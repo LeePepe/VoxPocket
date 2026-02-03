@@ -219,11 +219,11 @@ struct StatusBar: View {
                 Image(systemName: "mic.fill")
                     .foregroundColor(.white.opacity(0.85))
                 Text("Listening")
-                    .font(.custom("Avenir Next", size: 12).weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
                 Spacer()
                 Text("Mic Live")
-                    .font(.custom("Avenir Next", size: 12).weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.7))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -237,20 +237,17 @@ struct StatusBar: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(status == .error ? "Refine failed" : "Refine status")
-                        .font(.custom("Avenir Next", size: 13).weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                     Text(status == .error ? "Tap to retry" : "Ready for next segment")
-                        .font(.custom("Avenir Next", size: 11))
+                        .font(.system(size: 11, weight: .regular))
                         .foregroundColor(.white.opacity(0.6))
                 }
                 Spacer()
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.1))
-        )
+        .background(GlassCardBackground(cornerRadius: 20, strength: 0.12))
     }
 }
 
