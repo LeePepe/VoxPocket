@@ -120,15 +120,15 @@ struct TopBar: View {
                 Button(action: onToggleSidebar) {
                     Image(systemName: "line.3.horizontal")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.92))
+                        .foregroundColor(.textPrimary)
                         .frame(width: 38, height: 38)
                 }
                 .buttonStyle(GlassIconButtonStyle())
             }
 
             Text(title)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(Color.white.opacity(0.95))
+                .font(FontToken.headline)
+                .foregroundColor(.textPrimary)
 
             Spacer()
 
@@ -153,9 +153,9 @@ struct TopBar: View {
                     Image(systemName: "waveform.and.mic")
                         .font(.system(size: 11, weight: .semibold))
                     Text("Raw")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(FontToken.callout)
                 }
-                .foregroundColor(Color.white.opacity(0.92))
+                .foregroundColor(.textPrimary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
             }
@@ -174,14 +174,14 @@ struct RefinedTextPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(text)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
-                .foregroundColor(Color.white.opacity(0.97))
+                .font(FontToken.title)
+                .foregroundColor(.textPrimary)
                 .lineSpacing(7)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(status.rawValue)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.6))
+                .font(FontToken.caption)
+                .foregroundColor(.textTertiary)
         }
         .padding(22)
         .background(GlassCardBackground(cornerRadius: 26, strength: 0.22))
@@ -195,15 +195,15 @@ struct RawInlinePane: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Raw Transcript")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color.white.opacity(0.75))
+                    .font(FontToken.callout)
+                    .foregroundColor(.textSecondary)
                 Spacer()
                 Image(systemName: "doc.on.doc")
-                    .foregroundColor(Color.white.opacity(0.45))
+                    .foregroundColor(.textTertiary)
             }
             Text(text)
-                .font(.system(size: 14, weight: .regular))
-                .foregroundColor(Color.white.opacity(0.75))
+                .font(FontToken.body)
+                .foregroundColor(.textSecondary)
         }
         .padding(18)
         .background(GlassCardBackground(cornerRadius: 22, strength: 0.14))
@@ -217,31 +217,28 @@ struct StatusBar: View {
         HStack(spacing: 12) {
             if status == .listening {
                 Image(systemName: "mic.fill")
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.textSecondary)
                 Text("Listening")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(FontToken.callout)
+                    .foregroundColor(.textSecondary)
                 Spacer()
                 Text("Mic Live")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(FontToken.callout)
+                    .foregroundColor(.textSecondary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.12))
-                    )
+                    .background(GlassCapsuleBackground())
             } else {
                 Image(systemName: status == .error ? "exclamationmark.triangle" : "sparkles")
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.textSecondary)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(status == .error ? "Refine failed" : "Refine status")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(FontToken.callout)
+                        .foregroundColor(.textPrimary)
                     Text(status == .error ? "Tap to retry" : "Ready for next segment")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(.white.opacity(0.6))
+                        .font(FontToken.caption)
+                        .foregroundColor(.textTertiary)
                 }
                 Spacer()
             }
@@ -256,6 +253,7 @@ struct BottomControls: View {
     let onStopOrRestart: () -> Void
     let onCopy: () -> Void
     let onNewSession: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     private var primaryTitle: String {
         (status == .listening || status == .transcribing || status == .refining) ? "Stop" : "Restart"
@@ -265,22 +263,24 @@ struct BottomControls: View {
         (status == .listening || status == .transcribing || status == .refining) ? "stop.fill" : "arrow.counterclockwise"
     }
 
-    private var primaryColor: Color {
+    private func primaryColor(for theme: Theme) -> Color {
         switch status {
         case .listening, .transcribing:
-            return Color(red: 0.42, green: 0.76, blue: 0.82)
+            return theme.palette.statusListening
         case .refining:
-            return Color(red: 0.56, green: 0.54, blue: 0.88)
+            return theme.palette.statusRefining
         case .done:
-            return Color(red: 0.54, green: 0.8, blue: 0.62)
+            return theme.palette.statusDone
         case .error:
-            return Color(red: 0.8, green: 0.4, blue: 0.42)
+            return theme.palette.statusError
         case .idle:
-            return Color(red: 0.5, green: 0.62, blue: 0.8)
+            return theme.palette.accentPrimary
         }
     }
 
     var body: some View {
+        let theme = Theme.current(colorScheme)
+        let primaryColor = primaryColor(for: theme)
         HStack(spacing: 12) {
             Button(action: onStopOrRestart) {
                 ControlButtonLabel(title: primaryTitle, systemImage: primaryIcon)
@@ -290,12 +290,12 @@ struct BottomControls: View {
             Button(action: onCopy) {
                 ControlButtonLabel(title: "Copy", systemImage: "doc.on.doc")
             }
-            .buttonStyle(PrimaryControlStyle(color: Color.white.opacity(0.18), emphasis: false))
+            .buttonStyle(PrimaryControlStyle(color: theme.palette.surfaceElevated, emphasis: false))
 
             Button(action: onNewSession) {
                 ControlButtonLabel(title: "New Session", systemImage: "plus.circle.fill")
             }
-            .buttonStyle(PrimaryControlStyle(color: Color.white.opacity(0.18), emphasis: false))
+            .buttonStyle(PrimaryControlStyle(color: theme.palette.surfaceElevated, emphasis: false))
         }
     }
 }
@@ -308,9 +308,9 @@ struct ControlButtonLabel: View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(FontToken.callout)
         }
-        .foregroundColor(Color.white.opacity(0.95))
+        .foregroundColor(.textPrimary)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
     }
@@ -319,19 +319,22 @@ struct ControlButtonLabel: View {
 struct PrimaryControlStyle: ButtonStyle {
     let color: Color
     let emphasis: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     func makeBody(configuration: Configuration) -> some View {
+        let theme = Theme.current(colorScheme)
+        let strokeColor = emphasis ? theme.palette.strokeStrong : theme.palette.strokeSubtle
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(color.opacity(configuration.isPressed ? 0.6 : 0.85))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.white.opacity(emphasis ? 0.22 : 0.12), lineWidth: 1)
+                            .stroke(strokeColor, lineWidth: 1)
                     )
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white.opacity(emphasis ? 0.08 : 0.04))
+                            .fill(theme.palette.surfaceGlassStrong.opacity(emphasis ? 0.5 : 0.3))
                             .blur(radius: 6)
                     )
             )
@@ -341,16 +344,19 @@ struct PrimaryControlStyle: ButtonStyle {
 }
 
 struct GlassIconButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeBody(configuration: Configuration) -> some View {
+        let theme = Theme.current(colorScheme)
         configuration.label
             .frame(width: 34, height: 34)
-            .foregroundColor(Color.white.opacity(0.92))
+            .foregroundColor(theme.palette.textPrimary)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.16 : 0.1))
+                    .fill(theme.palette.surfaceElevated.opacity(configuration.isPressed ? 0.7 : 1))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            .stroke(theme.palette.strokeSubtle, lineWidth: 1)
                     )
             )
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
@@ -358,31 +364,51 @@ struct GlassIconButtonStyle: ButtonStyle {
 }
 
 struct GlassCapsuleStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeBody(configuration: Configuration) -> some View {
+        let theme = Theme.current(colorScheme)
         configuration.label
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.18 : 0.12))
+                    .fill(theme.palette.surfaceElevated.opacity(configuration.isPressed ? 0.8 : 1))
                     .overlay(
                         Capsule()
-                            .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                            .stroke(theme.palette.strokeSubtle, lineWidth: 1)
                     )
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
-struct GlassBarBackground: View {
+struct GlassCapsuleBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
+        let theme = Theme.current(colorScheme)
+        Capsule()
+            .fill(theme.palette.surfaceGlass)
+            .overlay(
+                Capsule()
+                    .stroke(theme.palette.strokeSubtle, lineWidth: 1)
+            )
+    }
+}
+
+struct GlassBarBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let theme = Theme.current(colorScheme)
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color.white.opacity(0.08))
+            .fill(theme.palette.surfaceGlass)
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    .stroke(theme.palette.strokeSubtle, lineWidth: 1)
             )
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(theme.palette.surfaceGlassStrong.opacity(0.6))
                     .blur(radius: 8)
             )
     }
@@ -391,17 +417,21 @@ struct GlassBarBackground: View {
 struct GlassCardBackground: View {
     let cornerRadius: CGFloat
     let strength: Double
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        let theme = Theme.current(colorScheme)
+        let fillColor = strength >= 0.2 ? theme.palette.surfaceGlassStrong : theme.palette.surfaceGlass
+        let strokeColor = strength >= 0.2 ? theme.palette.strokeStrong : theme.palette.strokeSubtle
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.white.opacity(strength))
+            .fill(fillColor)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                    .stroke(strokeColor, lineWidth: 1)
             )
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(theme.palette.surfaceGlassStrong.opacity(0.5))
                     .blur(radius: 10)
             )
     }
