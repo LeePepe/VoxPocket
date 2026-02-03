@@ -4,6 +4,7 @@ public struct BackgroundAtmosphere: View {
     let status: RecorderStatus
     let audioLevel: Double?
     @State private var stateStart = Date()
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(status: RecorderStatus = .idle, audioLevel: Double? = nil) {
         self.status = status
@@ -13,7 +14,8 @@ public struct BackgroundAtmosphere: View {
     public var body: some View {
         TimelineView(.animation(minimumInterval: 0.05, paused: false)) { context in
             let elapsed = context.date.timeIntervalSince(stateStart)
-            let config = atmosphereConfig(for: status, elapsed: elapsed, audioLevel: audioLevel)
+            let theme = Theme.current(colorScheme)
+            let config = atmosphereConfig(for: status, elapsed: elapsed, audioLevel: audioLevel, theme: theme)
 
             ZStack {
                 AtmospherePlate(config: config)
@@ -28,16 +30,18 @@ public struct BackgroundAtmosphere: View {
     private func atmosphereConfig(
         for status: RecorderStatus,
         elapsed: TimeInterval,
-        audioLevel: Double?
+        audioLevel: Double?,
+        theme: Theme
     ) -> AtmosphereConfig {
         let basePulse = slowPulse(elapsed: elapsed, period: 10)
+        let baseColor = theme.palette.backgroundBase
         switch status {
         case .idle:
             return AtmosphereConfig(
                 gradient: [
-                    Color(red: 0.12, green: 0.16, blue: 0.22),
+                    baseColor,
                     Color(red: 0.1, green: 0.14, blue: 0.2),
-                    Color(red: 0.08, green: 0.1, blue: 0.16)
+                    baseColor
                 ],
                 primaryShadow: Color(red: 0.2, green: 0.24, blue: 0.34),
                 secondaryShadow: Color(red: 0.12, green: 0.16, blue: 0.24),
@@ -48,6 +52,7 @@ public struct BackgroundAtmosphere: View {
                 primaryOffset: CGSize(width: 6, height: 8),
                 secondaryOffset: CGSize(width: -4, height: -6),
                 shadowLineWidth: 30,
+                vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.32
             )
         case .listening:
@@ -56,9 +61,9 @@ public struct BackgroundAtmosphere: View {
             let energy = max(level, pulse * 0.5)
             return AtmosphereConfig(
                 gradient: [
-                    Color(red: 0.05, green: 0.1, blue: 0.14),
+                    baseColor,
                     Color(red: 0.04, green: 0.08, blue: 0.12),
-                    Color(red: 0.03, green: 0.06, blue: 0.1)
+                    baseColor
                 ],
                 primaryShadow: Color(red: 0.12, green: 0.42, blue: 0.46),
                 secondaryShadow: Color(red: 0.08, green: 0.24, blue: 0.32),
@@ -69,15 +74,16 @@ public struct BackgroundAtmosphere: View {
                 primaryOffset: CGSize(width: 6 + energy * 6, height: 8 + energy * 7),
                 secondaryOffset: CGSize(width: -5 - energy * 4, height: -6 - energy * 5),
                 shadowLineWidth: 32,
+                vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.55
             )
         case .transcribing:
             let breathe = slowPulse(elapsed: elapsed, period: 6.5)
             return AtmosphereConfig(
                 gradient: [
-                    Color(red: 0.07, green: 0.1, blue: 0.18),
+                    baseColor,
                     Color(red: 0.09, green: 0.12, blue: 0.22),
-                    Color(red: 0.06, green: 0.08, blue: 0.16)
+                    baseColor
                 ],
                 primaryShadow: Color(red: 0.18, green: 0.28, blue: 0.56),
                 secondaryShadow: Color(red: 0.12, green: 0.2, blue: 0.38),
@@ -88,15 +94,16 @@ public struct BackgroundAtmosphere: View {
                 primaryOffset: CGSize(width: 6, height: 8),
                 secondaryOffset: CGSize(width: -4, height: -6),
                 shadowLineWidth: 30,
+                vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.45 + breathe * 0.08
             )
         case .refining:
             let pulse = slowPulse(elapsed: elapsed, period: 7.5)
             return AtmosphereConfig(
                 gradient: [
-                    Color(red: 0.1, green: 0.08, blue: 0.2),
+                    baseColor,
                     Color(red: 0.14, green: 0.1, blue: 0.24),
-                    Color(red: 0.08, green: 0.06, blue: 0.16)
+                    baseColor
                 ],
                 primaryShadow: Color(red: 0.38, green: 0.24, blue: 0.6),
                 secondaryShadow: Color(red: 0.24, green: 0.16, blue: 0.4),
@@ -107,15 +114,16 @@ public struct BackgroundAtmosphere: View {
                 primaryOffset: CGSize(width: 6, height: 8),
                 secondaryOffset: CGSize(width: -4, height: -6),
                 shadowLineWidth: 32,
+                vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.5
             )
         case .done:
             let settle = doneSettle(elapsed: elapsed)
             return AtmosphereConfig(
                 gradient: [
-                    Color(red: 0.1, green: 0.18, blue: 0.16),
+                    baseColor,
                     Color(red: 0.12, green: 0.2, blue: 0.18),
-                    Color(red: 0.08, green: 0.14, blue: 0.14)
+                    baseColor
                 ],
                 primaryShadow: Color(red: 0.22, green: 0.6, blue: 0.48),
                 secondaryShadow: Color(red: 0.16, green: 0.34, blue: 0.3),
@@ -126,15 +134,16 @@ public struct BackgroundAtmosphere: View {
                 primaryOffset: CGSize(width: 6, height: 8),
                 secondaryOffset: CGSize(width: -4, height: -5),
                 shadowLineWidth: 30,
+                vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.38
             )
         case .error:
             let jitter = Double(sin(elapsed * 6)) * 2
             return AtmosphereConfig(
                 gradient: [
-                    Color(red: 0.12, green: 0.06, blue: 0.1),
+                    baseColor,
                     Color(red: 0.14, green: 0.06, blue: 0.12),
-                    Color(red: 0.1, green: 0.05, blue: 0.1)
+                    baseColor
                 ],
                 primaryShadow: Color(red: 0.52, green: 0.2, blue: 0.26),
                 secondaryShadow: Color(red: 0.32, green: 0.12, blue: 0.18),
@@ -145,6 +154,7 @@ public struct BackgroundAtmosphere: View {
                 primaryOffset: CGSize(width: 6 + jitter, height: 8 + jitter),
                 secondaryOffset: CGSize(width: -5 - jitter, height: -6 - jitter),
                 shadowLineWidth: 32,
+                vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.6
             )
         }
@@ -275,7 +285,7 @@ private struct AtmospherePlate: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color.black.opacity(config.vignetteOpacity),
+                                config.vignetteColor.opacity(config.vignetteOpacity),
                                 Color.clear
                             ],
                             center: .center,
@@ -346,5 +356,6 @@ private struct AtmosphereConfig {
     let primaryOffset: CGSize
     let secondaryOffset: CGSize
     let shadowLineWidth: CGFloat
+    let vignetteColor: Color
     let vignetteOpacity: Double
 }
