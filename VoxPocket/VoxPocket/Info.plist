@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSServices</key>
+	<array>
+		<dict/>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>VoxPocket needs accessibility access to insert transcribed text into other applications.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VoxPocket needs microphone access to transcribe your voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>VoxPocket uses speech recognition to transcribe your voice into text.</string>
+</dict>
+</plist>

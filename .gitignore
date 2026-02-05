@@ -1,1 +1,29 @@
+# Worktrees
 .worktrees/
+
+# macOS
+.DS_Store
+
+# Swift/Xcode
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Archives
+*.zip
+
+# CSV files (可能是临时数据)
+*.csv
