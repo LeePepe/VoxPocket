@@ -6,6 +6,7 @@ struct HomeRecorderView<VM: EditorViewState>: View {
     let recorderStatus: RecorderStatus
     let onToggleSidebar: (() -> Void)?
     let onShowRawSheet: () -> Void
+    let onCopyRefined: (String) -> Void
 
     @State private var reveal = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -87,7 +88,9 @@ struct HomeRecorderView<VM: EditorViewState>: View {
                         await viewModel.toggleRecording()
                     }
                 },
-                onCopy: {},
+                onCopy: {
+                    onCopyRefined(viewModel.text)
+                },
                 onNewSession: {}
             )
         }
@@ -447,7 +450,8 @@ struct GlassCardBackground: View {
             viewModel: vm,
             recorderStatus: .idle,
             onToggleSidebar: {},
-            onShowRawSheet: {}
+            onShowRawSheet: {},
+            onCopyRefined: { _ in }
         )
     }
     .frame(height: 600)

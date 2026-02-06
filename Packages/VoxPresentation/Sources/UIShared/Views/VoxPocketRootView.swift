@@ -5,9 +5,17 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject var viewModel: VM
     @State private var sidebarSelection: SidebarDestination = .session(UUID())
+    let onCopyRefined: (String) -> Void
+    let onCopyRaw: (String) -> Void
  
-    public init(viewModel: VM) {
+    public init(
+        viewModel: VM,
+        onCopyRefined: @escaping (String) -> Void = { _ in },
+        onCopyRaw: @escaping (String) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
+        self.onCopyRefined = onCopyRefined
+        self.onCopyRaw = onCopyRaw
     }
 
     private var searchQueryBinding: Binding<String> {
@@ -73,7 +81,8 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     },
                     onShowRawSheet: {
                         viewModel.showRawSheet = true
-                    }
+                    },
+                    onCopyRefined: onCopyRefined
                 )
             }
             .navigationDestination(for: Route.self) { route in
@@ -84,9 +93,16 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
             }
         }
         .sheet(isPresented: $viewModel.showRawSheet) {
+            let rawText = viewModel.editorState.isRecording
+                ? viewModel.editorState.liveTranscription
+                : viewModel.editorState.rawTranscription
             RawTranscriptView(
-                rawText: viewModel.editorState.liveTranscription,
-                status: viewModel.recorderStatus
+                rawText: rawText,
+                status: viewModel.recorderStatus,
+                canCopyRaw: !rawText.isEmpty,
+                onCopyRaw: {
+                    onCopyRaw(rawText)
+                }
             )
         }
     }
@@ -135,12 +151,20 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     onToggleSidebar: nil,
                     onShowRawSheet: {
                         viewModel.showRawSheet = true
-                    }
+                    },
+                    onCopyRefined: onCopyRefined
                 )
                 .sheet(isPresented: $viewModel.showRawSheet) {
+                    let rawText = viewModel.editorState.isRecording
+                        ? viewModel.editorState.liveTranscription
+                        : viewModel.editorState.rawTranscription
                     RawTranscriptView(
-                        rawText: viewModel.editorState.liveTranscription,
-                        status: viewModel.recorderStatus
+                        rawText: rawText,
+                        status: viewModel.recorderStatus,
+                        canCopyRaw: !rawText.isEmpty,
+                        onCopyRaw: {
+                            onCopyRaw(rawText)
+                        }
                     )
                 }
             case .me:

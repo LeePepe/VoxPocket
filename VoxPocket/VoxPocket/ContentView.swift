@@ -10,6 +10,11 @@ import UIShared
 import TranscriptionKit
 import LLMKit
 import UseCases
+#if os(macOS)
+import PlatformAdapters
+#elseif os(iOS)
+import UIKit
+#endif
 
 struct ContentView: View {
     @StateObject private var rootViewModel: RootViewModel<MockSessionListViewModel, EditorViewModel>
@@ -47,7 +52,23 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VoxPocketRootView(viewModel: rootViewModel)
+        VoxPocketRootView(
+            viewModel: rootViewModel,
+            onCopyRefined: { text in
+#if os(macOS)
+                MacOSClipboardService.shared.copy(text)
+#elseif os(iOS)
+                UIPasteboard.general.string = text
+#endif
+            },
+            onCopyRaw: { text in
+#if os(macOS)
+                MacOSClipboardService.shared.copy(text)
+#elseif os(iOS)
+                UIPasteboard.general.string = text
+#endif
+            }
+        )
     }
 }
 
