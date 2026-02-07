@@ -133,9 +133,17 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     }
 
     public func stopRecording() async {
+        // 立即标记为非录音状态，防止新的转录触发 scheduleAutoStop
+        // 这样可以阻止在停止过程中收到的延迟转录结果重新触发 auto stop
+        let wasRecording = isRecording
+        isRecording = false
+
         // 取消自动停止计时
         silenceDetectionTask?.cancel()
         silenceDetectionTask = nil
+
+        // 防止重复调用 stopRecording
+        guard wasRecording else { return }
 
         do {
             try await recordingUseCase.stopRecording()

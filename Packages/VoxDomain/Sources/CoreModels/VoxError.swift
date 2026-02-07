@@ -41,6 +41,8 @@ public enum VoxError: Error, LocalizedError, Sendable {
     case llmInvalidAPIKey
     /// LLM 配额已用尽
     case llmQuotaExceeded
+    /// LLM 操作超时
+    case llmOperationTimeout
 
     // MARK: - 持久化相关错误
 
@@ -94,6 +96,8 @@ public enum VoxError: Error, LocalizedError, Sendable {
             return "无效的 API Key"
         case .llmQuotaExceeded:
             return "API 配额已用尽"
+        case .llmOperationTimeout:
+            return "LLM 操作超时"
         case .sessionNotFound(let id):
             return "会话未找到：\(id)"
         case .persistenceFailed(let reason):

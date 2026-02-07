@@ -138,6 +138,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         silenceDetectionTask?.cancel()
         silenceDetectionTask = nil
 
+        // 立即设置状态，防止延迟的转录结果重新触发 scheduleAutoStop
         isProcessing = true
         recorderStatus = .transcribing
 

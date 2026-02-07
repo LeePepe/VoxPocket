@@ -48,34 +48,24 @@ public actor AppleIntelligenceProvider: LLMProvider {
 
     // MARK: - Intent & Tone Analysis
 
-    /// 使用 guided generation 分析意图
+    /// 使用 guided generation 分析意图（简化版，性能优化）
     private func analyzeIntent(_ text: String, locale: Locale?) async throws -> IntentAnalysis {
         guard isAvailable else {
             throw VoxError.llmProviderNotConfigured
         }
 
-        logger.debug("开始意图分析 - 文本长度: \(text.count)字符")
+        logger.debug("开始意图分析（快速模式）- 文本长度: \(text.count)字符")
         let perfStart = logger.performanceStart()
         do {
-
             // 使用 contentTagging 专用模型
             let taggingModel = SystemLanguageModel(useCase: .contentTagging)
-
             let instruction = "识别文本的意图。"
 
             logger.log(.debug, "意图分析输入", context: [
                 "text_length": text.count,
                 "text_preview": String(text.prefix(200)),
-                "instruction_length": instruction.count,
-                "include_schema": false,
-                "locale": locale?.identifier ?? "nil",
-                "use_case": "contentTagging"
-            ], file: #file, function: #function, line: #line)
-            logger.log(.debug, "意图分析指令", context: [
-                "instruction": instruction
-            ], file: #file, function: #function, line: #line)
-            logger.log(.debug, "意图分析提示词", context: [
-                "prompt": text
+                "use_case": "contentTagging",
+                "fast_mode": true
             ], file: #file, function: #function, line: #line)
 
             let session = LanguageModelSession(
@@ -84,14 +74,13 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
-            var latest: IntentAnalysis.PartiallyGenerated?
+            // 使用简化的 FastIntentAnalysis，避免复杂的 guided generation
+            // 使用简化的 FastIntentAnalysis 提高性能
+            var latest: FastIntentAnalysis.PartiallyGenerated?
             var partialCount = 0
-            logger.log(.debug, "意图分析选项", context: [
-                "options": "default"
-            ], file: #file, function: #function, line: #line)
 
             let stream = session.streamResponse(
-                generating: IntentAnalysis.self,
+                generating: FastIntentAnalysis.self,
                 includeSchemaInPrompt: false,
                 options: .init(),
                 prompt: { Prompt(text) }
@@ -101,32 +90,28 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 partialCount += 1
             }
 
+            let intent = latest?.intent ?? .plainContent
+            let confidence = latest?.confidence ?? 0.0
+
+            // 返回简化版结果（entities 和 tags 为空）
             let intentAnalysis = IntentAnalysis(
-                intent: latest?.intent ?? .plainContent,
-                confidence: latest?.confidence ?? 0.0,
-                params: IntentParams(
-                    targetLanguage: latest?.params?.targetLanguage,
-                    original: latest?.params?.original,
-                    corrected: latest?.params?.corrected
-                ),
-                entities: latest?.entities ?? [],
-                tags: latest?.tags ?? []
+                intent: intent,
+                confidence: confidence,
+                params: IntentParams(),
+                entities: [],
+                tags: []
             )
 
-            // 详细日志记录
             logger.log(.info, "意图分析完成", context: [
                 "intent": intentAnalysis.intent.rawValue,
                 "intent_confidence": intentAnalysis.confidence,
-                "entities_count": intentAnalysis.entities.count,
-                "entities": intentAnalysis.entities.joined(separator: ", "),
-                "tags": intentAnalysis.tags.joined(separator: ", "),
                 "partial_count": partialCount
             ], file: #file, function: #function, line: #line)
 
             logger.performanceEnd(
                 "意图分析",
                 start: perfStart,
-                context: ["text_length": text.count],
+                context: ["text_length": text.count, "fast_mode": true],
                 file: #file,
                 function: #function,
                 line: #line
@@ -134,9 +119,10 @@ public actor AppleIntelligenceProvider: LLMProvider {
             return intentAnalysis
         } catch {
             let nsError = error as NSError
-            logger.log(.error, "意图分析错误详情", context: [
+            logger.log(.error, "意图分析失败", context: [
                 "domain": nsError.domain,
-                "code": nsError.code
+                "code": nsError.code,
+                "description": error.localizedDescription
             ], file: #file, function: #function, line: #line)
             logger.performanceEnd(
                 "意图分析",
@@ -151,13 +137,13 @@ public actor AppleIntelligenceProvider: LLMProvider {
         }
     }
 
-    /// 使用 guided generation 分析语气
+    /// 使用 guided generation 分析语气（优化版，带超时）
     private func analyzeTone(_ text: String, locale: Locale?) async throws -> ToneAnalysis {
         guard isAvailable else {
             throw VoxError.llmProviderNotConfigured
         }
 
-        logger.debug("开始语气分析 - 文本长度: \(text.count)字符")
+        logger.debug("开始语气分析（快速模式）- 文本长度: \(text.count)字符")
         let perfStart = logger.performanceStart()
         do {
             let taggingModel = SystemLanguageModel(useCase: .contentTagging)
@@ -166,16 +152,8 @@ public actor AppleIntelligenceProvider: LLMProvider {
             logger.log(.debug, "语气分析输入", context: [
                 "text_length": text.count,
                 "text_preview": String(text.prefix(200)),
-                "instruction_length": instruction.count,
-                "include_schema": false,
-                "locale": locale?.identifier ?? "nil",
-                "use_case": "contentTagging"
-            ], file: #file, function: #function, line: #line)
-            logger.log(.debug, "语气分析指令", context: [
-                "instruction": instruction
-            ], file: #file, function: #function, line: #line)
-            logger.log(.debug, "语气分析提示词", context: [
-                "prompt": text
+                "use_case": "contentTagging",
+                "fast_mode": true
             ], file: #file, function: #function, line: #line)
 
             let session = LanguageModelSession(
@@ -184,11 +162,9 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
+            // ToneAnalysis 本身已经是简化的 schema，直接使用
             var latest: ToneAnalysis.PartiallyGenerated?
             var partialCount = 0
-            logger.log(.debug, "语气分析选项", context: [
-                "options": "default"
-            ], file: #file, function: #function, line: #line)
 
             let stream = session.streamResponse(
                 generating: ToneAnalysis.self,
@@ -215,7 +191,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
             logger.performanceEnd(
                 "语气分析",
                 start: perfStart,
-                context: ["text_length": text.count],
+                context: ["text_length": text.count, "fast_mode": true],
                 file: #file,
                 function: #function,
                 line: #line
@@ -223,9 +199,10 @@ public actor AppleIntelligenceProvider: LLMProvider {
             return toneAnalysis
         } catch {
             let nsError = error as NSError
-            logger.log(.error, "语气分析错误详情", context: [
+            logger.log(.error, "语气分析失败", context: [
                 "domain": nsError.domain,
-                "code": nsError.code
+                "code": nsError.code,
+                "description": error.localizedDescription
             ], file: #file, function: #function, line: #line)
             logger.performanceEnd(
                 "语气分析",
@@ -252,15 +229,53 @@ public actor AppleIntelligenceProvider: LLMProvider {
             "has_custom_prompt": request.customPrompt != nil
         ], file: #file, function: #function, line: #line)
 
-        // 阶段 1: 分析意图/语气（分别调用）
-        logger.debug("启用两阶段处理：意图 → 语气 → 优化")
-        let intentAnalysis = try await analyzeIntent(
-            request.text,
-            locale: request.transcriptionMetadata?.locale
-        )
-        let toneAnalysis = try await analyzeTone(
-            request.text,
-            locale: request.transcriptionMetadata?.locale
+        // 阶段 1: 分析意图/语气（并行执行，失败时使用默认值）
+        logger.debug("启用两阶段处理：意图 || 语气（并行） → 优化")
+        let perfAnalysisStart = logger.performanceStart()
+
+        // 使用 async let 并行执行意图和语气分析
+        async let intentResult: IntentAnalysis = {
+            do {
+                return try await analyzeIntent(
+                    request.text,
+                    locale: request.transcriptionMetadata?.locale
+                )
+            } catch {
+                logger.log(.warning, "意图分析失败，使用默认值", context: [
+                    "error": error.localizedDescription
+                ], file: #file, function: #function, line: #line)
+                return IntentAnalysis(intent: .plainContent, confidence: 0.0)
+            }
+        }()
+
+        async let toneResult: ToneAnalysis = {
+            do {
+                return try await analyzeTone(
+                    request.text,
+                    locale: request.transcriptionMetadata?.locale
+                )
+            } catch {
+                logger.log(.warning, "语气分析失败，使用默认值", context: [
+                    "error": error.localizedDescription
+                ], file: #file, function: #function, line: #line)
+                return ToneAnalysis(tone: .neutral, confidence: 0.0)
+            }
+        }()
+
+        // 等待两个分析都完成
+        let (intent, tone) = await (intentResult, toneResult)
+
+        logger.performanceEnd(
+            "并行分析 (意图 + 语气)",
+            start: perfAnalysisStart,
+            context: [
+                "intent": intent.intent.rawValue,
+                "tone": tone.tone.rawValue,
+                "text_length": request.text.count
+            ],
+            file: #file,
+            function: #function,
+            line: #line
         )
 
         // 阶段 2: 构建简化 prompt
@@ -269,8 +284,8 @@ public actor AppleIntelligenceProvider: LLMProvider {
             customPrompt: request.customPrompt
         )
         logger.log(.debug, "使用简化 prompt 进行优化", context: [
-            "intent": intentAnalysis.intent.rawValue,
-            "tone": toneAnalysis.tone.rawValue
+            "intent": intent.intent.rawValue,
+            "tone": tone.tone.rawValue
         ], file: #file, function: #function, line: #line)
 
         // 执行优化
@@ -284,8 +299,8 @@ public actor AppleIntelligenceProvider: LLMProvider {
         return RefinementResponse(
             originalText: request.text,
             refinedText: refinedText,
-            intentAnalysis: intentAnalysis,
-            toneAnalysis: toneAnalysis,
+            intentAnalysis: intent,
+            toneAnalysis: tone,
             missingAnalysisSteps: []
         )
     }

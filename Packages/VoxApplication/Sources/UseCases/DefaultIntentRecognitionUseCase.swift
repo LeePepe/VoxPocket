@@ -1,5 +1,6 @@
 import Foundation
 import LLMKit
+import Observability
 
 /// 默认意图识别用例实现
 ///
@@ -10,6 +11,7 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
 
     private let llmService: LLMService
     private let editingUseCase: EditingUseCase
+    private let logger = PrintLogger(subsystem: "IntentRecognition", minimumLevel: .debug)
     public let isLLMEnhancementEnabled: Bool
 
     public init(
@@ -25,20 +27,70 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
     // MARK: - IntentRecognitionUseCase
 
     public func recognizeIntent(from text: String) async throws -> IntentRecognitionResult {
+        logger.log(.debug, "开始意图识别", context: [
+            "text_length": text.count,
+            "text_preview": String(text.prefix(100)),
+            "llm_enabled": isLLMEnhancementEnabled,
+            "has_provider": llmService.currentProvider != nil
+        ], file: #file, function: #function, line: #line)
+
+        let perfStart = logger.performanceStart()
+
         // 如果启用了 LLM 且配置了提供者，使用 LLM 识别
         if isLLMEnhancementEnabled, llmService.currentProvider != nil {
             do {
                 let result = try await recognizeWithLLM(text: text)
-                print("🤖 [Intent] LLM match: \(result.intent.displayName) (confidence: \(result.confidence))")
+
+                logger.log(.info, "意图识别成功 (LLM)", context: [
+                    "intent": result.intent.displayName,
+                    "confidence": result.confidence,
+                    "text_length": text.count
+                ], file: #file, function: #function, line: #line)
+
+                logger.performanceEnd(
+                    "意图识别 (LLM)",
+                    start: perfStart,
+                    context: ["text_length": text.count, "intent": result.intent.displayName],
+                    file: #file,
+                    function: #function,
+                    line: #line
+                )
+
                 return result
             } catch {
-                print("⚠️ [Intent] LLM recognition failed: \(error.localizedDescription)")
+                logger.log(.warning, "意图识别失败，降级到默认行为", context: [
+                    "error": error.localizedDescription,
+                    "text_length": text.count
+                ], file: #file, function: #function, line: #line)
+
+                logger.performanceEnd(
+                    "意图识别 (fallback)",
+                    start: perfStart,
+                    context: ["text_length": text.count],
+                    error: error,
+                    file: #file,
+                    function: #function,
+                    line: #line
+                )
                 // 降级到默认行为
             }
         }
 
         // 默认：作为普通内容处理
-        print("📝 [Intent] Default: plain content")
+        logger.log(.info, "使用默认意图", context: [
+            "intent": "plain_content",
+            "reason": isLLMEnhancementEnabled ? "no_provider" : "llm_disabled"
+        ], file: #file, function: #function, line: #line)
+
+        logger.performanceEnd(
+            "意图识别 (default)",
+            start: perfStart,
+            context: ["text_length": text.count],
+            file: #file,
+            function: #function,
+            line: #line
+        )
+
         return IntentRecognitionResult(intent: .plainContent, confidence: 1.0)
     }
 
@@ -49,9 +101,57 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
     // MARK: - LLM 识别
 
     private func recognizeWithLLM(text: String) async throws -> IntentRecognitionResult {
+        logger.log(.debug, "构建意图识别提示词", context: [
+            "text_length": text.count
+        ], file: #file, function: #function, line: #line)
+
+        let perfPromptStart = logger.performanceStart()
         let prompt = buildIntentPrompt(text: text)
+        logger.performanceEnd(
+            "构建提示词",
+            start: perfPromptStart,
+            context: ["prompt_length": prompt.count],
+            file: #file,
+            function: #function,
+            line: #line
+        )
+
+        logger.log(.debug, "调用 LLM 服务", context: [
+            "prompt_length": prompt.count,
+            "text_length": text.count
+        ], file: #file, function: #function, line: #line)
+
+        let perfLLMStart = logger.performanceStart()
         let response = try await llmService.complete(prompt: prompt)
-        return parseIntentFromLLM(response: response, originalText: text)
+        logger.performanceEnd(
+            "LLM 调用",
+            start: perfLLMStart,
+            context: ["response_length": response.count],
+            file: #file,
+            function: #function,
+            line: #line
+        )
+
+        logger.log(.debug, "解析 LLM 响应", context: [
+            "response_length": response.count,
+            "response_preview": String(response.prefix(200))
+        ], file: #file, function: #function, line: #line)
+
+        let perfParseStart = logger.performanceStart()
+        let result = parseIntentFromLLM(response: response, originalText: text)
+        logger.performanceEnd(
+            "解析响应",
+            start: perfParseStart,
+            context: [
+                "intent": result.intent.displayName,
+                "confidence": result.confidence
+            ],
+            file: #file,
+            function: #function,
+            line: #line
+        )
+
+        return result
     }
 
     private func buildIntentPrompt(text: String) -> String {

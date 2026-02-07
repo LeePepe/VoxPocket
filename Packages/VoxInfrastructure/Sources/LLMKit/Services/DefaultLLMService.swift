@@ -184,38 +184,53 @@ public final class DefaultLLMService: LLMService, Sendable {
                 let perfStart = logger.performanceStart()
                 do {
                     let partial = try await provider.analyze(analysisRequest, steps: stepSet)
-                    logger.performanceEnd(
-                        "分析步骤",
-                        start: perfStart,
-                        context: [
-                            "provider": providerType.rawValue,
-                            "steps": stepLabel
-                        ],
-                        file: #file,
-                        function: #function,
-                        line: #line
-                    )
+
+                    // 记录详细的分析结果
+                    var resultContext: [String: Any] = [
+                        "provider": providerType.rawValue,
+                        "steps": stepLabel
+                    ]
 
                     if stepSet.contains(.intent), let value = partial.intent {
                         intent = value
                         missing.remove(.intent)
+                        resultContext["intent"] = value.intent.rawValue
+                        resultContext["intent_confidence"] = value.confidence
                     }
                     if stepSet.contains(.tone), let value = partial.tone {
                         tone = value
                         missing.remove(.tone)
+                        resultContext["tone"] = value.tone.rawValue
+                        resultContext["tone_confidence"] = value.confidence
                     }
                     if stepSet.contains(.entities), let value = partial.entities {
                         entities = value
                         missing.remove(.entities)
+                        resultContext["entities_count"] = value.count
+                        resultContext["entities"] = value.joined(separator: ", ")
                     }
                     if stepSet.contains(.tags), let value = partial.tags {
                         tags = value
                         missing.remove(.tags)
+                        resultContext["tags_count"] = value.count
+                        resultContext["tags"] = value.joined(separator: ", ")
                     }
                     if stepSet.contains(.params), let value = partial.params {
                         params = value
                         missing.remove(.params)
+                        if let targetLang = value.targetLanguage {
+                            resultContext["target_language"] = targetLang
+                        }
                     }
+
+                    logger.performanceEnd(
+                        "分析步骤",
+                        start: perfStart,
+                        context: resultContext,
+                        file: #file,
+                        function: #function,
+                        line: #line
+                    )
                 } catch {
                     logger.performanceEnd(
                         "分析步骤",
@@ -237,6 +252,9 @@ public final class DefaultLLMService: LLMService, Sendable {
                 }
             }
 
+            // 顺序执行 intent 和 tone 步骤
+            // 注意：虽然并行执行可以提高性能，但由于 handleSteps 修改共享状态，
+            // Swift 严格并发检查会报错。实际的并行优化在 AppleIntelligenceProvider 中实现。
             await handleSteps(intentSteps)
             await handleSteps(toneSteps)
         }
@@ -309,11 +327,15 @@ public final class DefaultLLMService: LLMService, Sendable {
         guard let provider = currentProvider else {
             throw VoxError.llmProviderNotConfigured
         }
-        logger.log(.info, "开始流式文本优化", context: [
+        logger.log(.info, "开始流式文本优化（跳过分析以提高性能）", context: [
             "text_length": request.text.count,
             "provider": provider.providerType.rawValue
         ], file: #file, function: #function, line: #line)
-        _ = await analyzeContent(request)
+
+        // FIXME: 暂时禁用意图/语气分析，因为 Apple Intelligence 的 guided generation
+        // 存在严重性能问题（超时 120+ 秒）。直接进行文本优化。
+        // _ = await analyzeContent(request)
+
         let prompt = RefinementPromptBuilder.build(
             text: request.text,
             customPrompt: request.customPrompt

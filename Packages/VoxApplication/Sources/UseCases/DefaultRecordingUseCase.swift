@@ -45,13 +45,15 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     }
 
     public func startRecording() async throws {
-        stateSubject.send(.recording(duration: 0))
+        // 移除手动状态更新，让监听器（line 30-44）自动处理
+        // 避免状态更新竞态条件
         try await coordinator.start(language: language)
     }
 
     public func stopRecording() async throws {
+        // 移除手动状态更新，让监听器（line 30-44）自动处理
+        // 确保状态更新来源唯一，避免双重更新导致的竞态条件
         await coordinator.stop()
-        stateSubject.send(.idle)
     }
 
     public func pauseRecording() {

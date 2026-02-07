@@ -1,0 +1,169 @@
+import XCTest
+@testable import LLMKit
+import Observability
+
+/// 比较 AppleIntelligenceProvider V1 (guided generation) vs V2 (text completion)
+final class ProviderComparisonTests: XCTestCase {
+
+    let testTexts = [
+        "翻译成英语今天是周二",
+        "润色一下这段文字",
+        "我来测试一下语音能不能自动停止",
+        "看来测试一下意图识别和",
+        "Hello world"
+    ]
+
+    /// 测试 V2 (文本完成) 的性能
+    func testV2TextCompletionPerformance() async throws {
+        let provider = AppleIntelligenceProviderV2(
+            logger: PrintLogger(subsystem: "V2Test", minimumLevel: .info)
+        )
+
+        guard await provider.isAvailable else {
+            throw XCTSkip("Apple Intelligence 不可用")
+        }
+
+        print("\n" + String(repeating: "=", count:, 60))
+        print("测试 V2 (文本完成) 性能")
+        print(String(repeating: "=", count:, 60))
+
+        var totalIntentTime: Double = 0
+        var totalToneTime: Double = 0
+        var successCount = 0
+
+        for (index, text) in testTexts.enumerated() {
+            print("\n[\(index + 1)/\(testTexts.count)] 测试文本: \(text)")
+
+            do {
+                // 测试意图分析
+                let intentStart = ContinuousClock.now
+                let intent = try await provider.analyzeIntent(text, locale: nil)
+                let intentDuration = ContinuousClock.now - intentStart
+                let intentMs = Double(intentDuration.components.seconds) * 1000 +
+                              Double(intentDuration.components.attoseconds) / 1_000_000_000_000_000
+
+                print("  ✓ 意图: \(intent.intent.rawValue) (置信度: \(String(format: "%.2f", intent.confidence)))")
+                print("    耗时: \(String(format: "%.2f", intentMs))ms")
+
+                // 测试语气分析
+                let toneStart = ContinuousClock.now
+                let tone = try await provider.analyzeTone(text, locale: nil)
+                let toneDuration = ContinuousClock.now - toneStart
+                let toneMs = Double(toneDuration.components.seconds) * 1000 +
+                            Double(toneDuration.components.attoseconds) / 1_000_000_000_000_000
+
+                print("  ✓ 语气: \(tone.tone.rawValue) (置信度: \(String(format: "%.2f", tone.confidence)))")
+                print("    耗时: \(String(format: "%.2f", toneMs))ms")
+
+                totalIntentTime += intentMs
+                totalToneTime += toneMs
+                successCount += 1
+
+                // 断言：每个分析应该在 10 秒内完成
+                XCTAssertLessThan(intentMs, 10000, "意图分析应该在 10 秒内完成")
+                XCTAssertLessThan(toneMs, 10000, "语气分析应该在 10 秒内完成")
+
+            } catch {
+                print("  ❌ 失败: \(error)")
+            }
+        }
+
+        print("\n" + String(repeating: "-", count:, 60))
+        print("统计:")
+        print("  成功: \(successCount)/\(testTexts.count)")
+        if successCount > 0 {
+            print("  平均意图分析时间: \(String(format: "%.2f", totalIntentTime / Double(successCount)))ms")
+            print("  平均语气分析时间: \(String(format: "%.2f", totalToneTime / Double(successCount)))ms")
+            print("  平均总时间: \(String(format: "%.2f", (totalIntentTime + totalToneTime) / Double(successCount)))ms")
+        }
+        print(String(repeating: "=", count:, 60))
+
+        XCTAssertEqual(successCount, testTexts.count, "所有测试应该成功")
+    }
+
+    /// 测试 V2 并行分析的性能
+    func testV2ParallelAnalysis() async throws {
+        let provider = AppleIntelligenceProviderV2(
+            logger: PrintLogger(subsystem: "V2Test", minimumLevel: .info)
+        )
+
+        guard await provider.isAvailable else {
+            throw XCTSkip("Apple Intelligence 不可用")
+        }
+
+        print("\n" + String(repeating: "=", count:, 60))
+        print("测试 V2 并行分析性能")
+        print(String(repeating: "=", count:, 60))
+
+        let text = "翻译成英语今天是周二"
+        print("\n测试文本: \(text)")
+
+        // 顺序执行
+        print("\n顺序执行:")
+        let seqStart = ContinuousClock.now
+        let _ = try await provider.analyzeIntent(text, locale: nil)
+        let _ = try await provider.analyzeTone(text, locale: nil)
+        let seqDuration = ContinuousClock.now - seqStart
+        let seqMs = Double(seqDuration.components.seconds) * 1000 +
+                   Double(seqDuration.components.attoseconds) / 1_000_000_000_000_000
+        print("  耗时: \(String(format: "%.2f", seqMs))ms")
+
+        // 并行执行
+        print("\n并行执行:")
+        let parStart = ContinuousClock.now
+        async let intentResult = provider.analyzeIntent(text, locale: nil)
+        async let toneResult = provider.analyzeTone(text, locale: nil)
+        let _ = try await (intentResult, toneResult)
+        let parDuration = ContinuousClock.now - parStart
+        let parMs = Double(parDuration.components.seconds) * 1000 +
+                   Double(parDuration.components.attoseconds) / 1_000_000_000_000_000
+        print("  耗时: \(String(format: "%.2f", parMs))ms")
+
+        print("\n提升:")
+        let improvement = ((seqMs - parMs) / seqMs) * 100
+        print("  节省: \(String(format: "%.2f", seqMs - parMs))ms")
+        print("  提升: \(String(format: "%.1f", improvement))%")
+
+        // 并行应该更快
+        XCTAssertLessThan(parMs, seqMs, "并行执行应该比顺序执行更快")
+    }
+
+    /// 基准测试：单个文本的完整分析流程
+    func testCompletePipeline() async throws {
+        let provider = AppleIntelligenceProviderV2(
+            logger: PrintLogger(subsystem: "V2Test", minimumLevel: .info)
+        )
+
+        guard await provider.isAvailable else {
+            throw XCTSkip("Apple Intelligence 不可用")
+        }
+
+        let text = "翻译成英语今天是周二"
+
+        print("\n" + String(repeating: "=", count:, 60))
+        print("完整流程基准测试")
+        print(String(repeating: "=", count:, 60))
+        print("\n测试文本: \(text)")
+
+        let start = ContinuousClock.now
+
+        // 并行分析
+        async let intentResult = provider.analyzeIntent(text, locale: nil)
+        async let toneResult = provider.analyzeTone(text, locale: nil)
+        let (intent, tone) = try await (intentResult, toneResult)
+
+        let duration = ContinuousClock.now - start
+        let ms = Double(duration.components.seconds) * 1000 +
+                Double(duration.components.attoseconds) / 1_000_000_000_000_000
+
+        print("\n结果:")
+        print("  意图: \(intent.intent.rawValue) (置信度: \(String(format: "%.2f", intent.confidence)))")
+        print("  语气: \(tone.tone.rawValue) (置信度: \(String(format: "%.2f", tone.confidence)))")
+        print("  总耗时: \(String(format: "%.2f", ms))ms")
+
+        // 应该在 15 秒内完成（给予一些余地）
+        XCTAssertLessThan(ms, 15000, "完整流程应该在 15 秒内完成，实际耗时 \(ms)ms")
+
+        print(String(repeating: "=", count:, 60))
+    }
+}
