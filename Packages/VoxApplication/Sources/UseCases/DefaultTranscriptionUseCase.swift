@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import TranscriptionKit
+import Observability
 
 /// 转录用例默认实现
 ///
@@ -10,6 +11,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
 
     private let coordinator: TranscriptionCoordinator
     private let editingUseCase: EditingUseCase
+    private let logger: Logger
 
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
     private var cancellables = Set<AnyCancellable>()
@@ -33,11 +35,13 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
     public init(
         coordinator: TranscriptionCoordinator,
         editing: EditingUseCase,
-        language: Locale = Locale(identifier: "zh-Hans")
+        language: Locale = Locale(identifier: "zh-Hans"),
+        logger: Logger? = nil
     ) {
         self.coordinator = coordinator
         self.editingUseCase = editing
         self._currentLanguage = language
+        self.logger = logger ?? PrintLogger(subsystem: "TranscriptionUseCase")
 
         bindCoordinator()
     }
@@ -46,9 +50,17 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
         // 实时转录 → liveTextSubject
         coordinator.liveResultPublisher
             .map(\.text)
-            .catch { _ in Just("") }
+            .catch { [weak self] error -> Empty<String, Never> in
+                self?.logger.error("❌ liveResultPublisher error: \(error.localizedDescription)")
+                // Send empty string to clear live text, but don't complete the stream
+                self?.liveTextSubject.send("")
+                // Return Empty that never completes, allowing stream to continue
+                return Empty(completeImmediately: false)
+            }
             .sink { [weak self] text in
-                self?.liveTextSubject.send(text)
+                guard let self else { return }
+                self.logger.debug("📥 [TranscriptionUseCase] Received live result, sending to liveTextSubject: '\(text)'")
+                self.liveTextSubject.send(text)
             }
             .store(in: &cancellables)
 

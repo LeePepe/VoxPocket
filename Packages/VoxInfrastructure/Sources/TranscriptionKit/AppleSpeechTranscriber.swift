@@ -85,6 +85,14 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
 
     public func start(language: Locale) async throws {
         logger.info("start() called, language: \(language.identifier)")
+
+        // Re-entrancy guard: prevent calling start() while already transcribing
+        let alreadyTranscribing = _isTranscribing.withLock { $0 }
+        if alreadyTranscribing {
+            logger.warning("start() called while already transcribing, stopping previous session first")
+            await stop()
+        }
+
         _isStopping.withLock { $0 = false }
 
         guard let speechRecognizer else {
@@ -161,6 +169,19 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         logger.debug("Input node format: sampleRate=\(recordingFormat.sampleRate), channels=\(recordingFormat.channelCount)")
+
+        // 防御性清理：如果已有 tap 存在，先移除（防止 installTap 崩溃）
+        // 这可能发生在 stopInternal() 未完成或异常情况下
+        if audioEngine.isRunning {
+            logger.debug("Audio engine is running, stopping and removing existing tap before reinstalling")
+            audioEngine.stop()
+            inputNode.removeTap(onBus: 0)
+        } else {
+            // 即使引擎未运行，也尝试移除可能存在的 tap（防御性编程）
+            // removeTap 在没有 tap 时是安全的（不会崩溃）
+            inputNode.removeTap(onBus: 0)
+            logger.debug("Removed any existing tap (defensive cleanup)")
+        }
 
         tapBufferCount = 0
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
@@ -262,8 +283,10 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         audioLevelSubject.send(0)
 
         _isTranscribing.withLock { $0 = false }
-        _isStopping.withLock { $0 = false }
-        logger.debug("stopInternal() completed, isTranscribing = false")
+        // Don't reset _isStopping here to prevent race condition
+        // The async error callback from recognitionTask?.cancel() may not have fired yet
+        // _isStopping will be reset at the start of the next recording (line 96)
+        logger.debug("stopInternal() completed, isTranscribing = false, _isStopping remains true until next start()")
     }
 
     private func calculateRMSLevel(buffer: AVAudioPCMBuffer) -> Float {

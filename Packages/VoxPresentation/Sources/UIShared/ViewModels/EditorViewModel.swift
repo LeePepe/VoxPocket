@@ -3,6 +3,7 @@ import Combine
 import CoreModels
 import LLMKit
 import UseCases
+import Observability
 
 /// 编辑器 ViewModel
 ///
@@ -18,11 +19,18 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     private let editingUseCase: EditingUseCase
     private let historyUseCase: HistoryUseCase
     private let refinementUseCase: RefinementUseCase
+    private let logger: Logger
 
     private var cancellables = Set<AnyCancellable>()
     private var streamingTask: Task<Void, Never>?
     private var silenceDetectionTask: Task<Void, Never>?
     private var lastTranscriptionUpdate: Date = Date()
+
+    /// 防止录音操作重入的标志
+    private var isRecordingOperationInProgress = false
+
+    /// 录音前的 history undo 计数（用于取消时精确回退）
+    private var undoCountBeforeRecording: Int = 0
 
     // MARK: - 自动停止配置
 
@@ -51,13 +59,15 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         transcription: TranscriptionUseCase,
         editing: EditingUseCase,
         history: HistoryUseCase,
-        refinement: RefinementUseCase
+        refinement: RefinementUseCase,
+        logger: Logger? = nil
     ) {
         self.recordingUseCase = recording
         self.transcriptionUseCase = transcription
         self.editingUseCase = editing
         self.historyUseCase = history
         self.refinementUseCase = refinement
+        self.logger = logger ?? PrintLogger(subsystem: "EditorViewModel")
 
         bindUseCases()
     }
@@ -72,6 +82,9 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                 guard let self else { return }
                 self.isRecording = state.isActive
                 self.recordingDuration = state.duration ?? 0
+                if self.isRecording && !self.liveTranscription.isEmpty {
+                    self.scheduleAutoStop()
+                }
             }
             .store(in: &cancellables)
 
@@ -85,10 +98,13 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
                 guard let self else { return }
+                self.logger.debug("📝 [Transcription] Received live text update: '\(text)' (length: \(text.count), isRecording: \(self.isRecording))")
                 self.liveTranscription = text
                 // 每次转录文本更新，重置自动停止计时
                 if self.isRecording && !text.isEmpty {
                     self.scheduleAutoStop()
+                } else {
+                    self.logger.debug("⚠️ [Auto Stop] Skipped - isRecording: \(self.isRecording), isEmpty: \(text.isEmpty)")
                 }
             }
             .store(in: &cancellables)
@@ -119,13 +135,30 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
 
     // MARK: - 录音操作
 
+    /// 开始新的 session（清空所有内容）
+    public func startNewSession() async {
+        clearText()
+        await startRecording()
+    }
+
+    /// 开始录音（智能判断续写 vs 新建）
     public func startRecording() async {
+        // 记录录音前的 undo count（用于 cancel 时精确回退）
+        undoCountBeforeRecording = historyUseCase.undoCount
+
         // 取消进行中的优化
         cancelRefinement()
+
+        // 判断是否为续写模式（text 不为空则续写）
+        let isAppendMode = !text.isEmpty
+
+        // 清空临时状态（不管是新建还是续写）
         rawTranscription = ""
         streamingRefinedText = ""
         transcriptionUseCase.clearLiveText()
         liveTranscription = ""
+
+        logger.debug("🎙️ [Start Recording] Mode: \(isAppendMode ? "Append" : "New Session"), current text length: \(text.count)")
 
         do {
             try await recordingUseCase.startRecording()
@@ -147,13 +180,33 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         // 防止重复调用 stopRecording
         guard wasRecording else { return }
 
+        // 保存录音前是否有内容（用于判断续写模式）
+        let hadPreviousContent = !text.isEmpty
+
         do {
             try await recordingUseCase.stopRecording()
-            // 将最新的实时转录提交到编辑区，避免 final 为空导致后续优化无文本
-            try? await transcriptionUseCase.commitCurrentTranscription()
-            // 冻结原始转录文本（使用最新的实时转录内容）
-            rawTranscription = liveTranscription
-            // 自动执行优化
+
+            // 提交转录到编辑区
+            if hadPreviousContent {
+                // 续写模式：追加到现有文本 → History 记录 1
+                let newText = liveTranscription
+                logger.debug("📝 [Append Mode] Previous text: '\(text)'")
+                logger.debug("📝 [Append Mode] New transcription: '\(newText)'")
+                if !newText.isEmpty {
+                    try? editingUseCase.append("\n" + newText)
+                }
+                logger.debug("📝 [Append Mode] After append, currentText: '\(editingUseCase.currentText)'")
+            } else {
+                // New session 模式：替换全部 → History 记录 1
+                logger.debug("📝 [New Session] Transcription: '\(liveTranscription)'")
+                try? await transcriptionUseCase.commitCurrentTranscription()
+            }
+
+            // 冻结整个 text 用于优化（包括旧内容 + 新转录）
+            rawTranscription = editingUseCase.currentText
+            logger.debug("📝 [Refine] Raw text for refinement (length: \(rawTranscription.count)): '\(rawTranscription)'")
+
+            // 自动执行优化（针对整个 text）
             await autoRefine()
         } catch {
             errorMessage = error.localizedDescription
@@ -188,6 +241,15 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     }
 
     public func toggleRecording() async {
+        // 防止重入：如果已有录音操作正在进行，忽略新的切换请求
+        guard !isRecordingOperationInProgress else {
+            logger.warning("toggleRecording() ignored - operation already in progress")
+            return
+        }
+
+        isRecordingOperationInProgress = true
+        defer { isRecordingOperationInProgress = false }
+
         if isRecording {
             await stopRecording()
         } else {
@@ -225,7 +287,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                     guard !Task.isCancelled else { break }
                     switch event {
                     case .chunk(let text):
-                        self.streamingRefinedText += text
+                        self.streamingRefinedText = text
                     case .state:
                         // 状态已经通过 statePublisher 自动同步
                         break
@@ -233,7 +295,10 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                 }
                 // 流结束：将优化结果提交到编辑器
                 if !Task.isCancelled, !self.streamingRefinedText.isEmpty {
+                    self.logger.debug("✨ [Refine Complete] Raw text (length: \(self.rawTranscription.count)): '\(self.rawTranscription)'")
+                    self.logger.debug("✨ [Refine Complete] Refined text (length: \(self.streamingRefinedText.count)): '\(self.streamingRefinedText)'")
                     try? self.editingUseCase.replaceAll(with: self.streamingRefinedText)
+                    self.logger.debug("✨ [Refine Complete] Final currentText: '\(self.editingUseCase.currentText)'")
                 }
             } catch {
                 if !Task.isCancelled {
@@ -247,6 +312,34 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         streamingTask?.cancel()
         streamingTask = nil
         refinementUseCase.cancel()
+    }
+
+    /// 取消当前识别（回退到录音前状态）
+    ///
+    /// 取消正在进行的优化，并通过 undo 精确回退到录音前的状态。
+    /// - New session: 回退到空白状态
+    /// - 续写模式: 回退到续写前的状态
+    ///
+    /// 注意：当前 History 功能未实现，此方法暂时只清空临时状态
+    public func cancelRecording() {
+        // 取消正在进行的优化
+        cancelRefinement()
+
+        // 清空临时状态
+        streamingRefinedText = ""
+        rawTranscription = ""
+        liveTranscription = ""
+
+        // TODO: 当 History 实现后，使用以下代码精确回退：
+        // let currentUndoCount = historyUseCase.undoCount
+        // let stepsToUndo = currentUndoCount - undoCountBeforeRecording
+        // for _ in 0..<stepsToUndo {
+        //     if canUndo {
+        //         try? historyUseCase.undo()
+        //     }
+        // }
+
+        logger.warning("⚠️ cancelRecording() called but History is not implemented yet - only clearing temporary state")
     }
 
     // MARK: - 编辑操作

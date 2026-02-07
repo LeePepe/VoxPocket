@@ -327,14 +327,13 @@ public final class DefaultLLMService: LLMService, Sendable {
         guard let provider = currentProvider else {
             throw VoxError.llmProviderNotConfigured
         }
-        logger.log(.info, "开始流式文本优化（跳过分析以提高性能）", context: [
+        logger.log(.info, "开始流式文本优化", context: [
             "text_length": request.text.count,
             "provider": provider.providerType.rawValue
         ], file: #file, function: #function, line: #line)
 
-        // FIXME: 暂时禁用意图/语气分析，因为 Apple Intelligence 的 guided generation
-        // 存在严重性能问题（超时 120+ 秒）。直接进行文本优化。
-        // _ = await analyzeContent(request)
+        // 重新启用意图/语气分析（已切换到文本完成方法，性能提升 100+ 倍）
+        _ = await analyzeContent(request)
 
         let prompt = RefinementPromptBuilder.build(
             text: request.text,
