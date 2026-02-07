@@ -3,11 +3,20 @@ import SwiftUI
 struct RawTranscriptView: View {
     let rawText: String
     let status: RecorderStatus
+    let canCopyRaw: Bool
+    let onCopyRaw: () -> Void
     @Environment(\.dismiss) private var dismiss
 
-    init(rawText: String, status: RecorderStatus = .idle) {
+    init(
+        rawText: String,
+        status: RecorderStatus = .idle,
+        canCopyRaw: Bool? = nil,
+        onCopyRaw: @escaping () -> Void = {}
+    ) {
         self.rawText = rawText
         self.status = status
+        self.canCopyRaw = canCopyRaw ?? !rawText.isEmpty
+        self.onCopyRaw = onCopyRaw
     }
 
     var body: some View {
@@ -23,6 +32,11 @@ struct RawTranscriptView: View {
             .navigationTitle("Raw Transcript")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
+                    Button("Copy Raw", action: onCopyRaw)
+                        .disabled(!canCopyRaw)
+                        .opacity(canCopyRaw ? 1 : 0.4)
+                }
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
                         dismiss()
                     }

@@ -24,6 +24,7 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
 
     private let _isTranscribing = Mutex(false)
+    private let _isStopping = Mutex(false)
     private let logger: Logger
     private var tapBufferCount = 0
 
@@ -72,8 +73,19 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         _isTranscribing.withLock { $0 }
     }
 
+    internal static func shouldSuppressLiveStreamCompletion(for error: NSError, isStopping: Bool) -> Bool {
+        if isStopping {
+            return true
+        }
+        if error.domain == "kAFAssistantErrorDomain", error.code == 216 {
+            return true
+        }
+        return false
+    }
+
     public func start(language: Locale) async throws {
         logger.info("start() called, language: \(language.identifier)")
+        _isStopping.withLock { $0 = false }
 
         guard let speechRecognizer else {
             logger.error("SFSpeechRecognizer 不可用")
@@ -205,7 +217,8 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                 // 如果不是取消导致的错误
                 let nsError = error as NSError
                 self.logger.error("Recognition error: domain=\(nsError.domain), code=\(nsError.code), desc=\(nsError.localizedDescription)")
-                if nsError.domain != "kAFAssistantErrorDomain" || nsError.code != 216 {
+                let isStopping = self._isStopping.withLock { $0 }
+                if !Self.shouldSuppressLiveStreamCompletion(for: nsError, isStopping: isStopping) {
                     self.liveResultSubject.send(completion: .failure(error))
                 }
                 self.stopInternal()
@@ -216,6 +229,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
 
     public func stop() async {
         logger.info("stop() called")
+        _isStopping.withLock { $0 = true }
         // 结束识别请求，触发 isFinal 结果
         recognitionRequest?.endAudio()
         stopInternal()
@@ -248,6 +262,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         audioLevelSubject.send(0)
 
         _isTranscribing.withLock { $0 = false }
+        _isStopping.withLock { $0 = false }
         logger.debug("stopInternal() completed, isTranscribing = false")
     }
 

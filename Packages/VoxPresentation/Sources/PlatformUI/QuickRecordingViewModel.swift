@@ -117,6 +117,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         rawTranscription = ""
         errorMessage = nil
         isProcessing = false
+        transcriptionUseCase.clearLiveText()
 
         do {
             try await recordingUseCase.startRecording()

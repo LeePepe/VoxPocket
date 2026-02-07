@@ -2,9 +2,17 @@ import SwiftUI
 
 public struct VoxPocketView<VM: VoxPocketViewState>: View {
     @ObservedObject var viewModel: VM
+    let onCopyRefined: (String) -> Void
+    let onCopyRaw: (String) -> Void
 
-    public init(viewModel: VM) {
+    public init(
+        viewModel: VM,
+        onCopyRefined: @escaping (String) -> Void = { _ in },
+        onCopyRaw: @escaping (String) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
+        self.onCopyRefined = onCopyRefined
+        self.onCopyRaw = onCopyRaw
     }
 
     public var body: some View {
@@ -14,12 +22,20 @@ public struct VoxPocketView<VM: VoxPocketViewState>: View {
             onToggleSidebar: nil,
             onShowRawSheet: {
                 viewModel.showRawSheet = true
-            }
+            },
+            onCopyRefined: onCopyRefined
         )
         .sheet(isPresented: $viewModel.showRawSheet) {
+            let rawText = viewModel.editorState.isRecording
+                ? viewModel.editorState.liveTranscription
+                : viewModel.editorState.rawTranscription
             RawTranscriptView(
-                rawText: viewModel.editorState.liveTranscription,
-                status: viewModel.recorderStatus
+                rawText: rawText,
+                status: viewModel.recorderStatus,
+                canCopyRaw: !rawText.isEmpty,
+                onCopyRaw: {
+                    onCopyRaw(rawText)
+                }
             )
         }
     }

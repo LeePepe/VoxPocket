@@ -124,6 +124,8 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         cancelRefinement()
         rawTranscription = ""
         streamingRefinedText = ""
+        transcriptionUseCase.clearLiveText()
+        liveTranscription = ""
 
         do {
             try await recordingUseCase.startRecording()
