@@ -7,9 +7,10 @@
 # Swift/Xcode
 .build/
 .swiftpm/
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
-*.xcodeproj/project.xcworkspace/xcuserdata/
+**/*.xcodeproj/xcuserdata/
+**/*.xcworkspace/xcuserdata/
+**/*.xcodeproj/project.xcworkspace/xcuserdata/
+*.backup
 *.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
 DerivedData/
 *.moved-aside

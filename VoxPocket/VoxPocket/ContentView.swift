@@ -24,7 +24,7 @@ struct ContentView: View {
         let editing = DefaultEditingUseCase()
         let recording = DefaultRecordingUseCase(coordinator: transcriber)
         let transcription = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editing)
-        let history = DefaultHistoryUseCase()
+        let history = DefaultHistoryUseCase(editing: editing)
 
         // LLM 服务与优化用例
         let llmService = DefaultLLMService()

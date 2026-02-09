@@ -58,6 +58,9 @@ public protocol EditorViewState: ObservableObject {
     /// 切换录音状态
     func toggleRecording() async
 
+    /// 开始新的 session（清空所有内容并重新录音）
+    func startNewSession() async
+
     // MARK: - 编辑操作
 
     /// 撤销

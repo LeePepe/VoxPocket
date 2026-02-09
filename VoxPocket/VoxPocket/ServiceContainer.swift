@@ -65,7 +65,7 @@ public final class ServiceContainer: ObservableObject {
         editingUseCase = DefaultEditingUseCase()
         recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber)
         transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase)
-        historyUseCase = DefaultHistoryUseCase()
+        historyUseCase = DefaultHistoryUseCase(editing: editingUseCase)
         refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase)
 
         print("✅ [ServiceContainer] Initialized")

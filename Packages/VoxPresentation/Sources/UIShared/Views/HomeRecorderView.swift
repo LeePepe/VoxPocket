@@ -7,6 +7,7 @@ struct HomeRecorderView<VM: EditorViewState>: View {
     let onToggleSidebar: (() -> Void)?
     let onShowRawSheet: () -> Void
     let onCopyRefined: (String) -> Void
+    let onCopyRaw: (String) -> Void
 
     @State private var reveal = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -73,7 +74,8 @@ struct HomeRecorderView<VM: EditorViewState>: View {
 
                 if shouldShowRawPane {
                     RawInlinePane(
-                        text: rawPaneText
+                        text: rawPaneText,
+                        onCopy: { onCopyRaw(rawPaneText) }
                     )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -91,7 +93,9 @@ struct HomeRecorderView<VM: EditorViewState>: View {
                 onCopy: {
                     onCopyRefined(viewModel.text)
                 },
-                onNewSession: {}
+                onNewSession: {
+                    Task { await viewModel.startNewSession() }
+                }
             )
         }
         .padding(.horizontal, 20)
@@ -151,6 +155,7 @@ struct TopBar: View {
             .disabled(!canRedo)
             .opacity(canRedo ? 1 : 0.4)
 
+#if os(iOS)
             Button(action: onShowRaw) {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform.and.mic")
@@ -163,6 +168,7 @@ struct TopBar: View {
                 .padding(.vertical, 7)
             }
             .buttonStyle(GlassCapsuleStyle())
+#endif
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -193,6 +199,7 @@ struct RefinedTextPane: View {
 
 struct RawInlinePane: View {
     let text: String
+    let onCopy: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -201,8 +208,11 @@ struct RawInlinePane: View {
                     .font(FontToken.callout)
                     .foregroundColor(.textSecondary)
                 Spacer()
-                Image(systemName: "doc.on.doc")
-                    .foregroundColor(.textTertiary)
+                Button(action: onCopy) {
+                    Image(systemName: "doc.on.doc")
+                        .foregroundColor(.textTertiary)
+                }
+                .buttonStyle(GlassIconButtonStyle())
             }
             Text(text)
                 .font(FontToken.body)
@@ -259,11 +269,11 @@ struct BottomControls: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var primaryTitle: String {
-        (status == .listening || status == .transcribing || status == .refining) ? "Stop" : "Restart"
+        (status == .listening || status == .transcribing || status == .refining) ? "Stop" : "Resume"
     }
 
     private var primaryIcon: String {
-        (status == .listening || status == .transcribing || status == .refining) ? "stop.fill" : "arrow.counterclockwise"
+        (status == .listening || status == .transcribing || status == .refining) ? "stop.fill" : "mic.fill"
     }
 
     private func primaryColor(for theme: Theme) -> Color {
@@ -284,21 +294,23 @@ struct BottomControls: View {
     var body: some View {
         let theme = Theme.current(colorScheme)
         let primaryColor = primaryColor(for: theme)
-        HStack(spacing: 12) {
-            Button(action: onStopOrRestart) {
-                ControlButtonLabel(title: primaryTitle, systemImage: primaryIcon)
+        HStack(spacing: 10) {
+            Button(action: onNewSession) {
+                ControlButtonLabel(title: "New", systemImage: "plus")
             }
-            .buttonStyle(PrimaryControlStyle(color: primaryColor, emphasis: true))
+            .buttonStyle(PrimaryControlStyle(color: theme.palette.surfaceElevated, emphasis: false))
+
+            Spacer()
 
             Button(action: onCopy) {
                 ControlButtonLabel(title: "Copy", systemImage: "doc.on.doc")
             }
             .buttonStyle(PrimaryControlStyle(color: theme.palette.surfaceElevated, emphasis: false))
 
-            Button(action: onNewSession) {
-                ControlButtonLabel(title: "New Session", systemImage: "plus.circle.fill")
+            Button(action: onStopOrRestart) {
+                ControlButtonLabel(title: primaryTitle, systemImage: primaryIcon)
             }
-            .buttonStyle(PrimaryControlStyle(color: theme.palette.surfaceElevated, emphasis: false))
+            .buttonStyle(PrimaryControlStyle(color: primaryColor, emphasis: true))
         }
     }
 }
@@ -308,14 +320,15 @@ struct ControlButtonLabel: View {
     let systemImage: String
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Image(systemName: systemImage)
+                .font(.system(size: 13))
             Text(title)
-                .font(FontToken.callout)
+                .font(FontToken.caption)
         }
         .foregroundColor(.textPrimary)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
     }
 }
 
@@ -325,24 +338,38 @@ struct PrimaryControlStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
 
     func makeBody(configuration: Configuration) -> some View {
-        let theme = Theme.current(colorScheme)
-        let strokeColor = emphasis ? theme.palette.strokeStrong : theme.palette.strokeSubtle
-        configuration.label
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(color.opacity(configuration.isPressed ? 0.6 : 0.85))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(strokeColor, lineWidth: 1)
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(theme.palette.surfaceGlassStrong.opacity(emphasis ? 0.5 : 0.3))
-                            .blur(radius: 6)
-                    )
-            )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            if emphasis {
+                configuration.label
+                    .glassEffect(.regular.interactive().tint(color), in: RoundedRectangle(cornerRadius: 16))
+                    .scaleEffect(configuration.isPressed ? 0.98 : 1)
+                    .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+            } else {
+                configuration.label
+                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 16))
+                    .scaleEffect(configuration.isPressed ? 0.98 : 1)
+                    .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+            }
+        } else {
+            let theme = Theme.current(colorScheme)
+            let strokeColor = emphasis ? theme.palette.strokeStrong : theme.palette.strokeSubtle
+            configuration.label
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(color.opacity(configuration.isPressed ? 0.6 : 0.85))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(strokeColor, lineWidth: 1)
+                        )
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(theme.palette.surfaceGlassStrong.opacity(emphasis ? 0.5 : 0.3))
+                                .blur(radius: 6)
+                        )
+                )
+                .scaleEffect(configuration.isPressed ? 0.98 : 1)
+                .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+        }
     }
 }
 
@@ -350,19 +377,26 @@ struct GlassIconButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
 
     func makeBody(configuration: Configuration) -> some View {
-        let theme = Theme.current(colorScheme)
-        configuration.label
-            .frame(width: 34, height: 34)
-            .foregroundColor(theme.palette.textPrimary)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(theme.palette.surfaceElevated.opacity(configuration.isPressed ? 0.7 : 1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(theme.palette.strokeSubtle, lineWidth: 1)
-                    )
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            configuration.label
+                .frame(width: 34, height: 34)
+                .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 12))
+                .scaleEffect(configuration.isPressed ? 0.96 : 1)
+        } else {
+            let theme = Theme.current(colorScheme)
+            configuration.label
+                .frame(width: 34, height: 34)
+                .foregroundColor(theme.palette.textPrimary)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(theme.palette.surfaceElevated.opacity(configuration.isPressed ? 0.7 : 1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(theme.palette.strokeSubtle, lineWidth: 1)
+                        )
+                )
+                .scaleEffect(configuration.isPressed ? 0.96 : 1)
+        }
     }
 }
 
@@ -370,17 +404,23 @@ struct GlassCapsuleStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
 
     func makeBody(configuration: Configuration) -> some View {
-        let theme = Theme.current(colorScheme)
-        configuration.label
-            .background(
-                Capsule()
-                    .fill(theme.palette.surfaceElevated.opacity(configuration.isPressed ? 0.8 : 1))
-                    .overlay(
-                        Capsule()
-                            .stroke(theme.palette.strokeSubtle, lineWidth: 1)
-                    )
-            )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            configuration.label
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .scaleEffect(configuration.isPressed ? 0.98 : 1)
+        } else {
+            let theme = Theme.current(colorScheme)
+            configuration.label
+                .background(
+                    Capsule()
+                        .fill(theme.palette.surfaceElevated.opacity(configuration.isPressed ? 0.8 : 1))
+                        .overlay(
+                            Capsule()
+                                .stroke(theme.palette.strokeSubtle, lineWidth: 1)
+                        )
+                )
+                .scaleEffect(configuration.isPressed ? 0.98 : 1)
+        }
     }
 }
 
@@ -388,13 +428,19 @@ struct GlassCapsuleBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let theme = Theme.current(colorScheme)
-        Capsule()
-            .fill(theme.palette.surfaceGlass)
-            .overlay(
-                Capsule()
-                    .stroke(theme.palette.strokeSubtle, lineWidth: 1)
-            )
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Capsule()
+                .fill(.clear)
+                .glassEffect(.regular, in: .capsule)
+        } else {
+            let theme = Theme.current(colorScheme)
+            Capsule()
+                .fill(theme.palette.surfaceGlass)
+                .overlay(
+                    Capsule()
+                        .stroke(theme.palette.strokeSubtle, lineWidth: 1)
+                )
+        }
     }
 }
 
@@ -402,18 +448,24 @@ struct GlassBarBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let theme = Theme.current(colorScheme)
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(theme.palette.surfaceGlass)
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(theme.palette.strokeSubtle, lineWidth: 1)
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(theme.palette.surfaceGlassStrong.opacity(0.6))
-                    .blur(radius: 8)
-            )
+        if #available(iOS 26.0, macOS 26.0, *) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.clear)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18))
+        } else {
+            let theme = Theme.current(colorScheme)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(theme.palette.surfaceGlass)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(theme.palette.strokeSubtle, lineWidth: 1)
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(theme.palette.surfaceGlassStrong.opacity(0.6))
+                        .blur(radius: 8)
+                )
+        }
     }
 }
 
@@ -423,20 +475,26 @@ struct GlassCardBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let theme = Theme.current(colorScheme)
-        let fillColor = strength >= 0.2 ? theme.palette.surfaceGlassStrong : theme.palette.surfaceGlass
-        let strokeColor = strength >= 0.2 ? theme.palette.strokeStrong : theme.palette.strokeSubtle
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(fillColor)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(strokeColor, lineWidth: 1)
-            )
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(theme.palette.surfaceGlassStrong.opacity(0.5))
-                    .blur(radius: 10)
-            )
+        if #available(iOS 26.0, macOS 26.0, *) {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.clear)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
+        } else {
+            let theme = Theme.current(colorScheme)
+            let fillColor = strength >= 0.2 ? theme.palette.surfaceGlassStrong : theme.palette.surfaceGlass
+            let strokeColor = strength >= 0.2 ? theme.palette.strokeStrong : theme.palette.strokeSubtle
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(fillColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(strokeColor, lineWidth: 1)
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(theme.palette.surfaceGlassStrong.opacity(0.5))
+                        .blur(radius: 10)
+                )
+        }
     }
 }
 
@@ -451,7 +509,8 @@ struct GlassCardBackground: View {
             recorderStatus: .idle,
             onToggleSidebar: {},
             onShowRawSheet: {},
-            onCopyRefined: { _ in }
+            onCopyRefined: { _ in },
+            onCopyRaw: { _ in }
         )
     }
     .frame(height: 600)

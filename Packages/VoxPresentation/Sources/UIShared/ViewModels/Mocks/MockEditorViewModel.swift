@@ -112,6 +112,11 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
         streamingRefinedText = ""
     }
 
+    public func startNewSession() async {
+        clearText()
+        await startRecording()
+    }
+
     private func cancelMockFlow() {
         mockTask?.cancel()
         mockTask = nil

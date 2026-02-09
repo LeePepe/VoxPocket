@@ -4,7 +4,7 @@ import CoreModels
 public struct VoxPocketRootView<VM: RootViewState>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject var viewModel: VM
-    @State private var sidebarSelection: SidebarDestination = .session(UUID())
+    @State private var sidebarSelection: SidebarDestination? = .session(UUID())
     let onCopyRefined: (String) -> Void
     let onCopyRaw: (String) -> Void
  
@@ -82,7 +82,8 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     onShowRawSheet: {
                         viewModel.showRawSheet = true
                     },
-                    onCopyRefined: onCopyRefined
+                    onCopyRefined: onCopyRefined,
+                    onCopyRaw: onCopyRaw
                 )
             }
             .navigationDestination(for: Route.self) { route in
@@ -152,7 +153,8 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     onShowRawSheet: {
                         viewModel.showRawSheet = true
                     },
-                    onCopyRefined: onCopyRefined
+                    onCopyRefined: onCopyRefined,
+                    onCopyRaw: onCopyRaw
                 )
                 .sheet(isPresented: $viewModel.showRawSheet) {
                     let rawText = viewModel.editorState.isRecording
@@ -169,6 +171,9 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                 }
             case .me:
                 MeRootView(status: viewModel.recorderStatus)
+            case .none:
+                Text("Select a session")
+                    .foregroundColor(.textSecondary)
             }
         }
     }

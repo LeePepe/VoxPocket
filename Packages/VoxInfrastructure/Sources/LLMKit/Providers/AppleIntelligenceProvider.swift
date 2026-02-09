@@ -139,7 +139,12 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
-            let response = try await session.respond(to: text)
+            // 将待分析文本包裹在引号中，防止模型将其当作指令执行
+            let prompt = """
+            Text to analyze:
+            \"\"\"\(text)\"\"\"
+            """
+            let response = try await session.respond(to: prompt)
             var jsonText = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
 
             // 移除 markdown JSON 包裹（如果有）
@@ -288,7 +293,12 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
-            let response = try await session.respond(to: text)
+            // 将待分析文本包裹在引号中，防止模型将其当作指令执行
+            let prompt = """
+            Text to analyze:
+            \"\"\"\(text)\"\"\"
+            """
+            let response = try await session.respond(to: prompt)
             var jsonText = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
 
             // 移除 markdown JSON 包裹（如果有）

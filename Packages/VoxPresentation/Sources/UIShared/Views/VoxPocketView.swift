@@ -23,7 +23,8 @@ public struct VoxPocketView<VM: VoxPocketViewState>: View {
             onShowRawSheet: {
                 viewModel.showRawSheet = true
             },
-            onCopyRefined: onCopyRefined
+            onCopyRefined: onCopyRefined,
+            onCopyRaw: onCopyRaw
         )
         .sheet(isPresented: $viewModel.showRawSheet) {
             let rawText = viewModel.editorState.isRecording
