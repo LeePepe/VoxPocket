@@ -4,8 +4,6 @@ import CoreModels
 struct HomeRecorderView<VM: EditorViewState>: View {
     @ObservedObject var viewModel: VM
     let recorderStatus: RecorderStatus
-    let onToggleSidebar: (() -> Void)?
-    let onShowRawSheet: () -> Void
     let onCopyRefined: (String) -> Void
     let onCopyRaw: (String) -> Void
 
@@ -56,28 +54,22 @@ struct HomeRecorderView<VM: EditorViewState>: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            TopBar(
-                title: "VoxPocket",
-                onToggleSidebar: onToggleSidebar,
-                canUndo: viewModel.canUndo,
-                canRedo: viewModel.canRedo,
-                onUndo: { viewModel.undo() },
-                onRedo: { viewModel.redo() },
-                onShowRaw: onShowRawSheet
-            )
-
             VStack(spacing: 16) {
                 RefinedTextPane(
-                    text: refinedPaneText,
-                    status: recorderStatus
+                    text: refinedPaneText
                 )
+                .frame(maxHeight: .infinity, alignment: .top)
 
-                if shouldShowRawPane {
-                    RawInlinePane(
-                        text: rawPaneText,
-                        onCopy: { onCopyRaw(rawPaneText) }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                Spacer(minLength: 0)
+
+                Group {
+                    if shouldShowRawPane {
+                        RawInlinePane(
+                            text: rawPaneText,
+                            onCopy: { onCopyRaw(rawPaneText) }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
@@ -99,7 +91,7 @@ struct HomeRecorderView<VM: EditorViewState>: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 14)
+        .padding(.top, 8)
         .padding(.bottom, 28)
         .opacity(reveal ? 1 : 0)
         .offset(y: reveal ? 0 : 12)
@@ -112,73 +104,8 @@ struct HomeRecorderView<VM: EditorViewState>: View {
 
 // MARK: - Sub-components
 
-struct TopBar: View {
-    let title: String
-    let onToggleSidebar: (() -> Void)?
-    let canUndo: Bool
-    let canRedo: Bool
-    let onUndo: () -> Void
-    let onRedo: () -> Void
-    let onShowRaw: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            if let onToggleSidebar {
-                Button(action: onToggleSidebar) {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.textPrimary)
-                        .frame(width: 38, height: 38)
-                }
-                .buttonStyle(GlassIconButtonStyle())
-            }
-
-            Text(title)
-                .font(FontToken.headline)
-                .foregroundColor(.textPrimary)
-
-            Spacer()
-
-            Button(action: onUndo) {
-                Image(systemName: "arrow.uturn.left")
-                    .font(.system(size: 15, weight: .semibold))
-            }
-            .buttonStyle(GlassIconButtonStyle())
-            .disabled(!canUndo)
-            .opacity(canUndo ? 1 : 0.4)
-
-            Button(action: onRedo) {
-                Image(systemName: "arrow.uturn.right")
-                    .font(.system(size: 15, weight: .semibold))
-            }
-            .buttonStyle(GlassIconButtonStyle())
-            .disabled(!canRedo)
-            .opacity(canRedo ? 1 : 0.4)
-
-#if os(iOS)
-            Button(action: onShowRaw) {
-                HStack(spacing: 6) {
-                    Image(systemName: "waveform.and.mic")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Raw")
-                        .font(FontToken.callout)
-                }
-                .foregroundColor(.textPrimary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-            }
-            .buttonStyle(GlassCapsuleStyle())
-#endif
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(GlassBarBackground())
-    }
-}
-
 struct RefinedTextPane: View {
     let text: String
-    let status: RecorderStatus
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -187,10 +114,6 @@ struct RefinedTextPane: View {
                 .foregroundColor(.textPrimary)
                 .lineSpacing(7)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(status.rawValue)
-                .font(FontToken.caption)
-                .foregroundColor(.textTertiary)
         }
         .padding(22)
         .background(GlassCardBackground(cornerRadius: 26, strength: 0.22))
@@ -329,6 +252,7 @@ struct ControlButtonLabel: View {
         .foregroundColor(.textPrimary)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
+        .contentShape(.rect)
     }
 }
 
@@ -507,8 +431,6 @@ struct GlassCardBackground: View {
         HomeRecorderView(
             viewModel: vm,
             recorderStatus: .idle,
-            onToggleSidebar: {},
-            onShowRawSheet: {},
             onCopyRefined: { _ in },
             onCopyRaw: { _ in }
         )

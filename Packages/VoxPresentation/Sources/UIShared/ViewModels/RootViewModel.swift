@@ -30,6 +30,7 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
         self.editorState = editorState
 
         bindEditorState()
+        loadHistoryOnLaunch()
     }
 
     private func bindEditorState() {
@@ -58,7 +59,9 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
     // MARK: - 操作
 
     public func selectSession(_ id: UUID) {
-        sessionListState.selectedSessionId = id
+        Task {
+            await sessionListState.selectSession(id)
+        }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             isDrawerOpen = false
         }
@@ -74,6 +77,12 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
     public func toggleDrawer() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             isDrawerOpen.toggle()
+        }
+    }
+
+    private func loadHistoryOnLaunch() {
+        Task {
+            await sessionListState.loadSessions()
         }
     }
 }

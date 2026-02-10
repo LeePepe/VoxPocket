@@ -21,4 +21,9 @@ final class CopyButtonsTests: XCTestCase {
         let view = RawTranscriptView(rawText: "", status: .idle, canCopyRaw: false, onCopyRaw: {})
         XCTAssertFalse(view.canCopyRaw)
     }
+
+    func testRefinedTextPaneDoesNotRequireStatusLabel() {
+        _ = RefinedTextPane(text: "hello")
+        XCTAssertTrue(true)
+    }
 }

@@ -5,7 +5,8 @@ import Combine
 ///
 /// 负责管理全局 Snackbar 通知的显示、排队和生命周期。
 /// 采用队列机制确保通知按优先级有序展示。
-public protocol SnackbarService: AnyObject, Sendable {
+@MainActor
+public protocol SnackbarService: AnyObject {
 
     /// 当前显示的通知（用于 SwiftUI 绑定）
     var currentMessage: SnackbarMessage? { get }

@@ -4,6 +4,7 @@ public struct BackgroundAtmosphere: View {
     let status: RecorderStatus
     let audioLevel: Double?
     @State private var stateStart = Date()
+    @State private var smoothedAudioLevel: Double = 0
     @Environment(\.colorScheme) private var colorScheme
 
     public init(status: RecorderStatus = .idle, audioLevel: Double? = nil) {
@@ -15,7 +16,12 @@ public struct BackgroundAtmosphere: View {
         TimelineView(.animation(minimumInterval: 0.05, paused: false)) { context in
             let elapsed = context.date.timeIntervalSince(stateStart)
             let theme = Theme.current(colorScheme)
-            let config = atmosphereConfig(for: status, elapsed: elapsed, audioLevel: audioLevel, theme: theme)
+            let config = atmosphereConfig(
+                for: status,
+                elapsed: elapsed,
+                audioLevel: smoothedAudioLevel,
+                theme: theme
+            )
 
             ZStack {
                 AtmospherePlate(config: config)
@@ -24,6 +30,13 @@ public struct BackgroundAtmosphere: View {
         }
         .onChange(of: status) { _, _ in
             stateStart = Date()
+            if status != .listening {
+                smoothedAudioLevel = 0
+            }
+        }
+        .onChange(of: audioLevel ?? 0) { _, newLevel in
+            let clamped = clamp(newLevel, min: 0, max: 1)
+            smoothedAudioLevel = smoothedAudioLevel * 0.76 + clamped * 0.24
         }
     }
 
@@ -40,7 +53,7 @@ public struct BackgroundAtmosphere: View {
             return AtmosphereConfig(
                 gradient: [
                     baseColor,
-                    Color(red: 0.1, green: 0.14, blue: 0.2),
+                    Color(red: 0.22, green: 0.26, blue: 0.34),
                     baseColor
                 ],
                 primaryShadow: Color(red: 0.2, green: 0.24, blue: 0.34),
@@ -57,32 +70,31 @@ public struct BackgroundAtmosphere: View {
             )
         case .listening:
             let level = clamp(audioLevel ?? 0, min: 0, max: 1)
-            let pulse = quickPulse(elapsed: elapsed, period: 0.9)
-            let energy = max(level, pulse * 0.5)
+            let energy = 0.08 + pow(level, 0.85) * 0.92
             return AtmosphereConfig(
                 gradient: [
                     baseColor,
-                    Color(red: 0.04, green: 0.08, blue: 0.12),
+                    Color(red: 0.18, green: 0.26 + energy * 0.08, blue: 0.3 + energy * 0.1),
                     baseColor
                 ],
                 primaryShadow: Color(red: 0.12, green: 0.42, blue: 0.46),
                 secondaryShadow: Color(red: 0.08, green: 0.24, blue: 0.32),
-                primaryOpacity: 0.55 + energy * 0.4,
-                secondaryOpacity: 0.35 + energy * 0.2,
-                primaryRadius: 26 + energy * 12,
-                secondaryRadius: 18 + energy * 7,
+                primaryOpacity: 0.5 + energy * 0.38,
+                secondaryOpacity: 0.3 + energy * 0.26,
+                primaryRadius: 24 + energy * 14,
+                secondaryRadius: 16 + energy * 9,
                 primaryOffset: CGSize(width: 6 + energy * 6, height: 8 + energy * 7),
                 secondaryOffset: CGSize(width: -5 - energy * 4, height: -6 - energy * 5),
                 shadowLineWidth: 32,
                 vignetteColor: theme.palette.backgroundVignette,
-                vignetteOpacity: 0.55
+                vignetteOpacity: 0.4 + energy * 0.22
             )
         case .transcribing:
             let breathe = slowPulse(elapsed: elapsed, period: 6.5)
             return AtmosphereConfig(
                 gradient: [
                     baseColor,
-                    Color(red: 0.09, green: 0.12, blue: 0.22),
+                    Color(red: 0.2, green: 0.24, blue: 0.36),
                     baseColor
                 ],
                 primaryShadow: Color(red: 0.18, green: 0.28, blue: 0.56),
@@ -102,7 +114,7 @@ public struct BackgroundAtmosphere: View {
             return AtmosphereConfig(
                 gradient: [
                     baseColor,
-                    Color(red: 0.14, green: 0.1, blue: 0.24),
+                    Color(red: 0.26, green: 0.22, blue: 0.38),
                     baseColor
                 ],
                 primaryShadow: Color(red: 0.38, green: 0.24, blue: 0.6),
@@ -122,7 +134,7 @@ public struct BackgroundAtmosphere: View {
             return AtmosphereConfig(
                 gradient: [
                     baseColor,
-                    Color(red: 0.12, green: 0.2, blue: 0.18),
+                    Color(red: 0.24, green: 0.34, blue: 0.32),
                     baseColor
                 ],
                 primaryShadow: Color(red: 0.22, green: 0.6, blue: 0.48),
@@ -142,7 +154,7 @@ public struct BackgroundAtmosphere: View {
             return AtmosphereConfig(
                 gradient: [
                     baseColor,
-                    Color(red: 0.14, green: 0.06, blue: 0.12),
+                    Color(red: 0.34, green: 0.16, blue: 0.22),
                     baseColor
                 ],
                 primaryShadow: Color(red: 0.52, green: 0.2, blue: 0.26),
@@ -158,11 +170,6 @@ public struct BackgroundAtmosphere: View {
                 vignetteOpacity: 0.6
             )
         }
-    }
-
-    private func quickPulse(elapsed: TimeInterval, period: Double) -> Double {
-        let phase = (elapsed / period) * Double.pi * 2
-        return (sin(phase) + 1) * 0.5
     }
 
     private func slowPulse(elapsed: TimeInterval, period: Double) -> Double {
@@ -200,18 +207,10 @@ private struct AtmospherePlate: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let corner: CGFloat = 36
+            let corner: CGFloat = 0
             let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
-            let fill = LinearGradient(
-                colors: config.gradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
 
             ZStack {
-                shape
-                    .fill(fill)
-
                 shape
                     .fill(
                         RadialGradient(
@@ -257,11 +256,12 @@ private struct AtmospherePlate: View {
 
                 InnerEdgeHighlight(
                     shape: shape,
-                    highlightColor: Color.white.opacity(0.18),
+                    color: config.primaryShadow.opacity(config.primaryOpacity),
                     shadowColor: Color.black.opacity(0.35),
-                    radius: 6,
-                    lineWidth: 10
+                    lineWidth: 10,
+                    radius: 6
                 )
+                .blendMode(.screen)
 
                 InnerShadow(
                     shape: shape,
@@ -296,7 +296,6 @@ private struct AtmospherePlate: View {
                     .blendMode(.multiply)
             }
             .compositingGroup()
-            .padding(8)
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .ignoresSafeArea()
@@ -305,15 +304,15 @@ private struct AtmospherePlate: View {
 
 private struct InnerEdgeHighlight: View {
     let shape: RoundedRectangle
-    let highlightColor: Color
+    let color: Color
     let shadowColor: Color
-    let radius: CGFloat
     let lineWidth: CGFloat
+    let radius: CGFloat
 
     var body: some View {
         ZStack {
             shape
-                .stroke(highlightColor, lineWidth: lineWidth)
+                .stroke(color, lineWidth: lineWidth)
                 .blur(radius: radius)
                 .offset(x: -3, y: -3)
                 .mask(shape.fill(Color.black))

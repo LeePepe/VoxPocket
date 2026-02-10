@@ -18,6 +18,7 @@ import UIKit
 
 struct ContentView: View {
     @StateObject private var rootViewModel: RootViewModel<MockSessionListViewModel, EditorViewModel>
+    @StateObject private var snackbarService = DefaultSnackbarService()
 
     init() {
         let transcriber = AppleSpeechTranscriber()
@@ -55,20 +56,25 @@ struct ContentView: View {
         VoxPocketRootView(
             viewModel: rootViewModel,
             onCopyRefined: { text in
+                guard !text.isEmpty else { return }
 #if os(macOS)
                 MacOSClipboardService.shared.copy(text)
 #elseif os(iOS)
                 UIPasteboard.general.string = text
 #endif
+                snackbarService.showSuccess("已复制精炼文本")
             },
             onCopyRaw: { text in
+                guard !text.isEmpty else { return }
 #if os(macOS)
                 MacOSClipboardService.shared.copy(text)
 #elseif os(iOS)
                 UIPasteboard.general.string = text
 #endif
+                snackbarService.showSuccess("已复制原始转写")
             }
         )
+        .snackbarOverlay(service: snackbarService)
     }
 }
 

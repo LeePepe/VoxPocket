@@ -127,7 +127,7 @@ public final class WindowManager: ObservableObject {
         let contentView = FullPanelView(viewModel: panelViewModel)
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 420),
             styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -140,7 +140,7 @@ public final class WindowManager: ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         // 设置最小尺寸
-        panel.minSize = NSSize(width: 500, height: 350)
+        panel.minSize = NSSize(width: 460, height: 320)
 
         // 设置 SwiftUI 内容
         panel.contentView = NSHostingView(rootView: contentView)

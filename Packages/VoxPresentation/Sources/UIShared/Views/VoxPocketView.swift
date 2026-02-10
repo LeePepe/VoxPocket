@@ -19,10 +19,6 @@ public struct VoxPocketView<VM: VoxPocketViewState>: View {
         HomeRecorderView(
             viewModel: viewModel.editorState,
             recorderStatus: viewModel.recorderStatus,
-            onToggleSidebar: nil,
-            onShowRawSheet: {
-                viewModel.showRawSheet = true
-            },
             onCopyRefined: onCopyRefined,
             onCopyRaw: onCopyRaw
         )
