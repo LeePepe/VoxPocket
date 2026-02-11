@@ -8,6 +8,7 @@ import TranscriptionKit
 public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendable {
 
     private let coordinator: TranscriptionCoordinator
+    private let operationGate = RecordingOperationGate()
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private var cancellables = Set<AnyCancellable>()
     private var language: Locale
@@ -45,15 +46,20 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     }
 
     public func startRecording() async throws {
-        // 移除手动状态更新，让监听器（line 30-44）自动处理
-        // 避免状态更新竞态条件
-        try await coordinator.start(language: language)
+        let language = self.language
+        try await operationGate.withExclusiveAccess { [coordinator] in
+            // 移除手动状态更新，让监听器（line 30-44）自动处理
+            // 避免状态更新竞态条件
+            try await coordinator.start(language: language)
+        }
     }
 
     public func stopRecording() async throws {
-        // 移除手动状态更新，让监听器（line 30-44）自动处理
-        // 确保状态更新来源唯一，避免双重更新导致的竞态条件
-        await coordinator.stop()
+        await operationGate.withExclusiveAccess { [coordinator] in
+            // 移除手动状态更新，让监听器（line 30-44）自动处理
+            // 确保状态更新来源唯一，避免双重更新导致的竞态条件
+            await coordinator.stop()
+        }
     }
 
     public func pauseRecording() {
@@ -65,10 +71,13 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     }
 
     public func cancelRecording() {
-        Task {
-            await coordinator.stop()
+        Task { [weak self] in
+            guard let self else { return }
+            await self.operationGate.withExclusiveAccess { [coordinator] in
+                await coordinator.stop()
+            }
+            self.stateSubject.send(.idle)
         }
-        stateSubject.send(.idle)
     }
 
     public func checkPermission() async -> Bool {
@@ -77,5 +86,37 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
 
     public func requestPermission() async -> Bool {
         await coordinator.audioCaptureService.requestPermission()
+    }
+}
+
+private actor RecordingOperationGate {
+    private var isLocked = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func withExclusiveAccess<T>(_ operation: () async throws -> T) async rethrows -> T {
+        await lock()
+        defer { unlock() }
+        return try await operation()
+    }
+
+    private func lock() async {
+        if !isLocked {
+            isLocked = true
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    private func unlock() {
+        if waiters.isEmpty {
+            isLocked = false
+            return
+        }
+
+        let next = waiters.removeFirst()
+        next.resume()
     }
 }

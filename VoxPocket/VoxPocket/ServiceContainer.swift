@@ -75,12 +75,18 @@ public final class ServiceContainer: ObservableObject {
 
     /// 创建完整面板的 EditorViewModel
     public func makeEditorViewModel() -> EditorViewModel {
-        EditorViewModel(
+#if os(macOS)
+        let clipboard: ClipboardService? = MacOSClipboardService.shared
+#else
+        let clipboard: ClipboardService? = nil
+#endif
+        return EditorViewModel(
             recording: recordingUseCase,
             transcription: transcriptionUseCase,
             editing: editingUseCase,
             history: historyUseCase,
-            refinement: refinementUseCase
+            refinement: refinementUseCase,
+            clipboard: clipboard
         )
     }
 

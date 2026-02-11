@@ -31,12 +31,18 @@ struct ContentView: View {
         let llmService = DefaultLLMService()
         let refinement = DefaultRefinementUseCase(llmService: llmService, editing: editing)
 
+#if os(macOS)
+        let clipboard: ClipboardService? = MacOSClipboardService.shared
+#else
+        let clipboard: ClipboardService? = nil
+#endif
         let editor = EditorViewModel(
             recording: recording,
             transcription: transcription,
             editing: editing,
             history: history,
-            refinement: refinement
+            refinement: refinement,
+            clipboard: clipboard
         )
         let sessionUseCase = InMemorySessionUseCase()
         let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)

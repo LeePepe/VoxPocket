@@ -4,6 +4,7 @@ import CoreModels
 import LLMKit
 import UseCases
 import Observability
+import PlatformAdapters
 
 /// 编辑器 ViewModel
 ///
@@ -19,6 +20,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     private let editingUseCase: EditingUseCase
     private let historyUseCase: HistoryUseCase
     private let refinementUseCase: RefinementUseCase
+    private let clipboardService: ClipboardService?
     private let logger: Logger
 
     private var cancellables = Set<AnyCancellable>()
@@ -60,6 +62,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         editing: EditingUseCase,
         history: HistoryUseCase,
         refinement: RefinementUseCase,
+        clipboard: ClipboardService? = nil,
         logger: Logger? = nil
     ) {
         self.recordingUseCase = recording
@@ -67,6 +70,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         self.editingUseCase = editing
         self.historyUseCase = history
         self.refinementUseCase = refinement
+        self.clipboardService = clipboard
         self.logger = logger ?? PrintLogger(subsystem: "EditorViewModel")
 
         bindUseCases()
@@ -299,6 +303,10 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                     self.logger.debug("✨ [Refine Complete] Refined text (length: \(self.streamingRefinedText.count)): '\(self.streamingRefinedText)'")
                     try? self.editingUseCase.replaceAll(with: self.streamingRefinedText)
                     self.logger.debug("✨ [Refine Complete] Final currentText: '\(self.editingUseCase.currentText)'")
+
+                    // 自动复制精炼结果到剪贴板
+                    self.clipboardService?.copy(self.streamingRefinedText)
+                    self.logger.debug("📋 [Auto Copy] Refined text copied to clipboard")
                 }
             } catch {
                 if !Task.isCancelled {

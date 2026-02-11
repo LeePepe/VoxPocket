@@ -146,22 +146,9 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
         NavigationSplitView(columnVisibility: $splitViewVisibility) {
             VStack(spacing: 0) {
                 List(selection: $sidebarSelection) {
-                    Section {
-                        ForEach(viewModel.sessionListState.filteredSessions) { session in
-                            NavigationLink(value: SidebarDestination.session(session.id)) {
-                                HistoryRowView(session: session)
-                            }
-                        }
-                    } header: {
-                        HStack {
-                            SidebarHeaderView(isRecording: viewModel.recorderStatus == .listening)
-                            Button {
-                                viewModel.createNewSession()
-                                sidebarSelection = nil
-                                syncSidebarSelection()
-                            } label: {
-                                Image(systemName: "square.and.pencil")
-                            }
+                    ForEach(viewModel.sessionListState.filteredSessions) { session in
+                        NavigationLink(value: SidebarDestination.session(session.id)) {
+                            HistoryRowView(session: session)
                         }
                     }
                 }
@@ -198,6 +185,20 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 10)
+            }
+            .navigationTitle("VoxPocket")
+            .toolbar {
+                if splitViewVisibility != .detailOnly {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            viewModel.createNewSession()
+                            sidebarSelection = nil
+                            syncSidebarSelection()
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                        }
+                    }
+                }
             }
 #if os(macOS)
             .navigationSplitViewColumnWidth(min: 220, ideal: 280)
