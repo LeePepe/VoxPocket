@@ -34,8 +34,7 @@ public final class WindowManager: ObservableObject {
     private var windows: [WindowType: NSPanel] = [:]
     private var windowControllers: [WindowType: NSWindowController] = [:]
     private var viewModels: [WindowType: Any] = [:]
-    private let quickRecordingTopInset: CGFloat = 96
-
+    
     /// 窗口可见状态
     @Published public var windowVisibility: [WindowType: Bool] = [
         .fullPanel: false,
@@ -90,7 +89,7 @@ public final class WindowManager: ObservableObject {
 
         let visibleFrame = screen.visibleFrame
         let x = visibleFrame.midX - panel.frame.width / 2
-        let y = max(visibleFrame.minY, visibleFrame.maxY - quickRecordingTopInset - panel.frame.height)
+        let y = max(visibleFrame.minY, visibleFrame.maxY - QuickRecordingLayout.topInset - panel.frame.height)
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
@@ -205,7 +204,7 @@ public final class WindowManager: ObservableObject {
         let contentView = QuickRecordingView(viewModel: viewModel)
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 72),
+            contentRect: NSRect(x: 0, y: 0, width: QuickRecordingLayout.panelWidth, height: QuickRecordingLayout.panelHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -221,7 +220,7 @@ public final class WindowManager: ObservableObject {
         // 设置 SwiftUI 内容
         let hostingView = NSHostingView(rootView: contentView)
         hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = 36
+        hostingView.layer?.cornerRadius = QuickRecordingLayout.panelCornerRadius
         hostingView.layer?.masksToBounds = true
         panel.contentView = hostingView
 

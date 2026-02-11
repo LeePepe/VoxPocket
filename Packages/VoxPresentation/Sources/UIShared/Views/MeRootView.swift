@@ -27,6 +27,13 @@ struct MeRootView: View {
     }
 }
 
+private enum MePalette {
+    static let primaryText = Color.primary
+    static let secondaryText = Color.secondary
+    static let divider = Color.primary.opacity(0.12)
+    static let cardBorder = Color.primary.opacity(0.08)
+}
+
 struct ProfileCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -42,15 +49,15 @@ struct ProfileCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Tianpei Li")
                         .font(.custom("Avenir Next", size: 18).weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(MePalette.primaryText)
                     Text("Pro Plan · Active")
                         .font(.custom("Avenir Next", size: 12))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(MePalette.secondaryText)
                 }
                 Spacer()
             }
 
-            Divider().overlay(Color.white.opacity(0.1))
+            Divider().overlay(MePalette.divider)
 
             ProviderRow(provider: "ChatGPT", status: "Connected")
             ProviderRow(provider: "Claude", status: "Not linked")
@@ -67,11 +74,11 @@ struct ProviderRow: View {
         HStack {
             Text(provider)
                 .font(.custom("Avenir Next", size: 14).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
             Spacer()
             Text(status)
                 .font(.custom("Avenir Next", size: 12))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(MePalette.secondaryText)
         }
     }
 }
@@ -81,7 +88,7 @@ struct BehaviorCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Behavior")
                 .font(.custom("Avenir Next", size: 16).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Auto-stop silence", value: "2s")
             SettingRow(title: "VAD Advanced", value: "Off")
@@ -97,7 +104,7 @@ struct PrivacyCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Privacy & Data")
                 .font(.custom("Avenir Next", size: 16).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Data retention", value: "30 days")
             SettingRow(title: "Export data", value: "Ready")
@@ -112,7 +119,7 @@ struct DiagnosticsCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Diagnostics")
                 .font(.custom("Avenir Next", size: 16).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Logger level", value: "Verbose")
             SettingRow(title: "Share logs", value: "Tap")
@@ -129,7 +136,7 @@ struct ShortcutsCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Shortcuts")
                 .font(.custom("Avenir Next", size: 16).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
 
             ShortcutPickerRow(
                 title: "Show Panel",
@@ -150,8 +157,8 @@ struct ShortcutsCard: View {
                 Task { await viewModel.resetToDefaults() }
             }
             .buttonStyle(.borderedProminent)
-            .tint(.white.opacity(0.15))
-            .foregroundColor(.white)
+            .tint(MePalette.primaryText.opacity(0.16))
+            .foregroundColor(MePalette.primaryText)
         }
         .modifier(CardStyle())
         .onAppear {
@@ -186,7 +193,7 @@ struct ShortcutPickerRow: View {
         HStack {
             Text(title)
                 .font(.custom("Avenir Next", size: 13).weight(.medium))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
             Spacer()
             Picker("", selection: $selection) {
                 ForEach(FunctionKey.allCases, id: \.self) { key in
@@ -195,7 +202,7 @@ struct ShortcutPickerRow: View {
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .tint(.white)
+            .tint(MePalette.primaryText)
         }
     }
 }
@@ -207,7 +214,7 @@ struct AboutCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("About")
                 .font(.custom("Avenir Next", size: 16).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Version", value: "0.1.0")
             SettingRow(title: "Privacy policy", value: "View")
@@ -225,11 +232,11 @@ struct SettingRow: View {
         HStack {
             Text(title)
                 .font(.custom("Avenir Next", size: 13).weight(.medium))
-                .foregroundColor(.white)
+                .foregroundColor(MePalette.primaryText)
             Spacer()
             Text(value)
                 .font(.custom("Avenir Next", size: 12))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(MePalette.secondaryText)
         }
     }
 }
@@ -240,11 +247,11 @@ struct CardStyle: ViewModifier {
             .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.white.opacity(0.1))
+                    .fill(.regularMaterial)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(MePalette.cardBorder, lineWidth: 1)
             )
     }
 }

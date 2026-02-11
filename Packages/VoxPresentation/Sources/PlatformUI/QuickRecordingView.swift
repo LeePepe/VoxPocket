@@ -14,7 +14,7 @@ public struct QuickRecordingView: View {
         ZStack {
             BackgroundAtmosphere(status: viewModel.recorderStatus)
         }
-        .frame(width: 240, height: 64)
+        .frame(width: QuickRecordingLayout.pillWidth, height: QuickRecordingLayout.pillHeight)
         .clipShape(Capsule())
         .overlay(
             Capsule()
