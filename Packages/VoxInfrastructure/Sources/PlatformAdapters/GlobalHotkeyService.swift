@@ -89,6 +89,7 @@ public protocol GlobalHotkeyService: AnyObject {
     ///
     /// 长按触发时调用 onPress，释放时调用 onRelease。
     /// 长按阈值通常为 0.5 秒。
+    /// 当 keyCode 为 `kVK_Function`（Fn）时，按下即调用 onPress，抬起即调用 onRelease。
     ///
     /// - Parameters:
     ///   - hotkey: 快捷键定义

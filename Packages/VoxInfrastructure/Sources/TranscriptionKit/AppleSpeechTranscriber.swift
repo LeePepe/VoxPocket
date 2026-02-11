@@ -24,7 +24,6 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
 
     private let _isTranscribing = Mutex(false)
-    private let _isStopping = Mutex(false)
     private let logger: Logger
     private var tapBufferCount = 0
 
@@ -73,16 +72,6 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         _isTranscribing.withLock { $0 }
     }
 
-    internal static func shouldSuppressLiveStreamCompletion(for error: NSError, isStopping: Bool) -> Bool {
-        if isStopping {
-            return true
-        }
-        if error.domain == "kAFAssistantErrorDomain", error.code == 216 {
-            return true
-        }
-        return false
-    }
-
     public func start(language: Locale) async throws {
         logger.info("start() called, language: \(language.identifier)")
 
@@ -92,8 +81,6 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             logger.warning("start() called while already transcribing, stopping previous session first")
             await stop()
         }
-
-        _isStopping.withLock { $0 = false }
 
         guard let speechRecognizer else {
             logger.error("SFSpeechRecognizer 不可用")
@@ -235,13 +222,10 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             }
 
             if let error {
-                // 如果不是取消导致的错误
                 let nsError = error as NSError
                 self.logger.error("Recognition error: domain=\(nsError.domain), code=\(nsError.code), desc=\(nsError.localizedDescription)")
-                let isStopping = self._isStopping.withLock { $0 }
-                if !Self.shouldSuppressLiveStreamCompletion(for: nsError, isStopping: isStopping) {
-                    self.liveResultSubject.send(completion: .failure(error))
-                }
+                // 不发送 completion，避免 PassthroughSubject 永久终止。
+                // Subject 是单例级别的长生命周期对象，一旦 complete 后续录音都无法接收事件。
                 self.stopInternal()
             }
         }
@@ -250,7 +234,6 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
 
     public func stop() async {
         logger.info("stop() called")
-        _isStopping.withLock { $0 = true }
         // 结束识别请求，触发 isFinal 结果
         recognitionRequest?.endAudio()
         stopInternal()
@@ -283,10 +266,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         audioLevelSubject.send(0)
 
         _isTranscribing.withLock { $0 = false }
-        // Don't reset _isStopping here to prevent race condition
-        // The async error callback from recognitionTask?.cancel() may not have fired yet
-        // _isStopping will be reset at the start of the next recording (line 96)
-        logger.debug("stopInternal() completed, isTranscribing = false, _isStopping remains true until next start()")
+        logger.debug("stopInternal() completed, isTranscribing = false")
     }
 
     private func calculateRMSLevel(buffer: AVAudioPCMBuffer) -> Float {

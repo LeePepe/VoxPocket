@@ -53,13 +53,13 @@ public struct BackgroundAtmosphere: View {
         switch status {
         case .idle:
             return AtmosphereConfig(
-                primaryShadow: Color(red: 0.2, green: 0.24, blue: 0.34),
-                primaryOpacity: 0.45 + basePulse * 0.08,
+                primaryShadow: Color(red: 0.55, green: 0.6, blue: 0.8),
+                primaryOpacity: 0.3 + basePulse * 0.08,
                 primaryRadius: 26 + basePulse * 4,
                 primaryOffset: CGSize(width: 6, height: 8),
                 shadowLineWidth: 30,
-                edgeShadowColor: Color(red: 0.16, green: 0.2, blue: 0.3),
-                edgeShadowOpacity: 0.3,
+                edgeShadowColor: Color(red: 0.6, green: 0.65, blue: 0.85),
+                edgeShadowOpacity: 0.35,
                 edgeShadowInset: 40,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.32,
@@ -77,13 +77,13 @@ public struct BackgroundAtmosphere: View {
             let level = clamp(audioLevel ?? 0, min: 0, max: 1)
             let energy = 0.08 + pow(level, 0.85) * 0.92
             return AtmosphereConfig(
-                primaryShadow: Color(red: 0.12, green: 0.42, blue: 0.46),
-                primaryOpacity: 0.5 + energy * 0.38,
+                primaryShadow: Color(red: 0.3, green: 0.7, blue: 0.75),
+                primaryOpacity: 0.35 + energy * 0.35,
                 primaryRadius: 24 + energy * 14,
                 primaryOffset: CGSize(width: 6 + energy * 6, height: 8 + energy * 7),
                 shadowLineWidth: 32,
-                edgeShadowColor: Color(red: 0.1, green: 0.38, blue: 0.42),
-                edgeShadowOpacity: 0.3 + energy * 0.4,
+                edgeShadowColor: Color(red: 0.3, green: 0.68, blue: 0.72),
+                edgeShadowOpacity: 0.35 + energy * 0.35,
                 edgeShadowInset: 40 + energy * 50,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.4 + energy * 0.22,
@@ -100,12 +100,12 @@ public struct BackgroundAtmosphere: View {
         case .transcribing:
             let breathe = slowPulse(elapsed: elapsed, period: 6.5)
             return AtmosphereConfig(
-                primaryShadow: Color(red: 0.18, green: 0.28, blue: 0.56),
-                primaryOpacity: 0.5 + breathe * 0.18,
+                primaryShadow: Color(red: 0.45, green: 0.55, blue: 0.85),
+                primaryOpacity: 0.35 + breathe * 0.15,
                 primaryRadius: 24 + breathe * 8,
                 primaryOffset: CGSize(width: 6, height: 8),
                 shadowLineWidth: 30,
-                edgeShadowColor: Color(red: 0.14, green: 0.22, blue: 0.48),
+                edgeShadowColor: Color(red: 0.45, green: 0.55, blue: 0.82),
                 edgeShadowOpacity: 0.35 + breathe * 0.1,
                 edgeShadowInset: 40 + breathe * 15,
                 vignetteColor: theme.palette.backgroundVignette,
@@ -123,12 +123,12 @@ public struct BackgroundAtmosphere: View {
         case .refining:
             let pulse = slowPulse(elapsed: elapsed, period: 7.5)
             return AtmosphereConfig(
-                primaryShadow: Color(red: 0.38, green: 0.24, blue: 0.6),
-                primaryOpacity: 0.52 + pulse * 0.16,
+                primaryShadow: Color(red: 0.65, green: 0.5, blue: 0.85),
+                primaryOpacity: 0.35 + pulse * 0.15,
                 primaryRadius: 26 + pulse * 6,
                 primaryOffset: CGSize(width: 6, height: 8),
                 shadowLineWidth: 32,
-                edgeShadowColor: Color(red: 0.32, green: 0.2, blue: 0.52),
+                edgeShadowColor: Color(red: 0.62, green: 0.48, blue: 0.82),
                 edgeShadowOpacity: 0.35 + pulse * 0.1,
                 edgeShadowInset: 40 + pulse * 15,
                 vignetteColor: theme.palette.backgroundVignette,
@@ -146,13 +146,13 @@ public struct BackgroundAtmosphere: View {
         case .done:
             let settle = doneSettle(elapsed: elapsed)
             return AtmosphereConfig(
-                primaryShadow: Color(red: 0.22, green: 0.6, blue: 0.48),
-                primaryOpacity: 0.5 + settle.intensity,
+                primaryShadow: Color(red: 0.4, green: 0.75, blue: 0.6),
+                primaryOpacity: 0.3 + settle.intensity,
                 primaryRadius: 24 - settle.tighten,
                 primaryOffset: CGSize(width: 6, height: 8),
                 shadowLineWidth: 30,
-                edgeShadowColor: Color(red: 0.18, green: 0.5, blue: 0.4),
-                edgeShadowOpacity: 0.3,
+                edgeShadowColor: Color(red: 0.38, green: 0.72, blue: 0.58),
+                edgeShadowOpacity: 0.35,
                 edgeShadowInset: 40,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.38,
@@ -169,13 +169,13 @@ public struct BackgroundAtmosphere: View {
         case .error:
             let jitter = Double(sin(elapsed * 6)) * 2
             return AtmosphereConfig(
-                primaryShadow: Color(red: 0.52, green: 0.2, blue: 0.26),
-                primaryOpacity: 0.6,
+                primaryShadow: Color(red: 0.8, green: 0.4, blue: 0.45),
+                primaryOpacity: 0.4,
                 primaryRadius: 24,
                 primaryOffset: CGSize(width: 6 + jitter, height: 8 + jitter),
                 shadowLineWidth: 32,
-                edgeShadowColor: Color(red: 0.5, green: 0.15, blue: 0.2),
-                edgeShadowOpacity: 0.5,
+                edgeShadowColor: Color(red: 0.78, green: 0.38, blue: 0.42),
+                edgeShadowOpacity: 0.4,
                 edgeShadowInset: 50,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.6,
@@ -249,43 +249,40 @@ private struct AtmospherePlate: View {
                     .fill(.ultraThinMaterial)
                     .opacity(0.18)
 
-                // 四周边缘阴影，随声波脉动向内扩散
+                // 四周边缘彩色渐变光晕
                 EdgeShadow(
                     color: config.edgeShadowColor,
                     opacity: config.edgeShadowOpacity,
                     inset: inset,
                     size: proxy.size
                 )
-                .blendMode(.multiply)
 
-                // 主内阴影
+                // 主内阴影（彩色）
                 InnerShadow(
                     color: config.primaryShadow.opacity(config.primaryOpacity),
                     radius: config.primaryRadius,
                     offset: config.primaryOffset,
                     lineWidth: config.shadowLineWidth
                 )
-                .blendMode(.multiply)
 
-                // 暗角
+                // 边缘柔和渐变
                 shape
                     .fill(
                         RadialGradient(
                             colors: [
                                 Color.clear,
-                                config.vignetteColor.opacity(config.vignetteOpacity)
+                                config.vignetteColor.opacity(config.vignetteOpacity * 0.5)
                             ],
                             center: .center,
-                            startRadius: maxDim * 0.3,
-                            endRadius: maxDim * 0.75
+                            startRadius: maxDim * 0.35,
+                            endRadius: maxDim * 0.8
                         )
                     )
-                    .blendMode(.multiply)
             }
             // 拟态高光阴影（左上亮）
-            .shadow(color: Color.white.opacity(config.highlightShadowOpacity), radius: 12, x: -6, y: -6)
-            // 拟态暗影（右下暗）
-            .shadow(color: Color.black.opacity(config.darkShadowOpacity), radius: 12, x: 6, y: 6)
+            .shadow(color: Color.white.opacity(config.highlightShadowOpacity * 0.4), radius: 12, x: -6, y: -6)
+            // 拟态彩色阴影（右下，使用主题色代替黑色）
+            .shadow(color: config.primaryShadow.opacity(config.darkShadowOpacity * 1.5), radius: 12, x: 6, y: 6)
             .compositingGroup()
             .frame(width: proxy.size.width, height: proxy.size.height)
         }

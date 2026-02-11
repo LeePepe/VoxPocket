@@ -11,6 +11,7 @@ import AppKit
 import Carbon
 import PlatformAdapters
 import PlatformUI
+import UIShared
 import Preferences
 
 /// macOS 应用代理
@@ -84,11 +85,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             default: Self.defaultShowPanelHotkey
         )
 
-        // F6: 快速录音（长按）
-        let quickRecordHotkey = await preferences.getValue(
+        // Fn: 快速录音（按下开始 / 抬起结束）
+        var quickRecordHotkey = await preferences.getValue(
             for: .quickRecordHotkey,
             default: Self.defaultQuickRecordHotkey
         )
+        if quickRecordHotkey.keyCode == UInt16(kVK_F6), quickRecordHotkey.modifiers == 0 {
+            quickRecordHotkey = Self.defaultQuickRecordHotkey
+            await preferences.setValue(quickRecordHotkey, for: .quickRecordHotkey)
+        }
 
         // 注册显示面板快捷键
         do {
@@ -102,7 +107,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             print("❌ [AppDelegate] Failed to register show panel hotkey: \(error)")
         }
 
-        // 注册快速录音快捷键（长按模式）
+        // 注册快速录音快捷键（按下/抬起模式）
         hotkeyService.registerLongPress(
             quickRecordHotkey,
             onPress: { [weak self] in
@@ -112,7 +117,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 await self?.handleQuickRecordStop()
             }
         )
-        print("✅ [AppDelegate] Registered quick record hotkey: F6 (long-press)")
+        print("✅ [AppDelegate] Registered quick record hotkey: \(quickRecordHotkey.displayString) (press/release)")
     }
 
     private func observePreferenceChanges() {
@@ -134,7 +139,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     private static let defaultQuickRecordHotkey = HotkeyDefinition(
-        keyCode: UInt16(kVK_F6),
+        keyCode: UInt16(kVK_Function),
         modifiers: 0,
         identifier: HotkeyIdentifier.toggleRecording
     )
@@ -147,40 +152,64 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager.toggleWindow(.fullPanel)
     }
 
-    /// 处理快速录音开始（长按触发）
+    /// 处理快速录音开始（按下触发）
     private func handleQuickRecordStart() async {
-        print("🔥 [AppDelegate] Quick record start (long-press)")
+        print("🔥 [AppDelegate] Quick record start (press)")
 
-        // 检查是否已有录音在进行
-        guard !serviceContainer.isRecordingActive else {
-            print("⚠️ [AppDelegate] Recording already active, ignoring")
-            return
-        }
-
-        // 标记录音来源
         guard serviceContainer.tryStartRecording(source: .quickRecording) else {
             return
         }
 
-        // 显示快速录音窗口并开始录音
+        // 显示面板并开始录音
         await windowManager.showQuickRecordingAndStart()
+
+        // 设置完成回调：隐藏面板 + 清除录音状态
+        if let viewModel = windowManager.getQuickRecordingViewModel() {
+            viewModel.onComplete = { [weak self] _ in
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1))
+                    self?.windowManager.hideWindow(.quickRecording)
+                    self?.serviceContainer.endRecording()
+                }
+            }
+            viewModel.onNoResult = { [weak self] in
+                Task { @MainActor in
+                    self?.windowManager.hideWindow(.quickRecording)
+                    self?.serviceContainer.endRecording()
+                }
+            }
+        }
     }
 
     /// 处理快速录音结束（释放触发）
     private func handleQuickRecordStop() async {
         print("🔥 [AppDelegate] Quick record stop (release)")
 
-        // 验证录音来源
         guard serviceContainer.activeRecordingSource == .quickRecording else {
             print("⚠️ [AppDelegate] Recording not from quick recording, ignoring")
             return
         }
 
-        // 停止录音并处理
-        await windowManager.stopQuickRecordingAndProcess()
+        guard let viewModel = windowManager.getQuickRecordingViewModel() else {
+            serviceContainer.endRecording()
+            return
+        }
 
-        // 清除录音状态
-        serviceContainer.endRecording()
+        await viewModel.stopRecording()
+
+        if viewModel.isStartingRecording {
+            // 启动尚未完成，等待 ViewModel 在 start 完成后自动 stop 并通过回调清理
+            return
+        }
+
+        // 兜底清理：如果没有进入转录/优化流程，立即释放录音占用，避免状态卡死
+        switch viewModel.recorderStatus {
+        case .idle, .error:
+            serviceContainer.endRecording()
+            windowManager.hideWindow(.quickRecording)
+        case .listening, .transcribing, .refining, .done:
+            break
+        }
     }
 }
 #endif

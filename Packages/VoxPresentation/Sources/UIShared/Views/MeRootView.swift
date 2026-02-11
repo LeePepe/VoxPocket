@@ -136,7 +136,7 @@ struct ShortcutsCard: View {
                 selection: showPanelBinding
             )
             ShortcutPickerRow(
-                title: "Quick Recording (hold)",
+                title: "Quick Recording (press/release)",
                 selection: quickRecordBinding
             )
 

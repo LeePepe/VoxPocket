@@ -25,6 +25,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         let onRelease: @Sendable () async -> Void
         var isPressed: Bool = false
         var keyDownTime: Date?
+        var hasTriggeredPress: Bool = false
     }
 
     // MARK: - 常量
@@ -119,14 +120,14 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
 
     private func setupKeyMonitors() {
         // 全局键盘事件监听
-        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
             Task { @MainActor in
                 self?.handleKeyEvent(event)
             }
         }
 
         // 本地键盘事件监听（当应用在前台时）
-        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
             Task { @MainActor in
                 self?.handleKeyEvent(event)
             }
@@ -161,9 +162,44 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
     private func handleKeyEvent(_ event: NSEvent) {
         let keyCode = event.keyCode
         let modifiers = carbonModifiers(from: event.modifierFlags)
+        let functionKeyCode = UInt16(kVK_Function)
 
         // 查找匹配的长按快捷键
         for (identifier, var info) in longPressHotkeys {
+            // Fn 键是 flagsChanged 事件：按下即开始，抬起即结束
+            if info.definition.keyCode == functionKeyCode {
+                guard keyCode == functionKeyCode, event.type == .flagsChanged else {
+                    continue
+                }
+
+                let isFunctionPressed = event.modifierFlags.contains(.function)
+                if isFunctionPressed && !info.isPressed {
+                    info.isPressed = true
+                    info.keyDownTime = Date()
+                    info.hasTriggeredPress = true
+                    longPressHotkeys[identifier] = info
+
+                    print("⬇️ [GlobalHotkey] Function key down: \(identifier)")
+                    Task {
+                        await info.onPress()
+                    }
+                } else if !isFunctionPressed && info.isPressed {
+                    info.isPressed = false
+                    info.keyDownTime = nil
+                    let shouldRelease = info.hasTriggeredPress
+                    info.hasTriggeredPress = false
+                    longPressHotkeys[identifier] = info
+
+                    print("⬆️ [GlobalHotkey] Function key up: \(identifier)")
+                    if shouldRelease {
+                        Task {
+                            await info.onRelease()
+                        }
+                    }
+                }
+                continue
+            }
+
             guard info.definition.keyCode == keyCode,
                   info.definition.modifiers == modifiers else {
                 continue
@@ -174,6 +210,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                 if !info.isPressed {
                     info.isPressed = true
                     info.keyDownTime = Date()
+                    info.hasTriggeredPress = false
                     longPressHotkeys[identifier] = info
 
                     print("⬇️ [GlobalHotkey] Long-press key down: \(identifier)")
@@ -189,21 +226,27 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                             return
                         }
 
+                        var updatedInfo = currentInfo
+                        guard !updatedInfo.hasTriggeredPress else { return }
+                        updatedInfo.hasTriggeredPress = true
+                        self.longPressHotkeys[identifier] = updatedInfo
+
                         print("🔥 [GlobalHotkey] Long-press triggered: \(identifier)")
-                        await info.onPress()
+                        await updatedInfo.onPress()
                     }
                 }
 
             case .keyUp:
                 if info.isPressed {
                     info.isPressed = false
-                    let wasLongPress = info.keyDownTime.map { Date().timeIntervalSince($0) >= Self.longPressDuration } ?? false
                     info.keyDownTime = nil
+                    let shouldRelease = info.hasTriggeredPress
+                    info.hasTriggeredPress = false
                     longPressHotkeys[identifier] = info
 
-                    print("⬆️ [GlobalHotkey] Long-press key up: \(identifier), wasLongPress: \(wasLongPress)")
+                    print("⬆️ [GlobalHotkey] Long-press key up: \(identifier), shouldRelease: \(shouldRelease)")
 
-                    if wasLongPress {
+                    if shouldRelease {
                         Task {
                             await info.onRelease()
                         }

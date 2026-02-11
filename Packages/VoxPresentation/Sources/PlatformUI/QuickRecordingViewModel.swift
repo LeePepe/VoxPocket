@@ -10,7 +10,7 @@ import UIShared
 /// 快速录音 ViewModel
 ///
 /// 轻量级 ViewModel，用于快速录音流程：
-/// 录音 → 转录 → 意图识别 → LLM 优化 → 粘贴
+/// 按下开始录音 → 抬起停止 → LLM 优化 → 复制粘贴 → 完成
 @MainActor
 public final class QuickRecordingViewModel: ObservableObject {
 
@@ -38,13 +38,21 @@ public final class QuickRecordingViewModel: ObservableObject {
     @Published public var refinedText: String = ""
     @Published public var errorMessage: String?
 
-    /// 完成回调
+    /// 完成回调（参数为最终文本）
     public var onComplete: ((String) -> Void)?
+    /// 无识别结果回调（如空转录）
+    public var onNoResult: (() -> Void)?
 
     // MARK: - 内部状态
 
     private var rawTranscription: String = ""
     private var isProcessing: Bool = false
+    private var isStartingRecordingInternal: Bool = false
+    private var shouldStopAfterStart: Bool = false
+
+    public var isStartingRecording: Bool {
+        isStartingRecordingInternal
+    }
 
     // MARK: - Init
 
@@ -65,7 +73,6 @@ public final class QuickRecordingViewModel: ObservableObject {
     // MARK: - 绑定 UseCase 发布者
 
     private func bindUseCases() {
-        // 录音状态
         recordingUseCase.statePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -78,7 +85,6 @@ public final class QuickRecordingViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // 实时转录
         transcriptionUseCase.liveTextPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
@@ -91,7 +97,6 @@ public final class QuickRecordingViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // 优化状态
         refinementUseCase.statePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -106,10 +111,12 @@ public final class QuickRecordingViewModel: ObservableObject {
     // MARK: - 录音操作
 
     public func startRecording() async {
-        guard recorderStatus == .idle else {
+        guard recorderStatus == .idle, !isStartingRecordingInternal else {
             print("⚠️ [QuickRecording] Already recording or processing")
             return
         }
+        isStartingRecordingInternal = true
+        shouldStopAfterStart = false
 
         // 重置状态
         liveTranscription = ""
@@ -121,15 +128,29 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         do {
             try await recordingUseCase.startRecording()
+            isStartingRecordingInternal = false
             recorderStatus = .listening
             print("🎙️ [QuickRecording] Started recording")
+
+            if shouldStopAfterStart {
+                shouldStopAfterStart = false
+                await stopRecording()
+            }
         } catch {
+            isStartingRecordingInternal = false
             errorMessage = error.localizedDescription
             recorderStatus = .error
         }
     }
 
+    /// 停止录音并启动优化流程
     public func stopRecording() async {
+        if isStartingRecordingInternal {
+            shouldStopAfterStart = true
+            print("⏳ [QuickRecording] Stop requested while starting, will stop after start completes")
+            return
+        }
+
         guard recorderStatus == .listening else {
             print("⚠️ [QuickRecording] Not recording")
             return
@@ -139,7 +160,6 @@ public final class QuickRecordingViewModel: ObservableObject {
         silenceDetectionTask?.cancel()
         silenceDetectionTask = nil
 
-        // 立即设置状态，防止延迟的转录结果重新触发 scheduleAutoStop
         isProcessing = true
         recorderStatus = .transcribing
 
@@ -148,8 +168,15 @@ public final class QuickRecordingViewModel: ObservableObject {
             rawTranscription = liveTranscription
             print("⏹️ [QuickRecording] Stopped recording, got: \(rawTranscription.prefix(50))...")
 
-            // 执行优化流程
-            await processTranscription()
+            guard !rawTranscription.isEmpty else {
+                recorderStatus = .idle
+                isProcessing = false
+                onNoResult?()
+                return
+            }
+
+            recorderStatus = .refining
+            await performRefinement()
         } catch {
             errorMessage = error.localizedDescription
             recorderStatus = .error
@@ -195,23 +222,9 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
     }
 
-    // MARK: - 处理流程
-
-    private func processTranscription() async {
-        guard !rawTranscription.isEmpty else {
-            recorderStatus = .idle
-            isProcessing = false
-            return
-        }
-
-        recorderStatus = .refining
-
-        // 执行意图识别和优化
-        await performRefinement()
-    }
+    // MARK: - LLM 优化 → 复制粘贴 → 完成
 
     private func performRefinement() async {
-        // 执行流式优化
         let stream = refinementUseCase.refineStreaming(customPrompt: nil)
 
         streamingTask = Task { [weak self] in
@@ -230,20 +243,20 @@ public final class QuickRecordingViewModel: ObservableObject {
                     }
                 }
 
-                // 优化完成
                 if !Task.isCancelled {
-                    await self.handleRefinementComplete(finalText)
+                    await self.completeWithText(finalText)
                 }
             } catch {
                 if !Task.isCancelled {
                     // 优化失败，使用原始转录
-                    await self.handleRefinementComplete(self.rawTranscription)
+                    await self.completeWithText(self.rawTranscription)
                 }
             }
         }
     }
 
-    private func handleRefinementComplete(_ text: String) async {
+    /// 复制到剪贴板、模拟粘贴、触发完成回调
+    private func completeWithText(_ text: String) async {
         guard !text.isEmpty else {
             recorderStatus = .idle
             isProcessing = false
@@ -252,16 +265,13 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         recorderStatus = .done
 
-        // 复制到剪贴板
         clipboardService.copy(text)
 
-        // 模拟粘贴
         do {
             try await clipboardService.simulatePaste()
             print("✅ [QuickRecording] Pasted text: \(text.prefix(50))...")
         } catch {
             print("⚠️ [QuickRecording] Paste simulation failed: \(error)")
-            // 粘贴失败，文本已在剪贴板中
         }
 
         isProcessing = false

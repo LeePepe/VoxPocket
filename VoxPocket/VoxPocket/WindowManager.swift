@@ -34,6 +34,7 @@ public final class WindowManager: ObservableObject {
     private var windows: [WindowType: NSPanel] = [:]
     private var windowControllers: [WindowType: NSWindowController] = [:]
     private var viewModels: [WindowType: Any] = [:]
+    private let quickRecordingTopInset: CGFloat = 96
 
     /// 窗口可见状态
     @Published public var windowVisibility: [WindowType: Bool] = [
@@ -50,6 +51,7 @@ public final class WindowManager: ObservableObject {
     /// 显示窗口
     public func showWindow(_ type: WindowType) {
         if let existingWindow = windows[type] {
+            positionWindow(existingWindow, for: type)
             existingWindow.makeKeyAndOrderFront(nil)
             windowVisibility[type] = true
             autoResumeIfNeeded(type)
@@ -63,12 +65,33 @@ public final class WindowManager: ObservableObject {
         let controller = NSWindowController(window: panel)
         windowControllers[type] = controller
 
-        panel.center()
+        positionWindow(panel, for: type)
         panel.makeKeyAndOrderFront(nil)
         windowVisibility[type] = true
         autoResumeIfNeeded(type)
 
         print("📱 [WindowManager] Created and showing window: \(type.rawValue)")
+    }
+
+    private func positionWindow(_ panel: NSPanel, for type: WindowType) {
+        switch type {
+        case .fullPanel:
+            panel.center()
+        case .quickRecording:
+            positionQuickRecordingWindow(panel)
+        }
+    }
+
+    private func positionQuickRecordingWindow(_ panel: NSPanel) {
+        guard let screen = NSApp.keyWindow?.screen ?? NSScreen.main else {
+            panel.center()
+            return
+        }
+
+        let visibleFrame = screen.visibleFrame
+        let x = visibleFrame.midX - panel.frame.width / 2
+        let y = max(visibleFrame.minY, visibleFrame.maxY - quickRecordingTopInset - panel.frame.height)
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
     /// 面板唤起时自动开始录音
@@ -228,24 +251,6 @@ public final class WindowManager: ObservableObject {
 
         if let viewModel = viewModels[.quickRecording] as? QuickRecordingViewModel {
             await viewModel.startRecording()
-        }
-    }
-
-    /// 停止快速录音并处理
-    public func stopQuickRecordingAndProcess() async {
-        guard let viewModel = viewModels[.quickRecording] as? QuickRecordingViewModel else {
-            return
-        }
-
-        await viewModel.stopRecording()
-
-        // 等待处理完成后自动关闭窗口
-        viewModel.onComplete = { [weak self] _ in
-            Task { @MainActor in
-                // 延迟1秒后关闭窗口
-                try? await Task.sleep(for: .seconds(1))
-                self?.hideWindow(.quickRecording)
-            }
         }
     }
 }

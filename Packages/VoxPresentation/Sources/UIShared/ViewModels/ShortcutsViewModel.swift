@@ -8,7 +8,7 @@ import Preferences
 @MainActor
 public final class ShortcutsViewModel: ObservableObject {
     @Published public var showPanelKey: FunctionKey = .f7
-    @Published public var quickRecordKey: FunctionKey = .f6
+    @Published public var quickRecordKey: FunctionKey = .fn
     @Published public private(set) var hasConflict: Bool = false
 
     private let preferences: UserDefaultsPreferencesStore
@@ -28,7 +28,7 @@ public final class ShortcutsViewModel: ObservableObject {
         )
 
         showPanelKey = FunctionKey(keyCode: showPanelHotkey.keyCode) ?? .f7
-        quickRecordKey = FunctionKey(keyCode: quickRecordHotkey.keyCode) ?? .f6
+        quickRecordKey = FunctionKey(keyCode: quickRecordHotkey.keyCode) ?? .fn
         updateConflictState()
     }
 
@@ -62,7 +62,7 @@ public final class ShortcutsViewModel: ObservableObject {
         await preferences.setValue(Self.defaultShowPanelHotkey, for: .showPanelHotkey)
         await preferences.setValue(Self.defaultQuickRecordHotkey, for: .quickRecordHotkey)
         showPanelKey = .f7
-        quickRecordKey = .f6
+        quickRecordKey = .fn
         updateConflictState()
         NotificationCenter.default.post(name: PreferencesNotification.hotkeysDidChange, object: nil)
     }
@@ -86,14 +86,14 @@ public final class ShortcutsViewModel: ObservableObject {
     )
 
     private static let defaultQuickRecordHotkey = HotkeyDefinition(
-        keyCode: UInt16(kVK_F6),
+        keyCode: UInt16(kVK_Function),
         modifiers: 0,
         identifier: HotkeyIdentifier.toggleRecording
     )
 }
 
 public enum FunctionKey: String, CaseIterable, Hashable {
-    case f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
+    case fn, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
 
     public var label: String {
         rawValue.uppercased()
@@ -101,6 +101,7 @@ public enum FunctionKey: String, CaseIterable, Hashable {
 
     public var keyCode: UInt16 {
         switch self {
+        case .fn: return UInt16(kVK_Function)
         case .f1: return UInt16(kVK_F1)
         case .f2: return UInt16(kVK_F2)
         case .f3: return UInt16(kVK_F3)
@@ -118,6 +119,7 @@ public enum FunctionKey: String, CaseIterable, Hashable {
 
     public init?(keyCode: UInt16) {
         switch keyCode {
+        case UInt16(kVK_Function): self = .fn
         case UInt16(kVK_F1): self = .f1
         case UInt16(kVK_F2): self = .f2
         case UInt16(kVK_F3): self = .f3

@@ -52,5 +52,14 @@ let package = Package(
             name: "UISharedTests",
             dependencies: ["UIShared"]
         ),
+        .testTarget(
+            name: "PlatformUITests",
+            dependencies: [
+                "PlatformUI",
+                .product(name: "UseCases", package: "VoxApplication"),
+                .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
+                .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+            ]
+        ),
     ]
 )
