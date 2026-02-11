@@ -17,7 +17,7 @@ import UIKit
 #endif
 
 struct ContentView: View {
-    @StateObject private var rootViewModel: RootViewModel<MockSessionListViewModel, EditorViewModel>
+    @StateObject private var rootViewModel: RootViewModel<SessionListViewModel, EditorViewModel>
     @StateObject private var snackbarService = DefaultSnackbarService()
 
     init() {
@@ -31,13 +31,6 @@ struct ContentView: View {
         let llmService = DefaultLLMService()
         let refinement = DefaultRefinementUseCase(llmService: llmService, editing: editing)
 
-        // 意图识别用例
-        let intentRecognition = DefaultIntentRecognitionUseCase(
-            llmService: llmService,
-            editingUseCase: editing,
-            isLLMEnhancementEnabled: true
-        )
-
         let editor = EditorViewModel(
             recording: recording,
             transcription: transcription,
@@ -45,7 +38,8 @@ struct ContentView: View {
             history: history,
             refinement: refinement
         )
-        let sessionList = MockSessionListViewModel()
+        let sessionUseCase = InMemorySessionUseCase()
+        let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
         _rootViewModel = StateObject(wrappedValue: RootViewModel(
             sessionListState: sessionList,
             editorState: editor

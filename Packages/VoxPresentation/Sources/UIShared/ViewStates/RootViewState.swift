@@ -43,4 +43,7 @@ public protocol RootViewState: ObservableObject {
 
     /// 切换抽屉
     func toggleDrawer()
+
+    /// 创建新会话并返回主页
+    func createNewSession()
 }

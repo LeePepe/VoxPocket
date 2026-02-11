@@ -27,16 +27,10 @@ public final class DefaultSnackbarService: SnackbarService, ObservableObject {
     // MARK: - SnackbarService
 
     public func show(_ message: SnackbarMessage) {
-        // 高优先级消息直接替换当前显示
-        if let current = currentMessage, message.priority > current.priority {
-            queue.insert(current, at: 0)
-            display(message)
-        } else if currentMessage != nil {
-            queue.append(message)
-            queue.sort { $0.priority > $1.priority }
-        } else {
-            display(message)
-        }
+        // 新消息总是立即替换当前显示，确保每次调用都有视觉反馈
+        // SnackbarOverlayView 通过 .id(message.id) 强制 SwiftUI 重建视图触发 transition 动画
+        queue.removeAll()
+        display(message)
     }
 
     public func dismiss(messageId: UUID?) {

@@ -42,12 +42,6 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                 splitViewShell
             }
         }
-        .background(
-            BackgroundAtmosphere(
-                status: viewModel.recorderStatus,
-                audioLevel: Double(viewModel.editorState.audioLevel)
-            )
-        )
         .ignoresSafeArea()
         .onAppear {
             syncSidebarSelection()
@@ -77,6 +71,9 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     searchText: searchQueryBinding,
                     onSelectSession: { session in
                         viewModel.selectSession(session.id)
+                    },
+                    onNewSession: {
+                        viewModel.createNewSession()
                     },
                     onOpenMe: {
                         viewModel.navigateToMe()
@@ -125,6 +122,8 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
         }
 #if os(iOS)
         .toolbarBackground(.hidden, for: .navigationBar)
+#else
+        .toolbarBackground(.hidden, for: .windowToolbar)
 #endif
         .sheet(isPresented: $viewModel.showRawSheet) {
             let rawText = viewModel.editorState.isRecording
@@ -154,7 +153,16 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                             }
                         }
                     } header: {
-                        SidebarHeaderView(isRecording: viewModel.recorderStatus == .listening)
+                        HStack {
+                            SidebarHeaderView(isRecording: viewModel.recorderStatus == .listening)
+                            Button {
+                                viewModel.createNewSession()
+                                sidebarSelection = nil
+                                syncSidebarSelection()
+                            } label: {
+                                Image(systemName: "square.and.pencil")
+                            }
+                        }
                     }
                 }
                 .listStyle(.sidebar)
@@ -245,6 +253,8 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
         }
 #if os(iOS)
         .toolbarBackground(.hidden, for: .navigationBar)
+#else
+        .toolbarBackground(.hidden, for: .windowToolbar)
 #endif
     }
 

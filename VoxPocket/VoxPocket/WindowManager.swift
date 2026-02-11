@@ -52,6 +52,7 @@ public final class WindowManager: ObservableObject {
         if let existingWindow = windows[type] {
             existingWindow.makeKeyAndOrderFront(nil)
             windowVisibility[type] = true
+            autoResumeIfNeeded(type)
             print("📱 [WindowManager] Showing existing window: \(type.rawValue)")
             return
         }
@@ -65,8 +66,19 @@ public final class WindowManager: ObservableObject {
         panel.center()
         panel.makeKeyAndOrderFront(nil)
         windowVisibility[type] = true
+        autoResumeIfNeeded(type)
 
         print("📱 [WindowManager] Created and showing window: \(type.rawValue)")
+    }
+
+    /// 面板唤起时自动开始录音
+    private func autoResumeIfNeeded(_ type: WindowType) {
+        guard type == .fullPanel else { return }
+        guard let viewModel = viewModels[.fullPanel] as? RootViewModel<SessionListViewModel, EditorViewModel> else { return }
+        guard !viewModel.editorState.isRecording else { return }
+        Task {
+            await viewModel.editorState.toggleRecording()
+        }
     }
 
     /// 隐藏窗口
@@ -123,27 +135,32 @@ public final class WindowManager: ObservableObject {
         let viewModel = ServiceContainer.shared.makeRootViewModel()
         viewModels[.fullPanel] = viewModel
 
-        let panelViewModel = VoxPocketViewModel(editorState: viewModel.editorState)
-        let contentView = FullPanelView(viewModel: panelViewModel)
+        let contentView = FullPanelView(viewModel: viewModel)
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 420),
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
+            styleMask: [.borderless, .resizable, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
 
-        panel.title = "VoxPocket"
         panel.level = .floating
         panel.isFloatingPanel = true
+        panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
 
         // 设置最小尺寸
         panel.minSize = NSSize(width: 460, height: 320)
 
         // 设置 SwiftUI 内容
-        panel.contentView = NSHostingView(rootView: contentView)
+        let hostingView = NSHostingView(rootView: contentView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.cornerRadius = 16
+        hostingView.layer?.masksToBounds = true
+        panel.contentView = hostingView
 
         // 窗口关闭时更新状态
         NotificationCenter.default.addObserver(

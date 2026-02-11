@@ -2,39 +2,75 @@ import SwiftUI
 import CoreModels
 
 struct SidebarDrawerView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let sessions: [Session]
     let selectedSessionID: UUID
     let isRecording: Bool
     @Binding var searchText: String
     let onSelectSession: (Session) -> Void
+    let onNewSession: () -> Void
     let onOpenMe: () -> Void
+
+    private var theme: Theme { Theme.current(colorScheme) }
 
     var body: some View {
         VStack(spacing: 0) {
-            SidebarHeaderView(isRecording: isRecording)
+            // 中间区域：header 悬浮 + 列表滚动
+            ZStack(alignment: .top) {
+                // 会话列表（底层，内容可滚动到 header 下方透出模糊）
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(sessions) { session in
+                            Button {
+                                onSelectSession(session)
+                            } label: {
+                                HistoryRowView(session: session, isSelected: session.id == selectedSessionID)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    // 顶部留出 header 高度的空间
+                    .padding(.top, 110)
+                }
 
-            SearchField(text: $searchText)
-                .padding(.horizontal, 18)
-                .padding(.top, 8)
-
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(sessions) { session in
-                        Button {
-                            onSelectSession(session)
-                        } label: {
-                            HistoryRowView(session: session, isSelected: session.id == selectedSessionID)
+                // 固定头部 + 搜索栏（悬浮，模糊背景 + 渐变淡出边界）
+                VStack(spacing: 0) {
+                    HStack {
+                        SidebarHeaderView(isRecording: isRecording)
+                        Button(action: onNewSession) {
+                            Image(systemName: "square.and.pencil")
+                                .font(.title2)
+                                .foregroundColor(.textSecondary)
                         }
                         .buttonStyle(.plain)
+                        .padding(.trailing, 18)
                     }
+
+                    SearchField(text: $searchText)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 8)
+                        .padding(.bottom, 14)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
+                .background(.ultraThinMaterial)
+                .mask(
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 16)
+                    }
+                )
             }
 
-            Divider()
-                .background(Color.white.opacity(0.12))
-
+            // 底部 Me 入口
             Button(action: onOpenMe) {
                 MeEntryRow()
                     .padding(.horizontal, 18)
@@ -43,26 +79,29 @@ struct SidebarDrawerView: View {
             .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SidebarBackground())
+        .background(theme.palette.backgroundBase)
     }
 }
 
 struct SidebarHeaderView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let isRecording: Bool
+
+    private var theme: Theme { Theme.current(colorScheme) }
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("VoxPocket")
-                    .font(.custom("Avenir Next", size: 20).weight(.semibold))
-                    .foregroundColor(.white)
+                    .font(.title)
+                    .foregroundColor(.textPrimary)
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(isRecording ? Color.red : Color.green)
+                        .fill(isRecording ? theme.palette.statusListening : theme.palette.statusDone)
                         .frame(width: 8, height: 8)
                     Text(isRecording ? "Recording" : "Ready")
-                        .font(.custom("Avenir Next", size: 12))
-                        .foregroundColor(.white.opacity(0.7))
+                        .font(.caption)
+                        .foregroundColor(.textTertiary)
                 }
             }
             Spacer()
@@ -74,52 +113,57 @@ struct SidebarHeaderView: View {
 }
 
 struct SearchField: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var text: String
+
+    private var theme: Theme { Theme.current(colorScheme) }
 
     var body: some View {
         HStack {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.textTertiary)
             TextField("Search history", text: $text)
                 .textFieldStyle(.plain)
-                .foregroundColor(.white)
+                .foregroundColor(.textPrimary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+                .fill(theme.palette.surfaceGlass)
         )
     }
 }
 
 struct HistoryRowView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: Session
     var isSelected: Bool = false
 
+    private var theme: Theme { Theme.current(colorScheme) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(session.title.isEmpty ? "未命名会话" : session.title)
-                .font(.custom("Avenir Next", size: 14).weight(.medium))
-                .foregroundColor(.white)
+                .font(.callout)
+                .foregroundColor(.textPrimary)
                 .lineLimit(2)
 
             HStack(spacing: 8) {
                 Text(session.createdAt.formatted(date: .numeric, time: .shortened))
                 Text("· \(session.state.rawValue)")
             }
-            .font(.custom("Avenir Next", size: 11))
-            .foregroundColor(.white.opacity(0.6))
+            .font(.caption)
+            .foregroundColor(.textTertiary)
         }
-        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.08))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isSelected ? theme.palette.surfaceGlassStrong : Color.clear)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(isSelected ? Color.white.opacity(0.4) : Color.clear, lineWidth: 1)
-        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -135,31 +179,16 @@ struct MeEntryRow: View {
                 )
             VStack(alignment: .leading, spacing: 4) {
                 Text("Me")
-                    .font(.custom("Avenir Next", size: 16).weight(.semibold))
-                    .foregroundColor(.white)
+                    .font(.headline)
+                    .foregroundColor(.textPrimary)
                 Text("Profile & Settings")
-                    .font(.custom("Avenir Next", size: 12))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.caption)
+                    .foregroundColor(.textSecondary)
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.textTertiary)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-        )
-    }
-}
-
-struct SidebarBackground: View {
-    var body: some View {
-        LinearGradient(
-            colors: [Color(red: 0.08, green: 0.12, blue: 0.2), Color(red: 0.12, green: 0.16, blue: 0.28)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
     }
 }
 
@@ -170,6 +199,7 @@ struct SidebarBackground: View {
         isRecording: true,
         searchText: .constant(""),
         onSelectSession: { _ in },
+        onNewSession: {},
         onOpenMe: {}
     )
 }

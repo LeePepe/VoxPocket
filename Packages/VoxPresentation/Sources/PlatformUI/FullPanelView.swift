@@ -5,8 +5,8 @@ import PlatformAdapters
 
 /// 完整面板视图
 ///
-/// 包装 VoxPocketView，用于浮动面板窗口。
-public struct FullPanelView<VM: VoxPocketViewState>: View {
+/// 包装 HomeRecorderView，用于浮动面板窗口。
+public struct FullPanelView<VM: RootViewState>: View {
     @ObservedObject var viewModel: VM
     @StateObject private var snackbarService = DefaultSnackbarService()
 
@@ -15,8 +15,9 @@ public struct FullPanelView<VM: VoxPocketViewState>: View {
     }
 
     public var body: some View {
-        VoxPocketView(
-            viewModel: viewModel,
+        HomeRecorderView(
+            viewModel: viewModel.editorState,
+            recorderStatus: viewModel.recorderStatus,
             onCopyRefined: { text in
                 guard !text.isEmpty else { return }
                 MacOSClipboardService.shared.copy(text)

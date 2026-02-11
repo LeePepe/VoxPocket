@@ -17,13 +17,14 @@ public struct SnackbarOverlayView: View {
                 SnackbarBannerView(message: message) {
                     service.dismiss(messageId: message.id)
                 }
+                .id(message.id)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
             }
             Spacer()
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: service.currentMessage?.id)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: service.currentMessage?.id)
     }
 }
 

@@ -1,11 +1,23 @@
 import SwiftUI
 import CoreModels
 
-struct HomeRecorderView<VM: EditorViewState>: View {
+public struct HomeRecorderView<VM: EditorViewState>: View {
     @ObservedObject var viewModel: VM
     let recorderStatus: RecorderStatus
     let onCopyRefined: (String) -> Void
     let onCopyRaw: (String) -> Void
+
+    public init(
+        viewModel: VM,
+        recorderStatus: RecorderStatus,
+        onCopyRefined: @escaping (String) -> Void,
+        onCopyRaw: @escaping (String) -> Void
+    ) {
+        self.viewModel = viewModel
+        self.recorderStatus = recorderStatus
+        self.onCopyRefined = onCopyRefined
+        self.onCopyRaw = onCopyRaw
+    }
 
     @State private var reveal = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -52,7 +64,7 @@ struct HomeRecorderView<VM: EditorViewState>: View {
 #endif
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 16) {
                 RefinedTextPane(
@@ -93,6 +105,12 @@ struct HomeRecorderView<VM: EditorViewState>: View {
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 28)
+        .background(
+            BackgroundAtmosphere(
+                status: recorderStatus,
+                audioLevel: Double(viewModel.audioLevel)
+            )
+        )
         .opacity(reveal ? 1 : 0)
         .offset(y: reveal ? 0 : 12)
         .animation(.easeOut(duration: 0.4), value: reveal)
@@ -116,7 +134,6 @@ struct RefinedTextPane: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(22)
-        .background(GlassCardBackground(cornerRadius: 26, strength: 0.22))
     }
 }
 
@@ -142,7 +159,6 @@ struct RawInlinePane: View {
                 .foregroundColor(.textSecondary)
         }
         .padding(18)
-        .background(GlassCardBackground(cornerRadius: 22, strength: 0.14))
     }
 }
 
@@ -426,14 +442,11 @@ struct GlassCardBackground: View {
     @Previewable
     @StateObject var vm = MockEditorViewModel()
 
-    ZStack {
-        BackgroundAtmosphere(status: .idle)
-        HomeRecorderView(
-            viewModel: vm,
-            recorderStatus: .idle,
-            onCopyRefined: { _ in },
-            onCopyRaw: { _ in }
-        )
-    }
+    HomeRecorderView(
+        viewModel: vm,
+        recorderStatus: .idle,
+        onCopyRefined: { _ in },
+        onCopyRaw: { _ in }
+    )
     .frame(height: 600)
 }

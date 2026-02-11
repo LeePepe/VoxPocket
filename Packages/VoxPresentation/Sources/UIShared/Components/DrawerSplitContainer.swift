@@ -44,6 +44,7 @@ struct DrawerSplitContainer<Sidebar: View, Content: View>: View {
             isRecording: true,
             searchText: .constant(""),
             onSelectSession: { _ in },
+            onNewSession: {},
             onOpenMe: {}
         )
     } content: {

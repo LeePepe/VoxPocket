@@ -85,9 +85,10 @@ public final class ServiceContainer: ObservableObject {
     }
 
     /// 创建完整面板的 RootViewModel
-    public func makeRootViewModel() -> RootViewModel<MockSessionListViewModel, EditorViewModel> {
+    public func makeRootViewModel() -> RootViewModel<SessionListViewModel, EditorViewModel> {
         let editor = makeEditorViewModel()
-        let sessionList = MockSessionListViewModel()
+        let sessionUseCase = InMemorySessionUseCase()
+        let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
         return RootViewModel(sessionListState: sessionList, editorState: editor)
     }
 

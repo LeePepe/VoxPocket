@@ -24,14 +24,17 @@ public struct BackgroundAtmosphere: View {
             )
 
             ZStack {
-                AtmospherePlate(config: config)
+                AtmospherePlate(config: config, audioLevel: smoothedAudioLevel, elapsed: elapsed)
             }
             .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.6), value: status)
         }
         .onChange(of: status) { _, _ in
-            stateStart = Date()
-            if status != .listening {
-                smoothedAudioLevel = 0
+            withAnimation(.easeInOut(duration: 0.6)) {
+                stateStart = Date()
+                if status != .listening {
+                    smoothedAudioLevel = 0
+                }
             }
         }
         .onChange(of: audioLevel ?? 0) { _, newLevel in
@@ -47,127 +50,144 @@ public struct BackgroundAtmosphere: View {
         theme: Theme
     ) -> AtmosphereConfig {
         let basePulse = slowPulse(elapsed: elapsed, period: 10)
-        let baseColor = theme.palette.backgroundBase
         switch status {
         case .idle:
             return AtmosphereConfig(
-                gradient: [
-                    baseColor,
-                    Color(red: 0.22, green: 0.26, blue: 0.34),
-                    baseColor
-                ],
                 primaryShadow: Color(red: 0.2, green: 0.24, blue: 0.34),
-                secondaryShadow: Color(red: 0.12, green: 0.16, blue: 0.24),
                 primaryOpacity: 0.45 + basePulse * 0.08,
-                secondaryOpacity: 0.35,
                 primaryRadius: 26 + basePulse * 4,
-                secondaryRadius: 18,
                 primaryOffset: CGSize(width: 6, height: 8),
-                secondaryOffset: CGSize(width: -4, height: -6),
                 shadowLineWidth: 30,
+                edgeShadowColor: Color(red: 0.16, green: 0.2, blue: 0.3),
+                edgeShadowOpacity: 0.3,
+                edgeShadowInset: 40,
                 vignetteColor: theme.palette.backgroundVignette,
-                vignetteOpacity: 0.32
+                vignetteOpacity: 0.32,
+                gradientColors: [
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                    Color(red: 0.88, green: 0.92, blue: 1.0),
+                    Color(red: 0.82, green: 0.86, blue: 0.96),
+                    Color(red: 0.76, green: 0.8, blue: 0.92),
+                    Color(red: 0.7, green: 0.74, blue: 0.88)
+                ],
+                highlightShadowOpacity: 0.6,
+                darkShadowOpacity: 0.08
             )
         case .listening:
             let level = clamp(audioLevel ?? 0, min: 0, max: 1)
             let energy = 0.08 + pow(level, 0.85) * 0.92
             return AtmosphereConfig(
-                gradient: [
-                    baseColor,
-                    Color(red: 0.18, green: 0.26 + energy * 0.08, blue: 0.3 + energy * 0.1),
-                    baseColor
-                ],
                 primaryShadow: Color(red: 0.12, green: 0.42, blue: 0.46),
-                secondaryShadow: Color(red: 0.08, green: 0.24, blue: 0.32),
                 primaryOpacity: 0.5 + energy * 0.38,
-                secondaryOpacity: 0.3 + energy * 0.26,
                 primaryRadius: 24 + energy * 14,
-                secondaryRadius: 16 + energy * 9,
                 primaryOffset: CGSize(width: 6 + energy * 6, height: 8 + energy * 7),
-                secondaryOffset: CGSize(width: -5 - energy * 4, height: -6 - energy * 5),
                 shadowLineWidth: 32,
+                edgeShadowColor: Color(red: 0.1, green: 0.38, blue: 0.42),
+                edgeShadowOpacity: 0.3 + energy * 0.4,
+                edgeShadowInset: 40 + energy * 50,
                 vignetteColor: theme.palette.backgroundVignette,
-                vignetteOpacity: 0.4 + energy * 0.22
+                vignetteOpacity: 0.4 + energy * 0.22,
+                gradientColors: [
+                    Color(red: 0.85, green: 0.98, blue: 0.96),
+                    Color(red: 0.7, green: 0.92, blue: 0.9),
+                    Color(red: 0.55, green: 0.84, blue: 0.84),
+                    Color(red: 0.4, green: 0.74, blue: 0.78),
+                    Color(red: 0.28, green: 0.62, blue: 0.7)
+                ],
+                highlightShadowOpacity: 0.5 + energy * 0.3,
+                darkShadowOpacity: 0.06 + energy * 0.08
             )
         case .transcribing:
             let breathe = slowPulse(elapsed: elapsed, period: 6.5)
             return AtmosphereConfig(
-                gradient: [
-                    baseColor,
-                    Color(red: 0.2, green: 0.24, blue: 0.36),
-                    baseColor
-                ],
                 primaryShadow: Color(red: 0.18, green: 0.28, blue: 0.56),
-                secondaryShadow: Color(red: 0.12, green: 0.2, blue: 0.38),
                 primaryOpacity: 0.5 + breathe * 0.18,
-                secondaryOpacity: 0.34 + breathe * 0.1,
                 primaryRadius: 24 + breathe * 8,
-                secondaryRadius: 16 + breathe * 5,
                 primaryOffset: CGSize(width: 6, height: 8),
-                secondaryOffset: CGSize(width: -4, height: -6),
                 shadowLineWidth: 30,
+                edgeShadowColor: Color(red: 0.14, green: 0.22, blue: 0.48),
+                edgeShadowOpacity: 0.35 + breathe * 0.1,
+                edgeShadowInset: 40 + breathe * 15,
                 vignetteColor: theme.palette.backgroundVignette,
-                vignetteOpacity: 0.45 + breathe * 0.08
+                vignetteOpacity: 0.45 + breathe * 0.08,
+                gradientColors: [
+                    Color(red: 0.9, green: 0.92, blue: 1.0),
+                    Color(red: 0.78, green: 0.82, blue: 0.98),
+                    Color(red: 0.64, green: 0.72, blue: 0.94),
+                    Color(red: 0.5, green: 0.6, blue: 0.88),
+                    Color(red: 0.38, green: 0.48, blue: 0.8)
+                ],
+                highlightShadowOpacity: 0.55,
+                darkShadowOpacity: 0.08
             )
         case .refining:
             let pulse = slowPulse(elapsed: elapsed, period: 7.5)
             return AtmosphereConfig(
-                gradient: [
-                    baseColor,
-                    Color(red: 0.26, green: 0.22, blue: 0.38),
-                    baseColor
-                ],
                 primaryShadow: Color(red: 0.38, green: 0.24, blue: 0.6),
-                secondaryShadow: Color(red: 0.24, green: 0.16, blue: 0.4),
                 primaryOpacity: 0.52 + pulse * 0.16,
-                secondaryOpacity: 0.36,
                 primaryRadius: 26 + pulse * 6,
-                secondaryRadius: 18,
                 primaryOffset: CGSize(width: 6, height: 8),
-                secondaryOffset: CGSize(width: -4, height: -6),
                 shadowLineWidth: 32,
+                edgeShadowColor: Color(red: 0.32, green: 0.2, blue: 0.52),
+                edgeShadowOpacity: 0.35 + pulse * 0.1,
+                edgeShadowInset: 40 + pulse * 15,
                 vignetteColor: theme.palette.backgroundVignette,
-                vignetteOpacity: 0.5
+                vignetteOpacity: 0.5,
+                gradientColors: [
+                    Color(red: 0.94, green: 0.9, blue: 1.0),
+                    Color(red: 0.86, green: 0.78, blue: 0.98),
+                    Color(red: 0.74, green: 0.64, blue: 0.92),
+                    Color(red: 0.62, green: 0.5, blue: 0.84),
+                    Color(red: 0.5, green: 0.38, blue: 0.76)
+                ],
+                highlightShadowOpacity: 0.5,
+                darkShadowOpacity: 0.1
             )
         case .done:
             let settle = doneSettle(elapsed: elapsed)
             return AtmosphereConfig(
-                gradient: [
-                    baseColor,
-                    Color(red: 0.24, green: 0.34, blue: 0.32),
-                    baseColor
-                ],
                 primaryShadow: Color(red: 0.22, green: 0.6, blue: 0.48),
-                secondaryShadow: Color(red: 0.16, green: 0.34, blue: 0.3),
                 primaryOpacity: 0.5 + settle.intensity,
-                secondaryOpacity: 0.34,
                 primaryRadius: 24 - settle.tighten,
-                secondaryRadius: 16,
                 primaryOffset: CGSize(width: 6, height: 8),
-                secondaryOffset: CGSize(width: -4, height: -5),
                 shadowLineWidth: 30,
+                edgeShadowColor: Color(red: 0.18, green: 0.5, blue: 0.4),
+                edgeShadowOpacity: 0.3,
+                edgeShadowInset: 40,
                 vignetteColor: theme.palette.backgroundVignette,
-                vignetteOpacity: 0.38
+                vignetteOpacity: 0.38,
+                gradientColors: [
+                    Color(red: 0.88, green: 0.98, blue: 0.92),
+                    Color(red: 0.74, green: 0.94, blue: 0.84),
+                    Color(red: 0.58, green: 0.86, blue: 0.74),
+                    Color(red: 0.44, green: 0.78, blue: 0.66),
+                    Color(red: 0.34, green: 0.68, blue: 0.56)
+                ],
+                highlightShadowOpacity: 0.6,
+                darkShadowOpacity: 0.07
             )
         case .error:
             let jitter = Double(sin(elapsed * 6)) * 2
             return AtmosphereConfig(
-                gradient: [
-                    baseColor,
-                    Color(red: 0.34, green: 0.16, blue: 0.22),
-                    baseColor
-                ],
                 primaryShadow: Color(red: 0.52, green: 0.2, blue: 0.26),
-                secondaryShadow: Color(red: 0.32, green: 0.12, blue: 0.18),
                 primaryOpacity: 0.6,
-                secondaryOpacity: 0.42,
                 primaryRadius: 24,
-                secondaryRadius: 18,
                 primaryOffset: CGSize(width: 6 + jitter, height: 8 + jitter),
-                secondaryOffset: CGSize(width: -5 - jitter, height: -6 - jitter),
                 shadowLineWidth: 32,
+                edgeShadowColor: Color(red: 0.5, green: 0.15, blue: 0.2),
+                edgeShadowOpacity: 0.5,
+                edgeShadowInset: 50,
                 vignetteColor: theme.palette.backgroundVignette,
-                vignetteOpacity: 0.6
+                vignetteOpacity: 0.6,
+                gradientColors: [
+                    Color(red: 1.0, green: 0.92, blue: 0.9),
+                    Color(red: 0.98, green: 0.8, blue: 0.78),
+                    Color(red: 0.92, green: 0.66, blue: 0.64),
+                    Color(red: 0.84, green: 0.5, blue: 0.5),
+                    Color(red: 0.74, green: 0.38, blue: 0.4)
+                ],
+                highlightShadowOpacity: 0.4,
+                darkShadowOpacity: 0.12
             )
         }
     }
@@ -202,69 +222,44 @@ public struct BackgroundAtmosphere: View {
     BackgroundAtmosphere(status: .listening, audioLevel: 0.7)
 }
 
+// MARK: - AtmospherePlate
+
 private struct AtmospherePlate: View {
     let config: AtmosphereConfig
+    let audioLevel: Double
+    let elapsed: TimeInterval
 
     var body: some View {
         GeometryReader { proxy in
-            let corner: CGFloat = 0
-            let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+            let shape = Rectangle()
+            let maxDim = max(proxy.size.width, proxy.size.height)
+            let inset = config.edgeShadowInset
 
             ZStack {
-                shape
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.white.opacity(0.2),
-                                Color.white.opacity(0.06),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: max(proxy.size.width, proxy.size.height) * 0.55
-                        )
-                    )
-                    .blendMode(.screen)
-
-                shape
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.white.opacity(0.06),
-                                Color.clear
-                            ],
-                            center: .topLeading,
-                            startRadius: 20,
-                            endRadius: 320
-                        )
-                    )
-                    .blendMode(.screen)
-
-                shape
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.white.opacity(0.12),
-                                Color.clear
-                            ],
-                            center: .bottomTrailing,
-                            startRadius: 30,
-                            endRadius: max(proxy.size.width, proxy.size.height) * 0.6
-                        )
-                    )
-                    .blendMode(.screen)
-
-                InnerEdgeHighlight(
-                    shape: shape,
-                    color: config.primaryShadow.opacity(config.primaryOpacity),
-                    shadowColor: Color.black.opacity(0.35),
-                    lineWidth: 10,
-                    radius: 6
+                // 多色径向渐变底层
+                RadialGradient(
+                    gradient: Gradient(colors: config.gradientColors),
+                    center: .center,
+                    startRadius: maxDim * 0.02,
+                    endRadius: maxDim * 0.7
                 )
-                .blendMode(.screen)
 
+                // 毛玻璃材质层
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.18)
+
+                // 四周边缘阴影，随声波脉动向内扩散
+                EdgeShadow(
+                    color: config.edgeShadowColor,
+                    opacity: config.edgeShadowOpacity,
+                    inset: inset,
+                    size: proxy.size
+                )
+                .blendMode(.multiply)
+
+                // 主内阴影
                 InnerShadow(
-                    shape: shape,
                     color: config.primaryShadow.opacity(config.primaryOpacity),
                     radius: config.primaryRadius,
                     offset: config.primaryOffset,
@@ -272,29 +267,25 @@ private struct AtmospherePlate: View {
                 )
                 .blendMode(.multiply)
 
-                InnerShadow(
-                    shape: shape,
-                    color: config.secondaryShadow.opacity(config.secondaryOpacity),
-                    radius: config.secondaryRadius,
-                    offset: config.secondaryOffset,
-                    lineWidth: config.shadowLineWidth * 0.7
-                )
-                .blendMode(.multiply)
-
+                // 暗角
                 shape
                     .fill(
                         RadialGradient(
                             colors: [
-                                config.vignetteColor.opacity(config.vignetteOpacity),
-                                Color.clear
+                                Color.clear,
+                                config.vignetteColor.opacity(config.vignetteOpacity)
                             ],
                             center: .center,
-                            startRadius: 120,
-                            endRadius: max(proxy.size.width, proxy.size.height)
+                            startRadius: maxDim * 0.3,
+                            endRadius: maxDim * 0.75
                         )
                     )
                     .blendMode(.multiply)
             }
+            // 拟态高光阴影（左上亮）
+            .shadow(color: Color.white.opacity(config.highlightShadowOpacity), radius: 12, x: -6, y: -6)
+            // 拟态暗影（右下暗）
+            .shadow(color: Color.black.opacity(config.darkShadowOpacity), radius: 12, x: 6, y: 6)
             .compositingGroup()
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
@@ -302,40 +293,68 @@ private struct AtmospherePlate: View {
     }
 }
 
-private struct InnerEdgeHighlight: View {
-    let shape: RoundedRectangle
+// MARK: - EdgeShadow
+
+private struct EdgeShadow: View {
     let color: Color
-    let shadowColor: Color
-    let lineWidth: CGFloat
-    let radius: CGFloat
+    let opacity: Double
+    let inset: CGFloat
+    let size: CGSize
 
     var body: some View {
-        ZStack {
-            shape
-                .stroke(color, lineWidth: lineWidth)
-                .blur(radius: radius)
-                .offset(x: -3, y: -3)
-                .mask(shape.fill(Color.black))
-                .blendMode(.screen)
+        Canvas { context, canvasSize in
+            let edges: [UnitPoint] = [.top, .bottom, .leading, .trailing]
+            for edge in edges {
+                let startPoint: CGPoint
+                let endPoint: CGPoint
 
-            shape
-                .stroke(shadowColor, lineWidth: lineWidth)
-                .blur(radius: radius)
-                .offset(x: 3, y: 3)
-                .mask(shape.fill(Color.black))
-                .blendMode(.multiply)
+                switch edge {
+                case .top:
+                    startPoint = CGPoint(x: canvasSize.width / 2, y: 0)
+                    endPoint = CGPoint(x: canvasSize.width / 2, y: inset)
+                case .bottom:
+                    startPoint = CGPoint(x: canvasSize.width / 2, y: canvasSize.height)
+                    endPoint = CGPoint(x: canvasSize.width / 2, y: canvasSize.height - inset)
+                case .leading:
+                    startPoint = CGPoint(x: 0, y: canvasSize.height / 2)
+                    endPoint = CGPoint(x: inset, y: canvasSize.height / 2)
+                case .trailing:
+                    startPoint = CGPoint(x: canvasSize.width, y: canvasSize.height / 2)
+                    endPoint = CGPoint(x: canvasSize.width - inset, y: canvasSize.height / 2)
+                default:
+                    continue
+                }
+
+                let gradient = Gradient(colors: [
+                    color.opacity(opacity),
+                    color.opacity(opacity * 0.4),
+                    Color.clear
+                ])
+
+                context.fill(
+                    Path(CGRect(origin: .zero, size: canvasSize)),
+                    with: .linearGradient(
+                        gradient,
+                        startPoint: startPoint,
+                        endPoint: endPoint
+                    )
+                )
+            }
         }
+        .allowsHitTesting(false)
     }
 }
 
+// MARK: - InnerShadow
+
 private struct InnerShadow: View {
-    let shape: RoundedRectangle
     let color: Color
     let radius: CGFloat
     let offset: CGSize
     let lineWidth: CGFloat
 
     var body: some View {
+        let shape = Rectangle()
         shape
             .stroke(color, lineWidth: lineWidth)
             .blur(radius: radius)
@@ -344,17 +363,53 @@ private struct InnerShadow: View {
     }
 }
 
+// MARK: - AtmosphereConfig
+
 private struct AtmosphereConfig {
-    let gradient: [Color]
     let primaryShadow: Color
-    let secondaryShadow: Color
     let primaryOpacity: Double
-    let secondaryOpacity: Double
     let primaryRadius: CGFloat
-    let secondaryRadius: CGFloat
     let primaryOffset: CGSize
-    let secondaryOffset: CGSize
     let shadowLineWidth: CGFloat
+    let edgeShadowColor: Color
+    let edgeShadowOpacity: Double
+    let edgeShadowInset: CGFloat
     let vignetteColor: Color
     let vignetteOpacity: Double
+    // 径向渐变色（4-5种颜色）
+    let gradientColors: [Color]
+    // 拟态阴影
+    let highlightShadowOpacity: Double
+    let darkShadowOpacity: Double
+}
+
+// MARK: - 2. Neumorphism + RadialGradient
+struct NeumorphicRadialCard: View {
+    var body: some View {
+        ZStack {
+            RadialGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                    Color(red: 0.85, green: 0.9, blue: 1.0),
+                    Color(red: 0.8, green: 0.85, blue: 0.95),
+                    Color(red: 0.75, green: 0.8, blue: 0.9)
+                ]),
+                center: .center,
+                startRadius: 10,
+                endRadius: 250
+            )
+            .frame(width: 250, height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: 25))
+            .shadow(color: Color.white.opacity(0.8), radius: 10, x: -6, y: -6)
+            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 6, y: 6)
+        }
+    }
+}
+
+struct NeumorphicRadialCard_Previews: PreviewProvider {
+    static var previews: some View {
+        NeumorphicRadialCard()
+            .previewLayout(.sizeThatFits)
+            .padding()
+    }
 }

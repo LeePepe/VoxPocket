@@ -38,9 +38,9 @@ public extension SnackbarService {
         show(SnackbarMessage(type: .info, message: message, action: action))
     }
 
-    /// 显示成功通知
+    /// 显示成功通知（短时显示）
     func showSuccess(_ message: String) {
-        show(SnackbarMessage(type: .success, message: message))
+        show(SnackbarMessage(type: .success, message: message, duration: .short))
     }
 
     /// 显示警告通知

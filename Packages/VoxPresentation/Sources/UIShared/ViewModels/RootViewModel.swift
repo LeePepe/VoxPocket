@@ -80,6 +80,16 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
         }
     }
 
+    public func createNewSession() {
+        Task {
+            await sessionListState.createSession()
+        }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            isDrawerOpen = false
+        }
+        navigationPath.removeAll()
+    }
+
     private func loadHistoryOnLaunch() {
         Task {
             await sessionListState.loadSessions()
