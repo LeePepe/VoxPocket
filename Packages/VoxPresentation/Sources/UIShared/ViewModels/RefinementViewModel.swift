@@ -95,7 +95,8 @@ public final class RefinementViewModel: ObservableObject, RefinementPanelViewSta
                     guard !Task.isCancelled else { break }
                     switch event {
                     case .chunk(let text):
-                        streamingText += text
+                        // chunk 是累积的完整文本，直接替换
+                        streamingText = text
                     case .state(let state):
                         // 状态已经通过 statePublisher 自动同步，这里可以忽略
                         // 如果需要特殊处理，可以在这里添加

@@ -63,13 +63,14 @@ public struct BackgroundAtmosphere: View {
                 edgeShadowInset: 40,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.32,
-                gradientColors: [
+                baseGradientColors: [
                     Color(red: 0.95, green: 0.97, blue: 1.0),
                     Color(red: 0.88, green: 0.92, blue: 1.0),
                     Color(red: 0.82, green: 0.86, blue: 0.96),
                     Color(red: 0.76, green: 0.8, blue: 0.92),
                     Color(red: 0.7, green: 0.74, blue: 0.88)
                 ],
+                directionalGradients: AtmosphereGradientPresets.directions(for: .idle, modulation: basePulse),
                 highlightShadowOpacity: 0.6,
                 darkShadowOpacity: 0.08
             )
@@ -87,13 +88,14 @@ public struct BackgroundAtmosphere: View {
                 edgeShadowInset: 40 + energy * 50,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.4 + energy * 0.22,
-                gradientColors: [
+                baseGradientColors: [
                     Color(red: 0.85, green: 0.98, blue: 0.96),
                     Color(red: 0.7, green: 0.92, blue: 0.9),
                     Color(red: 0.55, green: 0.84, blue: 0.84),
                     Color(red: 0.4, green: 0.74, blue: 0.78),
                     Color(red: 0.28, green: 0.62, blue: 0.7)
                 ],
+                directionalGradients: AtmosphereGradientPresets.directions(for: .listening, modulation: energy),
                 highlightShadowOpacity: 0.5 + energy * 0.3,
                 darkShadowOpacity: 0.06 + energy * 0.08
             )
@@ -110,13 +112,14 @@ public struct BackgroundAtmosphere: View {
                 edgeShadowInset: 40 + breathe * 15,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.45 + breathe * 0.08,
-                gradientColors: [
+                baseGradientColors: [
                     Color(red: 0.9, green: 0.92, blue: 1.0),
                     Color(red: 0.78, green: 0.82, blue: 0.98),
                     Color(red: 0.64, green: 0.72, blue: 0.94),
                     Color(red: 0.5, green: 0.6, blue: 0.88),
                     Color(red: 0.38, green: 0.48, blue: 0.8)
                 ],
+                directionalGradients: AtmosphereGradientPresets.directions(for: .transcribing, modulation: breathe),
                 highlightShadowOpacity: 0.55,
                 darkShadowOpacity: 0.08
             )
@@ -133,13 +136,14 @@ public struct BackgroundAtmosphere: View {
                 edgeShadowInset: 40 + pulse * 15,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.5,
-                gradientColors: [
+                baseGradientColors: [
                     Color(red: 0.94, green: 0.9, blue: 1.0),
                     Color(red: 0.86, green: 0.78, blue: 0.98),
                     Color(red: 0.74, green: 0.64, blue: 0.92),
                     Color(red: 0.62, green: 0.5, blue: 0.84),
                     Color(red: 0.5, green: 0.38, blue: 0.76)
                 ],
+                directionalGradients: AtmosphereGradientPresets.directions(for: .refining, modulation: pulse),
                 highlightShadowOpacity: 0.5,
                 darkShadowOpacity: 0.1
             )
@@ -156,13 +160,14 @@ public struct BackgroundAtmosphere: View {
                 edgeShadowInset: 40,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.38,
-                gradientColors: [
+                baseGradientColors: [
                     Color(red: 0.88, green: 0.98, blue: 0.92),
                     Color(red: 0.74, green: 0.94, blue: 0.84),
                     Color(red: 0.58, green: 0.86, blue: 0.74),
                     Color(red: 0.44, green: 0.78, blue: 0.66),
                     Color(red: 0.34, green: 0.68, blue: 0.56)
                 ],
+                directionalGradients: AtmosphereGradientPresets.directions(for: .done, modulation: settle.intensity * 20),
                 highlightShadowOpacity: 0.6,
                 darkShadowOpacity: 0.07
             )
@@ -179,13 +184,14 @@ public struct BackgroundAtmosphere: View {
                 edgeShadowInset: 50,
                 vignetteColor: theme.palette.backgroundVignette,
                 vignetteOpacity: 0.6,
-                gradientColors: [
+                baseGradientColors: [
                     Color(red: 1.0, green: 0.92, blue: 0.9),
                     Color(red: 0.98, green: 0.8, blue: 0.78),
                     Color(red: 0.92, green: 0.66, blue: 0.64),
                     Color(red: 0.84, green: 0.5, blue: 0.5),
                     Color(red: 0.74, green: 0.38, blue: 0.4)
                 ],
+                directionalGradients: AtmosphereGradientPresets.directions(for: .error, modulation: abs(jitter) / 2),
                 highlightShadowOpacity: 0.4,
                 darkShadowOpacity: 0.12
             )
@@ -238,11 +244,21 @@ private struct AtmospherePlate: View {
             ZStack {
                 // 多色径向渐变底层
                 RadialGradient(
-                    gradient: Gradient(colors: config.gradientColors),
+                    gradient: Gradient(colors: config.baseGradientColors),
                     center: .center,
                     startRadius: maxDim * 0.02,
                     endRadius: maxDim * 0.7
                 )
+
+                ForEach(Array(config.directionalGradients.enumerated()), id: \.offset) { _, gradient in
+                    LinearGradient(
+                        colors: gradient.colors,
+                        startPoint: gradient.start.unitPoint,
+                        endPoint: gradient.end.unitPoint
+                    )
+                    .opacity(gradient.opacity)
+                    .blendMode(.screen)
+                }
 
                 // 毛玻璃材质层
                 Rectangle()
@@ -362,6 +378,186 @@ private struct InnerShadow: View {
 
 // MARK: - AtmosphereConfig
 
+enum AtmosphereGradientAnchor: String, Hashable {
+    case topLeading
+    case top
+    case topTrailing
+    case leading
+    case center
+    case trailing
+    case bottomLeading
+    case bottom
+    case bottomTrailing
+
+    var unitPoint: UnitPoint {
+        switch self {
+        case .topLeading: .topLeading
+        case .top: .top
+        case .topTrailing: .topTrailing
+        case .leading: .leading
+        case .center: .center
+        case .trailing: .trailing
+        case .bottomLeading: .bottomLeading
+        case .bottom: .bottom
+        case .bottomTrailing: .bottomTrailing
+        }
+    }
+}
+
+struct AtmosphereDirectionalGradient {
+    let start: AtmosphereGradientAnchor
+    let end: AtmosphereGradientAnchor
+    let colors: [Color]
+    let opacity: Double
+}
+
+enum AtmosphereGradientPresets {
+    static func directions(for status: RecorderStatus, modulation: Double) -> [AtmosphereDirectionalGradient] {
+        let amount = clamp(modulation, min: 0, max: 1)
+        switch status {
+        case .idle:
+            return [
+                AtmosphereDirectionalGradient(
+                    start: .topLeading,
+                    end: .bottomTrailing,
+                    colors: [
+                        Color(red: 0.98, green: 0.91, blue: 0.98),
+                        Color.clear
+                    ],
+                    opacity: 0.18 + amount * 0.08
+                ),
+                AtmosphereDirectionalGradient(
+                    start: .bottomLeading,
+                    end: .topTrailing,
+                    colors: [
+                        Color(red: 0.82, green: 0.95, blue: 1.0),
+                        Color.clear
+                    ],
+                    opacity: 0.2 + amount * 0.06
+                )
+            ]
+        case .listening:
+            return [
+                AtmosphereDirectionalGradient(
+                    start: .leading,
+                    end: .trailing,
+                    colors: [
+                        Color(red: 0.62, green: 0.98, blue: 0.88),
+                        Color.clear
+                    ],
+                    opacity: 0.18 + amount * 0.2
+                ),
+                AtmosphereDirectionalGradient(
+                    start: .top,
+                    end: .bottom,
+                    colors: [
+                        Color(red: 0.54, green: 0.89, blue: 1.0),
+                        Color.clear
+                    ],
+                    opacity: 0.16 + amount * 0.16
+                ),
+                AtmosphereDirectionalGradient(
+                    start: .topTrailing,
+                    end: .bottomLeading,
+                    colors: [
+                        Color(red: 0.86, green: 1.0, blue: 0.8),
+                        Color.clear
+                    ],
+                    opacity: 0.08 + amount * 0.12
+                )
+            ]
+        case .transcribing:
+            return [
+                AtmosphereDirectionalGradient(
+                    start: .topLeading,
+                    end: .bottomTrailing,
+                    colors: [
+                        Color(red: 0.86, green: 0.88, blue: 1.0),
+                        Color.clear
+                    ],
+                    opacity: 0.2 + amount * 0.14
+                ),
+                AtmosphereDirectionalGradient(
+                    start: .bottom,
+                    end: .top,
+                    colors: [
+                        Color(red: 0.66, green: 0.76, blue: 1.0),
+                        Color.clear
+                    ],
+                    opacity: 0.18 + amount * 0.1
+                )
+            ]
+        case .refining:
+            return [
+                AtmosphereDirectionalGradient(
+                    start: .leading,
+                    end: .trailing,
+                    colors: [
+                        Color(red: 0.96, green: 0.74, blue: 1.0),
+                        Color.clear
+                    ],
+                    opacity: 0.18 + amount * 0.12
+                ),
+                AtmosphereDirectionalGradient(
+                    start: .top,
+                    end: .bottom,
+                    colors: [
+                        Color(red: 0.8, green: 0.64, blue: 1.0),
+                        Color.clear
+                    ],
+                    opacity: 0.18 + amount * 0.12
+                )
+            ]
+        case .done:
+            return [
+                AtmosphereDirectionalGradient(
+                    start: .bottomLeading,
+                    end: .topTrailing,
+                    colors: [
+                        Color(red: 0.74, green: 1.0, blue: 0.84),
+                        Color.clear
+                    ],
+                    opacity: 0.18 + amount * 0.14
+                ),
+                AtmosphereDirectionalGradient(
+                    start: .top,
+                    end: .bottom,
+                    colors: [
+                        Color(red: 0.9, green: 1.0, blue: 0.78),
+                        Color.clear
+                    ],
+                    opacity: 0.14 + amount * 0.08
+                )
+            ]
+        case .error:
+            return [
+                AtmosphereDirectionalGradient(
+                    start: .leading,
+                    end: .trailing,
+                    colors: [
+                        Color(red: 1.0, green: 0.76, blue: 0.62),
+                        Color.clear
+                    ],
+                    opacity: 0.2 + amount * 0.12
+                ),
+                AtmosphereDirectionalGradient(
+                    start: .topTrailing,
+                    end: .bottomLeading,
+                    colors: [
+                        Color(red: 1.0, green: 0.56, blue: 0.62),
+                        Color.clear
+                    ],
+                    opacity: 0.16 + amount * 0.12
+                )
+            ]
+        }
+    }
+
+    private static func clamp(_ value: Double, min: Double, max: Double) -> Double {
+        Swift.max(min, Swift.min(max, value))
+    }
+}
+
 private struct AtmosphereConfig {
     let primaryShadow: Color
     let primaryOpacity: Double
@@ -374,7 +570,9 @@ private struct AtmosphereConfig {
     let vignetteColor: Color
     let vignetteOpacity: Double
     // 径向渐变色（4-5种颜色）
-    let gradientColors: [Color]
+    let baseGradientColors: [Color]
+    // 不同方向的线性渐变叠加，增强空间感
+    let directionalGradients: [AtmosphereDirectionalGradient]
     // 拟态阴影
     let highlightShadowOpacity: Double
     let darkShadowOpacity: Double

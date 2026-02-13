@@ -234,41 +234,55 @@ struct BottomControls: View {
         let theme = Theme.current(colorScheme)
         let primaryColor = primaryColor(for: theme)
         HStack(spacing: 10) {
-            Button(action: onNewSession) {
-                ControlButtonLabel(title: "New", systemImage: "plus")
-            }
-            .buttonStyle(PrimaryControlStyle(color: theme.palette.surfaceElevated, emphasis: false))
+            ControlButton("New", systemImage: "plus", color: theme.palette.surfaceElevated, action: onNewSession)
 
             Spacer()
 
-            Button(action: onCopy) {
-                ControlButtonLabel(title: "Copy", systemImage: "doc.on.doc")
-            }
-            .buttonStyle(PrimaryControlStyle(color: theme.palette.surfaceElevated, emphasis: false))
+            ControlButton("Copy", systemImage: "doc.on.doc", color: theme.palette.surfaceElevated, action: onCopy)
 
-            Button(action: onStopOrRestart) {
-                ControlButtonLabel(title: primaryTitle, systemImage: primaryIcon)
-            }
-            .buttonStyle(PrimaryControlStyle(color: primaryColor, emphasis: true))
+            ControlButton(primaryTitle, systemImage: primaryIcon, color: primaryColor, emphasis: true, action: onStopOrRestart)
         }
     }
 }
 
-struct ControlButtonLabel: View {
+/// 统一尺寸的控制按钮组件
+struct ControlButton: View {
     let title: String
     let systemImage: String
+    let color: Color
+    let emphasis: Bool
+    let action: () -> Void
+
+    init(
+        _ title: String,
+        systemImage: String,
+        color: Color,
+        emphasis: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.color = color
+        self.emphasis = emphasis
+        self.action = action
+    }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.system(size: 13))
-            Text(title)
-                .font(FontToken.caption)
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13))
+                    .frame(width: 16)
+                Text(title)
+                    .font(FontToken.caption)
+            }
+            .foregroundColor(.textPrimary)
+            .frame(minWidth: 56)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .contentShape(.rect)
         }
-        .foregroundColor(.textPrimary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .contentShape(.rect)
+        .buttonStyle(PrimaryControlStyle(color: color, emphasis: emphasis))
     }
 }
 

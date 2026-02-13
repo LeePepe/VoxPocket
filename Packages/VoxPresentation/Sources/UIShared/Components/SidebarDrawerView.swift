@@ -149,9 +149,15 @@ struct HistoryRowView: View {
                 .foregroundColor(.textPrimary)
                 .lineLimit(2)
 
+            if !session.displayText.isEmpty {
+                Text(session.displayText)
+                    .font(.caption)
+                    .foregroundColor(.textSecondary)
+                    .lineLimit(2)
+            }
+
             HStack(spacing: 8) {
                 Text(session.createdAt.formatted(date: .numeric, time: .shortened))
-                Text("· \(session.state.rawValue)")
             }
             .font(.caption)
             .foregroundColor(.textTertiary)

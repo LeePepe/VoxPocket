@@ -28,6 +28,7 @@ public final class SessionListViewModel: ObservableObject, SessionListViewState 
         guard !searchQuery.isEmpty else { return sessions }
         return sessions.filter { session in
             session.title.localizedCaseInsensitiveContains(searchQuery)
+            || session.displayText.localizedCaseInsensitiveContains(searchQuery)
         }
     }
 

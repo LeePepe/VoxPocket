@@ -217,11 +217,10 @@ public final class WindowManager: ObservableObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
 
-        // 设置 SwiftUI 内容
+        // 设置 SwiftUI 内容（Capsule clipShape 已在 SwiftUI 层处理圆角）
         let hostingView = NSHostingView(rootView: contentView)
         hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = QuickRecordingLayout.panelCornerRadius
-        hostingView.layer?.masksToBounds = true
+        hostingView.layer?.backgroundColor = .clear
         panel.contentView = hostingView
 
         // 窗口关闭时更新状态并清理

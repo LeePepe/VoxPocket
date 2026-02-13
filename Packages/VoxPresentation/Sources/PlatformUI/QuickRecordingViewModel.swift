@@ -45,7 +45,7 @@ public final class QuickRecordingViewModel: ObservableObject {
 
     // MARK: - 内部状态
 
-    private var rawTranscription: String = ""
+    public private(set) var rawTranscription: String = ""
     private var isProcessing: Bool = false
     private var isStartingRecordingInternal: Bool = false
     private var shouldStopAfterStart: Bool = false
@@ -175,6 +175,9 @@ public final class QuickRecordingViewModel: ObservableObject {
                 return
             }
 
+            // 将转录文本提交到 EditingUseCase，供 RefinementUseCase 读取
+            try await transcriptionUseCase.commitCurrentTranscription()
+
             recorderStatus = .refining
             await performRefinement()
         } catch {
@@ -229,22 +232,20 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         streamingTask = Task { [weak self] in
             guard let self else { return }
-            var finalText = ""
-
             do {
                 for try await event in stream {
                     guard !Task.isCancelled else { break }
                     switch event {
                     case .chunk(let text):
-                        finalText += text
-                        self.refinedText = finalText
+                        // chunk 是累积的完整文本，直接替换
+                        self.refinedText = text
                     case .state:
                         break
                     }
                 }
 
                 if !Task.isCancelled {
-                    await self.completeWithText(finalText)
+                    await self.completeWithText(self.refinedText)
                 }
             } catch {
                 if !Task.isCancelled {
@@ -276,6 +277,7 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         isProcessing = false
         onComplete?(text)
+        recorderStatus = .idle
     }
 }
 #endif

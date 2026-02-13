@@ -21,6 +21,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     private let historyUseCase: HistoryUseCase
     private let refinementUseCase: RefinementUseCase
     private let clipboardService: ClipboardService?
+    private let sessionUseCase: SessionUseCase?
     private let logger: Logger
 
     private var cancellables = Set<AnyCancellable>()
@@ -63,6 +64,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         history: HistoryUseCase,
         refinement: RefinementUseCase,
         clipboard: ClipboardService? = nil,
+        session: SessionUseCase? = nil,
         logger: Logger? = nil
     ) {
         self.recordingUseCase = recording
@@ -71,6 +73,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         self.historyUseCase = history
         self.refinementUseCase = refinement
         self.clipboardService = clipboard
+        self.sessionUseCase = session
         self.logger = logger ?? PrintLogger(subsystem: "EditorViewModel")
 
         bindUseCases()
@@ -307,6 +310,17 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                     // 自动复制精炼结果到剪贴板
                     self.clipboardService?.copy(self.streamingRefinedText)
                     self.logger.debug("📋 [Auto Copy] Refined text copied to clipboard")
+
+                    // 保存会话到持久化存储
+                    if let sessionUseCase = self.sessionUseCase {
+                        Task {
+                            try? await sessionUseCase.saveCompletedSession(
+                                title: nil,
+                                rawText: self.rawTranscription,
+                                refinedText: self.streamingRefinedText
+                            )
+                        }
+                    }
                 }
             } catch {
                 if !Task.isCancelled {

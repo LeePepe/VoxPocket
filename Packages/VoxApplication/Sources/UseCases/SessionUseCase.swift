@@ -56,4 +56,16 @@ public protocol SessionUseCase: AnyObject, Sendable {
     ///
     /// 保存并关闭当前会话。
     func closeCurrentSession() async throws
+
+    /// 保存已完成的录音会话
+    ///
+    /// 创建并持久化一个包含转录文本的会话。
+    ///
+    /// - Parameters:
+    ///   - title: 会话标题（可选，默认从内容生成）
+    ///   - rawText: 原始转录文本
+    ///   - refinedText: LLM 优化后的文本
+    /// - Returns: 创建的会话
+    @discardableResult
+    func saveCompletedSession(title: String?, rawText: String, refinedText: String) async throws -> Session
 }

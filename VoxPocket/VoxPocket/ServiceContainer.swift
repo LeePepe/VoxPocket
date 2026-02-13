@@ -8,10 +8,12 @@
 #if os(macOS)
 import Foundation
 import SwiftUI
+import SwiftData
 import Combine
 import TranscriptionKit
 import LLMKit
 import UseCases
+import Persistence
 import PlatformAdapters
 import UIShared
 import PlatformUI
@@ -43,6 +45,9 @@ public final class ServiceContainer: ObservableObject {
     public let historyUseCase: DefaultHistoryUseCase
     public let refinementUseCase: DefaultRefinementUseCase
 
+    /// 会话持久化用例（在 configure(modelContainer:) 后可用）
+    public private(set) var sessionUseCase: SessionUseCase!
+
     // MARK: - 状态跟踪
 
     /// 当前是否有录音正在进行
@@ -71,6 +76,15 @@ public final class ServiceContainer: ObservableObject {
         print("✅ [ServiceContainer] Initialized")
     }
 
+    /// 配置 SwiftData 持久化层
+    ///
+    /// 在 ModelContainer 创建后调用，注入持久化依赖。
+    public func configure(modelContainer: ModelContainer) {
+        let repository = SwiftDataSessionRepository(container: modelContainer)
+        sessionUseCase = DefaultSessionUseCase(repository: repository)
+        print("✅ [ServiceContainer] Persistence configured with SwiftData + CloudKit")
+    }
+
     // MARK: - ViewModel 工厂方法
 
     /// 创建完整面板的 EditorViewModel
@@ -86,14 +100,14 @@ public final class ServiceContainer: ObservableObject {
             editing: editingUseCase,
             history: historyUseCase,
             refinement: refinementUseCase,
-            clipboard: clipboard
+            clipboard: clipboard,
+            session: sessionUseCase
         )
     }
 
     /// 创建完整面板的 RootViewModel
     public func makeRootViewModel() -> RootViewModel<SessionListViewModel, EditorViewModel> {
         let editor = makeEditorViewModel()
-        let sessionUseCase = InMemorySessionUseCase()
         let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
         return RootViewModel(sessionListState: sessionList, editorState: editor)
     }

@@ -497,6 +497,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
             Task {
                 do {
                     let stream = session.streamResponse(to: prompt, options: .init())
+                    // response.content 是累积的完整文本，直接返回完整内容
                     for try await response in stream {
                         continuation.yield(response.content)
                     }

@@ -12,6 +12,7 @@ import PlatformAdapters
 import Carbon
 #endif
 import SwiftData
+import Persistence
 import UIShared
 
 @main
@@ -22,12 +23,18 @@ struct VoxPocketApp: App {
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            SessionRecord.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .automatic
+        )
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+            ServiceContainer.shared.configure(modelContainer: container)
+            return container
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
