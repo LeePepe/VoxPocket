@@ -88,4 +88,23 @@ public final class InMemorySessionUseCase: SessionUseCase, @unchecked Sendable {
     public func closeCurrentSession() async throws {
         currentSessionSubject.send(nil)
     }
+
+    @discardableResult
+    public func saveCompletedSession(title: String?, rawText: String, refinedText: String) async throws -> Session {
+        let displayText = refinedText.isEmpty ? rawText : refinedText
+        let autoTitle = title ?? String(displayText.prefix(20))
+        let now = Date()
+        let session = Session(
+            id: UUID(),
+            title: autoTitle,
+            rawText: rawText,
+            refinedText: refinedText,
+            createdAt: now,
+            updatedAt: now,
+            state: .idle
+        )
+        sessions.insert(session, at: 0)
+        sessionsSubject.send(sessions)
+        return session
+    }
 }
