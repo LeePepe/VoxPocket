@@ -7,8 +7,6 @@
 
 import SwiftUI
 import UIShared
-import TranscriptionKit
-import LLMKit
 import UseCases
 #if os(macOS)
 import PlatformAdapters
@@ -21,35 +19,8 @@ struct ContentView: View {
     @StateObject private var snackbarService = DefaultSnackbarService()
 
     init() {
-        let transcriber = AppleSpeechTranscriber()
-        let editing = DefaultEditingUseCase()
-        let recording = DefaultRecordingUseCase(coordinator: transcriber)
-        let transcription = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editing)
-        let history = DefaultHistoryUseCase(editing: editing)
-
-        // LLM 服务与优化用例
-        let llmService = DefaultLLMService()
-        let refinement = DefaultRefinementUseCase(llmService: llmService, editing: editing)
-
-#if os(macOS)
-        let clipboard: ClipboardService? = MacOSClipboardService.shared
-#else
-        let clipboard: ClipboardService? = nil
-#endif
-        let editor = EditorViewModel(
-            recording: recording,
-            transcription: transcription,
-            editing: editing,
-            history: history,
-            refinement: refinement,
-            clipboard: clipboard
-        )
-        let sessionUseCase = InMemorySessionUseCase()
-        let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
-        _rootViewModel = StateObject(wrappedValue: RootViewModel(
-            sessionListState: sessionList,
-            editorState: editor
-        ))
+        let vm = ServiceContainer.shared.makeRootViewModel()
+        _rootViewModel = StateObject(wrappedValue: vm)
     }
 
     var body: some View {
@@ -75,6 +46,10 @@ struct ContentView: View {
             }
         )
         .snackbarOverlay(service: snackbarService)
+        .task {
+            // 延迟初始化 SwiftData，避免在 App init 阶段创建 ModelContainer 阻塞 UI
+            ServiceContainer.shared.initializePersistence()
+        }
     }
 }
 

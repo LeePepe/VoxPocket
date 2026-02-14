@@ -11,7 +11,6 @@ import Preferences
 import PlatformAdapters
 import Carbon
 #endif
-import SwiftData
 import UIShared
 
 @main
@@ -20,26 +19,13 @@ struct VoxPocketApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
 
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
     var body: some Scene {
         #if os(macOS)
         // macOS: 主窗口 + 设置窗口
         WindowGroup("VoxPocket") {
             ContentView()
         }
-        .modelContainer(sharedModelContainer)
+        // 不使用 .modelContainer() — repository 直接持有 container 引用
 
         // 设置窗口（可选）
         Settings {
@@ -50,7 +36,7 @@ struct VoxPocketApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(sharedModelContainer)
+        // 不使用 .modelContainer() — repository 直接持有 container 引用
         #endif
     }
 }

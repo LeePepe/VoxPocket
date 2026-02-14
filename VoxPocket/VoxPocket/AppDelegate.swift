@@ -12,6 +12,7 @@ import Carbon
 import PlatformAdapters
 import PlatformUI
 import UIShared
+import UseCases
 import Preferences
 
 /// macOS 应用代理
@@ -165,8 +166,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 设置完成回调：隐藏面板 + 清除录音状态
         if let viewModel = windowManager.getQuickRecordingViewModel() {
-            viewModel.onComplete = { [weak self] _ in
+            viewModel.onComplete = { [weak self, weak viewModel] finalText in
                 Task { @MainActor in
+                    // 保存会话到持久化存储
+                    let raw = viewModel?.rawTranscription ?? finalText
+                    try? await self?.serviceContainer.sessionUseCase.saveCompletedSession(
+                        title: nil,
+                        rawText: raw,
+                        refinedText: finalText
+                    )
+
                     try? await Task.sleep(for: .seconds(1))
                     self?.windowManager.hideWindow(.quickRecording)
                     self?.serviceContainer.endRecording()
