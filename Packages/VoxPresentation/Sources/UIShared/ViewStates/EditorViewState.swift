@@ -47,6 +47,9 @@ public protocol EditorViewState: ObservableObject {
     /// 流式优化输出文本（refine 过程中实时更新）
     var streamingRefinedText: String { get }
 
+    /// 自动复制完成时的文本（用于触发 snackbar 通知，显示后重置为 nil）
+    var autoCopiedText: String? { get set }
+
     // MARK: - 录音操作
 
     /// 开始录音

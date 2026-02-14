@@ -19,6 +19,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     @Published public var selectedRange: NSRange = NSRange(location: 0, length: 0)
     @Published public var rawTranscription: String = ""
     @Published public var streamingRefinedText: String = ""
+    @Published public var autoCopiedText: String?
 
     private var mockTask: Task<Void, Never>?
 

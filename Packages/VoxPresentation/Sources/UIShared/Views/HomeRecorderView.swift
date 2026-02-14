@@ -117,6 +117,12 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
         .onAppear {
             reveal = true
         }
+        .onChange(of: viewModel.autoCopiedText) { _, newValue in
+            if let text = newValue, !text.isEmpty {
+                onCopyRefined(text)
+                viewModel.autoCopiedText = nil
+            }
+        }
     }
 }
 
@@ -238,7 +244,12 @@ struct BottomControls: View {
 
             Spacer()
 
-            ControlButton("Copy", systemImage: "doc.on.doc", color: theme.palette.surfaceElevated, action: onCopy)
+            Button(action: onCopy) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 13))
+                    .foregroundColor(.textTertiary)
+            }
+            .buttonStyle(GlassIconButtonStyle())
 
             ControlButton(primaryTitle, systemImage: primaryIcon, color: primaryColor, emphasis: true, action: onStopOrRestart)
         }

@@ -49,6 +49,15 @@ public final class ServiceContainer: ObservableObject {
     /// 会话用例代理（启动时用内存实现，UI 就绪后延迟切换到 SwiftData）
     public let sessionUseCase: ProxySessionUseCase
 
+    // MARK: - Quick Recording 独立服务栈
+
+    /// 快速录音专用转录器（空闲时轻量，同一时刻只有一个可以录音）
+    public let quickTranscriber: AppleSpeechTranscriber
+    public let quickEditingUseCase: DefaultEditingUseCase
+    public let quickRecordingUseCase: DefaultRecordingUseCase
+    public let quickTranscriptionUseCase: DefaultTranscriptionUseCase
+    public let quickRefinementUseCase: DefaultRefinementUseCase
+
     // MARK: - 状态跟踪
 
     /// 当前是否有录音正在进行
@@ -77,6 +86,19 @@ public final class ServiceContainer: ObservableObject {
         // 启动时先用内存实现，避免 ModelContainer 创建阻塞 UI
         sessionUseCase = ProxySessionUseCase(backing: InMemorySessionUseCase())
 
+        // 快速录音独立服务栈（共享 llmService，独立状态管线）
+        quickTranscriber = AppleSpeechTranscriber()
+        quickEditingUseCase = DefaultEditingUseCase()
+        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber)
+        quickTranscriptionUseCase = DefaultTranscriptionUseCase(
+            coordinator: quickTranscriber,
+            editing: quickEditingUseCase
+        )
+        quickRefinementUseCase = DefaultRefinementUseCase(
+            llmService: llmService,
+            editing: quickEditingUseCase
+        )
+
         print("✅ [ServiceContainer] Initialized")
     }
 
@@ -85,7 +107,7 @@ public final class ServiceContainer: ObservableObject {
     /// 延迟初始化 SwiftData 持久化层
     ///
     /// 在 UI 首次渲染后调用，避免 ModelContainer 创建阻塞 App 初始化导致 UI 卡死。
-    public func initializePersistence() {
+    public func initializePersistence() async {
         let schema = Schema([SessionRecord.self])
         let config = ModelConfiguration(
             schema: schema,
@@ -96,7 +118,7 @@ public final class ServiceContainer: ObservableObject {
             let container = try ModelContainer(for: schema, configurations: [config])
             let repository = SwiftDataSessionRepository(container: container)
             let swiftDataUseCase = DefaultSessionUseCase(repository: repository)
-            sessionUseCase.switchBacking(to: swiftDataUseCase)
+            await sessionUseCase.switchBacking(to: swiftDataUseCase)
             print("✅ [ServiceContainer] SwiftData persistence initialized")
         } catch {
             print("❌ [ServiceContainer] Failed to create ModelContainer: \(error)")
@@ -130,12 +152,12 @@ public final class ServiceContainer: ObservableObject {
         return RootViewModel(sessionListState: sessionList, editorState: editor)
     }
 
-    /// 创建快速录音的 ViewModel
+    /// 创建快速录音的 ViewModel（使用独立服务栈，不影响主编辑器状态）
     public func makeQuickRecordingViewModel() -> QuickRecordingViewModel {
         QuickRecordingViewModel(
-            recordingUseCase: recordingUseCase,
-            transcriptionUseCase: transcriptionUseCase,
-            refinementUseCase: refinementUseCase,
+            recordingUseCase: quickRecordingUseCase,
+            transcriptionUseCase: quickTranscriptionUseCase,
+            refinementUseCase: quickRefinementUseCase,
             clipboardService: clipboardService
         )
     }
@@ -191,13 +213,11 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
     }
 
     /// 切换底层实现并重新加载数据
-    func switchBacking(to newBacking: SessionUseCase) {
+    func switchBacking(to newBacking: SessionUseCase) async {
         backing = newBacking
         rebindPublisher()
-        // 触发重新加载
-        Task {
-            _ = try? await fetchAllSessions()
-        }
+        // 等待数据加载完成，确保 UI 及时刷新
+        _ = try? await fetchAllSessions()
     }
 
     private func rebindPublisher() {

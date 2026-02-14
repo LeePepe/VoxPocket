@@ -81,6 +81,19 @@ public final class SessionListViewModel: ObservableObject, SessionListViewState 
         }
     }
 
+    public func deleteAllSessions() async {
+        let allIds = sessions.map(\.id)
+        for id in allIds {
+            do {
+                try await sessionUseCase.deleteSession(id)
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
+        }
+        selectedSessionId = nil
+    }
+
     public func selectSession(_ id: UUID) async {
         selectedSessionId = id
         do {

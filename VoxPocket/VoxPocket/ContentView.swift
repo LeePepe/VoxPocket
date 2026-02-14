@@ -48,7 +48,7 @@ struct ContentView: View {
         .snackbarOverlay(service: snackbarService)
         .task {
             // 延迟初始化 SwiftData，避免在 App init 阶段创建 ModelContainer 阻塞 UI
-            ServiceContainer.shared.initializePersistence()
+            await ServiceContainer.shared.initializePersistence()
         }
     }
 }

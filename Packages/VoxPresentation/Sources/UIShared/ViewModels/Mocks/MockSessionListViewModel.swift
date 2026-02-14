@@ -26,6 +26,7 @@ public final class MockSessionListViewModel: ObservableObject, SessionListViewSt
     public func loadSessions() async {}
     public func createSession() async {}
     public func deleteSession(_ id: UUID) async {}
+    public func deleteAllSessions() async { sessions.removeAll(); selectedSessionId = nil }
 
     public func selectSession(_ id: UUID) async {
         selectedSessionId = id

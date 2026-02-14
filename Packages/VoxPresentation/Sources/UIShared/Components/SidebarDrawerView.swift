@@ -8,6 +8,7 @@ struct SidebarDrawerView: View {
     let isRecording: Bool
     @Binding var searchText: String
     let onSelectSession: (Session) -> Void
+    let onDeleteSession: (Session) -> Void
     let onNewSession: () -> Void
     let onOpenMe: () -> Void
 
@@ -17,23 +18,26 @@ struct SidebarDrawerView: View {
         VStack(spacing: 0) {
             // 中间区域：header 悬浮 + 列表滚动
             ZStack(alignment: .top) {
-                // 会话列表（底层，内容可滚动到 header 下方透出模糊）
-                ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(sessions) { session in
-                            Button {
+                // 会话列表（底层，使用 List 以获得系统原生滑动删除手势）
+                List {
+                    ForEach(sessions) { session in
+                        HistoryRowView(session: session, isSelected: session.id == selectedSessionID)
+                            .onTapGesture {
                                 onSelectSession(session)
-                            } label: {
-                                HistoryRowView(session: session, isSelected: session.id == selectedSessionID)
                             }
-                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            onDeleteSession(sessions[index])
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    // 顶部留出 header 高度的空间
-                    .padding(.top, 110)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .contentMargins(.top, 110, for: .scrollContent)
 
                 // 固定头部 + 搜索栏（悬浮，模糊背景 + 渐变淡出边界）
                 VStack(spacing: 0) {
@@ -65,7 +69,7 @@ struct SidebarDrawerView: View {
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: 16)
+                        .frame(height: 32)
                     }
                 )
             }
@@ -205,6 +209,7 @@ struct MeEntryRow: View {
         isRecording: true,
         searchText: .constant(""),
         onSelectSession: { _ in },
+        onDeleteSession: { _ in },
         onNewSession: {},
         onOpenMe: {}
     )

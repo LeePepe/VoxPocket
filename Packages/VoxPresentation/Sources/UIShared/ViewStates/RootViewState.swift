@@ -35,6 +35,12 @@ public protocol RootViewState: ObservableObject {
 
     // MARK: - 操作
 
+    /// 删除会话
+    func deleteSession(_ id: UUID)
+
+    /// 删除所有会话
+    func deleteAllSessions()
+
     /// 选择会话
     func selectSession(_ id: UUID)
 

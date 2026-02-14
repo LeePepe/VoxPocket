@@ -39,6 +39,9 @@ public protocol SessionListViewState: ObservableObject {
     /// - Parameter id: 会话 ID
     func deleteSession(_ id: UUID) async
 
+    /// 删除所有会话
+    func deleteAllSessions() async
+
     /// 选择会话
     ///
     /// - Parameter id: 会话 ID

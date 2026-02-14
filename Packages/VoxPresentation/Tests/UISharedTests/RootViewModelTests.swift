@@ -50,6 +50,7 @@ private final class SessionListSpy: ObservableObject, SessionListViewState {
 
     func createSession() async {}
     func deleteSession(_ id: UUID) async {}
+    func deleteAllSessions() async {}
     func refresh() async {}
     func clearError() {}
 
@@ -73,6 +74,7 @@ private final class EditorStateSpy: ObservableObject, EditorViewState {
     @Published var selectedRange: NSRange = NSRange(location: 0, length: 0)
     @Published var rawTranscription: String = ""
     @Published var streamingRefinedText: String = ""
+    @Published var autoCopiedText: String?
 
     func startRecording() async {}
     func stopRecording() async {}

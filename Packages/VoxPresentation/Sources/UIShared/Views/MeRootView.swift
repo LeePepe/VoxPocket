@@ -3,9 +3,11 @@ import Preferences
 
 struct MeRootView: View {
     let status: RecorderStatus
+    var onDeleteAllHistory: (() -> Void)?
 
-    init(status: RecorderStatus = .idle) {
+    init(status: RecorderStatus = .idle, onDeleteAllHistory: (() -> Void)? = nil) {
         self.status = status
+        self.onDeleteAllHistory = onDeleteAllHistory
     }
 
     var body: some View {
@@ -16,7 +18,7 @@ struct MeRootView: View {
 #if os(macOS)
                 ShortcutsCard()
 #endif
-                PrivacyCard()
+                PrivacyCard(onDeleteAllHistory: onDeleteAllHistory)
                 DiagnosticsCard()
                 AboutCard()
             }
@@ -100,6 +102,9 @@ struct BehaviorCard: View {
 }
 
 struct PrivacyCard: View {
+    var onDeleteAllHistory: (() -> Void)?
+    @State private var showDeleteConfirmation = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Privacy & Data")
@@ -108,7 +113,29 @@ struct PrivacyCard: View {
 
             SettingRow(title: "Data retention", value: "30 days")
             SettingRow(title: "Export data", value: "Ready")
-            SettingRow(title: "Clear history", value: "Danger")
+
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                HStack {
+                    Text("Clear history")
+                        .font(.custom("Avenir Next", size: 13).weight(.medium))
+                        .foregroundColor(.red)
+                    Spacer()
+                    Text("删除全部")
+                        .font(.custom("Avenir Next", size: 12))
+                        .foregroundColor(.red.opacity(0.7))
+                }
+            }
+            .buttonStyle(.plain)
+            .confirmationDialog("确认删除所有历史记录？", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                Button("删除全部", role: .destructive) {
+                    onDeleteAllHistory?()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("此操作不可撤销，所有会话记录将被永久删除。")
+            }
         }
         .modifier(CardStyle())
     }

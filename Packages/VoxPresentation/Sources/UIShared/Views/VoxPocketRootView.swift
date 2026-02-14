@@ -72,6 +72,9 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     onSelectSession: { session in
                         viewModel.selectSession(session.id)
                     },
+                    onDeleteSession: { session in
+                        viewModel.deleteSession(session.id)
+                    },
                     onNewSession: {
                         viewModel.createNewSession()
                     },
@@ -116,7 +119,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .me:
-                    MeRootView(status: viewModel.recorderStatus)
+                    MeRootView(status: viewModel.recorderStatus, onDeleteAllHistory: { viewModel.deleteAllSessions() })
                 }
             }
         }
@@ -149,6 +152,13 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     ForEach(viewModel.sessionListState.filteredSessions) { session in
                         NavigationLink(value: SidebarDestination.session(session.id)) {
                             HistoryRowView(session: session)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                viewModel.deleteSession(session.id)
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
                         }
                     }
                 }

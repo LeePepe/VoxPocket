@@ -54,6 +54,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     @Published public var selectedRange: NSRange = NSRange(location: 0, length: 0)
     @Published public var rawTranscription: String = ""
     @Published public var streamingRefinedText: String = ""
+    @Published public var autoCopiedText: String?
 
     // MARK: - Init
 
@@ -309,6 +310,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
 
                     // 自动复制精炼结果到剪贴板
                     self.clipboardService?.copy(self.streamingRefinedText)
+                    self.autoCopiedText = self.streamingRefinedText
                     self.logger.debug("📋 [Auto Copy] Refined text copied to clipboard")
 
                     // 保存会话到持久化存储

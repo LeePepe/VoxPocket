@@ -30,6 +30,7 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
         self.editorState = editorState
 
         bindEditorState()
+        bindSessionListState()
         loadHistoryOnLaunch()
     }
 
@@ -40,6 +41,16 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.updateRecorderStatus()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func bindSessionListState() {
+        // 转发子 ViewModel 变更，驱动视图刷新
+        sessionListState.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
             }
             .store(in: &cancellables)
     }
@@ -57,6 +68,18 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
     }
 
     // MARK: - 操作
+
+    public func deleteSession(_ id: UUID) {
+        Task {
+            await sessionListState.deleteSession(id)
+        }
+    }
+
+    public func deleteAllSessions() {
+        Task {
+            await sessionListState.deleteAllSessions()
+        }
+    }
 
     public func selectSession(_ id: UUID) {
         Task {
