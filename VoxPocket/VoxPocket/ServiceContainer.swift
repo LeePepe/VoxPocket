@@ -5,7 +5,6 @@
 //  依赖注入容器，管理所有共享服务和用例实例
 //
 
-#if os(macOS)
 import Foundation
 import SwiftUI
 import SwiftData
@@ -17,7 +16,9 @@ import CoreModels
 import Persistence
 import PlatformAdapters
 import UIShared
+#if os(macOS)
 import PlatformUI
+#endif
 
 /// 服务容器
 ///
@@ -34,9 +35,6 @@ public final class ServiceContainer: ObservableObject {
 
     public let transcriber: AppleSpeechTranscriber
     public let llmService: DefaultLLMService
-    public let clipboardService: MacOSClipboardService
-    public let accessibilityService: MacOSAccessibilityService
-    public let hotkeyService: MacOSGlobalHotkeyService
 
     // MARK: - Use Cases
 
@@ -49,6 +47,14 @@ public final class ServiceContainer: ObservableObject {
     /// 会话用例代理（启动时用内存实现，UI 就绪后延迟切换到 SwiftData）
     public let sessionUseCase: ProxySessionUseCase
 
+    /// Deep Link 路由
+    public let deepLinkRouter: DefaultDeepLinkRouter
+
+#if os(macOS)
+    public let clipboardService: MacOSClipboardService
+    public let accessibilityService: MacOSAccessibilityService
+    public let hotkeyService: MacOSGlobalHotkeyService
+
     // MARK: - Quick Recording 独立服务栈
 
     /// 快速录音专用转录器（空闲时轻量，同一时刻只有一个可以录音）
@@ -57,6 +63,7 @@ public final class ServiceContainer: ObservableObject {
     public let quickRecordingUseCase: DefaultRecordingUseCase
     public let quickTranscriptionUseCase: DefaultTranscriptionUseCase
     public let quickRefinementUseCase: DefaultRefinementUseCase
+#endif
 
     // MARK: - 状态跟踪
 
@@ -72,9 +79,11 @@ public final class ServiceContainer: ObservableObject {
         // 初始化基础服务
         transcriber = AppleSpeechTranscriber()
         llmService = DefaultLLMService()
+#if os(macOS)
         clipboardService = MacOSClipboardService.shared
         accessibilityService = MacOSAccessibilityService.shared
         hotkeyService = MacOSGlobalHotkeyService.shared
+#endif
 
         // 初始化 Use Cases
         editingUseCase = DefaultEditingUseCase()
@@ -86,6 +95,10 @@ public final class ServiceContainer: ObservableObject {
         // 启动时先用内存实现，避免 ModelContainer 创建阻塞 UI
         sessionUseCase = ProxySessionUseCase(backing: InMemorySessionUseCase())
 
+        // Deep Link 路由
+        deepLinkRouter = DefaultDeepLinkRouter()
+
+#if os(macOS)
         // 快速录音独立服务栈（共享 llmService，独立状态管线）
         quickTranscriber = AppleSpeechTranscriber()
         quickEditingUseCase = DefaultEditingUseCase()
@@ -98,6 +111,7 @@ public final class ServiceContainer: ObservableObject {
             llmService: llmService,
             editing: quickEditingUseCase
         )
+#endif
 
         print("✅ [ServiceContainer] Initialized")
     }
@@ -149,10 +163,11 @@ public final class ServiceContainer: ObservableObject {
     public func makeRootViewModel() -> RootViewModel<SessionListViewModel, EditorViewModel> {
         let editor = makeEditorViewModel()
         let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
-        return RootViewModel(sessionListState: sessionList, editorState: editor)
+        return RootViewModel(sessionListState: sessionList, editorState: editor, deepLinkRouter: deepLinkRouter)
     }
 
     /// 创建快速录音的 ViewModel（使用独立服务栈，不影响主编辑器状态）
+#if os(macOS)
     public func makeQuickRecordingViewModel() -> QuickRecordingViewModel {
         QuickRecordingViewModel(
             recordingUseCase: quickRecordingUseCase,
@@ -161,6 +176,7 @@ public final class ServiceContainer: ObservableObject {
             clipboardService: clipboardService
         )
     }
+#endif
 
     // MARK: - 录音状态管理
 
@@ -277,4 +293,3 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
         try await backing.saveCompletedSession(title: title, rawText: rawText, refinedText: refinedText)
     }
 }
-#endif

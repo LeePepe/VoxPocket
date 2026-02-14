@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import CoreModels
 import SwiftUI
+import UseCases
 
 /// 根视图 ViewModel
 ///
@@ -14,6 +15,10 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
     public let sessionListState: SL
     public let editorState: E
 
+    // MARK: - Deep Link 路由
+
+    private let deepLinkRouter: DeepLinkRouting?
+
     // MARK: - 导航状态
 
     @Published public var recorderStatus: RecorderStatus = .idle
@@ -25,12 +30,14 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
 
     // MARK: - Init
 
-    public init(sessionListState: SL, editorState: E) {
+    public init(sessionListState: SL, editorState: E, deepLinkRouter: DeepLinkRouting? = nil) {
         self.sessionListState = sessionListState
         self.editorState = editorState
+        self.deepLinkRouter = deepLinkRouter
 
         bindEditorState()
         bindSessionListState()
+        bindDeepLinkRouter()
         loadHistoryOnLaunch()
     }
 
@@ -111,6 +118,35 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
             isDrawerOpen = false
         }
         navigationPath.removeAll()
+    }
+
+    private func bindDeepLinkRouter() {
+        deepLinkRouter?.pendingActionPublisher
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] action in
+                guard let self else { return }
+                self.handleDeepLinkAction(action)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleDeepLinkAction(_ action: DeepLinkAction) {
+        // 消费后立即清除
+        deepLinkRouter?.pendingAction = nil
+
+        switch action {
+        case .startRecording:
+            Task {
+                // 短暂延迟，确保 UI 和权限就绪
+                try? await Task.sleep(for: .milliseconds(300))
+                await editorState.startRecording()
+            }
+        case .newSession:
+            createNewSession()
+        case .openSession(let id):
+            selectSession(id)
+        }
     }
 
     private func loadHistoryOnLaunch() {

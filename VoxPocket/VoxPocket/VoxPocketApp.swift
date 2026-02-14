@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Preferences
+import UseCases
 #if os(macOS)
 import PlatformAdapters
 import Carbon
@@ -35,6 +36,9 @@ struct VoxPocketApp: App {
         // iOS: 标准窗口组
         WindowGroup {
             ContentView()
+                .onOpenURL { url in
+                    ServiceContainer.shared.deepLinkRouter.handle(url)
+                }
         }
         // 不使用 .modelContainer() — repository 直接持有 container 引用
         #endif

@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		70398B052F2706AA007D1E07 /* PlatformUI in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B042F2706AA007D1E07 /* PlatformUI */; };
 		70398B072F2706AA007D1E07 /* UIShared in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B062F2706AA007D1E07 /* UIShared */; };
+		70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B0F2F270800007D1E07 /* WidgetKit.framework */; };
+		70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B112F270800007D1E07 /* SwiftUI.framework */; };
+		70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,12 +29,22 @@
 			remoteGlobalIDString = 70398AD32F27048D007D1E07;
 			remoteInfo = VoxPocket;
 		};
+		70398B182F270800007D1E07 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 70398ACC2F27048D007D1E07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 70398B0D2F270800007D1E07;
+			remoteInfo = VoxPocketWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		70398AD42F27048D007D1E07 /* VoxPocket.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoxPocket.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		70398AE52F270490007D1E07 /* VoxPocketTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoxPocketTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		70398AEF2F270490007D1E07 /* VoxPocketUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoxPocketUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VoxPocketWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		70398B0F2F270800007D1E07 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		70398B112F270800007D1E07 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,6 +54,13 @@
 				Info.plist,
 			);
 			target = 70398AD32F27048D007D1E07 /* VoxPocket */;
+		};
+		70398B172F270800007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -61,6 +81,14 @@
 		70398AF22F270490007D1E07 /* VoxPocketUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VoxPocketUITests;
+			sourceTree = "<group>";
+		};
+		70398B132F270800007D1E07 /* VoxPocketWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				70398B172F270800007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */,
+			);
+			path = ../VoxPocketWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -89,6 +117,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		70398B0C2F270800007D1E07 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */,
+				70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -96,8 +133,10 @@
 			isa = PBXGroup;
 			children = (
 				70398AD62F27048D007D1E07 /* VoxPocket */,
+				70398B132F270800007D1E07 /* VoxPocketWidget */,
 				70398AE82F270490007D1E07 /* VoxPocketTests */,
 				70398AF22F270490007D1E07 /* VoxPocketUITests */,
+				70398B142F270800007D1E07 /* Frameworks */,
 				70398AD52F27048D007D1E07 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -108,8 +147,18 @@
 				70398AD42F27048D007D1E07 /* VoxPocket.app */,
 				70398AE52F270490007D1E07 /* VoxPocketTests.xctest */,
 				70398AEF2F270490007D1E07 /* VoxPocketUITests.xctest */,
+				70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		70398B142F270800007D1E07 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				70398B0F2F270800007D1E07 /* WidgetKit.framework */,
+				70398B112F270800007D1E07 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -122,10 +171,12 @@
 				70398AD02F27048D007D1E07 /* Sources */,
 				70398AD12F27048D007D1E07 /* Frameworks */,
 				70398AD22F27048D007D1E07 /* Resources */,
+				70398B1E2F270800007D1E07 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				70398B192F270800007D1E07 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				70398AD62F27048D007D1E07 /* VoxPocket */,
@@ -185,6 +236,28 @@
 			productReference = 70398AEF2F270490007D1E07 /* VoxPocketUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 70398B1B2F270800007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketWidgetExtension" */;
+			buildPhases = (
+				70398B0B2F270800007D1E07 /* Sources */,
+				70398B0C2F270800007D1E07 /* Frameworks */,
+				70398B0A2F270800007D1E07 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				70398B132F270800007D1E07 /* VoxPocketWidget */,
+			);
+			name = VoxPocketWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = VoxPocketWidgetExtension;
+			productReference = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -205,6 +278,9 @@
 					70398AEE2F270490007D1E07 = {
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 70398AD32F27048D007D1E07;
+					};
+					70398B0D2F270800007D1E07 = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -228,6 +304,7 @@
 				70398AD32F27048D007D1E07 /* VoxPocket */,
 				70398AE42F270490007D1E07 /* VoxPocketTests */,
 				70398AEE2F270490007D1E07 /* VoxPocketUITests */,
+				70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -254,7 +331,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		70398B0A2F270800007D1E07 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		70398B1E2F270800007D1E07 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		70398AD02F27048D007D1E07 /* Sources */ = {
@@ -278,6 +376,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		70398B0B2F270800007D1E07 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -290,6 +395,11 @@
 			isa = PBXTargetDependency;
 			target = 70398AD32F27048D007D1E07 /* VoxPocket */;
 			targetProxy = 70398AF02F270490007D1E07 /* PBXContainerItemProxy */;
+		};
+		70398B192F270800007D1E07 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */;
+			targetProxy = 70398B182F270800007D1E07 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -626,6 +736,72 @@
 			};
 			name = Release;
 		};
+		70398B1C2F270800007D1E07 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q4R6JFFF33;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ../VoxPocketWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocket.Widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		70398B1D2F270800007D1E07 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q4R6JFFF33;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ../VoxPocketWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocket.Widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -661,6 +837,15 @@
 			buildConfigurations = (
 				70398B012F270490007D1E07 /* Debug */,
 				70398B022F270490007D1E07 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		70398B1B2F270800007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				70398B1C2F270800007D1E07 /* Debug */,
+				70398B1D2F270800007D1E07 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
