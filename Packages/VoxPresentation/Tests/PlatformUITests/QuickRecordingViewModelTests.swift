@@ -8,6 +8,34 @@ import UseCases
 
 @MainActor
 final class QuickRecordingViewModelTests: XCTestCase {
+    func testStopRecordingUsesLatestTranscriptionArrivingRightAfterStop() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        recording.onStop = {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                transcription.sendLiveText("你好世界")
+            }
+        }
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("你好世")
+
+        await viewModel.stopRecording()
+        try? await Task.sleep(nanoseconds: 160_000_000)
+
+        XCTAssertEqual(viewModel.rawTranscription, "你好世界")
+    }
+
     func testStopRecordingWithEmptyTranscriptionTriggersNoResultCallback() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()
@@ -59,6 +87,7 @@ private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable 
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
     private let startDelayNanoseconds: UInt64
     private(set) var stopCallCount = 0
+    var onStop: (() -> Void)?
 
     init(startDelayNanoseconds: UInt64 = 0) {
         self.startDelayNanoseconds = startDelayNanoseconds
@@ -77,6 +106,7 @@ private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable 
 
     func stopRecording() async throws {
         stopCallCount += 1
+        onStop?()
         stateSubject.send(.idle)
     }
 
@@ -100,6 +130,7 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
     func setLanguage(_ locale: Locale) { _currentLanguage = locale }
     func commitCurrentTranscription() async throws {}
     func clearLiveText() { liveTextSubject.send("") }
+    func sendLiveText(_ text: String) { liveTextSubject.send(text) }
 }
 
 private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendable {

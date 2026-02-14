@@ -90,6 +90,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             .sink { [weak self] text in
                 guard let self else { return }
                 self.liveTranscription = text
+                self.lastTranscriptionUpdate = Date()
                 // 每次转录文本更新，重置自动停止计时
                 if self.recorderStatus == .listening && !text.isEmpty {
                     self.scheduleAutoStop()
@@ -165,7 +166,7 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         do {
             try await recordingUseCase.stopRecording()
-            rawTranscription = liveTranscription
+            rawTranscription = await waitForTranscriptionToSettle()
             print("⏹️ [QuickRecording] Stopped recording, got: \(rawTranscription.prefix(50))...")
 
             guard !rawTranscription.isEmpty else {
@@ -226,6 +227,33 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     // MARK: - LLM 优化 → 复制粘贴 → 完成
+
+    /// 停止录音后，短暂等待识别流的尾部增量收敛，避免松手瞬间丢字。
+    private func waitForTranscriptionToSettle(
+        maxWait: TimeInterval = 0.8,
+        quietWindow: TimeInterval = 0.12,
+        pollInterval: TimeInterval = 0.03
+    ) async -> String {
+        var lastSnapshot = liveTranscription
+        var lastChange = Date()
+        let deadline = Date().addingTimeInterval(maxWait)
+
+        while Date() < deadline {
+            try? await Task.sleep(for: .seconds(pollInterval))
+
+            if liveTranscription != lastSnapshot {
+                lastSnapshot = liveTranscription
+                lastChange = Date()
+                continue
+            }
+
+            if Date().timeIntervalSince(lastChange) >= quietWindow {
+                break
+            }
+        }
+
+        return liveTranscription
+    }
 
     private func performRefinement() async {
         let stream = refinementUseCase.refineStreaming(customPrompt: nil)
