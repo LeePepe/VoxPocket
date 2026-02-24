@@ -17,6 +17,11 @@ let package = Package(
             name: "PlatformUI",
             targets: ["PlatformUI"]
         ),
+        .library(
+            name: "WidgetUI",
+            type: .dynamic,
+            targets: ["WidgetUI"]
+        ),
     ],
     dependencies: [
         .package(path: "../VoxDomain"),
@@ -48,6 +53,10 @@ let package = Package(
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
         ),
+        .target(
+            name: "WidgetUI",
+            dependencies: []
+        ),
         .testTarget(
             name: "UISharedTests",
             dependencies: ["UIShared"]
@@ -60,6 +69,10 @@ let package = Package(
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
             ]
+        ),
+        .testTarget(
+            name: "WidgetUITests",
+            dependencies: ["WidgetUI"]
         ),
     ]
 )

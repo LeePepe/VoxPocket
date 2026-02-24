@@ -1,5 +1,5 @@
-import WidgetKit
 import SwiftUI
+import WidgetKit
 
 /// 简单时间线提供者（静态 Widget，无需动态数据）
 struct QuickRecordProvider: TimelineProvider {
@@ -27,10 +27,12 @@ struct QuickRecordEntry: TimelineEntry {
 /// 快速录音 Widget
 ///
 /// 主屏幕小组件，点击后启动 VoxPocket 并自动开始语音识别。
-struct QuickRecordWidget: Widget {
-    let kind = "com.tianpli.VoxPocket.QuickRecord"
+public struct QuickRecordWidget: Widget {
+    public let kind = "com.tianpli.VoxPocket.QuickRecord"
 
-    var body: some WidgetConfiguration {
+    public init() {}
+
+    public var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: QuickRecordProvider()) { _ in
             QuickRecordWidgetView()
                 .containerBackground(.fill.tertiary, for: .widget)

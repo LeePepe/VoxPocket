@@ -12,6 +12,7 @@
 		70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B0F2F270800007D1E07 /* WidgetKit.framework */; };
 		70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B112F270800007D1E07 /* SwiftUI.framework */; };
 		70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		70398B202F270900007D1E07 /* WidgetUI in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B1F2F270900007D1E07 /* WidgetUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -121,6 +122,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				70398B202F270900007D1E07 /* WidgetUI in Frameworks */,
 				70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */,
 				70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */,
 			);
@@ -253,6 +255,7 @@
 			);
 			name = VoxPocketWidgetExtension;
 			packageProductDependencies = (
+				70398B1F2F270900007D1E07 /* WidgetUI */,
 			);
 			productName = VoxPocketWidgetExtension;
 			productReference = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */;
@@ -763,6 +766,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(PROJECT_DIR)/../Packages/VoxPresentation/build/$(CONFIGURATION)-$(PLATFORM_NAME)";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -796,6 +800,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(PROJECT_DIR)/../Packages/VoxPresentation/build/$(CONFIGURATION)-$(PLATFORM_NAME)";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -867,6 +872,10 @@
 		70398B062F2706AA007D1E07 /* UIShared */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = UIShared;
+		};
+		70398B1F2F270900007D1E07 /* WidgetUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WidgetUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

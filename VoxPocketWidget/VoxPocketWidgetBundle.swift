@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import WidgetUI
 
 /// VoxPocket Widget Bundle
 ///
