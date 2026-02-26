@@ -11,7 +11,7 @@
 		70398B072F2706AA007D1E07 /* UIShared in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B062F2706AA007D1E07 /* UIShared */; };
 		70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B0F2F270800007D1E07 /* WidgetKit.framework */; };
 		70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B112F270800007D1E07 /* SwiftUI.framework */; };
-		70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		70398B202F270900007D1E07 /* WidgetUI in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B1F2F270900007D1E07 /* WidgetUI */; };
 /* End PBXBuildFile section */
 
@@ -39,6 +39,20 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		70398B1E2F270800007D1E07 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		70398AD42F27048D007D1E07 /* VoxPocket.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoxPocket.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		70398AE52F270490007D1E07 /* VoxPocketTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoxPocketTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -55,13 +69,6 @@
 				Info.plist,
 			);
 			target = 70398AD32F27048D007D1E07 /* VoxPocket */;
-		};
-		70398B172F270800007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -82,14 +89,6 @@
 		70398AF22F270490007D1E07 /* VoxPocketUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VoxPocketUITests;
-			sourceTree = "<group>";
-		};
-		70398B132F270800007D1E07 /* VoxPocketWidget */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				70398B172F270800007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */,
-			);
-			path = ../VoxPocketWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -135,7 +134,6 @@
 			isa = PBXGroup;
 			children = (
 				70398AD62F27048D007D1E07 /* VoxPocket */,
-				70398B132F270800007D1E07 /* VoxPocketWidget */,
 				70398AE82F270490007D1E07 /* VoxPocketTests */,
 				70398AF22F270490007D1E07 /* VoxPocketUITests */,
 				70398B142F270800007D1E07 /* Frameworks */,
@@ -250,9 +248,6 @@
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				70398B132F270800007D1E07 /* VoxPocketWidget */,
-			);
 			name = VoxPocketWidgetExtension;
 			packageProductDependencies = (
 				70398B1F2F270900007D1E07 /* WidgetUI */,
@@ -343,20 +338,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		70398B1E2F270800007D1E07 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
 		70398AD02F27048D007D1E07 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -401,6 +382,7 @@
 		};
 		70398B192F270800007D1E07 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilter = ios;
 			target = 70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */;
 			targetProxy = 70398B182F270800007D1E07 /* PBXContainerItemProxy */;
 		};

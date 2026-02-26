@@ -1,9 +1,36 @@
 import XCTest
 import LLMKit
+import CoreModels
 
 final class LLMKitTests: XCTestCase {
     func testPlaceholder() {
         XCTAssertTrue(true)
+    }
+
+    func testAzureFoundryProviderTypeIsSupported() {
+        XCTAssertNotNil(LLMProviderType(rawValue: "azureFoundry"))
+    }
+
+    func testProviderTypesAreAppleAndAzureFoundry() {
+        XCTAssertEqual(Set(LLMProviderType.allCases), Set([.appleIntelligence, .azureFoundry]))
+    }
+
+    func testAzureFoundryProviderValidateRequiresEndpointAndAPIKey() async {
+        let provider = AzureFoundryProvider(
+            config: LLMProviderConfig(
+                providerType: .azureFoundry,
+                modelIdentifier: "gpt-4.1-mini"
+            )
+        )
+
+        do {
+            try await provider.validate()
+            XCTFail("Expected validation to fail for missing endpoint/API key")
+        } catch VoxError.llmProviderNotConfigured {
+            XCTAssertTrue(true)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
     }
 
     func testIntentAndToneAnalysis() async throws {

@@ -15,6 +15,7 @@ struct MeRootView: View {
             VStack(spacing: 18) {
                 ProfileCard()
                 BehaviorCard()
+                LLMProviderCard()
 #if os(macOS)
                 ShortcutsCard()
 #endif
@@ -98,6 +99,46 @@ struct BehaviorCard: View {
             SettingRow(title: "Streaming", value: "Off")
         }
         .modifier(CardStyle())
+    }
+}
+
+struct LLMProviderCard: View {
+    @StateObject private var viewModel = LLMProviderSettingsViewModel()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("LLM Provider")
+                .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                .foregroundColor(MePalette.primaryText)
+
+            HStack {
+                Text("Provider")
+                    .font(.custom("Avenir Next", size: 13).weight(.medium))
+                    .foregroundColor(MePalette.primaryText)
+                Spacer()
+                Picker("", selection: providerBinding) {
+                    ForEach(LLMProviderSelection.allCases, id: \.self) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(MePalette.primaryText)
+            }
+        }
+        .modifier(CardStyle())
+        .onAppear {
+            Task { await viewModel.load() }
+        }
+    }
+
+    private var providerBinding: Binding<LLMProviderSelection> {
+        Binding(
+            get: { viewModel.selectedProvider },
+            set: { newValue in
+                Task { await viewModel.updateProvider(newValue) }
+            }
+        )
     }
 }
 

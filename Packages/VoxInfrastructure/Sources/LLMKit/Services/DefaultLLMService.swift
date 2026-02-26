@@ -20,13 +20,23 @@ public final class DefaultLLMService: LLMService, Sendable {
     private let state: Mutex<State>
     private let logger: Logger
 
-    public init(logger: Logger? = nil) {
+    public init(
+        logger: Logger? = nil,
+        azureFoundryConfig: LLMProviderConfig? = nil
+    ) {
         self.logger = logger ?? PrintLogger(subsystem: "LLMService", minimumLevel: .debug)
         let aiProvider = AppleIntelligenceProvider(logger: self.logger)
-        let initialState = State(
-            providers: [.appleIntelligence: aiProvider],
-            currentProvider: aiProvider
-        )
+        var providers: [LLMProviderType: any LLMProvider] = [.appleIntelligence: aiProvider]
+
+        if let azureConfig = azureFoundryConfig {
+            let azureProvider = AzureFoundryProvider(
+                config: azureConfig,
+                logger: self.logger
+            )
+            providers[.azureFoundry] = azureProvider
+        }
+
+        let initialState = State(providers: providers, currentProvider: aiProvider)
         self.state = Mutex(initialState)
     }
 

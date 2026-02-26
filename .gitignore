@@ -6,6 +6,9 @@
 
 # Swift/Xcode
 .build/
+build/
+/VoxPocket/build/
+/Packages/*/build/
 .swiftpm/
 **/*.xcodeproj/xcuserdata/
 **/*.xcworkspace/xcuserdata/

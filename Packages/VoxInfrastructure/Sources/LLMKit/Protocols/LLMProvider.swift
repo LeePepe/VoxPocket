@@ -2,16 +2,10 @@ import Foundation
 
 /// LLM 提供者类型
 public enum LLMProviderType: String, CaseIterable, Sendable {
-    /// OpenAI (GPT 系列)
-    case openAI
-    /// Anthropic (Claude 系列)
-    case anthropic
-    /// 本地模型
-    case local
-    /// 自定义提供者
-    case custom
     /// Apple Intelligence (FoundationModels)
     case appleIntelligence
+    /// Azure AI Foundry 远端模型
+    case azureFoundry
 }
 
 /// LLM 提供者配置

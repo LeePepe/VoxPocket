@@ -3,10 +3,12 @@ import Foundation
 public enum PreferencesKey: String, CaseIterable, Sendable {
     case showPanelHotkey = "hotkey.showPanel"
     case quickRecordHotkey = "hotkey.quickRecord"
+    case llmProvider = "llm.provider"
 }
 
 public enum PreferencesNotification {
     public static let hotkeysDidChange = Notification.Name("vox.preferences.hotkeysDidChange")
+    public static let llmProviderDidChange = Notification.Name("vox.preferences.llmProviderDidChange")
 }
 
 public protocol PreferencesStore: AnyObject, Sendable {
