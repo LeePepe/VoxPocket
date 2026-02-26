@@ -15,6 +15,7 @@ import UseCases
 import CoreModels
 import Persistence
 import PlatformAdapters
+import Preferences
 import UIShared
 #if os(macOS)
 import PlatformUI
@@ -26,6 +27,7 @@ import PlatformUI
 /// 提供工厂方法创建 ViewModel。
 @MainActor
 public final class ServiceContainer: ObservableObject {
+    private let preferencesStore = UserDefaultsPreferencesStore.shared
 
     // MARK: - 单例
 
@@ -76,9 +78,11 @@ public final class ServiceContainer: ObservableObject {
     // MARK: - 初始化
 
     private init() {
+        let azureConfig = Self.makeAzureFoundryConfig()
+
         // 初始化基础服务
         transcriber = AppleSpeechTranscriber()
-        llmService = DefaultLLMService()
+        llmService = DefaultLLMService(azureFoundryConfig: azureConfig)
 #if os(macOS)
         clipboardService = MacOSClipboardService.shared
         accessibilityService = MacOSAccessibilityService.shared
@@ -113,7 +117,118 @@ public final class ServiceContainer: ObservableObject {
         )
 #endif
 
+        configureLLMService()
+        observeProviderPreferenceChanges()
+        Task { [weak self] in
+            await self?.applyProviderPreferenceIfExists()
+        }
+
         print("✅ [ServiceContainer] Initialized")
+    }
+
+    private func observeProviderPreferenceChanges() {
+        NotificationCenter.default.addObserver(
+            forName: PreferencesNotification.llmProviderDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { [weak self] in
+                await self?.applyProviderPreferenceIfExists()
+            }
+        }
+    }
+
+    private func applyProviderPreferenceIfExists() async {
+        let stored: String? = await preferencesStore.getValue(for: .llmProvider)
+        guard let stored, let preferred = LLMProviderType(rawValue: stored) else {
+            return
+        }
+        configureLLMService(preferredProvider: preferred)
+    }
+
+    private static func makeAzureFoundryConfig() -> LLMProviderConfig? {
+        guard let deployment = makeAzureFoundryDeployment() else {
+            return nil
+        }
+        return deployment.providerConfig
+    }
+
+    private func configureLLMService(
+        preferredProvider: LLMProviderType? = nil
+    ) {
+        let provider = preferredProvider
+            ?? LLMAppConfig.defaultProvider
+
+        var options: [String: String] = LLMAppConfig.analysisOptions()
+
+        let modelIdentifier: String
+        let apiKey: String?
+        let baseURL: URL?
+
+        switch provider {
+        case .azureFoundry:
+            if let deployment = Self.makeAzureFoundryDeployment() {
+                modelIdentifier = deployment.model
+                apiKey = deployment.apiKey
+                baseURL = deployment.endpoint
+                options["azure.api_version"] = deployment.apiVersion
+                options["azure.auth_mode"] = deployment.authMode.rawValue
+                options["azure.max_tokens"] = String(deployment.maxTokens)
+                options["azure.top_p"] = String(deployment.topP)
+                options["azure.presence_penalty"] = String(deployment.presencePenalty)
+            } else {
+                modelIdentifier = LLMAppConfig.azureModelIdentifier
+                apiKey = nil
+                baseURL = LLMAppConfig.azureEndpoint
+                options["azure.api_version"] = LLMAppConfig.azureAPIVersion
+            }
+        default:
+            modelIdentifier = "apple-intelligence"
+            apiKey = nil
+            baseURL = nil
+        }
+
+        let config = LLMProviderConfig(
+            providerType: provider,
+            apiKey: apiKey,
+            baseURL: baseURL,
+            modelIdentifier: modelIdentifier,
+            options: options
+        )
+
+        do {
+            try llmService.setProvider(config)
+            print("✅ [ServiceContainer] LLM configured: provider=\(provider.rawValue), options=\(options)")
+        } catch {
+            print("⚠️ [ServiceContainer] LLM configuration failed, fallback to default: \(error)")
+        }
+    }
+
+    private static func readAzureFoundryAPIKey() -> String? {
+        // API Key 注入入口：
+        // 1) 推荐：环境变量 `kimikey`
+        // 2) 兼容：环境变量 `AZURE_API_KEY`、`VOX_AZURE_FOUNDRY_API_KEY`（历史命名）
+        let env = ProcessInfo.processInfo.environment
+        return env["kimikey"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? env["AZURE_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? env["VOX_AZURE_FOUNDRY_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func makeAzureFoundryDeployment() -> AzureFoundryDeployment? {
+        guard let apiKey = readAzureFoundryAPIKey(), !apiKey.isEmpty else {
+            return nil
+        }
+
+        // Foundry 配置入口：在这里设置模型、URL、鉴权模式和 API Key
+        return AzureFoundryDeployment(
+            name: "default",
+            endpoint: LLMAppConfig.azureEndpoint,
+            model: LLMAppConfig.azureModelIdentifier,
+            apiKey: apiKey,
+            apiVersion: LLMAppConfig.azureAPIVersion,
+            authMode: LLMAppConfig.azureAuthMode
+        )
     }
 
     // MARK: - 延迟持久化初始化
