@@ -2,6 +2,7 @@
 import Foundation
 import AppKit
 import Carbon
+import Observability
 
 /// macOS 剪贴板服务实现
 ///
@@ -16,6 +17,7 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
     // MARK: - 属性
 
     private let pasteboard = NSPasteboard.general
+    private let logger: Logger = PrintLogger(subsystem: "Clipboard")
 
     // MARK: - 初始化
 
@@ -26,7 +28,7 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
     public func copy(_ text: String) {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        print("📋 [Clipboard] Copied \(text.count) characters")
+        logger.log(.debug, "Copied text to pasteboard", context: ["char_count": text.count])
     }
 
     public func paste() -> String? {
@@ -42,7 +44,7 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
     }
 
     public func simulatePaste() async throws {
-        print("📋 [Clipboard] Simulating paste (Cmd+V)")
+        logger.debug("Simulating paste keyboard shortcut")
 
         // 创建 Cmd+V 按键事件序列
         let source = CGEventSource(stateID: .hidSystemState)
@@ -87,7 +89,7 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
 
         cmdUp.post(tap: tapLocation)
 
-        print("✅ [Clipboard] Paste simulation complete")
+        logger.debug("Paste simulation complete")
     }
 }
 

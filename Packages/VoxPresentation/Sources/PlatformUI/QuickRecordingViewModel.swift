@@ -6,6 +6,7 @@ import LLMKit
 import UseCases
 import PlatformAdapters
 import UIShared
+import Observability
 
 /// 快速录音 ViewModel
 ///
@@ -20,6 +21,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     private let transcriptionUseCase: TranscriptionUseCase
     private let refinementUseCase: RefinementUseCase
     private let clipboardService: ClipboardService
+    private let logger: Logger
 
     private var cancellables = Set<AnyCancellable>()
     private var streamingTask: Task<Void, Never>?
@@ -60,12 +62,14 @@ public final class QuickRecordingViewModel: ObservableObject {
         recordingUseCase: RecordingUseCase,
         transcriptionUseCase: TranscriptionUseCase,
         refinementUseCase: RefinementUseCase,
-        clipboardService: ClipboardService
+        clipboardService: ClipboardService,
+        logger: Logger? = nil
     ) {
         self.recordingUseCase = recordingUseCase
         self.transcriptionUseCase = transcriptionUseCase
         self.refinementUseCase = refinementUseCase
         self.clipboardService = clipboardService
+        self.logger = logger ?? PrintLogger(subsystem: "QuickRecordingVM")
 
         bindUseCases()
     }
@@ -113,7 +117,7 @@ public final class QuickRecordingViewModel: ObservableObject {
 
     public func startRecording() async {
         guard recorderStatus == .idle, !isStartingRecordingInternal else {
-            print("⚠️ [QuickRecording] Already recording or processing")
+            logger.debug("Start recording ignored because recorder is busy")
             return
         }
         isStartingRecordingInternal = true
@@ -131,7 +135,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             try await recordingUseCase.startRecording()
             isStartingRecordingInternal = false
             recorderStatus = .listening
-            print("🎙️ [QuickRecording] Started recording")
+            logger.debug("Recording started")
 
             if shouldStopAfterStart {
                 shouldStopAfterStart = false
@@ -148,12 +152,12 @@ public final class QuickRecordingViewModel: ObservableObject {
     public func stopRecording() async {
         if isStartingRecordingInternal {
             shouldStopAfterStart = true
-            print("⏳ [QuickRecording] Stop requested while starting, will stop after start completes")
+            logger.debug("Stop requested while start is in progress")
             return
         }
 
         guard recorderStatus == .listening else {
-            print("⚠️ [QuickRecording] Not recording")
+            logger.debug("Stop recording ignored because recorder is not listening")
             return
         }
 
@@ -167,7 +171,9 @@ public final class QuickRecordingViewModel: ObservableObject {
         do {
             try await recordingUseCase.stopRecording()
             rawTranscription = await waitForTranscriptionToSettle()
-            print("⏹️ [QuickRecording] Stopped recording, got: \(rawTranscription.prefix(50))...")
+            logger.log(.debug, "Recording stopped", context: [
+                "transcription_length": rawTranscription.count
+            ])
 
             guard !rawTranscription.isEmpty else {
                 recorderStatus = .idle
@@ -201,7 +207,7 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         recorderStatus = .idle
         isProcessing = false
-        print("❌ [QuickRecording] Cancelled")
+        logger.debug("Recording cancelled")
     }
 
     // MARK: - 自动停止
@@ -210,14 +216,16 @@ public final class QuickRecordingViewModel: ObservableObject {
         silenceDetectionTask?.cancel()
         lastTranscriptionUpdate = Date()
 
-        print("🔄 [QuickRecording] Transcription updated, resetting auto-stop timer")
+        logger.debug("Reset auto-stop timer after transcription update")
 
         silenceDetectionTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 try await Task.sleep(for: .seconds(self.autoStopDuration))
                 if !Task.isCancelled, self.recorderStatus == .listening {
-                    print("⏹️ [QuickRecording] Auto-stopping after \(self.autoStopDuration)s of silence")
+                    self.logger.log(.debug, "Auto-stopping after silence", context: [
+                        "duration_seconds": self.autoStopDuration
+                    ])
                     await self.stopRecording()
                 }
             } catch {
@@ -298,9 +306,13 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         do {
             try await clipboardService.simulatePaste()
-            print("✅ [QuickRecording] Pasted text: \(text.prefix(50))...")
+            logger.log(.debug, "Pasted refined text", context: [
+                "text_length": text.count
+            ])
         } catch {
-            print("⚠️ [QuickRecording] Paste simulation failed: \(error)")
+            logger.log(.debug, "Paste simulation failed", context: [
+                "error": error.localizedDescription
+            ])
         }
 
         isProcessing = false

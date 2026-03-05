@@ -17,6 +17,7 @@ import Persistence
 import PlatformAdapters
 import Preferences
 import UIShared
+import Observability
 #if os(macOS)
 import PlatformUI
 #endif
@@ -28,6 +29,7 @@ import PlatformUI
 @MainActor
 public final class ServiceContainer: ObservableObject {
     private let preferencesStore = UserDefaultsPreferencesStore.shared
+    private let logger: Logger
 
     // MARK: - 单例
 
@@ -78,6 +80,7 @@ public final class ServiceContainer: ObservableObject {
     // MARK: - 初始化
 
     private init() {
+        logger = PrintLogger(subsystem: "ServiceContainer")
         let azureConfig = Self.makeAzureFoundryConfig()
 
         // 初始化基础服务
@@ -124,7 +127,7 @@ public final class ServiceContainer: ObservableObject {
             await self?.applyAnalysisSettingsPreference()
         }
 
-        print("✅ [ServiceContainer] Initialized")
+        logger.debug("Initialized")
     }
 
     private func observeProviderPreferenceChanges() {
@@ -154,7 +157,9 @@ public final class ServiceContainer: ObservableObject {
     private func applyAnalysisSettingsPreference() async {
         let skip: Bool = await preferencesStore.getValue(for: .llmSkipContentAnalysis, default: false)
         llmService.setSkipContentAnalysis(skip)
-        print("✅ [ServiceContainer] LLM skipContentAnalysis=\(skip)")
+        logger.log(.debug, "Applied LLM analysis settings", context: [
+            "skip_content_analysis": skip
+        ])
     }
 
     private func applyProviderPreferenceIfExists() async {
@@ -217,9 +222,15 @@ public final class ServiceContainer: ObservableObject {
 
         do {
             try llmService.setProvider(config)
-            print("✅ [ServiceContainer] LLM configured: provider=\(provider.rawValue), options=\(options)")
+            logger.log(.debug, "Configured LLM provider", context: [
+                "provider": provider.rawValue,
+                "options_count": options.count
+            ])
         } catch {
-            print("⚠️ [ServiceContainer] LLM configuration failed, fallback to default: \(error)")
+            logger.log(.debug, "LLM configuration failed; using fallback", context: [
+                "provider": provider.rawValue,
+                "error": error.localizedDescription
+            ])
         }
     }
 
@@ -266,9 +277,11 @@ public final class ServiceContainer: ObservableObject {
             let repository = SwiftDataSessionRepository(container: container)
             let swiftDataUseCase = DefaultSessionUseCase(repository: repository)
             await sessionUseCase.switchBacking(to: swiftDataUseCase)
-            print("✅ [ServiceContainer] SwiftData persistence initialized")
+            logger.debug("SwiftData persistence initialized")
         } catch {
-            print("❌ [ServiceContainer] Failed to create ModelContainer: \(error)")
+            logger.log(.debug, "Failed to initialize SwiftData persistence", context: [
+                "error": error.localizedDescription
+            ])
         }
     }
 
@@ -318,13 +331,18 @@ public final class ServiceContainer: ObservableObject {
     /// - Returns: 是否成功开始
     public func tryStartRecording(source: RecordingSource) -> Bool {
         guard !isRecordingActive else {
-            print("⚠️ [ServiceContainer] Recording already active from: \(activeRecordingSource?.rawValue ?? "unknown")")
+            logger.log(.debug, "Recording request rejected because another source is active", context: [
+                "active_source": activeRecordingSource?.rawValue ?? "unknown",
+                "requested_source": source.rawValue
+            ])
             return false
         }
 
         isRecordingActive = true
         activeRecordingSource = source
-        print("🎙️ [ServiceContainer] Recording started from: \(source.rawValue)")
+        logger.log(.debug, "Recording started", context: [
+            "source": source.rawValue
+        ])
         return true
     }
 
@@ -332,7 +350,7 @@ public final class ServiceContainer: ObservableObject {
     public func endRecording() {
         isRecordingActive = false
         activeRecordingSource = nil
-        print("⏹️ [ServiceContainer] Recording ended")
+        logger.debug("Recording ended")
     }
 }
 

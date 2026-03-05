@@ -3,6 +3,7 @@ import Foundation
 import Combine
 import Carbon
 import AppKit
+import Observability
 
 /// macOS 全局快捷键服务实现
 ///
@@ -42,6 +43,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
     private var eventHandlerRef: EventHandlerRef?
     private var globalKeyMonitor: Any?
     private var localKeyMonitor: Any?
+    private let logger: Logger = PrintLogger(subsystem: "GlobalHotkey")
 
     private let hotkeySubject = PassthroughSubject<String, Never>()
     public var hotkeyTriggeredPublisher: AnyPublisher<String, Never> {
@@ -105,7 +107,9 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         )
 
         if handlerResult != noErr {
-            print("❌ [GlobalHotkey] Failed to install Carbon event handler: \(handlerResult)")
+            logger.log(.debug, "Failed to install Carbon event handler", context: [
+                "status": handlerResult
+            ])
         }
     }
 
@@ -154,7 +158,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
             return
         }
 
-        print("🔥 [GlobalHotkey] Triggered: \(identifier)")
+        logger.log(.debug, "Hotkey triggered", context: ["identifier": identifier])
         hotkeySubject.send(identifier)
         info.handler()
     }
@@ -179,7 +183,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                     info.hasTriggeredPress = true
                     longPressHotkeys[identifier] = info
 
-                    print("⬇️ [GlobalHotkey] Function key down: \(identifier)")
+                    logger.log(.debug, "Function key down", context: ["identifier": identifier])
                     Task {
                         await info.onPress()
                     }
@@ -190,7 +194,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                     info.hasTriggeredPress = false
                     longPressHotkeys[identifier] = info
 
-                    print("⬆️ [GlobalHotkey] Function key up: \(identifier)")
+                    logger.log(.debug, "Function key up", context: ["identifier": identifier])
                     if shouldRelease {
                         Task {
                             await info.onRelease()
@@ -213,7 +217,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                     info.hasTriggeredPress = false
                     longPressHotkeys[identifier] = info
 
-                    print("⬇️ [GlobalHotkey] Long-press key down: \(identifier)")
+                    logger.log(.debug, "Long-press key down", context: ["identifier": identifier])
 
                     // 延迟后检查是否仍在按住
                     Task { @MainActor [weak self] in
@@ -231,7 +235,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                         updatedInfo.hasTriggeredPress = true
                         self.longPressHotkeys[identifier] = updatedInfo
 
-                        print("🔥 [GlobalHotkey] Long-press triggered: \(identifier)")
+                        self.logger.log(.debug, "Long-press triggered", context: ["identifier": identifier])
                         await updatedInfo.onPress()
                     }
                 }
@@ -244,7 +248,10 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                     info.hasTriggeredPress = false
                     longPressHotkeys[identifier] = info
 
-                    print("⬆️ [GlobalHotkey] Long-press key up: \(identifier), shouldRelease: \(shouldRelease)")
+                    logger.log(.debug, "Long-press key up", context: [
+                        "identifier": identifier,
+                        "should_release": shouldRelease
+                    ])
 
                     if shouldRelease {
                         Task {
@@ -288,7 +295,10 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         registeredHotkeys[hotkey.identifier] = info
         hotkeyIdToIdentifier[hotkeyId] = hotkey.identifier
 
-        print("✅ [GlobalHotkey] Registered: \(hotkey.identifier) (\(hotkey.displayString))")
+        logger.log(.debug, "Registered hotkey", context: [
+            "identifier": hotkey.identifier,
+            "display": hotkey.displayString
+        ])
     }
 
     public func unregister(_ identifier: String) {
@@ -298,7 +308,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                 UnregisterEventHotKey(ref)
             }
             hotkeyIdToIdentifier = hotkeyIdToIdentifier.filter { $0.value != identifier }
-            print("🗑️ [GlobalHotkey] Unregistered: \(identifier)")
+            logger.log(.debug, "Unregistered hotkey", context: ["identifier": identifier])
         }
 
         // 注销长按快捷键
@@ -379,7 +389,10 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         )
         longPressHotkeys[hotkey.identifier] = info
 
-        print("✅ [GlobalHotkey] Registered long-press: \(hotkey.identifier) (\(hotkey.displayString))")
+        logger.log(.debug, "Registered long-press hotkey", context: [
+            "identifier": hotkey.identifier,
+            "display": hotkey.displayString
+        ])
     }
 
     // MARK: - 辅助方法

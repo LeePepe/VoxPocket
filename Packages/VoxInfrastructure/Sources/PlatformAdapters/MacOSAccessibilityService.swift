@@ -2,6 +2,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import Observability
 
 /// macOS 辅助功能服务实现
 ///
@@ -11,6 +12,7 @@ public final class MacOSAccessibilityService: AccessibilityService, @unchecked S
     // MARK: - 单例
 
     public static let shared = MacOSAccessibilityService()
+    private let logger: Logger = PrintLogger(subsystem: "Accessibility")
 
     // MARK: - 初始化
 
@@ -93,7 +95,9 @@ public final class MacOSAccessibilityService: AccessibilityService, @unchecked S
             throw AccessibilityError.operationFailed(status: result)
         }
 
-        print("✅ [Accessibility] Inserted \(text.count) characters")
+        logger.log(.debug, "Inserted text into focused element", context: [
+            "char_count": text.count
+        ])
     }
 
     public func getTextFromFocusedElement() async throws -> String? {
@@ -149,7 +153,9 @@ public final class MacOSAccessibilityService: AccessibilityService, @unchecked S
             throw AccessibilityError.operationFailed(status: result)
         }
 
-        print("✅ [Accessibility] Replaced selected text with \(text.count) characters")
+        logger.log(.debug, "Replaced selected text in focused element", context: [
+            "char_count": text.count
+        ])
     }
 
     // MARK: - 私有方法

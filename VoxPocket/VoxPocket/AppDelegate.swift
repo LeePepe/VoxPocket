@@ -14,6 +14,7 @@ import PlatformUI
 import UIShared
 import UseCases
 import Preferences
+import Observability
 
 /// macOS 应用代理
 ///
@@ -30,11 +31,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowManager: WindowManager!
     private var hotkeyService: MacOSGlobalHotkeyService!
     private let preferences = UserDefaultsPreferencesStore.shared
+    private let logger: Logger = PrintLogger(subsystem: "AppDelegate")
 
     // MARK: - NSApplicationDelegate
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        print("🚀 [AppDelegate] Application did finish launching")
+        logger.debug("Application did finish launching")
 
         // 初始化服务
         setupServices()
@@ -48,11 +50,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // 隐藏 Dock 图标（可选）
         // NSApp.setActivationPolicy(.accessory)
 
-        print("✅ [AppDelegate] Initialization complete")
+        logger.debug("Initialization complete")
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
-        print("👋 [AppDelegate] Application will terminate")
+        logger.debug("Application will terminate")
 
         // 注销所有快捷键
         hotkeyService?.unregisterAll()
@@ -70,7 +72,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager = WindowManager.shared
         hotkeyService = MacOSGlobalHotkeyService.shared
 
-        print("📦 [AppDelegate] Services initialized")
+        logger.debug("Services initialized")
     }
 
     // MARK: - 快捷键注册
@@ -103,9 +105,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.handleShowPanelHotkey()
                 }
             }
-            print("✅ [AppDelegate] Registered show panel hotkey: F7")
+            logger.log(.debug, "Registered show panel hotkey", context: [
+                "identifier": HotkeyIdentifier.showPopover,
+                "display": showPanelHotkey.displayString
+            ])
         } catch {
-            print("❌ [AppDelegate] Failed to register show panel hotkey: \(error)")
+            logger.log(.debug, "Failed to register show panel hotkey", context: [
+                "identifier": HotkeyIdentifier.showPopover,
+                "error": error.localizedDescription
+            ])
         }
 
         // 注册快速录音快捷键（按下/抬起模式）
@@ -118,7 +126,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 await self?.handleQuickRecordStop()
             }
         )
-        print("✅ [AppDelegate] Registered quick record hotkey: \(quickRecordHotkey.displayString) (press/release)")
+        logger.log(.debug, "Registered quick record hotkey", context: [
+            "identifier": HotkeyIdentifier.toggleRecording,
+            "display": quickRecordHotkey.displayString,
+            "mode": "press_release"
+        ])
     }
 
     private func observePreferenceChanges() {
@@ -149,13 +161,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 处理显示面板快捷键
     private func handleShowPanelHotkey() {
-        print("🔥 [AppDelegate] Show panel hotkey triggered")
+        logger.debug("Show panel hotkey triggered")
         windowManager.toggleWindow(.fullPanel)
     }
 
     /// 处理快速录音开始（按下触发）
     private func handleQuickRecordStart() async {
-        print("🔥 [AppDelegate] Quick record start (press)")
+        logger.debug("Quick record start triggered")
 
         guard serviceContainer.tryStartRecording(source: .quickRecording) else {
             return
@@ -192,10 +204,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 处理快速录音结束（释放触发）
     private func handleQuickRecordStop() async {
-        print("🔥 [AppDelegate] Quick record stop (release)")
+        logger.debug("Quick record stop triggered")
 
         guard serviceContainer.activeRecordingSource == .quickRecording else {
-            print("⚠️ [AppDelegate] Recording not from quick recording, ignoring")
+            logger.log(.debug, "Recording source mismatch on quick record stop", context: [
+                "active_source": serviceContainer.activeRecordingSource?.rawValue ?? "nil"
+            ])
             return
         }
 

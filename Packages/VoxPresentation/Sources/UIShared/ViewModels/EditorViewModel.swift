@@ -106,13 +106,19 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
                 guard let self else { return }
-                self.logger.debug("📝 [Transcription] Received live text update: '\(text)' (length: \(text.count), isRecording: \(self.isRecording))")
+                self.logger.log(.debug, "Received live transcription update", context: [
+                    "length": text.count,
+                    "is_recording": self.isRecording
+                ])
                 self.liveTranscription = text
                 // 每次转录文本更新，重置自动停止计时
                 if self.isRecording && !text.isEmpty {
                     self.scheduleAutoStop()
                 } else {
-                    self.logger.debug("⚠️ [Auto Stop] Skipped - isRecording: \(self.isRecording), isEmpty: \(text.isEmpty)")
+                    self.logger.log(.debug, "Skipped auto-stop scheduling", context: [
+                        "is_recording": self.isRecording,
+                        "is_empty": text.isEmpty
+                    ])
                 }
             }
             .store(in: &cancellables)
@@ -166,7 +172,10 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         transcriptionUseCase.clearLiveText()
         liveTranscription = ""
 
-        logger.debug("🎙️ [Start Recording] Mode: \(isAppendMode ? "Append" : "New Session"), current text length: \(text.count)")
+        logger.log(.debug, "Start recording requested", context: [
+            "mode": isAppendMode ? "append" : "new_session",
+            "current_text_length": text.count
+        ])
 
         do {
             try await recordingUseCase.startRecording()
@@ -198,21 +207,29 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
             if hadPreviousContent {
                 // 续写模式：追加到现有文本 → History 记录 1
                 let newText = liveTranscription
-                logger.debug("📝 [Append Mode] Previous text: '\(text)'")
-                logger.debug("📝 [Append Mode] New transcription: '\(newText)'")
+                logger.log(.debug, "Committing transcription in append mode", context: [
+                    "previous_text_length": text.count,
+                    "new_transcription_length": newText.count
+                ])
                 if !newText.isEmpty {
                     try? editingUseCase.append("\n" + newText)
                 }
-                logger.debug("📝 [Append Mode] After append, currentText: '\(editingUseCase.currentText)'")
+                logger.log(.debug, "Append mode commit completed", context: [
+                    "current_text_length": editingUseCase.currentText.count
+                ])
             } else {
                 // New session 模式：替换全部 → History 记录 1
-                logger.debug("📝 [New Session] Transcription: '\(liveTranscription)'")
+                logger.log(.debug, "Committing transcription in new session mode", context: [
+                    "transcription_length": liveTranscription.count
+                ])
                 try? await transcriptionUseCase.commitCurrentTranscription()
             }
 
             // 冻结整个 text 用于优化（包括旧内容 + 新转录）
             rawTranscription = editingUseCase.currentText
-            logger.debug("📝 [Refine] Raw text for refinement (length: \(rawTranscription.count)): '\(rawTranscription)'")
+            logger.log(.debug, "Prepared text for refinement", context: [
+                "raw_text_length": rawTranscription.count
+            ])
 
             // 自动执行优化（针对整个 text）
             await autoRefine()
@@ -230,7 +247,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         // 更新最后更新时间
         lastTranscriptionUpdate = Date()
 
-        print("🔄 [Auto Stop] Transcription updated, resetting timer")
+        logger.debug("Reset auto-stop timer after transcription update")
 
         // 启动新的自动停止任务
         silenceDetectionTask = Task { @MainActor [weak self] in
@@ -239,7 +256,9 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                 try await Task.sleep(for: .seconds(self.autoStopDuration))
                 // 如果任务没有被取消，说明超过阈值时间没有新的转录结果
                 if !Task.isCancelled, self.isRecording {
-                    print("⏹️ [Auto Stop] No transcription update for \(self.autoStopDuration)s, stopping recording")
+                    self.logger.log(.debug, "Auto-stopping recording after inactivity", context: [
+                        "duration_seconds": self.autoStopDuration
+                    ])
                     await self.stopRecording()
                 }
             } catch {
@@ -251,7 +270,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     public func toggleRecording() async {
         // 防止重入：如果已有录音操作正在进行，忽略新的切换请求
         guard !isRecordingOperationInProgress else {
-            logger.warning("toggleRecording() ignored - operation already in progress")
+            logger.debug("toggleRecording() ignored - operation already in progress")
             return
         }
 
@@ -303,15 +322,21 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                 }
                 // 流结束：将优化结果提交到编辑器
                 if !Task.isCancelled, !self.streamingRefinedText.isEmpty {
-                    self.logger.debug("✨ [Refine Complete] Raw text (length: \(self.rawTranscription.count)): '\(self.rawTranscription)'")
-                    self.logger.debug("✨ [Refine Complete] Refined text (length: \(self.streamingRefinedText.count)): '\(self.streamingRefinedText)'")
+                    self.logger.log(.debug, "Refinement stream completed", context: [
+                        "raw_text_length": self.rawTranscription.count,
+                        "refined_text_length": self.streamingRefinedText.count
+                    ])
                     try? self.editingUseCase.replaceAll(with: self.streamingRefinedText)
-                    self.logger.debug("✨ [Refine Complete] Final currentText: '\(self.editingUseCase.currentText)'")
+                    self.logger.log(.debug, "Applied refined text to editor", context: [
+                        "current_text_length": self.editingUseCase.currentText.count
+                    ])
 
                     // 自动复制精炼结果到剪贴板
                     self.clipboardService?.copy(self.streamingRefinedText)
                     self.autoCopiedText = self.streamingRefinedText
-                    self.logger.debug("📋 [Auto Copy] Refined text copied to clipboard")
+                    self.logger.log(.debug, "Auto-copied refined text", context: [
+                        "text_length": self.streamingRefinedText.count
+                    ])
 
                     // 保存会话到持久化存储
                     if let sessionUseCase = self.sessionUseCase {
@@ -363,7 +388,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         //     }
         // }
 
-        logger.warning("⚠️ cancelRecording() called but History is not implemented yet - only clearing temporary state")
+        logger.debug("cancelRecording() called but History rollback is not implemented yet")
     }
 
     // MARK: - 编辑操作

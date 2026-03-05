@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Observability
 
 /// Deep Link 路由协议
 ///
@@ -29,12 +30,15 @@ public protocol DeepLinkRouting: AnyObject {
 public final class DefaultDeepLinkRouter: DeepLinkRouting, ObservableObject {
 
     @Published public var pendingAction: DeepLinkAction?
+    private let logger: Logger
 
     public var pendingActionPublisher: AnyPublisher<DeepLinkAction?, Never> {
         $pendingAction.eraseToAnyPublisher()
     }
 
-    public init() {}
+    public init(logger: Logger? = nil) {
+        self.logger = logger ?? PrintLogger(subsystem: "DeepLinkRouter")
+    }
 
     public func resolve(_ url: URL) -> DeepLinkAction? {
         guard url.scheme == "voxpocket" else { return nil }
@@ -56,9 +60,14 @@ public final class DefaultDeepLinkRouter: DeepLinkRouting, ObservableObject {
     public func handle(_ url: URL) {
         if let action = resolve(url) {
             pendingAction = action
-            print("🔗 [DeepLink] Resolved: \(url) → \(action)")
+            logger.log(.debug, "Resolved deep link", context: [
+                "url": url.absoluteString,
+                "action": String(describing: action)
+            ])
         } else {
-            print("⚠️ [DeepLink] Unrecognized URL: \(url)")
+            logger.log(.debug, "Unrecognized deep link URL", context: [
+                "url": url.absoluteString
+            ])
         }
     }
 }

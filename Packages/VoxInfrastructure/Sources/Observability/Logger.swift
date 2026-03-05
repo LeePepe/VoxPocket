@@ -47,6 +47,29 @@ public protocol Logger: AnyObject, Sendable {
 
 public extension Logger {
 
+    /// 记录日志（自动填充调用位置信息）
+    func log(
+        _ level: LogLevel,
+        _ message: @autoclosure () -> String,
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(level, message(), file: file, function: function, line: line)
+    }
+
+    /// 记录日志（带上下文，自动填充调用位置信息）
+    func log(
+        _ level: LogLevel,
+        _ message: @autoclosure () -> String,
+        context: [String: Any],
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(level, message(), context: context, file: file, function: function, line: line)
+    }
+
     /// 记录调试日志
     func debug(
         _ message: @autoclosure () -> String,
@@ -55,6 +78,17 @@ public extension Logger {
         line: Int = #line
     ) {
         log(.debug, message(), file: file, function: function, line: line)
+    }
+
+    /// 记录调试日志（带上下文）
+    func debug(
+        _ message: @autoclosure () -> String,
+        context: [String: Any],
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.debug, message(), context: context, file: file, function: function, line: line)
     }
 
     /// 记录信息日志
@@ -67,6 +101,17 @@ public extension Logger {
         log(.info, message(), file: file, function: function, line: line)
     }
 
+    /// 记录信息日志（带上下文）
+    func info(
+        _ message: @autoclosure () -> String,
+        context: [String: Any],
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.info, message(), context: context, file: file, function: function, line: line)
+    }
+
     /// 记录警告日志
     func warning(
         _ message: @autoclosure () -> String,
@@ -75,6 +120,17 @@ public extension Logger {
         line: Int = #line
     ) {
         log(.warning, message(), file: file, function: function, line: line)
+    }
+
+    /// 记录警告日志（带上下文）
+    func warning(
+        _ message: @autoclosure () -> String,
+        context: [String: Any],
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.warning, message(), context: context, file: file, function: function, line: line)
     }
 
     /// 记录错误日志
@@ -87,6 +143,17 @@ public extension Logger {
         log(.error, message(), file: file, function: function, line: line)
     }
 
+    /// 记录错误日志（带上下文）
+    func error(
+        _ message: @autoclosure () -> String,
+        context: [String: Any],
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.error, message(), context: context, file: file, function: function, line: line)
+    }
+
     /// 记录严重错误日志
     func critical(
         _ message: @autoclosure () -> String,
@@ -95,6 +162,17 @@ public extension Logger {
         line: Int = #line
     ) {
         log(.critical, message(), file: file, function: function, line: line)
+    }
+
+    /// 记录严重错误日志（带上下文）
+    func critical(
+        _ message: @autoclosure () -> String,
+        context: [String: Any],
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.critical, message(), context: context, file: file, function: function, line: line)
     }
 
     /// 记录错误对象

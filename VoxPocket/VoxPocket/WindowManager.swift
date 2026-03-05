@@ -12,6 +12,7 @@ import SwiftUI
 import Combine
 import UIShared
 import PlatformUI
+import Observability
 
 /// 窗口类型
 public enum WindowType: String, CaseIterable {
@@ -34,6 +35,7 @@ public final class WindowManager: ObservableObject {
     private var windows: [WindowType: NSPanel] = [:]
     private var windowControllers: [WindowType: NSWindowController] = [:]
     private var viewModels: [WindowType: Any] = [:]
+    private let logger: Logger = PrintLogger(subsystem: "WindowManager")
     
     /// 窗口可见状态
     @Published public var windowVisibility: [WindowType: Bool] = [
@@ -54,7 +56,7 @@ public final class WindowManager: ObservableObject {
             existingWindow.makeKeyAndOrderFront(nil)
             windowVisibility[type] = true
             autoResumeIfNeeded(type)
-            print("📱 [WindowManager] Showing existing window: \(type.rawValue)")
+            logger.log(.debug, "Showing existing window", context: ["type": type.rawValue])
             return
         }
 
@@ -69,7 +71,7 @@ public final class WindowManager: ObservableObject {
         windowVisibility[type] = true
         autoResumeIfNeeded(type)
 
-        print("📱 [WindowManager] Created and showing window: \(type.rawValue)")
+        logger.log(.debug, "Created and showing window", context: ["type": type.rawValue])
     }
 
     private func positionWindow(_ panel: NSPanel, for type: WindowType) {
@@ -108,7 +110,7 @@ public final class WindowManager: ObservableObject {
         guard let window = windows[type] else { return }
         window.orderOut(nil)
         windowVisibility[type] = false
-        print("📱 [WindowManager] Hiding window: \(type.rawValue)")
+        logger.log(.debug, "Hiding window", context: ["type": type.rawValue])
     }
 
     /// 切换窗口显示状态
@@ -128,7 +130,7 @@ public final class WindowManager: ObservableObject {
         windowControllers.removeValue(forKey: type)
         viewModels.removeValue(forKey: type)
         windowVisibility[type] = false
-        print("📱 [WindowManager] Closed window: \(type.rawValue)")
+        logger.log(.debug, "Closed window", context: ["type": type.rawValue])
     }
 
     /// 获取窗口的 ViewModel
