@@ -95,14 +95,12 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 你是一个语音意图识别助手。分析用户的语音转录文本，识别用户的真实意图。
 
                 可能的意图类型：
-                - self_correction: 用户自我纠正（如"不对，应该是..."）
+                - self_correction: 将口语化内容转为准确的文字表达（默认）
                 - translate: 翻译请求
                 - polish: 润色文本
                 - correct: 纠错
                 - summarize: 总结
                 - expand: 扩展内容
-                - delete: 删除/撤销
-                - plain_content: 普通内容（默认）
 
                 请返回 JSON 格式（只输出 JSON，不要添加任何解释）：
                 {"intent": "意图类型", "confidence": 0.0-1.0}
@@ -112,14 +110,12 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 You are a voice intent recognition assistant. Analyze the user's speech transcription to identify their true intent.
 
                 Possible intent types:
-                - self_correction: User self-correction (e.g., "no, it should be...")
+                - self_correction: Convert colloquial speech to accurate written text (default)
                 - translate: Translation request
                 - polish: Polish text
                 - correct: Correction
                 - summarize: Summarize
                 - expand: Expand content
-                - delete: Delete/undo
-                - plain_content: Plain content (default)
 
                 Return JSON format only (no explanation):
                 {"intent": "intent_type", "confidence": 0.0-1.0}
@@ -167,14 +163,12 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 logger.log(.warning, "JSON 解析失败，使用默认值", context: [
                     "response": jsonText
                 ], file: #file, function: #function, line: #line)
-                return IntentAnalysis(intent: .plainContent, confidence: 0.5, params: IntentParams(), entities: [], tags: [])
+                return IntentAnalysis(intent: .selfCorrection, confidence: 0.5, params: IntentParams(), entities: [], tags: [])
             }
 
             // 映射意图类型
             let intent: IntentKind
             switch intentStr.lowercased() {
-            case "self_correction":
-                intent = .selfCorrection
             case "translate":
                 intent = .translate
             case "polish":
@@ -185,10 +179,8 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 intent = .summarize
             case "expand":
                 intent = .expand
-            case "delete":
-                intent = .delete
             default:
-                intent = .plainContent
+                intent = .selfCorrection
             }
 
             let result = IntentAnalysis(
@@ -407,7 +399,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 logger.log(.warning, "意图分析失败，使用默认值", context: [
                     "error": error.localizedDescription
                 ], file: #file, function: #function, line: #line)
-                return IntentAnalysis(intent: .plainContent, confidence: 0.0)
+                return IntentAnalysis(intent: .selfCorrection, confidence: 0.0)
             }
         }()
 

@@ -362,16 +362,14 @@ public actor AzureFoundryProvider: LLMProvider {
         你是一个语音意图识别助手。分析文本并返回 JSON（只输出 JSON，不要解释）。
 
         可能的 intent:
-        self_correction, translate, polish, correct, summarize, expand, delete, plain_content
+        self_correction, translate, polish, correct, summarize, expand
 
         JSON 格式：
         {
-          "intent": "plain_content",
+          "intent": "self_correction",
           "confidence": 0.0,
           "params": {
-            "targetLanguage": null,
-            "original": null,
-            "corrected": null
+            "targetLanguage": null
           },
           "entities": [],
           "tags": []
@@ -390,7 +388,7 @@ public actor AzureFoundryProvider: LLMProvider {
         let cleaned = normalizeJSON(raw)
         guard let data = cleaned.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return IntentAnalysis(intent: .plainContent, confidence: 0.5)
+            return IntentAnalysis(intent: .selfCorrection, confidence: 0.5)
         }
 
         let intent = mapIntent(json["intent"] as? String)
@@ -398,9 +396,7 @@ public actor AzureFoundryProvider: LLMProvider {
 
         let paramsDict = json["params"] as? [String: Any]
         let params = IntentParams(
-            targetLanguage: paramsDict?["targetLanguage"] as? String,
-            original: paramsDict?["original"] as? String,
-            corrected: paramsDict?["corrected"] as? String
+            targetLanguage: paramsDict?["targetLanguage"] as? String
         )
 
         let entities = (json["entities"] as? [String]) ?? []
@@ -458,8 +454,6 @@ public actor AzureFoundryProvider: LLMProvider {
 
     private func mapIntent(_ raw: String?) -> IntentKind {
         switch raw?.lowercased() {
-        case "self_correction":
-            return .selfCorrection
         case "translate":
             return .translate
         case "polish":
@@ -470,10 +464,8 @@ public actor AzureFoundryProvider: LLMProvider {
             return .summarize
         case "expand":
             return .expand
-        case "delete":
-            return .delete
         default:
-            return .plainContent
+            return .selfCorrection
         }
     }
 

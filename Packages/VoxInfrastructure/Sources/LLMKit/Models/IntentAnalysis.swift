@@ -9,33 +9,23 @@ public enum IntentKind: String, Sendable, Equatable {
     case correct
     case summarize
     case expand
-    case delete
-    case plainContent = "plain_content"
 }
 
 @Generable
 public struct IntentParams: Sendable, Equatable {
     @Guide(description: "目标语言，例如 en 或 zh-Hans（可选）")
     public let targetLanguage: String?
-    @Guide(description: "自我纠正时的原始片段（可选）")
-    public let original: String?
-    @Guide(description: "自我纠正时的纠正片段（可选）")
-    public let corrected: String?
 
     public init(
-        targetLanguage: String? = nil,
-        original: String? = nil,
-        corrected: String? = nil
+        targetLanguage: String? = nil
     ) {
         self.targetLanguage = targetLanguage
-        self.original = original
-        self.corrected = corrected
     }
 }
 
 @Generable
 public struct IntentAnalysis: Sendable, Equatable {
-    @Guide(description: "意图：self_correction / translate / polish / correct / summarize / expand / delete / plain_content")
+    @Guide(description: "意图：self_correction / translate / polish / correct / summarize / expand")
     public let intent: IntentKind
     @Guide(description: "意图置信度，0.0 到 1.0")
     public let confidence: Double
@@ -47,7 +37,7 @@ public struct IntentAnalysis: Sendable, Equatable {
     public let tags: [String]
 
     public init(
-        intent: IntentKind = .plainContent,
+        intent: IntentKind = .selfCorrection,
         confidence: Double = 0.0,
         params: IntentParams = IntentParams(),
         entities: [String] = [],

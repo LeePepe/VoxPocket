@@ -2,21 +2,13 @@ import Foundation
 
 /// 用户意图类型
 ///
-/// 通过分析语音转录文本，识别用户的真实意图，包括内容操作、自我纠正、删除等。
+/// 通过分析语音转录文本，识别用户的真实意图，包括内容操作和自我纠正。
 public enum UserIntent: Equatable, Sendable {
     /// 内容操作：需要对内容进行处理（翻译、润色等）
     case contentOperation(RefinementType, targetLanguage: String? = nil)
 
-    /// 自我纠正：用户发现说错了，要修正
-    /// - original: 原始错误内容
-    /// - corrected: 修正后的内容
-    case selfCorrection(original: String, corrected: String)
-
-    /// 删除/撤销：用户否定之前说的内容
-    case deletion
-
-    /// 纯内容：没有特殊意图，就是普通转录
-    case plainContent
+    /// 自我纠正：将口语化内容转为准确的文字表达，由 LLM 自行分析给出结果
+    case selfCorrection
 
     /// 意图的显示名称
     public var displayName: String {
@@ -25,10 +17,6 @@ public enum UserIntent: Equatable, Sendable {
             return type.displayName
         case .selfCorrection:
             return "自我纠正"
-        case .deletion:
-            return "删除"
-        case .plainContent:
-            return "普通内容"
         }
     }
 
@@ -40,12 +28,8 @@ public enum UserIntent: Equatable, Sendable {
                 return "\(type.description) (目标语言: \(lang))"
             }
             return type.description
-        case .selfCorrection(let original, let corrected):
-            return "将 '\(original)' 修正为 '\(corrected)'"
-        case .deletion:
-            return "删除或撤销之前的内容"
-        case .plainContent:
-            return "普通内容，无特殊操作"
+        case .selfCorrection:
+            return "将口语化内容转为准确的文字表达"
         }
     }
 }

@@ -70,6 +70,13 @@
 			);
 			target = 70398AD32F27048D007D1E07 /* VoxPocket */;
 		};
+		70398B262F270A00007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -89,6 +96,14 @@
 		70398AF22F270490007D1E07 /* VoxPocketUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VoxPocketUITests;
+			sourceTree = "<group>";
+		};
+		70398B252F270A00007D1E07 /* VoxPocketWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				70398B262F270A00007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */,
+			);
+			path = ../VoxPocketWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -136,6 +151,7 @@
 				70398AD62F27048D007D1E07 /* VoxPocket */,
 				70398AE82F270490007D1E07 /* VoxPocketTests */,
 				70398AF22F270490007D1E07 /* VoxPocketUITests */,
+				70398B252F270A00007D1E07 /* VoxPocketWidget */,
 				70398B142F270800007D1E07 /* Frameworks */,
 				70398AD52F27048D007D1E07 /* Products */,
 			);
@@ -247,6 +263,9 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				70398B252F270A00007D1E07 /* VoxPocketWidget */,
 			);
 			name = VoxPocketWidgetExtension;
 			packageProductDependencies = (
@@ -413,6 +432,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VoxPocket/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoxPocket 需要使用麦克风进行语音录入";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VoxPocket 需要语音识别权限以将语音转换为文字";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -470,6 +490,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VoxPocket/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoxPocket 需要使用麦克风进行语音录入";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VoxPocket 需要语音识别权限以将语音转换为文字";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

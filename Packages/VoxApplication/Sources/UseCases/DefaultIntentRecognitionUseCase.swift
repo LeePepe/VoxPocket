@@ -6,7 +6,7 @@ import Observability
 ///
 /// 使用 LLM 识别用户意图：
 /// 1. 如果配置了 LLM，进行深度识别
-/// 2. 失败时，返回 plainContent
+/// 2. 失败时，返回 selfCorrection（默认意图）
 public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Sendable {
 
     private let llmService: LLMService
@@ -78,7 +78,7 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
 
         // 默认：作为普通内容处理
         logger.log(.info, "使用默认意图", context: [
-            "intent": "plain_content",
+            "intent": "self_correction",
             "reason": isLLMEnhancementEnabled ? "no_provider" : "llm_disabled"
         ], file: #file, function: #function, line: #line)
 
@@ -91,7 +91,7 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
             line: #line
         )
 
-        return IntentRecognitionResult(intent: .plainContent, confidence: 1.0)
+        return IntentRecognitionResult(intent: .selfCorrection, confidence: 1.0)
     }
 
     public func quickRecognize(from text: String) -> IntentRecognitionResult? {
@@ -162,6 +162,7 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
         - 如果文本包含明确的操作指令（如"翻译"、"润色"等），即使后面跟着内容，也应识别为操作意图
         - 例如："翻译成英语今天是周二" 应识别为 translate 意图（高置信度 0.9）
         - 例如："润色一下这段文字" 应识别为 polish 意图（高置信度 0.9）
+        - 没有明确操作指令时，默认为 self_correction（将口语化内容转为准确文字表达）
 
         可能的意图类型：
         1. translate - 用户想翻译内容
@@ -176,12 +177,8 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
            - 关键词：总结、摘要、概括
         5. expand - 用户想扩展
            - 关键词：扩展、详细、展开
-        6. self_correction - 用户自我纠正
-           - 模式："A 不对 B"、"不是 A 是 B"、"应该是 A"
-        7. deletion - 用户否定删除
-           - 关键词：不是、删掉、不要、算了等（带有否定情绪）
-        8. plain_content - 普通内容
-           - 只有当完全没有任何操作意图时才选择此项
+        6. self_correction - 将口语化内容转为准确的文字表达（默认）
+           - 没有明确操作指令时一律选此项
 
         用户输入："\(text)"
 
@@ -190,8 +187,6 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
           "intent": "意图类型",
           "confidence": 0.0-1.0,
           "params": {
-            "original": "原内容（仅 self_correction）",
-            "corrected": "修正后内容（仅 self_correction）",
             "targetLanguage": "目标语言代码（仅 translate，如：en/zh/ja）"
           }
         }
@@ -205,7 +200,7 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
               let intentStr = json["intent"] as? String,
               let confidence = json["confidence"] as? Double else {
             // 解析失败，返回默认
-            return IntentRecognitionResult(intent: .plainContent, confidence: 0.5)
+            return IntentRecognitionResult(intent: .selfCorrection, confidence: 0.5)
         }
 
         let params = json["params"] as? [String: String] ?? [:]
@@ -228,16 +223,8 @@ public final class DefaultIntentRecognitionUseCase: IntentRecognitionUseCase, Se
         case "expand":
             intent = .contentOperation(.expand)
 
-        case "self_correction":
-            let original = params["original"] ?? ""
-            let corrected = params["corrected"] ?? ""
-            intent = .selfCorrection(original: original, corrected: corrected)
-
-        case "deletion":
-            intent = .deletion
-
         default:
-            intent = .plainContent
+            intent = .selfCorrection
         }
 
         return IntentRecognitionResult(intent: intent, confidence: confidence)
