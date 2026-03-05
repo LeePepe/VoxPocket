@@ -4,6 +4,7 @@ import CoreModels
 public struct VoxPocketRootView<VM: RootViewState>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject var viewModel: VM
+    @StateObject private var llmSettings = LLMProviderSettingsViewModel()
     @State private var sidebarSelection: SidebarDestination?
     @State private var splitViewVisibility: NavigationSplitViewVisibility = .detailOnly
     let onCopyRefined: (String) -> Void
@@ -45,6 +46,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
         .ignoresSafeArea()
         .onAppear {
             syncSidebarSelection()
+            Task { await llmSettings.load() }
         }
         .onChange(of: viewModel.sessionListState.selectedSessionId) { _, _ in
             syncSidebarSelection()
@@ -113,6 +115,13 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                         Button(action: { viewModel.showRawSheet = true }) {
                             Label("Raw", systemImage: "waveform.and.mic")
                         }
+
+                        Button {
+                            Task { await llmSettings.updateSkipContentAnalysis(!llmSettings.skipContentAnalysis) }
+                        } label: {
+                            Image(systemName: llmSettings.skipContentAnalysis ? "wand.and.sparkles.inverse" : "wand.and.sparkles")
+                        }
+                        .help(llmSettings.skipContentAnalysis ? "跳过意图分析（已开启）" : "意图分析中（点击跳过）")
                     }
                 }
             }
@@ -243,6 +252,13 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                             Label("Raw", systemImage: "waveform.and.mic")
                         }
 #endif
+
+                        Button {
+                            Task { await llmSettings.updateSkipContentAnalysis(!llmSettings.skipContentAnalysis) }
+                        } label: {
+                            Image(systemName: llmSettings.skipContentAnalysis ? "wand.and.sparkles.inverse" : "wand.and.sparkles")
+                        }
+                        .help(llmSettings.skipContentAnalysis ? "跳过意图分析（已开启）" : "意图分析中（点击跳过）")
                     }
                 }
                 .sheet(isPresented: $viewModel.showRawSheet) {

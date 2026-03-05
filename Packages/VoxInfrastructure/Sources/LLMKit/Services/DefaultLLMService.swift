@@ -15,6 +15,8 @@ public final class DefaultLLMService: LLMService, Sendable {
         var providers: [LLMProviderType: any LLMProvider] = [:]
         var currentProvider: (any LLMProvider)?
         var analysisProviderOverrides: [AnalysisStep: LLMProviderType] = [:]
+        /// 跳过意图/语气前置分析，直接使用 self_correction 默认改写
+        var skipContentAnalysis: Bool = false
     }
 
     private let state: Mutex<State>
@@ -90,6 +92,10 @@ public final class DefaultLLMService: LLMService, Sendable {
             state.currentProvider = provider
             state.analysisProviderOverrides = Self.analysisProviderOverrides(from: config.options)
         }
+    }
+
+    public func setSkipContentAnalysis(_ skip: Bool) {
+        state.withLock { $0.skipContentAnalysis = skip }
     }
 
     // MARK: - Analysis
@@ -309,11 +315,15 @@ public final class DefaultLLMService: LLMService, Sendable {
             throw VoxError.llmProviderNotConfigured
         }
 
+        let shouldSkip = state.withLock { $0.skipContentAnalysis }
         logger.log(.info, "开始文本优化", context: [
             "text_length": request.text.count,
-            "provider": provider.providerType.rawValue
+            "provider": provider.providerType.rawValue,
+            "skip_analysis": shouldSkip
         ], file: #file, function: #function, line: #line)
-        let analysis = await analyzeContent(request)
+        let analysis: AnalysisResult = shouldSkip
+            ? (intent: IntentAnalysis(), tone: ToneAnalysis(), missingSteps: Set(AnalysisStep.allCases))
+            : await analyzeContent(request)
         let prompt = RefinementPromptBuilder.build(
             text: request.text,
             customPrompt: request.customPrompt
@@ -337,13 +347,16 @@ public final class DefaultLLMService: LLMService, Sendable {
         guard let provider = currentProvider else {
             throw VoxError.llmProviderNotConfigured
         }
+        let shouldSkip = state.withLock { $0.skipContentAnalysis }
         logger.log(.info, "开始流式文本优化", context: [
             "text_length": request.text.count,
-            "provider": provider.providerType.rawValue
+            "provider": provider.providerType.rawValue,
+            "skip_analysis": shouldSkip
         ], file: #file, function: #function, line: #line)
 
-        // 重新启用意图/语气分析（已切换到文本完成方法，性能提升 100+ 倍）
-        _ = await analyzeContent(request)
+        if !shouldSkip {
+            _ = await analyzeContent(request)
+        }
 
         let prompt = RefinementPromptBuilder.build(
             text: request.text,

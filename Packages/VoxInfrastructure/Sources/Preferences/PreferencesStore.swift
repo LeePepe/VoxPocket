@@ -4,11 +4,13 @@ public enum PreferencesKey: String, CaseIterable, Sendable {
     case showPanelHotkey = "hotkey.showPanel"
     case quickRecordHotkey = "hotkey.quickRecord"
     case llmProvider = "llm.provider"
+    case llmSkipContentAnalysis = "llm.skipContentAnalysis"
 }
 
 public enum PreferencesNotification {
     public static let hotkeysDidChange = Notification.Name("vox.preferences.hotkeysDidChange")
     public static let llmProviderDidChange = Notification.Name("vox.preferences.llmProviderDidChange")
+    public static let llmAnalysisSettingsDidChange = Notification.Name("vox.preferences.llmAnalysisSettingsDidChange")
 }
 
 public protocol PreferencesStore: AnyObject, Sendable {

@@ -125,6 +125,23 @@ struct LLMProviderCard: View {
                 .pickerStyle(.menu)
                 .tint(MePalette.primaryText)
             }
+
+            Divider().overlay(MePalette.divider)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Skip intent analysis")
+                        .font(.custom("Avenir Next", size: 13).weight(.medium))
+                        .foregroundColor(MePalette.primaryText)
+                    Text("直接使用默认改写，跳过意图/语气前置分析")
+                        .font(.custom("Avenir Next", size: 11))
+                        .foregroundColor(MePalette.secondaryText)
+                }
+                Spacer()
+                Toggle("", isOn: skipAnalysisBinding)
+                    .labelsHidden()
+                    .tint(MePalette.primaryText.opacity(0.8))
+            }
         }
         .modifier(CardStyle())
         .onAppear {
@@ -137,6 +154,15 @@ struct LLMProviderCard: View {
             get: { viewModel.selectedProvider },
             set: { newValue in
                 Task { await viewModel.updateProvider(newValue) }
+            }
+        )
+    }
+
+    private var skipAnalysisBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.skipContentAnalysis },
+            set: { newValue in
+                Task { await viewModel.updateSkipContentAnalysis(newValue) }
             }
         )
     }

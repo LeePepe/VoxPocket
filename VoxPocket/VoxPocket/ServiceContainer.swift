@@ -121,6 +121,7 @@ public final class ServiceContainer: ObservableObject {
         observeProviderPreferenceChanges()
         Task { [weak self] in
             await self?.applyProviderPreferenceIfExists()
+            await self?.applyAnalysisSettingsPreference()
         }
 
         print("✅ [ServiceContainer] Initialized")
@@ -137,6 +138,23 @@ public final class ServiceContainer: ObservableObject {
                 await self?.applyProviderPreferenceIfExists()
             }
         }
+
+        NotificationCenter.default.addObserver(
+            forName: PreferencesNotification.llmAnalysisSettingsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { [weak self] in
+                await self?.applyAnalysisSettingsPreference()
+            }
+        }
+    }
+
+    private func applyAnalysisSettingsPreference() async {
+        let skip: Bool = await preferencesStore.getValue(for: .llmSkipContentAnalysis, default: false)
+        llmService.setSkipContentAnalysis(skip)
+        print("✅ [ServiceContainer] LLM skipContentAnalysis=\(skip)")
     }
 
     private func applyProviderPreferenceIfExists() async {
