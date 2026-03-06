@@ -37,7 +37,8 @@ public final class ServiceContainer: ObservableObject {
 
     // MARK: - 基础服务
 
-    public let transcriber: AppleSpeechTranscriber
+    /// 主转录器：有 Whisper API Key 时使用 Azure Whisper，否则回退到 Apple Speech
+    public let transcriber: any TranscriptionCoordinator
     public let llmService: DefaultLLMService
 
     // MARK: - Use Cases
@@ -62,7 +63,7 @@ public final class ServiceContainer: ObservableObject {
     // MARK: - Quick Recording 独立服务栈
 
     /// 快速录音专用转录器（空闲时轻量，同一时刻只有一个可以录音）
-    public let quickTranscriber: AppleSpeechTranscriber
+    public let quickTranscriber: any TranscriptionCoordinator
     public let quickEditingUseCase: DefaultEditingUseCase
     public let quickRecordingUseCase: DefaultRecordingUseCase
     public let quickTranscriptionUseCase: DefaultTranscriptionUseCase
@@ -83,8 +84,8 @@ public final class ServiceContainer: ObservableObject {
         logger = PrintLogger(subsystem: "ServiceContainer")
         let azureConfig = Self.makeAzureFoundryConfig()
 
-        // 初始化基础服务
-        transcriber = AppleSpeechTranscriber()
+        // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
+        transcriber = Self.makeTranscriber()
         llmService = DefaultLLMService(azureFoundryConfig: azureConfig)
 #if os(macOS)
         clipboardService = MacOSClipboardService.shared
@@ -107,7 +108,7 @@ public final class ServiceContainer: ObservableObject {
 
 #if os(macOS)
         // 快速录音独立服务栈（共享 llmService，独立状态管线）
-        quickTranscriber = AppleSpeechTranscriber()
+        quickTranscriber = Self.makeTranscriber()
         quickEditingUseCase = DefaultEditingUseCase()
         quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber)
         quickTranscriptionUseCase = DefaultTranscriptionUseCase(
@@ -168,6 +169,35 @@ public final class ServiceContainer: ObservableObject {
             return
         }
         configureLLMService(preferredProvider: preferred)
+    }
+
+    private static func makeTranscriber() -> any TranscriptionCoordinator {
+        switch LLMAppConfig.defaultTranscriberProvider {
+        case .hybridWhisper:
+            if let config = makeAzureWhisperConfig() {
+                return HybridWhisperTranscriber(whisperConfig: config)
+            }
+            return AppleSpeechTranscriber()
+        case .azureWhisper:
+            if let config = makeAzureWhisperConfig() {
+                return AzureWhisperTranscriber(config: config)
+            }
+            return AppleSpeechTranscriber()
+        case .appleSpeech:
+            return AppleSpeechTranscriber()
+        }
+    }
+
+    private static func makeAzureWhisperConfig() -> AzureWhisperConfig? {
+        let env = ProcessInfo.processInfo.environment
+        guard let apiKey = env["whisperkey"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !apiKey.isEmpty else {
+            return nil
+        }
+        // audio/transcriptions 保留原始语言（如中文）
+        // audio/translations 会强制将所有音频翻译为英文
+        let endpoint = URL(string: "https://tianp-mmd3pwyc-swedencentral.cognitiveservices.azure.com/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01")!
+        return AzureWhisperConfig(endpoint: endpoint, apiKey: apiKey)
     }
 
     private static func makeAzureFoundryConfig() -> LLMProviderConfig? {

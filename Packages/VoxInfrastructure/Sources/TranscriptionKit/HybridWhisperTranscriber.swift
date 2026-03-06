@@ -5,14 +5,18 @@ import Observability
 import Speech
 import Synchronization
 
-/// Apple Speech Framework 转录协调器
+/// Apple Speech + Azure Whisper 混合转录器
 ///
-/// 使用 `MicrophoneRecorder` 采集音频，`SFSpeechRecognizer` 实时识别文字。
-public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
+/// - `MicrophoneRecorder` 负责音频采集，buffer 同时喂给 Apple Speech 和 WAV 文件写入
+/// - Apple Speech 提供实时 partial 结果，驱动 UI 更新和自动停止
+/// - 录音结束后，若 Apple Speech 已识别到内容，则由 `WhisperEngine` 提交获取高质量最终结果
+/// - 若 Apple Speech 全程无内容（静默/噪音），跳过 Whisper API 调用
+public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Dependencies
 
     fileprivate let recorder: MicrophoneRecorder
+    private let whisperEngine: WhisperEngine
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -27,34 +31,34 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
     private let _isTranscribing = Mutex(false)
     private let logger: Logger
+    private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
+    /// Apple Speech 是否识别到任何文字（用于决定是否调用 Whisper）
+    private var appleHasContent = false
 
     // MARK: - Sub-services
 
-    private lazy var _audioCaptureService: AppleAudioCapture = AppleAudioCapture(transcriber: self)
-    private lazy var _speechRecognitionService: AppleSpeechRecognition = AppleSpeechRecognition(transcriber: self)
+    private lazy var _audioCaptureService: HybridAudioCapture = HybridAudioCapture(transcriber: self)
+    private lazy var _speechRecognitionService: HybridSpeechRecognition = HybridSpeechRecognition(transcriber: self)
 
     // MARK: - Init
 
-    public override init() {
-        self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
-        self.logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
-        super.init()
-        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
-        logger.debug("init with default locale zh-Hans")
-    }
-
-    public init(locale: Locale, logger: Logger = PrintLogger(subsystem: "AppleSpeechTranscriber")) {
-        self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
+    public init(
+        whisperConfig: AzureWhisperConfig,
+        logger: Logger = PrintLogger(subsystem: "HybridWhisperTranscriber"),
+        session: URLSession = .shared
+    ) {
+        self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "HybridWhisperTranscriber.Mic"))
+        self.whisperEngine = WhisperEngine(config: whisperConfig, session: session,
+                                           logger: PrintLogger(subsystem: "WhisperEngine"))
         self.logger = logger
+        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         super.init()
-        self.speechRecognizer = SFSpeechRecognizer(locale: locale)
-        logger.debug("init with locale: \(locale.identifier)")
     }
 }
 
 // MARK: - TranscriptionCoordinator
 
-extension AppleSpeechTranscriber: TranscriptionCoordinator {
+extension HybridWhisperTranscriber: TranscriptionCoordinator {
 
     public var audioCaptureService: AudioCaptureService { _audioCaptureService }
     public var speechRecognitionService: SpeechRecognitionService { _speechRecognitionService }
@@ -83,6 +87,9 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             await stop()
         }
 
+        recordingLocale = language
+        appleHasContent = false
+
         // 请求语音识别权限
         let speechAuthorized = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
@@ -90,7 +97,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             }
         }
         guard speechAuthorized else {
-            throw NSError(domain: "AppleSpeechTranscriber", code: -1,
+            throw NSError(domain: "HybridWhisperTranscriber", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
         }
 
@@ -99,7 +106,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             speechRecognizer = SFSpeechRecognizer(locale: language)
         }
         guard let speechRecognizer else {
-            throw NSError(domain: "AppleSpeechTranscriber", code: -2,
+            throw NSError(domain: "HybridWhisperTranscriber", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
         }
 
@@ -115,22 +122,25 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         }
         recognitionRequest = request
 
-        // 启动录音，将 buffer 实时送给识别请求
+        // 启动录音：buffer 同步喂给 Apple Speech，同时写入 WAV 文件（由 MicrophoneRecorder 负责）
         try await recorder.start { buffer in
             request.append(buffer)
         }
 
         captureStateSubject.send(.recording)
         _isTranscribing.withLock { $0 = true }
-        logger.info("Recording + recognition started")
+        logger.info("Recording + Apple Speech started")
 
-        // 启动识别任务
+        // 启动 Apple Speech 识别任务
         recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
 
             if let result {
+                let text = result.bestTranscription.formattedString
+                if !text.isEmpty { self.appleHasContent = true }
+
                 let transcriptionResult = TranscriptionResult(
-                    text: result.bestTranscription.formattedString,
+                    text: text,
                     type: result.isFinal ? .final : .partial,
                     confidence: result.isFinal
                         ? Double(result.bestTranscription.segments.last?.confidence ?? 0)
@@ -139,23 +149,51 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                     locale: language
                 )
                 self.liveResultSubject.send(transcriptionResult)
-                if result.isFinal {
-                    self.finalResultSubject.send(transcriptionResult)
-                }
+                self.logger.debug("Apple Speech: isFinal=\(result.isFinal), chars=\(text.count)")
             }
 
             if let error {
                 let e = error as NSError
-                self.logger.error("Recognition error: \(e.domain) \(e.code) \(e.localizedDescription)")
-                self.stopInternal()
+                self.logger.error("Apple Speech error: \(e.domain) \(e.code) \(e.localizedDescription)")
+                self.stopRecorder()
             }
         }
     }
 
     public func stop() async {
-        logger.info("stop() called")
+        logger.info("stop() called, appleHasContent=\(appleHasContent)")
+
         recognitionRequest?.endAudio()
-        stopInternal()
+        let fileURL = stopRecorder()
+        let hadContent = appleHasContent
+        appleHasContent = false
+
+        guard let fileURL else {
+            logger.warning("No audio file")
+            return
+        }
+
+        // 只有 Apple Speech 有内容时才调用 Whisper
+        guard hadContent else {
+            logger.info("Apple Speech had no content → skipping Whisper")
+            try? FileManager.default.removeItem(at: fileURL)
+            return
+        }
+
+        do {
+            logger.info("Apple Speech had content → submitting to Whisper")
+            let text = try await whisperEngine.transcribe(fileURL: fileURL, language: recordingLocale)
+            let result = TranscriptionResult(
+                text: text, type: .final,
+                confidence: nil, timestamp: Date(), locale: recordingLocale
+            )
+            liveResultSubject.send(result)
+            finalResultSubject.send(result)
+        } catch {
+            logger.error("Whisper error: \(error.localizedDescription)")
+        }
+
+        try? FileManager.default.removeItem(at: fileURL)
     }
 
     public func pause() {
@@ -170,22 +208,23 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
 
     // MARK: - Private
 
-    private func stopInternal() {
-        recorder.stop()
+    @discardableResult
+    private func stopRecorder() -> URL? {
+        let url = recorder.stop()
         recognitionRequest = nil
         recognitionTask?.cancel()
         recognitionTask = nil
         captureStateSubject.send(.idle)
         _isTranscribing.withLock { $0 = false }
-        logger.debug("stopInternal() done")
+        return url
     }
 }
 
 // MARK: - Internal AudioCaptureService
 
-private final class AppleAudioCapture: AudioCaptureService, @unchecked Sendable {
-    private weak var transcriber: AppleSpeechTranscriber?
-    init(transcriber: AppleSpeechTranscriber) { self.transcriber = transcriber }
+private final class HybridAudioCapture: AudioCaptureService, @unchecked Sendable {
+    private weak var transcriber: HybridWhisperTranscriber?
+    init(transcriber: HybridWhisperTranscriber) { self.transcriber = transcriber }
 
     var state: AudioCaptureState { transcriber?.captureStateSubject.value ?? .idle }
 
@@ -201,21 +240,17 @@ private final class AppleAudioCapture: AudioCaptureService, @unchecked Sendable 
     func stopCapture() async {}
     func pauseCapture() { transcriber?.pause() }
     func resumeCapture() { transcriber?.resume() }
-
-    func requestPermission() async -> Bool {
-        await transcriber?.recorder.requestPermission() ?? false
-    }
-
+    func requestPermission() async -> Bool { await transcriber?.recorder.requestPermission() ?? false }
     var hasPermission: Bool { transcriber?.recorder.hasPermission ?? false }
 }
 
 // MARK: - Internal SpeechRecognitionService
 
-private final class AppleSpeechRecognition: SpeechRecognitionService, @unchecked Sendable {
-    private weak var transcriber: AppleSpeechTranscriber?
-    init(transcriber: AppleSpeechTranscriber) { self.transcriber = transcriber }
+private final class HybridSpeechRecognition: SpeechRecognitionService, @unchecked Sendable {
+    private weak var transcriber: HybridWhisperTranscriber?
+    init(transcriber: HybridWhisperTranscriber) { self.transcriber = transcriber }
 
-    var providerType: ASRProviderType { .apple }
+    var providerType: ASRProviderType { .whisper }
 
     var resultPublisher: AnyPublisher<TranscriptionResult, Error> {
         transcriber?.liveResultPublisher
@@ -224,10 +259,7 @@ private final class AppleSpeechRecognition: SpeechRecognitionService, @unchecked
 
     func startRecognition(language: Locale) async throws {}
     func stopRecognition() async {}
-
-    func checkAvailability() async -> Bool {
-        SFSpeechRecognizer.authorizationStatus() == .authorized
-    }
+    func checkAvailability() async -> Bool { true }
 
     func requestPermission() async -> Bool {
         await withCheckedContinuation { continuation in

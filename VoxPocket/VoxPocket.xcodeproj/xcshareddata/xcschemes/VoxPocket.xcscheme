@@ -85,6 +85,11 @@
             value = "69TZwDmseMDe1NfjpYUTDbKacjjwlvSVG3OkT90QGejbNP5gaGwfJQQJ99CBACYeBjFXJ3w3AAAAACOG9O5d"
             isEnabled = "YES">
          </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "whisperkey"
+            value = "CG74E1aIj57sp3qufYt3QoAoIZ60UbwtzfLXtFIFOh6Kt8P4bOerJQQJ99CCACfhMk5XJ3w3AAAAACOGgdOr"
+            isEnabled = "YES">
+         </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
