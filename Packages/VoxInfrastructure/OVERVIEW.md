@@ -13,6 +13,7 @@ Public products
 Depends on
 - VoxDomain (`CoreModels`, `TextHistory`)
 - Swift Async Algorithms
+- WhisperKit (Core ML 本地语音转录)
 
 Primary entry points
 - `Packages/VoxInfrastructure/Package.swift`
@@ -32,3 +33,8 @@ Recommended read order
 
 Notes for LLM context
 - Start with service boundaries and protocols, then implementations.
+
+Transcription defaults
+- 默认实时转录路径为 `WhisperKitTranscriber`（`localWhisperKit`）。
+- `AppleSpeechTranscriber`、`HybridWhisperTranscriber`、`AzureWhisperTranscriber` 作为回退/调试路径保留。
+- 本地模型配置入口在 `LocalWhisperKitConfig`，包含模型名、预加载开关、语言提示映射。

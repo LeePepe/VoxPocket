@@ -75,11 +75,13 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 **依赖**:
 - CoreModels (数据模型)
 - Observability (日志/监控)
+- WhisperKit (Core ML 本地模型推理)
 
 **功能**:
-- 封装 Apple Speech Recognition API
-- 提供实时转录能力
-- 错误处理和重试逻辑
+- 默认使用 `WhisperKitTranscriber` 做本地实时转录（`localWhisperKit`）
+- 保留 `AppleSpeechTranscriber`、`HybridWhisperTranscriber`、`AzureWhisperTranscriber` 作为回退路径
+- 提供 partial/final 事件流、音频电平流、失败遥测
+- 错误处理与故障上报（模型加载失败、启动失败）
 
 ### 2.2 LLMKit
 **职责**: 大语言模型服务
@@ -250,7 +252,7 @@ UIShared/
        ↓
 [RecordingUseCase] - 录音流程编排
        ↓
-[TranscriptionKit] - 调用系统语音识别
+[TranscriptionKit] - 默认走本地 WhisperKit（可按配置切换）
        ↓
 [Session (CoreModels)] - 更新会话数据
        ↓

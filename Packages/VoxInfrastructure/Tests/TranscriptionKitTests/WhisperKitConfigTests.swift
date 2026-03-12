@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import TranscriptionKit
 
-final class LocalWhisperKitConfigTests: XCTestCase {
+final class WhisperKitConfigTests: XCTestCase {
     func testDefaultModelIsLargeV3Turbo() {
         let config = LocalWhisperKitConfig.default
         XCTAssertEqual(config.model, "openai/whisper-large-v3-turbo")

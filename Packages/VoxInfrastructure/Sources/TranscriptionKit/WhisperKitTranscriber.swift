@@ -17,6 +17,9 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     fileprivate let recorder: MicrophoneRecorder
     private let config: LocalWhisperKitConfig
     private let logger: Logger
+    fileprivate let telemetry: TelemetryService
+    fileprivate let permissionRequester: @Sendable () async -> Bool
+    fileprivate let hasPermissionProvider: @Sendable () -> Bool
     private let engineFactory: @Sendable (LocalWhisperKitConfig, Logger) -> any LocalWhisperEngine
 
     // MARK: - Publishers
@@ -31,6 +34,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     private let _isTranscribing = Mutex(false)
     private let _engine = Mutex<(any LocalWhisperEngine)?>(nil)
     private let _latestPartialText = Mutex("")
+    private let _startedAt = Mutex<Date?>(nil)
     private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
 
     /// 后台预加载任务（与录音无关，app 启动时独立运行）
@@ -50,40 +54,115 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     public init(
         config: LocalWhisperKitConfig,
         logger: Logger = PrintLogger(subsystem: "WhisperKitTranscriber"),
-        recorder: MicrophoneRecorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriber.Mic"))
+        recorder: MicrophoneRecorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriber.Mic")),
+        telemetry: TelemetryService = NoopTelemetryService()
     ) {
         self.engineFactory = { LocalWhisperKitEngine(config: $0, logger: $1) }
         self.config = config
         self.logger = logger
         self.recorder = recorder
+        self.telemetry = telemetry
+        self.permissionRequester = { await recorder.requestPermission() }
+        self.hasPermissionProvider = { recorder.hasPermission }
         super.init()
-        startBackgroundPreload()
+        if config.preloadOnStart {
+            startBackgroundPreload()
+        }
     }
 
     init(
         config: LocalWhisperKitConfig,
         logger: Logger,
         recorder: MicrophoneRecorder,
-        engineFactory: @escaping @Sendable (LocalWhisperKitConfig, Logger) -> any LocalWhisperEngine
+        telemetry: TelemetryService = NoopTelemetryService(),
+        permissionRequester: (@Sendable () async -> Bool)? = nil,
+        hasPermissionProvider: (@Sendable () -> Bool)? = nil,
+        engineFactory: @escaping @Sendable (LocalWhisperKitConfig, Logger) -> any LocalWhisperEngine,
+        autoPreload: Bool = false
     ) {
         self.config = config
         self.logger = logger
         self.recorder = recorder
+        self.telemetry = telemetry
+        self.permissionRequester = permissionRequester ?? { await recorder.requestPermission() }
+        self.hasPermissionProvider = hasPermissionProvider ?? { recorder.hasPermission }
         self.engineFactory = engineFactory
         super.init()
-        // 测试用 init 不自动预加载（engineFactory 由外部注入）
+        if autoPreload && config.preloadOnStart {
+            startBackgroundPreload()
+        }
     }
 
     /// 后台下载并加载模型，与录音流程完全解耦
     private func startBackgroundPreload() {
         let task = Task<Void, Error> { [weak self] in
             guard let self else { return }
+            let startedAt = Date()
             let engine = self.engineFactory(self.config, self.logger)
-            try await engine.prepare()
-            self._engine.withLock { $0 = engine }
-            self.logger.info("WhisperKit model preloaded and ready")
+            do {
+                try await engine.prepare()
+                self._engine.withLock { $0 = engine }
+                self.logger.info("WhisperKit model preloaded and ready")
+                let loadMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                self.telemetry.track(
+                    name: TelemetryEventName.whisperModelLoaded.rawValue,
+                    properties: [
+                        "model": self.config.model,
+                        "load_ms": String(loadMs)
+                    ]
+                )
+            } catch {
+                self.telemetry.track(
+                    name: TelemetryEventName.whisperModelLoadFailed.rawValue,
+                    properties: [
+                        "model": self.config.model,
+                        "reason": String(describing: error)
+                    ]
+                )
+                throw error
+            }
         }
         _preloadTask.withLock { $0 = task }
+    }
+
+    private func ensureEngineReady() async throws -> any LocalWhisperEngine {
+        if let existing = _engine.withLock({ $0 }) {
+            return existing
+        }
+
+        if _preloadTask.withLock({ $0 }) == nil {
+            startBackgroundPreload()
+        }
+
+        guard let preloadTask = _preloadTask.withLock({ $0 }) else {
+            throw NSError(
+                domain: "WhisperKitTranscriber",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "WhisperKit 模型预加载任务不存在"]
+            )
+        }
+        try await preloadTask.value
+
+        guard let engine = _engine.withLock({ $0 }) else {
+            throw NSError(
+                domain: "WhisperKitTranscriber",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "WhisperKit 模型加载失败"]
+            )
+        }
+        return engine
+    }
+
+    private func trackTranscriptionFailure(_ error: Error, phase: String) {
+        telemetry.track(
+            name: TelemetryEventName.transcriptionFailed.rawValue,
+            properties: [
+                "provider": "whisperkit",
+                "model": config.model,
+                "phase": phase,
+                "reason": String(describing: error)
+            ]
+        )
     }
 }
 
@@ -118,7 +197,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
             await stop()
         }
 
-        let granted = await recorder.requestPermission()
+        let granted = await permissionRequester()
         guard granted else {
             throw NSError(
                 domain: "WhisperKitTranscriber", code: -1,
@@ -126,19 +205,13 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
             )
         }
 
-        // 如果 engine 还未就绪，等待后台预加载任务完成
-        if _engine.withLock({ $0 }) == nil {
-            logger.info("Engine not ready, waiting for preload to complete...")
-            if let preloadTask = _preloadTask.withLock({ $0 }) {
-                try await preloadTask.value
-            }
-        }
-
-        guard let engine = _engine.withLock({ $0 }) else {
-            throw NSError(
-                domain: "WhisperKitTranscriber", code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "WhisperKit 模型加载失败"]
-            )
+        let engine: any LocalWhisperEngine
+        do {
+            engine = try await ensureEngineReady()
+        } catch {
+            trackTranscriptionFailure(error, phase: "model_load")
+            await stop()
+            throw error
         }
 
         recordingLocale = language
@@ -146,35 +219,46 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
 
         let languageCode = config.languageHint(for: language)
 
-        try await engine.startStreaming(
-            languageCode: languageCode,
-            onPartial: { [weak self] text in
-                guard let self else { return }
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty, trimmed != "Waiting for speech..." else { return }
-                self._latestPartialText.withLock { $0 = trimmed }
-                let result = TranscriptionResult(
-                    text: trimmed,
-                    type: .partial,
-                    confidence: nil,
-                    timestamp: Date(),
-                    locale: self.recordingLocale
-                )
-                self.liveResultSubject.send(result)
-            },
-            onAudioLevel: { [weak self] level in
-                self?.audioLevelSubject.send(level)
-            }
-        )
+        do {
+            try await engine.startStreaming(
+                languageCode: languageCode,
+                onPartial: { [weak self] text in
+                    guard let self else { return }
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty, trimmed != "Waiting for speech..." else { return }
+                    self._latestPartialText.withLock { $0 = trimmed }
+                    let result = TranscriptionResult(
+                        text: trimmed,
+                        type: .partial,
+                        confidence: nil,
+                        timestamp: Date(),
+                        locale: self.recordingLocale
+                    )
+                    self.liveResultSubject.send(result)
+                },
+                onAudioLevel: { [weak self] level in
+                    self?.audioLevelSubject.send(level)
+                }
+            )
+        } catch {
+            trackTranscriptionFailure(error, phase: "stream_start")
+            await stop()
+            throw error
+        }
 
         captureStateSubject.send(.recording)
         _isTranscribing.withLock { $0 = true }
+        _startedAt.withLock { $0 = Date() }
     }
 
     public func stop() async {
         logger.info("stop() called")
 
         _isTranscribing.withLock { $0 = false }
+        let startedAt = _startedAt.withLock { state -> Date? in
+            defer { state = nil }
+            return state
+        }
         captureStateSubject.send(.idle)
         audioLevelSubject.send(0)
 
@@ -196,6 +280,20 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         )
         liveResultSubject.send(result)
         finalResultSubject.send(result)
+
+        if let startedAt {
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            telemetry.track(
+                name: TelemetryEventName.transcriptionCompleted.rawValue,
+                properties: [
+                    "provider": "whisperkit",
+                    "model": config.model,
+                    "elapsed_ms": String(max(elapsedMs, 0)),
+                    "rtf_rough": "1.0",
+                    "text_length": String(finalText.count)
+                ]
+            )
+        }
     }
 
     public func pause() {
@@ -236,8 +334,8 @@ private final class WhisperKitAudioCapture: AudioCaptureService, @unchecked Send
     func stopCapture() async {}
     func pauseCapture() { transcriber?.pause() }
     func resumeCapture() { transcriber?.resume() }
-    func requestPermission() async -> Bool { await transcriber?.recorder.requestPermission() ?? false }
-    var hasPermission: Bool { transcriber?.recorder.hasPermission ?? false }
+    func requestPermission() async -> Bool { await transcriber?.permissionRequester() ?? false }
+    var hasPermission: Bool { transcriber?.hasPermissionProvider() ?? false }
 }
 
 // MARK: - Internal SpeechRecognitionService
@@ -256,7 +354,7 @@ private final class WhisperKitSpeechRecognition: SpeechRecognitionService, @unch
     func startRecognition(language: Locale) async throws {}
     func stopRecognition() async {}
     func checkAvailability() async -> Bool { true }
-    func requestPermission() async -> Bool { await transcriber?.recorder.requestPermission() ?? false }
+    func requestPermission() async -> Bool { await transcriber?.permissionRequester() ?? false }
     var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
 }
 

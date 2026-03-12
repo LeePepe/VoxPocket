@@ -30,6 +30,8 @@ public enum TelemetryEventName: String, Sendable {
     // 转录相关
     case transcriptionCompleted = "transcription.completed"
     case transcriptionFailed = "transcription.failed"
+    case whisperModelLoaded = "whisper.model.loaded"
+    case whisperModelLoadFailed = "whisper.model.load_failed"
 
     // LLM 相关
     case refinementStarted = "refinement.started"
@@ -80,4 +82,19 @@ public extension TelemetryService {
     func track(name: String) {
         track(name: name, properties: [:])
     }
+}
+
+/// 默认空实现，避免在未接入具体遥测系统时传播条件分支。
+public final class NoopTelemetryService: TelemetryService, @unchecked Sendable {
+    public var isEnabled: Bool = false
+
+    public init() {}
+
+    public func track(_ event: TelemetryEvent) {}
+
+    public func track(name: String, properties: [String: String]) {}
+
+    public func flush() async {}
+
+    public func resetIdentifier() {}
 }
