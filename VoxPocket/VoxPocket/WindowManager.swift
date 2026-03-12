@@ -84,7 +84,8 @@ public final class WindowManager: ObservableObject {
     }
 
     private func positionQuickRecordingWindow(_ panel: NSPanel) {
-        guard let screen = NSApp.keyWindow?.screen ?? NSScreen.main else {
+        let mouseLocation = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.main else {
             panel.center()
             return
         }
@@ -218,6 +219,7 @@ public final class WindowManager: ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        panel.hasShadow = false
 
         // 设置 SwiftUI 内容（Capsule clipShape 已在 SwiftUI 层处理圆角）
         let hostingView = NSHostingView(rootView: contentView)
