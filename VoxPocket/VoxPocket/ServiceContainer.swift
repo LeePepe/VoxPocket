@@ -402,7 +402,9 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
 
     private var backing: SessionUseCase
     private var sessionsSubscription: AnyCancellable?
+    private var currentSessionSubscription: AnyCancellable?
     private let sessionsRelay = CurrentValueSubject<[Session], Error>([])
+    private let currentSessionRelay = CurrentValueSubject<Session?, Never>(nil)
 
     init(backing: SessionUseCase) {
         self.backing = backing
@@ -427,14 +429,19 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
                     self?.sessionsRelay.send(sessions)
                 }
             )
+
+        currentSessionSubscription = backing.currentSessionPublisher
+            .sink { [weak self] session in
+                self?.currentSessionRelay.send(session)
+            }
     }
 
     // MARK: - SessionUseCase 转发
 
-    public var currentSession: Session? { backing.currentSession }
+    public var currentSession: Session? { currentSessionRelay.value }
 
     public var currentSessionPublisher: AnyPublisher<Session?, Never> {
-        backing.currentSessionPublisher
+        currentSessionRelay.eraseToAnyPublisher()
     }
 
     public var sessionsPublisher: AnyPublisher<[Session], Error> {

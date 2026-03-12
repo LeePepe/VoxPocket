@@ -128,6 +128,27 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
             .receive(on: DispatchQueue.main)
             .assign(to: &$text)
 
+        // 会话切换：加载历史会话文本到编辑器
+        sessionUseCase?.currentSessionPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] session in
+                guard let self else { return }
+
+                // 切换会话时终止当前临时流，避免旧会话残留状态干扰
+                self.cancelRefinement()
+                self.liveTranscription = ""
+                self.streamingRefinedText = ""
+                self.rawTranscription = session?.rawText ?? ""
+
+                do {
+                    try self.editingUseCase.replaceAll(with: session?.displayText ?? "")
+                    self.historyUseCase.clearHistory()
+                } catch {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+            .store(in: &cancellables)
+
         // 撤销/重做
         historyUseCase.canUndoPublisher
             .receive(on: DispatchQueue.main)
