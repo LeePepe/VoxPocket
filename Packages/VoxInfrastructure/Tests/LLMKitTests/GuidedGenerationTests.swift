@@ -6,12 +6,18 @@ import FoundationModels
 ///
 /// 目标：找出为什么 guided generation 会超时 120+ 秒
 final class GuidedGenerationTests: XCTestCase {
-
-    /// 测试最简单的 guided generation - 只有 2 个字段
-    func testMinimalGuidedGeneration() async throws {
+    private func requireGuidedGenerationOptIn() throws {
+        guard ProcessInfo.processInfo.environment["VOX_RUN_GUIDED_GENERATION_TESTS"] == "1" else {
+            throw XCTSkip("Guided generation tests are opt-in. Set VOX_RUN_GUIDED_GENERATION_TESTS=1 to run.")
+        }
         guard SystemLanguageModel.default.availability == .available else {
             throw XCTSkip("Apple Intelligence 不可用")
         }
+    }
+
+    /// 测试最简单的 guided generation - 只有 2 个字段
+    func testMinimalGuidedGeneration() async throws {
+        try requireGuidedGenerationOptIn()
 
         let text = "测试文本"
         let model = SystemLanguageModel(useCase: .contentTagging)
@@ -81,9 +87,7 @@ final class GuidedGenerationTests: XCTestCase {
 
     /// 测试不使用 guided generation - 直接文本完成
     func testDirectTextCompletion() async throws {
-        guard SystemLanguageModel.default.availability == .available else {
-            throw XCTSkip("Apple Intelligence 不可用")
-        }
+        try requireGuidedGenerationOptIn()
 
         let text = "测试文本"
         let instruction = "识别这段文本的意图，返回 JSON 格式：{\"intent\": \"plain_content\", \"confidence\": 1.0}"
@@ -130,9 +134,7 @@ final class GuidedGenerationTests: XCTestCase {
 
     /// 测试不同的 schema 包含选项
     func testSchemaInclusionVariants() async throws {
-        guard SystemLanguageModel.default.availability == .available else {
-            throw XCTSkip("Apple Intelligence 不可用")
-        }
+        try requireGuidedGenerationOptIn()
 
         let text = "测试文本"
         let model = SystemLanguageModel(useCase: .contentTagging)
@@ -187,9 +189,7 @@ final class GuidedGenerationTests: XCTestCase {
 
     /// 测试不同的模型 use case
     func testDifferentModelUseCases() async throws {
-        guard SystemLanguageModel.default.availability == .available else {
-            throw XCTSkip("Apple Intelligence 不可用")
-        }
+        try requireGuidedGenerationOptIn()
 
         let text = "测试文本"
         let instruction = "识别意图"
