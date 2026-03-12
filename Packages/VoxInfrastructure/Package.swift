@@ -37,6 +37,7 @@ let package = Package(
     dependencies: [
         .package(path: "../VoxDomain"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
+        .package(url: "https://github.com/argmaxinc/WhisperKit", from: "0.12.0"),
     ],
     targets: [
         .target(
@@ -44,6 +45,7 @@ let package = Package(
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
                 "Observability",
+                .product(name: "WhisperKit", package: "WhisperKit"),
             ]
         ),
         .target(

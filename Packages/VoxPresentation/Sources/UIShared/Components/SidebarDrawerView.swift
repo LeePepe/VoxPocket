@@ -199,6 +199,8 @@ struct MeEntryRow: View {
             Image(systemName: "chevron.right")
                 .foregroundColor(.textTertiary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(.rect)
     }
 }
 

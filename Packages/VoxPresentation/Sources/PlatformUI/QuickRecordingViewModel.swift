@@ -116,6 +116,11 @@ public final class QuickRecordingViewModel: ObservableObject {
     // MARK: - 录音操作
 
     public func startRecording() async {
+        // 允许从 .error 状态重试
+        if recorderStatus == .error {
+            recorderStatus = .idle
+            errorMessage = nil
+        }
         guard recorderStatus == .idle, !isStartingRecordingInternal else {
             logger.debug("Start recording ignored because recorder is busy")
             return

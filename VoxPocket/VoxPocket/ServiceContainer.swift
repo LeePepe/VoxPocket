@@ -37,7 +37,7 @@ public final class ServiceContainer: ObservableObject {
 
     // MARK: - 基础服务
 
-    /// 主转录器：有 Whisper API Key 时使用 Azure Whisper，否则回退到 Apple Speech
+    /// 主转录器：默认使用 WhisperKit 本地模型，可按配置切换到其他实现
     public let transcriber: any TranscriptionCoordinator
     public let llmService: DefaultLLMService
 
@@ -173,6 +173,8 @@ public final class ServiceContainer: ObservableObject {
 
     private static func makeTranscriber() -> any TranscriptionCoordinator {
         switch LLMAppConfig.defaultTranscriberProvider {
+        case .localWhisperKit:
+            return WhisperKitTranscriber(config: .default)
         case .hybridWhisper:
             if let config = makeAzureWhisperConfig() {
                 return HybridWhisperTranscriber(whisperConfig: config)

@@ -74,33 +74,38 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
         }
         #endif
 
-        let inputNode = audioEngine.inputNode
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            inputNode.removeTap(onBus: 0)
-        } else {
-            inputNode.removeTap(onBus: 0)
-        }
-
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("mic_\(UUID().uuidString).wav")
         tempFileURL = tempURL
 
-        let format = inputNode.outputFormat(forBus: 0)
-        audioFile = try AVAudioFile(forWriting: tempURL, settings: format.settings)
-        logger.debug("Recording to \(tempURL.lastPathComponent), \(format.sampleRate)Hz \(format.channelCount)ch")
-
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        // Tap callback must be defined OUTSIDE MainActor.run so it does not inherit
+        // MainActor isolation. AVAudioEngine calls it on the realtime audio thread;
+        // if the closure were @MainActor, Swift's runtime isolation check would crash.
+        nonisolated(unsafe) let handler = bufferHandler
+        nonisolated(unsafe) let tapBlock: (AVAudioPCMBuffer, AVAudioTime) -> Void = { [weak self] buffer, _ in
             guard let self else { return }
             try? self.audioFile?.write(from: buffer)
             let level = self.rmsLevel(buffer: buffer)
             self.audioLevelSubject.send(level)
-            bufferHandler?(buffer)
+            handler?(buffer)
         }
 
-        audioEngine.prepare()
-        try audioEngine.start()
-        captureStateSubject.send(.recording)
+        // AVAudioEngine node configuration must run on the main thread.
+        try await MainActor.run {
+            let inputNode = audioEngine.inputNode
+            audioEngine.stop()
+            inputNode.removeTap(onBus: 0)
+
+            let format = inputNode.outputFormat(forBus: 0)
+            audioFile = try AVAudioFile(forWriting: tempURL, settings: format.settings)
+            logger.debug("Recording to \(tempURL.lastPathComponent), \(format.sampleRate)Hz \(format.channelCount)ch")
+
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
+
+            audioEngine.prepare()
+            try audioEngine.start()
+            captureStateSubject.send(.recording)
+        }
         logger.info("Recording started")
     }
 

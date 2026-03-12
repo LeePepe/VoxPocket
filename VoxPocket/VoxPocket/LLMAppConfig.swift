@@ -4,6 +4,8 @@ import TranscriptionKit
 
 /// 转录器提供者选择
 enum TranscriberProvider {
+    /// WhisperKit 本地模型（Core ML）
+    case localWhisperKit
     /// Apple Speech Framework（默认，无需 API Key）
     case appleSpeech
     /// Azure OpenAI Whisper 纯批量模式（录音结束后送 Whisper，无实时结果）
@@ -21,7 +23,7 @@ enum LLMAppConfig {
     ///
     /// 设为 `.azureWhisper` 时，需在 Scheme 环境变量中配置 `whisperkey`。
     /// 未配置 API Key 时自动回退到 `.appleSpeech`。
-    static let defaultTranscriberProvider: TranscriberProvider = .hybridWhisper
+    static let defaultTranscriberProvider: TranscriberProvider = .localWhisperKit
     /// 默认 provider（当用户未在设置中显式选择时）
     static let defaultProvider: LLMProviderType = .appleIntelligence
 
