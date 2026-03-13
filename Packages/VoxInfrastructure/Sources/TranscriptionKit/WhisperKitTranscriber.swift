@@ -28,6 +28,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
+    private let _modelLoadingStateSubject = CurrentValueSubject<ModelLoadingState, Never>(.idle)
 
     // MARK: - State
 
@@ -100,7 +101,10 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
             let startedAt = Date()
             let engine = self.engineFactory(self.config, self.logger)
             do {
-                try await engine.prepare()
+                try await engine.prepare(onProgress: { [weak self] progress in
+                    self?._modelLoadingStateSubject.send(.downloading(progress: progress))
+                })
+                self._modelLoadingStateSubject.send(.ready)
                 self._engine.withLock { $0 = engine }
                 self.logger.info("WhisperKit model preloaded and ready")
                 let loadMs = Int(Date().timeIntervalSince(startedAt) * 1000)
@@ -112,6 +116,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                     ]
                 )
             } catch {
+                self._modelLoadingStateSubject.send(.failed(error.localizedDescription))
                 self.telemetry.track(
                     name: TelemetryEventName.whisperModelLoadFailed.rawValue,
                     properties: [
@@ -122,6 +127,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 throw error
             }
         }
+        _modelLoadingStateSubject.send(.loading)
         _preloadTask.withLock { $0 = task }
     }
 
@@ -163,6 +169,18 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 "reason": String(describing: error)
             ]
         )
+    }
+}
+
+// MARK: - ModelLoadingObservable
+
+extension WhisperKitTranscriber: ModelLoadingObservable {
+    public var modelLoadingState: ModelLoadingState {
+        _modelLoadingStateSubject.value
+    }
+
+    public var modelLoadingStatePublisher: AnyPublisher<ModelLoadingState, Never> {
+        _modelLoadingStateSubject.eraseToAnyPublisher()
     }
 }
 
@@ -361,8 +379,9 @@ private final class WhisperKitSpeechRecognition: SpeechRecognitionService, @unch
 // MARK: - Engine abstraction
 
 protocol LocalWhisperEngine: Sendable {
-    func prepare() async throws
+    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws
     func startStreaming(
+
         languageCode: String?,
         onPartial: @escaping @Sendable (String) -> Void,
         onAudioLevel: @escaping @Sendable (Float) -> Void
@@ -370,6 +389,14 @@ protocol LocalWhisperEngine: Sendable {
     func stopStreaming() async
     func pauseStreaming() async
     func resumeStreaming() async
+}
+
+enum LocalWhisperRawOutputLogger {
+    static func log(_ rawText: String, logger: Logger) {
+        let normalized = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        logger.debug("Local Whisper raw output: \(normalized)")
+    }
 }
 
 private actor LocalWhisperKitEngine: LocalWhisperEngine {
@@ -387,7 +414,7 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         self.logger = logger
     }
 
-    func prepare() async throws {
+    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
 #if canImport(WhisperKit)
         if pipeline != nil {
             return
@@ -405,6 +432,7 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
                 } else {
                     logger.info("WhisperKit model download: \(pct)%")
                 }
+                onProgress?(progress.fractionCompleted)
             }
         )
         logger.info("Model ready at: \(modelFolder.path)")
@@ -413,6 +441,7 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         pipeline = try await WhisperKit(whisperConfig)
         logger.info("WhisperKit pipeline loaded successfully")
 #else
+        _ = onProgress
         throw NSError(
             domain: "WhisperKitTranscriber", code: -100,
             userInfo: [NSLocalizedDescriptionKey: "WhisperKit module unavailable in current build"]
@@ -430,7 +459,7 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             return
         }
 
-        try await prepare()
+        try await prepare(onProgress: nil)
         guard let pipeline else {
             throw NSError(
                 domain: "WhisperKitTranscriber", code: -101,
@@ -457,9 +486,10 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             tokenizer: tokenizerRef,
             audioProcessor: audioProcessor,
             decodingOptions: options,
-            stateChangeCallback: { _, newState in
-                let mergedText = LocalWhisperKitEngine.composeStreamText(from: newState)
-                onPartial(mergedText)
+            stateChangeCallback: { [logger = self.logger] _, newState in
+                let rawText = LocalWhisperKitEngine.composeRawStreamText(from: newState)
+                LocalWhisperRawOutputLogger.log(rawText, logger: logger)
+                onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: rawText))
                 let level = newState.bufferEnergy.last ?? 0
                 onAudioLevel(level)
             }
@@ -506,13 +536,17 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
     }
 
 #if canImport(WhisperKit)
-    private nonisolated static func composeStreamText(from state: AudioStreamTranscriber.State) -> String {
+    private nonisolated static func composeRawStreamText(from state: AudioStreamTranscriber.State) -> String {
         let confirmed = state.confirmedSegments.map(\.text).joined(separator: " ")
         let current = state.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let merged = [confirmed, current]
+        return [confirmed, current]
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .joined(separator: " ")
-        return stripWhisperTokens(from: merged.trimmingCharacters(in: .whitespacesAndNewlines))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private nonisolated static func cleanStreamText(fromRaw rawText: String) -> String {
+        stripWhisperTokens(from: rawText)
     }
 
     /// 剥离 Whisper 特殊 token，如 <|startoftranscript|>、<|zh|>、<|0.00|> 等

@@ -5,6 +5,7 @@ import LLMKit
 import UseCases
 import Observability
 import PlatformAdapters
+import TranscriptionKit
 
 /// 编辑器 ViewModel
 ///
@@ -23,6 +24,9 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     private let clipboardService: ClipboardService?
     private let sessionUseCase: SessionUseCase?
     private let logger: Logger
+
+    /// 用于在录音被阻止时显示 snackbar 通知（可选，由外部注入）
+    public var snackbarService: (any SnackbarService)?
 
     private var cancellables = Set<AnyCancellable>()
     private var streamingTask: Task<Void, Never>?
@@ -200,6 +204,8 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
 
         do {
             try await recordingUseCase.startRecording()
+        } catch VoxError.modelNotReady {
+            snackbarService?.showWarning("本地模型正在加载中，请稍候再试")
         } catch {
             errorMessage = error.localizedDescription
         }

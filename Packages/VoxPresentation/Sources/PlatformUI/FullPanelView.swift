@@ -31,6 +31,10 @@ public struct FullPanelView<VM: RootViewState>: View {
         )
             .frame(minWidth: 560, minHeight: 360)
             .snackbarOverlay(service: snackbarService)
+            .onAppear {
+                // 注入 snackbar，使录音被阻止时（如模型未就绪）能显示提示
+                (viewModel.editorState as? EditorViewModel)?.snackbarService = snackbarService
+            }
     }
 }
 #endif

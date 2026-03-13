@@ -9,15 +9,18 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
     @State private var splitViewVisibility: NavigationSplitViewVisibility = .detailOnly
     let onCopyRefined: (String) -> Void
     let onCopyRaw: (String) -> Void
- 
+    var localModelLoadingStatus: LocalModelLoadingStatus?
+
     public init(
         viewModel: VM,
         onCopyRefined: @escaping (String) -> Void = { _ in },
-        onCopyRaw: @escaping (String) -> Void = { _ in }
+        onCopyRaw: @escaping (String) -> Void = { _ in },
+        localModelLoadingStatus: LocalModelLoadingStatus? = nil
     ) {
         self.viewModel = viewModel
         self.onCopyRefined = onCopyRefined
         self.onCopyRaw = onCopyRaw
+        self.localModelLoadingStatus = localModelLoadingStatus
     }
 
     private var searchQueryBinding: Binding<String> {
@@ -128,7 +131,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .me:
-                    MeRootView(status: viewModel.recorderStatus, onDeleteAllHistory: { viewModel.deleteAllSessions() })
+                    MeRootView(status: viewModel.recorderStatus, onDeleteAllHistory: { viewModel.deleteAllSessions() }, localModelLoadingStatus: localModelLoadingStatus)
                 }
             }
         }
@@ -275,7 +278,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     )
                 }
             case .me:
-                MeRootView(status: viewModel.recorderStatus)
+                MeRootView(status: viewModel.recorderStatus, localModelLoadingStatus: localModelLoadingStatus)
             }
         }
 #if os(iOS)
