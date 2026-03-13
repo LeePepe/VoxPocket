@@ -4,10 +4,16 @@ import Preferences
 struct MeRootView: View {
     let status: RecorderStatus
     var onDeleteAllHistory: (() -> Void)?
+    var localModelLoadingStatus: LocalModelLoadingStatus?
 
-    init(status: RecorderStatus = .idle, onDeleteAllHistory: (() -> Void)? = nil) {
+    init(
+        status: RecorderStatus = .idle,
+        onDeleteAllHistory: (() -> Void)? = nil,
+        localModelLoadingStatus: LocalModelLoadingStatus? = nil
+    ) {
         self.status = status
         self.onDeleteAllHistory = onDeleteAllHistory
+        self.localModelLoadingStatus = localModelLoadingStatus
     }
 
     var body: some View {
@@ -16,6 +22,9 @@ struct MeRootView: View {
                 ProfileCard()
                 BehaviorCard()
                 LLMProviderCard()
+                if let loadingStatus = localModelLoadingStatus, loadingStatus.state != .idle {
+                    LocalModelLoadingCard(status: loadingStatus)
+                }
 #if os(macOS)
                 ShortcutsCard()
 #endif
@@ -331,6 +340,72 @@ struct SettingRow: View {
             Text(value)
                 .font(.custom("Avenir Next", size: 12))
                 .foregroundColor(MePalette.secondaryText)
+        }
+    }
+}
+
+struct LocalModelLoadingCard: View {
+    @ObservedObject var status: LocalModelLoadingStatus
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("本地模型")
+                    .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                    .foregroundColor(MePalette.primaryText)
+                Spacer()
+                statusBadge
+            }
+
+            if let progress = status.downloadProgress {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(status.statusText)
+                        .font(.custom("Avenir Next", size: 12))
+                        .foregroundColor(MePalette.secondaryText)
+                    ProgressView(value: progress)
+                        .tint(.blue)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    if status.isInProgress {
+                        ProgressView()
+                            .scaleEffect(0.75)
+                    }
+                    Text(status.statusText)
+                        .font(.custom("Avenir Next", size: 12))
+                        .foregroundColor(MePalette.secondaryText)
+                }
+            }
+        }
+        .modifier(CardStyle())
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        switch status.state {
+        case .downloading, .loading:
+            Text("加载中")
+                .font(.custom("Avenir Next", size: 11).weight(.medium))
+                .foregroundColor(.orange)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.orange.opacity(0.12), in: Capsule())
+        case .ready:
+            Text("就绪")
+                .font(.custom("Avenir Next", size: 11).weight(.medium))
+                .foregroundColor(.green)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.green.opacity(0.12), in: Capsule())
+        case .failed:
+            Text("失败")
+                .font(.custom("Avenir Next", size: 11).weight(.medium))
+                .foregroundColor(.red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.red.opacity(0.12), in: Capsule())
+        case .idle:
+            EmptyView()
         }
     }
 }

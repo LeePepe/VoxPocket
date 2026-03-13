@@ -20,7 +20,12 @@ public struct QuickRecordingView: View {
             Capsule()
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
+        .background(
+            Capsule()
+                .fill(Color.black.opacity(0.25))
+                .blur(radius: 8)
+                .offset(y: 4)
+        )
     }
 }
 #endif

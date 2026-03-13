@@ -3,9 +3,9 @@ import XCTest
 @testable import TranscriptionKit
 
 final class LocalWhisperKitConfigTests: XCTestCase {
-    func testDefaultModelIsLargeV3Turbo() {
+    func testDefaultModelIsUnderOneGigabyteVariant() {
         let config = LocalWhisperKitConfig.default
-        XCTAssertEqual(config.model, "openai/whisper-large-v3-turbo")
+        XCTAssertEqual(config.model, "openai_whisper-large-v3-v20240930_turbo_632MB")
     }
 
     func testLocaleMapsToChineseLanguageHint() {

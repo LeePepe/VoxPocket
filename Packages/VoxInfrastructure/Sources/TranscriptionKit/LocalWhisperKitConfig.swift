@@ -8,7 +8,7 @@ public struct LocalWhisperKitConfig: Sendable {
     public let preloadOnStart: Bool
 
     public init(
-        model: String = "openai_whisper-base",
+        model: String = "openai_whisper-large-v3-v20240930_turbo_632MB",
         preloadOnStart: Bool = true
     ) {
         self.model = model

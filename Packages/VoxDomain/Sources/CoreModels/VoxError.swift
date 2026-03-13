@@ -53,6 +53,11 @@ public enum VoxError: Error, LocalizedError, Sendable {
     /// 数据迁移失败
     case migrationFailed(reason: String)
 
+    // MARK: - 模型加载相关错误
+
+    /// 本地模型尚未就绪（仍在下载或初始化中）
+    case modelNotReady
+
     // MARK: - 平台相关错误 (macOS)
 
     /// 辅助功能权限被拒绝
@@ -110,6 +115,8 @@ public enum VoxError: Error, LocalizedError, Sendable {
             return "文本注入失败：\(reason)"
         case .noFocusedTextField:
             return "没有聚焦的输入框"
+        case .modelNotReady:
+            return "本地模型正在加载中，请稍候再试"
         }
     }
 }

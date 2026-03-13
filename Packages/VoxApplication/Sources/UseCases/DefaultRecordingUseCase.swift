@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import TranscriptionKit
+import CoreModels
 
 /// 录音用例默认实现
 ///
@@ -46,6 +47,12 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     }
 
     public func startRecording() async throws {
+        // 如果转录器是本地模型且还未就绪，拒绝录音
+        if let loadable = coordinator as? any ModelLoadingObservable,
+           loadable.modelLoadingState != .ready {
+            throw VoxError.modelNotReady
+        }
+
         let language = self.language
         try await operationGate.withExclusiveAccess { [coordinator] in
             // 移除手动状态更新，让监听器（line 30-44）自动处理
