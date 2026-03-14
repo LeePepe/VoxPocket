@@ -60,6 +60,7 @@ public final class ServiceContainer: ObservableObject {
     public let clipboardService: MacOSClipboardService
     public let accessibilityService: MacOSAccessibilityService
     public let hotkeyService: MacOSGlobalHotkeyService
+    public let claudeInboxService: MacOSClaudeInboxService
 
     // MARK: - Quick Recording 独立服务栈
 
@@ -102,6 +103,7 @@ public final class ServiceContainer: ObservableObject {
         clipboardService = MacOSClipboardService.shared
         accessibilityService = MacOSAccessibilityService.shared
         hotkeyService = MacOSGlobalHotkeyService.shared
+        claudeInboxService = MacOSClaudeInboxService.shared
 #endif
 
         // 初始化 Use Cases
@@ -351,8 +353,10 @@ public final class ServiceContainer: ObservableObject {
     public func makeEditorViewModel() -> EditorViewModel {
 #if os(macOS)
         let clipboard: ClipboardService? = MacOSClipboardService.shared
+        let inbox: (any ClaudeInboxService)? = MacOSClaudeInboxService.shared
 #else
         let clipboard: ClipboardService? = nil
+        let inbox: (any ClaudeInboxService)? = nil
 #endif
         return EditorViewModel(
             recording: recordingUseCase,
@@ -361,7 +365,8 @@ public final class ServiceContainer: ObservableObject {
             history: historyUseCase,
             refinement: refinementUseCase,
             clipboard: clipboard,
-            session: sessionUseCase
+            session: sessionUseCase,
+            inbox: inbox
         )
     }
 

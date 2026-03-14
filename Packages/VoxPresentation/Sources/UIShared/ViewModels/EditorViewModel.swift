@@ -23,6 +23,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     private let refinementUseCase: RefinementUseCase
     private let clipboardService: ClipboardService?
     private let sessionUseCase: SessionUseCase?
+    private let inboxService: (any ClaudeInboxService)?
     private let logger: Logger
 
     /// 用于在录音被阻止时显示 snackbar 通知（可选，由外部注入）
@@ -70,6 +71,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         refinement: RefinementUseCase,
         clipboard: ClipboardService? = nil,
         session: SessionUseCase? = nil,
+        inbox: (any ClaudeInboxService)? = nil,
         logger: Logger? = nil
     ) {
         self.recordingUseCase = recording
@@ -79,6 +81,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         self.refinementUseCase = refinement
         self.clipboardService = clipboard
         self.sessionUseCase = session
+        self.inboxService = inbox
         self.logger = logger ?? PrintLogger(subsystem: "EditorViewModel")
 
         bindUseCases()
@@ -373,6 +376,13 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                                 rawText: self.rawTranscription,
                                 refinedText: self.streamingRefinedText
                             )
+                        }
+                    }
+
+                    // 将优化结果写入 Claude inbox，触发自动计划流程
+                    if let inboxService = self.inboxService {
+                        Task {
+                            try? await inboxService.appendToInbox(self.streamingRefinedText)
                         }
                     }
                 }
