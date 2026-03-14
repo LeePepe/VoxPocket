@@ -2,6 +2,7 @@ import XCTest
 import Combine
 @testable import UseCases
 import TranscriptionKit
+import CoreModels
 
 final class UseCasesTests: XCTestCase {
     func testRecordingOperationsAreSerialized() async throws {
@@ -25,6 +26,41 @@ final class UseCasesTests: XCTestCase {
         XCTAssertTrue(stopObservedAfterStartFinished)
         let overlap = await coordinator.didStopRunDuringStart()
         XCTAssertFalse(overlap)
+    }
+
+    func testLiveTextPublisherDeduplicatesConsecutiveIdenticalTexts() async {
+        let coordinator = LiveResultTranscriptionCoordinator()
+        let useCase = DefaultTranscriptionUseCase(
+            coordinator: coordinator,
+            editing: FakeEditingUseCase()
+        )
+
+        var values: [String] = []
+        let cancellable = useCase.liveTextPublisher.sink { values.append($0) }
+        defer { cancellable.cancel() }
+
+        coordinator.sendLiveText("你好")
+        coordinator.sendLiveText("你好")
+        coordinator.sendLiveText("你好世界")
+        coordinator.sendLiveText("你好世界")
+        coordinator.sendLiveText("你好世界！")
+        await Task.yield()
+
+        XCTAssertEqual(values, ["", "你好", "你好世界", "你好世界！"])
+    }
+
+    func testStartRecordingFallsBackWhenPrimaryModelIsStillLoading() async throws {
+        let primary = ModelLoadingTranscriptionCoordinator(state: .loading)
+        let fallback = NamedTranscriptionCoordinator(name: "fallback")
+        let useCase = DefaultRecordingUseCase(coordinator: primary, fallbackCoordinator: fallback)
+
+        try await useCase.startRecording()
+        try await useCase.stopRecording()
+
+        let primaryEvents = await primary.events()
+        let fallbackEvents = await fallback.events()
+        XCTAssertEqual(primaryEvents, [])
+        XCTAssertEqual(fallbackEvents, ["start:zh-Hans", "stop"])
     }
 }
 
@@ -167,4 +203,129 @@ private final class FakeSpeechRecognitionService: SpeechRecognitionService, @unc
     func requestPermission() async -> Bool { true }
 
     var supportedLanguages: [Locale] { [Locale(identifier: "zh-Hans")] }
+}
+
+private final class LiveResultTranscriptionCoordinator: TranscriptionCoordinator, @unchecked Sendable {
+    let audioCaptureService: AudioCaptureService = FakeAudioCaptureService()
+    let speechRecognitionService: SpeechRecognitionService = FakeSpeechRecognitionService()
+
+    private let finalSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let liveSubject = PassthroughSubject<TranscriptionResult, Error>()
+
+    var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
+        finalSubject.eraseToAnyPublisher()
+    }
+
+    var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
+        liveSubject.eraseToAnyPublisher()
+    }
+
+    var audioLevelPublisher: AnyPublisher<Float, Never> {
+        Empty().eraseToAnyPublisher()
+    }
+
+    var isTranscribing: Bool { false }
+
+    func start(language: Locale) async throws {}
+    func stop() async {}
+    func pause() {}
+    func resume() {}
+
+    func sendLiveText(_ text: String) {
+        liveSubject.send(
+            TranscriptionResult(
+                text: text,
+                type: .partial,
+                confidence: nil,
+                timestamp: Date(),
+                locale: Locale(identifier: "zh-Hans")
+            )
+        )
+    }
+}
+
+private final class FakeEditingUseCase: EditingUseCase, @unchecked Sendable {
+    private let currentTextSubject = CurrentValueSubject<String, Never>("")
+
+    var currentText: String { currentTextSubject.value }
+
+    var currentTextPublisher: AnyPublisher<String, Never> {
+        currentTextSubject.eraseToAnyPublisher()
+    }
+
+    func applyEdit(range: CoreModels.TextRange, newText: String) throws {}
+    func replaceAll(with text: String) throws { currentTextSubject.send(text) }
+    func insert(_ text: String, at location: Int) throws {}
+    func delete(range: CoreModels.TextRange) throws {}
+    func append(_ text: String) throws {}
+    func mergeRecentEdits() {}
+}
+
+private class NamedTranscriptionCoordinator: TranscriptionCoordinator, @unchecked Sendable {
+    let audioCaptureService: AudioCaptureService = FakeAudioCaptureService()
+    let speechRecognitionService: SpeechRecognitionService = FakeSpeechRecognitionService()
+
+    private actor State {
+        var events: [String] = []
+        func append(_ event: String) { events.append(event) }
+        func snapshot() -> [String] { events }
+    }
+
+    private let state = State()
+    private let name: String
+
+    init(name: String) {
+        self.name = name
+    }
+
+    var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
+        Empty().eraseToAnyPublisher()
+    }
+
+    var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
+        Empty().eraseToAnyPublisher()
+    }
+
+    var audioLevelPublisher: AnyPublisher<Float, Never> {
+        Empty().eraseToAnyPublisher()
+    }
+
+    var isTranscribing: Bool { false }
+
+    func start(language: Locale) async throws {
+        await state.append("start:\(language.identifier)")
+    }
+
+    func stop() async {
+        await state.append("stop")
+    }
+
+    func pause() {
+        Task { await state.append("pause") }
+    }
+
+    func resume() {
+        Task { await state.append("resume") }
+    }
+
+    func events() async -> [String] {
+        await state.snapshot()
+    }
+}
+
+private final class ModelLoadingTranscriptionCoordinator: NamedTranscriptionCoordinator, ModelLoadingObservable, @unchecked Sendable {
+    private let loadingSubject: CurrentValueSubject<ModelLoadingState, Never>
+
+    init(state: ModelLoadingState) {
+        self.loadingSubject = CurrentValueSubject(state)
+        super.init(name: "primary")
+    }
+
+    var modelLoadingState: ModelLoadingState {
+        loadingSubject.value
+    }
+
+    var modelLoadingStatePublisher: AnyPublisher<ModelLoadingState, Never> {
+        loadingSubject.eraseToAnyPublisher()
+    }
 }

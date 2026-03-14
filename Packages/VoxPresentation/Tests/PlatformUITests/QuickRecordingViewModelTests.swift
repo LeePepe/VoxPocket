@@ -8,6 +8,27 @@ import UseCases
 
 @MainActor
 final class QuickRecordingViewModelTests: XCTestCase {
+    func testQuickRecordingDoesNotAutoStopAfterSilenceWhileStillHeld() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("你好")
+
+        try? await Task.sleep(nanoseconds: 3_100_000_000)
+
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertEqual(viewModel.recorderStatus, .listening)
+    }
+
     func testStopRecordingUsesLatestTranscriptionArrivingRightAfterStop() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()
@@ -32,6 +53,34 @@ final class QuickRecordingViewModelTests: XCTestCase {
 
         await viewModel.stopRecording()
         try? await Task.sleep(nanoseconds: 160_000_000)
+
+        XCTAssertEqual(viewModel.rawTranscription, "你好世界")
+    }
+
+    func testStopRecordingWaitsForDelayedFinalTranscription() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        recording.onStop = {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                transcription.sendFinalText("你好世界")
+            }
+        }
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("你好世")
+
+        await viewModel.stopRecording()
+        try? await Task.sleep(nanoseconds: 260_000_000)
 
         XCTAssertEqual(viewModel.rawTranscription, "你好世界")
     }
@@ -131,6 +180,17 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
     func commitCurrentTranscription() async throws {}
     func clearLiveText() { liveTextSubject.send("") }
     func sendLiveText(_ text: String) { liveTextSubject.send(text) }
+    func sendFinalText(_ text: String) {
+        finalResultSubject.send(
+            TranscriptionResult(
+                text: text,
+                type: .final,
+                confidence: nil,
+                timestamp: Date(),
+                locale: _currentLanguage
+            )
+        )
+    }
 }
 
 private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendable {

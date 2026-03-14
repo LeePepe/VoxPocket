@@ -26,7 +26,7 @@ struct ContentView: View {
         _rootViewModel = StateObject(wrappedValue: vm)
 
         let status: LocalModelLoadingStatus
-        if let observable = ServiceContainer.shared.transcriber as? any ModelLoadingObservable {
+        if let observable = ServiceContainer.shared.localModelLoadingObservable {
             status = LocalModelLoadingStatus(observable: observable)
         } else {
             // 非本地模型（Apple Speech 等）不展示加载状态

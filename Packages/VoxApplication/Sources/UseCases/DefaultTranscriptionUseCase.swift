@@ -50,6 +50,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
         // 实时转录 → liveTextSubject
         coordinator.liveResultPublisher
             .map(\.text)
+            .removeDuplicates()
             .catch { [weak self] error -> Empty<String, Never> in
                 self?.logger.error("❌ liveResultPublisher error: \(error.localizedDescription)")
                 // Send empty string to clear live text, but don't complete the stream

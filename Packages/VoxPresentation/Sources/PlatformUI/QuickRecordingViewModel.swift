@@ -25,13 +25,6 @@ public final class QuickRecordingViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var streamingTask: Task<Void, Never>?
-    private var silenceDetectionTask: Task<Void, Never>?
-    private var lastTranscriptionUpdate: Date = Date()
-
-    // MARK: - 自动停止配置
-
-    /// 转录文本停止更新后自动停止的时间阈值（秒）
-    private let autoStopDuration: TimeInterval = 2.5
 
     // MARK: - Published 状态
 
@@ -94,11 +87,6 @@ public final class QuickRecordingViewModel: ObservableObject {
             .sink { [weak self] text in
                 guard let self else { return }
                 self.liveTranscription = text
-                self.lastTranscriptionUpdate = Date()
-                // 每次转录文本更新，重置自动停止计时
-                if self.recorderStatus == .listening && !text.isEmpty {
-                    self.scheduleAutoStop()
-                }
             }
             .store(in: &cancellables)
 
@@ -150,6 +138,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             isStartingRecordingInternal = false
             errorMessage = error.localizedDescription
             recorderStatus = .error
+            logger.warning("Start recording failed: \(error.localizedDescription)")
         }
     }
 
@@ -166,16 +155,16 @@ public final class QuickRecordingViewModel: ObservableObject {
             return
         }
 
-        // 取消自动停止计时
-        silenceDetectionTask?.cancel()
-        silenceDetectionTask = nil
-
         isProcessing = true
         recorderStatus = .transcribing
 
+        let finalResultTask = makeFinalResultWaitTask()
+        await Task.yield()
+
         do {
             try await recordingUseCase.stopRecording()
-            rawTranscription = await waitForTranscriptionToSettle()
+            rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask)
+            liveTranscription = rawTranscription
             logger.log(.debug, "Recording stopped", context: [
                 "transcription_length": rawTranscription.count
             ])
@@ -193,6 +182,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             recorderStatus = .refining
             await performRefinement()
         } catch {
+            finalResultTask.cancel()
             errorMessage = error.localizedDescription
             recorderStatus = .error
             isProcessing = false
@@ -200,8 +190,6 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     public func cancelRecording() async {
-        silenceDetectionTask?.cancel()
-        silenceDetectionTask = nil
         streamingTask?.cancel()
         streamingTask = nil
         refinementUseCase.cancel()
@@ -215,33 +203,50 @@ public final class QuickRecordingViewModel: ObservableObject {
         logger.debug("Recording cancelled")
     }
 
-    // MARK: - 自动停止
+    // MARK: - LLM 优化 → 复制粘贴 → 完成
 
-    private func scheduleAutoStop() {
-        silenceDetectionTask?.cancel()
-        lastTranscriptionUpdate = Date()
+    /// 停止录音后，短暂等待识别流的尾部增量收敛，避免松手瞬间丢字。
+    private func waitForCompletedTranscription(
+        finalResultTask: Task<String?, Never>,
+        settleMaxWait: TimeInterval = 0.8
+    ) async -> String {
+        if let finalText = await finalResultTask.value {
+            return finalText
+        }
 
-        logger.debug("Reset auto-stop timer after transcription update")
+        return await waitForTranscriptionToSettle(maxWait: settleMaxWait)
+    }
 
-        silenceDetectionTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            do {
-                try await Task.sleep(for: .seconds(self.autoStopDuration))
-                if !Task.isCancelled, self.recorderStatus == .listening {
-                    self.logger.log(.debug, "Auto-stopping after silence", context: [
-                        "duration_seconds": self.autoStopDuration
-                    ])
-                    await self.stopRecording()
+    private func makeFinalResultWaitTask(timeout: TimeInterval = 1.2) -> Task<String?, Never> {
+        Task { [transcriptionUseCase] in
+            await withTaskGroup(of: String?.self) { group in
+                group.addTask {
+                    do {
+                        for try await result in transcriptionUseCase.finalResultPublisher.values {
+                            let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !text.isEmpty {
+                                return text
+                            }
+                        }
+                    } catch {
+                        return nil
+                    }
+
+                    return nil
                 }
-            } catch {
-                // Task 被取消
+
+                group.addTask {
+                    try? await Task.sleep(for: .seconds(timeout))
+                    return nil
+                }
+
+                let value = await group.next() ?? nil
+                group.cancelAll()
+                return value
             }
         }
     }
 
-    // MARK: - LLM 优化 → 复制粘贴 → 完成
-
-    /// 停止录音后，短暂等待识别流的尾部增量收敛，避免松手瞬间丢字。
     private func waitForTranscriptionToSettle(
         maxWait: TimeInterval = 0.8,
         quietWindow: TimeInterval = 0.12,

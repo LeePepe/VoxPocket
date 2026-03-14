@@ -15,7 +15,7 @@ VoxPocket 默认使用 `WhisperKitTranscriber` 进行本地实时转录（`LLMAp
 
 `LocalWhisperKitConfig` 当前提供：
 
-- `model`: 默认 `openai/whisper-large-v3-turbo`
+- `model`: 默认按平台区分（`iOS -> openai/whisper-base`，`macOS -> openai/whisper-large-v3-turbo`）
 - `preloadOnStart`: 默认 `true`，在转录前后台预加载模型
 - `languageHint(for:)`: 从 `Locale` 映射 Whisper 语言提示（如 `zh-Hans -> zh`）
 

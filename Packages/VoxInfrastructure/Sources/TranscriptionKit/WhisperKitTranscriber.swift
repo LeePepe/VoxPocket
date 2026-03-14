@@ -58,7 +58,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
         recorder: MicrophoneRecorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriber.Mic")),
         telemetry: TelemetryService = NoopTelemetryService()
     ) {
-        self.engineFactory = { LocalWhisperKitEngine(config: $0, logger: $1) }
+        self.engineFactory = { SharedLocalWhisperEngineHandle(config: $0, logger: $1) }
         self.config = config
         self.logger = logger
         self.recorder = recorder
@@ -96,8 +96,19 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
     /// 后台下载并加载模型，与录音流程完全解耦
     private func startBackgroundPreload() {
+        if _engine.withLock({ $0 }) != nil {
+            _modelLoadingStateSubject.send(.ready)
+            return
+        }
+        if _preloadTask.withLock({ $0 }) != nil {
+            return
+        }
+
         let task = Task<Void, Error> { [weak self] in
             guard let self else { return }
+            defer {
+                self._preloadTask.withLock { $0 = nil }
+            }
             let startedAt = Date()
             let engine = self.engineFactory(self.config, self.logger)
             do {
@@ -117,6 +128,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 )
             } catch {
                 self._modelLoadingStateSubject.send(.failed(error.localizedDescription))
+                self.logger.error("WhisperKit model preload failed: \(error.localizedDescription)")
                 self.telemetry.track(
                     name: TelemetryEventName.whisperModelLoadFailed.rawValue,
                     properties: [
@@ -127,8 +139,8 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 throw error
             }
         }
-        _modelLoadingStateSubject.send(.loading)
         _preloadTask.withLock { $0 = task }
+        _modelLoadingStateSubject.send(.loading)
     }
 
     private func ensureEngineReady() async throws -> any LocalWhisperEngine {
@@ -169,6 +181,38 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 "reason": String(describing: error)
             ]
         )
+    }
+
+    private func acceptLivePartial(_ text: String) -> String? {
+        let sanitized = Self.sanitizeLivePartialText(text)
+        guard !sanitized.isEmpty else { return nil }
+
+        return _latestPartialText.withLock { latest in
+            let current = latest.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard sanitized != current else { return nil }
+
+            // Whisper 在停顿时会回退到更短的 hypothesis；不要让它覆盖更完整的文本。
+            if !current.isEmpty, current.hasPrefix(sanitized) {
+                return nil
+            }
+
+            latest = sanitized
+            return sanitized
+        }
+    }
+
+    private static func sanitizeLivePartialText(_ text: String) -> String {
+        let withoutPlaceholder = text
+            .replacingOccurrences(of: "Waiting for speech...", with: " ")
+            .replacingOccurrences(of: "Realtime transcription has started", with: " ")
+            .replacingOccurrences(of: "Realtime transcription has ended", with: " ")
+
+        let collapsedWhitespace = withoutPlaceholder
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        return collapsedWhitespace.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -242,11 +286,9 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
                 languageCode: languageCode,
                 onPartial: { [weak self] text in
                     guard let self else { return }
-                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty, trimmed != "Waiting for speech..." else { return }
-                    self._latestPartialText.withLock { $0 = trimmed }
+                    guard let acceptedText = self.acceptLivePartial(text) else { return }
                     let result = TranscriptionResult(
-                        text: trimmed,
+                        text: acceptedText,
                         type: .partial,
                         confidence: nil,
                         timestamp: Date(),
@@ -399,6 +441,70 @@ enum LocalWhisperRawOutputLogger {
     }
 }
 
+private actor SharedLocalWhisperEnginePool {
+    static let shared = SharedLocalWhisperEnginePool()
+
+    private var engines: [String: any LocalWhisperEngine] = [:]
+
+    func engine(for config: LocalWhisperKitConfig, logger: Logger) -> any LocalWhisperEngine {
+        let key = config.resolvedModelVariant
+        if let existing = engines[key] {
+            return existing
+        }
+
+        let engine = LocalWhisperKitEngine(config: config, logger: logger)
+        engines[key] = engine
+        return engine
+    }
+}
+
+private final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
+    private let config: LocalWhisperKitConfig
+    private let logger: Logger
+
+    init(config: LocalWhisperKitConfig, logger: Logger) {
+        self.config = config
+        self.logger = logger
+    }
+
+    private func engine() async -> any LocalWhisperEngine {
+        await SharedLocalWhisperEnginePool.shared.engine(for: config, logger: logger)
+    }
+
+    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
+        let engine = await engine()
+        try await engine.prepare(onProgress: onProgress)
+    }
+
+    func startStreaming(
+        languageCode: String?,
+        onPartial: @escaping @Sendable (String) -> Void,
+        onAudioLevel: @escaping @Sendable (Float) -> Void
+    ) async throws {
+        let engine = await engine()
+        try await engine.startStreaming(
+            languageCode: languageCode,
+            onPartial: onPartial,
+            onAudioLevel: onAudioLevel
+        )
+    }
+
+    func stopStreaming() async {
+        let engine = await engine()
+        await engine.stopStreaming()
+    }
+
+    func pauseStreaming() async {
+        let engine = await engine()
+        await engine.pauseStreaming()
+    }
+
+    func resumeStreaming() async {
+        let engine = await engine()
+        await engine.resumeStreaming()
+    }
+}
+
 private actor LocalWhisperKitEngine: LocalWhisperEngine {
     private let config: LocalWhisperKitConfig
     private let logger: Logger
@@ -407,11 +513,54 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
     private var pipeline: WhisperKit?
     private var streamTranscriber: AudioStreamTranscriber?
     private var streamTask: Task<Void, Error>?
+    private var prepareTask: Task<Void, Error>?
 #endif
 
     init(config: LocalWhisperKitConfig, logger: Logger) {
         self.config = config
         self.logger = logger
+    }
+
+    private static func dedicatedDownloadBase() -> URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("VoxPocketWhisperKitHub", isDirectory: true)
+    }
+
+    private static func isRecoverableSnapshotError(_ error: Error) -> Bool {
+        let text = String(describing: error).lowercased()
+        return text.contains(".incomplete")
+            || text.contains("couldn’t be moved")
+            || text.contains("couldn't be moved")
+    }
+
+    private static func resetCorruptedCache(downloadBase: URL?, modelFolder: URL?) {
+        let fileManager = FileManager.default
+        if let modelFolder {
+            try? fileManager.removeItem(at: modelFolder)
+        }
+        if let downloadBase {
+            try? fileManager.removeItem(at: downloadBase)
+            try? fileManager.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+        }
+        for cachePath in huggingFaceWhisperKitRepoCacheCandidates() {
+            try? fileManager.removeItem(at: cachePath)
+        }
+    }
+
+    private static func huggingFaceWhisperKitRepoCacheCandidates() -> [URL] {
+        let fileManager = FileManager.default
+        var roots: [URL] = []
+
+        if let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            roots.append(caches.appendingPathComponent("huggingface/hub", isDirectory: true))
+        }
+
+        let home = fileManager.homeDirectoryForCurrentUser
+        roots.append(home.appendingPathComponent(".cache/huggingface/hub", isDirectory: true))
+
+        return roots.map {
+            $0.appendingPathComponent("models--argmaxinc--whisperkit-coreml", isDirectory: true)
+        }
     }
 
     func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
@@ -420,26 +569,19 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             return
         }
 
-        logger.info("Downloading/locating WhisperKit model: \(config.model)")
-        let modelFolder = try await WhisperKit.download(
-            variant: config.model,
-            progressCallback: { [logger] progress in
-                let pct = Int(progress.fractionCompleted * 100)
-                let completed = progress.completedUnitCount
-                let total = progress.totalUnitCount
-                if total > 0 {
-                    logger.info("WhisperKit model download: \(pct)% (\(completed)/\(total) bytes)")
-                } else {
-                    logger.info("WhisperKit model download: \(pct)%")
-                }
-                onProgress?(progress.fractionCompleted)
-            }
-        )
-        logger.info("Model ready at: \(modelFolder.path)")
+        if let prepareTask {
+            try await prepareTask.value
+            return
+        }
 
-        let whisperConfig = WhisperKitConfig(modelFolder: modelFolder.path)
-        pipeline = try await WhisperKit(whisperConfig)
-        logger.info("WhisperKit pipeline loaded successfully")
+        let task = Task { [weak self] in
+            guard let self else { return }
+            try await self.performPrepare(onProgress: onProgress)
+        }
+        prepareTask = task
+        defer { prepareTask = nil }
+
+        try await task.value
 #else
         _ = onProgress
         throw NSError(
@@ -448,6 +590,60 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         )
 #endif
     }
+
+#if canImport(WhisperKit)
+    private func performPrepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
+        let modelVariant = config.resolvedModelVariant
+        logger.info("Downloading/locating WhisperKit model: \(config.model)")
+        if modelVariant != config.model {
+            logger.info("Resolved WhisperKit variant: \(modelVariant)")
+        }
+        let downloadBase = Self.dedicatedDownloadBase()
+        if let downloadBase {
+            try? FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+        }
+
+        let downloadModel: () async throws -> URL = { [logger = self.logger] in
+            try await WhisperKit.download(
+                variant: modelVariant,
+                downloadBase: downloadBase,
+                progressCallback: { progress in
+                    let pct = Int(progress.fractionCompleted * 100)
+                    let completed = progress.completedUnitCount
+                    let total = progress.totalUnitCount
+                    if total > 0 {
+                        logger.info("WhisperKit model download: \(pct)% (\(completed)/\(total) bytes)")
+                    } else {
+                        logger.info("WhisperKit model download: \(pct)%")
+                    }
+                    onProgress?(progress.fractionCompleted)
+                }
+            )
+        }
+
+        var lastModelFolder: URL?
+        let initializePipeline: () async throws -> WhisperKit = { [self] in
+            let modelFolder = try await downloadModel()
+            lastModelFolder = modelFolder
+            self.logger.info("Model ready at: \(modelFolder.path)")
+            onProgress?(1.0)
+
+            self.logger.info("Loading WhisperKit pipeline from model folder...")
+            let whisperConfig = WhisperKitConfig(modelFolder: modelFolder.path)
+            return try await WhisperKit(whisperConfig)
+        }
+
+        do {
+            pipeline = try await initializePipeline()
+        } catch {
+            guard Self.isRecoverableSnapshotError(error) else { throw error }
+            logger.warning("WhisperKit cache appears corrupted. Clearing cache and retrying once.")
+            Self.resetCorruptedCache(downloadBase: downloadBase, modelFolder: lastModelFolder)
+            pipeline = try await initializePipeline()
+        }
+        logger.info("WhisperKit pipeline loaded successfully")
+    }
+#endif
 
     func startStreaming(
         languageCode: String?,
@@ -486,9 +682,8 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             tokenizer: tokenizerRef,
             audioProcessor: audioProcessor,
             decodingOptions: options,
-            stateChangeCallback: { [logger = self.logger] _, newState in
+            stateChangeCallback: { _, newState in
                 let rawText = LocalWhisperKitEngine.composeRawStreamText(from: newState)
-                LocalWhisperRawOutputLogger.log(rawText, logger: logger)
                 onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: rawText))
                 let level = newState.bufferEnergy.last ?? 0
                 onAudioLevel(level)

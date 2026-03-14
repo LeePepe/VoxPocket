@@ -39,6 +39,7 @@ public final class ServiceContainer: ObservableObject {
 
     /// 主转录器：默认使用 WhisperKit 本地模型，可按配置切换到其他实现
     public let transcriber: any TranscriptionCoordinator
+    public let localModelLoadingObservable: (any ModelLoadingObservable)?
     public let llmService: DefaultLLMService
 
     // MARK: - Use Cases
@@ -85,7 +86,17 @@ public final class ServiceContainer: ObservableObject {
         let azureConfig = Self.makeAzureFoundryConfig()
 
         // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
-        transcriber = Self.makeTranscriber()
+        if LLMAppConfig.defaultTranscriberProvider == .localWhisperKit {
+            let whisper = Self.makeLocalWhisperTranscriber(preloadOnStart: true)
+            transcriber = LoadingFallbackTranscriptionCoordinator(
+                primary: whisper,
+                fallback: AppleSpeechTranscriber()
+            )
+            localModelLoadingObservable = whisper
+        } else {
+            transcriber = Self.makeTranscriber(preloadOnStart: true)
+            localModelLoadingObservable = nil
+        }
         llmService = DefaultLLMService(azureFoundryConfig: azureConfig)
 #if os(macOS)
         clipboardService = MacOSClipboardService.shared
@@ -107,8 +118,9 @@ public final class ServiceContainer: ObservableObject {
         deepLinkRouter = DefaultDeepLinkRouter()
 
 #if os(macOS)
-        // 快速录音独立服务栈（共享 llmService，独立状态管线）
-        quickTranscriber = Self.makeTranscriber()
+        // 快速录音使用独立 coordinator，避免主编辑器和快速录音串流/状态互相污染。
+        // 本地 Whisper engine 在底层共享，不会重复下载同一模型。
+        quickTranscriber = Self.makeQuickTranscriber()
         quickEditingUseCase = DefaultEditingUseCase()
         quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber)
         quickTranscriptionUseCase = DefaultTranscriptionUseCase(
@@ -171,10 +183,13 @@ public final class ServiceContainer: ObservableObject {
         configureLLMService(preferredProvider: preferred)
     }
 
-    private static func makeTranscriber() -> any TranscriptionCoordinator {
+    static func makeTranscriber(preloadOnStart: Bool = true) -> any TranscriptionCoordinator {
         switch LLMAppConfig.defaultTranscriberProvider {
         case .localWhisperKit:
-            return WhisperKitTranscriber(config: .default)
+            return LoadingFallbackTranscriptionCoordinator(
+                primary: makeLocalWhisperTranscriber(preloadOnStart: preloadOnStart),
+                fallback: AppleSpeechTranscriber()
+            )
         case .hybridWhisper:
             if let config = makeAzureWhisperConfig() {
                 return HybridWhisperTranscriber(whisperConfig: config)
@@ -188,6 +203,19 @@ public final class ServiceContainer: ObservableObject {
         case .appleSpeech:
             return AppleSpeechTranscriber()
         }
+    }
+
+    static func makeQuickTranscriber() -> any TranscriptionCoordinator {
+        makeTranscriber(preloadOnStart: false)
+    }
+
+    private static func makeLocalWhisperTranscriber(preloadOnStart: Bool) -> WhisperKitTranscriber {
+        WhisperKitTranscriber(
+            config: LocalWhisperKitConfig(
+                model: LocalWhisperKitConfig.platformDefaultModel,
+                preloadOnStart: preloadOnStart
+            )
+        )
     }
 
     private static func makeAzureWhisperConfig() -> AzureWhisperConfig? {
