@@ -7,9 +7,9 @@ public enum QuickRecordingLayout {
     public static let pillWidth: CGFloat = 132
     public static let pillHeight: CGFloat = 34
 
-    /// 面板尺寸（包含主体周围留白 + 阴影空间）。
-    public static let panelWidth: CGFloat = 164
-    public static let panelHeight: CGFloat = 58
+    /// 面板尺寸与胶囊本体一致，避免额外留白形成矩形阴影感。
+    public static let panelWidth: CGFloat = pillWidth
+    public static let panelHeight: CGFloat = pillHeight
 
     /// 浮窗距离屏幕顶部的偏移（更大表示更靠上）。
     public static let topInset: CGFloat = 120

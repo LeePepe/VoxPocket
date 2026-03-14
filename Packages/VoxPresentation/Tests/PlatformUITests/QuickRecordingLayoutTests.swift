@@ -6,8 +6,8 @@ final class QuickRecordingLayoutTests: XCTestCase {
     func testQuickRecordingLayoutUsesCompactPillSize() {
         XCTAssertEqual(QuickRecordingLayout.pillWidth, 132)
         XCTAssertEqual(QuickRecordingLayout.pillHeight, 34)
-        XCTAssertEqual(QuickRecordingLayout.panelWidth, 164)
-        XCTAssertEqual(QuickRecordingLayout.panelHeight, 58)
+        XCTAssertEqual(QuickRecordingLayout.panelWidth, QuickRecordingLayout.pillWidth)
+        XCTAssertEqual(QuickRecordingLayout.panelHeight, QuickRecordingLayout.pillHeight)
     }
 
     func testQuickRecordingTopInsetMovesPanelUp() {
