@@ -53,7 +53,7 @@ public final class WindowManager: ObservableObject {
     public func showWindow(_ type: WindowType) {
         if let existingWindow = windows[type] {
             positionWindow(existingWindow, for: type)
-            existingWindow.makeKeyAndOrderFront(nil)
+            presentWindow(existingWindow, for: type)
             windowVisibility[type] = true
             autoResumeIfNeeded(type)
             logger.log(.debug, "Showing existing window", context: ["type": type.rawValue])
@@ -67,11 +67,20 @@ public final class WindowManager: ObservableObject {
         windowControllers[type] = controller
 
         positionWindow(panel, for: type)
-        panel.makeKeyAndOrderFront(nil)
+        presentWindow(panel, for: type)
         windowVisibility[type] = true
         autoResumeIfNeeded(type)
 
         logger.log(.debug, "Created and showing window", context: ["type": type.rawValue])
+    }
+
+    private func presentWindow(_ panel: NSPanel, for type: WindowType) {
+        switch type {
+        case .fullPanel:
+            panel.makeKeyAndOrderFront(nil)
+        case .quickRecording:
+            panel.orderFrontRegardless()
+        }
     }
 
     private func positionWindow(_ panel: NSPanel, for type: WindowType) {
@@ -108,6 +117,12 @@ public final class WindowManager: ObservableObject {
 
     /// 隐藏窗口
     public func hideWindow(_ type: WindowType) {
+        if type == .quickRecording {
+            closeWindow(type)
+            logger.log(.debug, "Hiding window", context: ["type": type.rawValue, "mode": "close"])
+            return
+        }
+
         guard let window = windows[type] else { return }
         window.orderOut(nil)
         windowVisibility[type] = false
