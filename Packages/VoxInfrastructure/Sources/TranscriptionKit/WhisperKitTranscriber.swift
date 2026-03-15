@@ -228,6 +228,12 @@ extension WhisperKitTranscriber: ModelLoadingObservable {
     }
 }
 
+extension WhisperKitTranscriber: ModelPreloadControlling {
+    public func startModelPreloadIfNeeded() {
+        startBackgroundPreload()
+    }
+}
+
 // MARK: - TranscriptionCoordinator
 
 extension WhisperKitTranscriber: TranscriptionCoordinator {

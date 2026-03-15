@@ -141,21 +141,34 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                 self.liveResultSubject.send(transcriptionResult)
                 if result.isFinal {
                     self.finalResultSubject.send(transcriptionResult)
+                    // 任务自然完成，清理 task
+                    self.recognitionTask = nil
                 }
             }
 
             if let error {
                 let e = error as NSError
-                self.logger.error("Recognition error: \(e.domain) \(e.code) \(e.localizedDescription)")
-                self.stopInternal()
+                // code 301 (kLSRErrorDomain) 是 endAudio 后的正常取消信号
+                if e.code == 301 || e.code == NSURLErrorCancelled {
+                    self.logger.debug("Recognition task ended (expected on stop)")
+                } else {
+                    self.logger.error("Recognition error: \(e.domain) \(e.code) \(e.localizedDescription)")
+                }
+                self.recognitionTask = nil
             }
         }
     }
 
     public func stop() async {
         logger.info("stop() called")
+        // 先停录音，再告知识别器音频结束
+        // 不立即 cancel recognitionTask，让其自然完成并返回 isFinal 结果
+        recorder.stop()
         recognitionRequest?.endAudio()
-        stopInternal()
+        recognitionRequest = nil
+        captureStateSubject.send(.idle)
+        _isTranscribing.withLock { $0 = false }
+        logger.debug("stop() done")
     }
 
     public func pause() {
@@ -168,17 +181,6 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         captureStateSubject.send(.recording)
     }
 
-    // MARK: - Private
-
-    private func stopInternal() {
-        recorder.stop()
-        recognitionRequest = nil
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        captureStateSubject.send(.idle)
-        _isTranscribing.withLock { $0 = false }
-        logger.debug("stopInternal() done")
-    }
 }
 
 // MARK: - Internal AudioCaptureService

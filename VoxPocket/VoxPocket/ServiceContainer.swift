@@ -208,7 +208,7 @@ public final class ServiceContainer: ObservableObject {
     }
 
     static func makeQuickTranscriber() -> any TranscriptionCoordinator {
-        makeTranscriber(preloadOnStart: false)
+        makeTranscriber(preloadOnStart: true)
     }
 
     private static func makeLocalWhisperTranscriber(preloadOnStart: Bool) -> WhisperKitTranscriber {

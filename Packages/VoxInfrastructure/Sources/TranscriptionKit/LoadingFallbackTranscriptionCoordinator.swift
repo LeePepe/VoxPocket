@@ -51,6 +51,7 @@ public final class LoadingFallbackTranscriptionCoordinator: TranscriptionCoordin
     }
 
     public func start(language: Locale) async throws {
+        startPrimaryPreloadIfNeeded()
         let selection = preferredSelection()
         setActiveSelection(selection)
         try await coordinator(for: selection).start(language: language)
@@ -124,9 +125,19 @@ public final class LoadingFallbackTranscriptionCoordinator: TranscriptionCoordin
         switch loadable.modelLoadingState {
         case .ready:
             return .primary
-        case .idle, .loading, .downloading, .failed:
+        case .failed, .idle, .loading, .downloading:
             return .fallback
         }
+    }
+
+    private func startPrimaryPreloadIfNeeded() {
+        guard let loadable = primary as? any ModelLoadingObservable,
+              case .idle = loadable.modelLoadingState,
+              let preloadable = primary as? any ModelPreloadControlling else {
+            return
+        }
+
+        preloadable.startModelPreloadIfNeeded()
     }
 
     fileprivate func currentCoordinator() -> any TranscriptionCoordinator {
