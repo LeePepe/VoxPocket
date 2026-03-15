@@ -1,0 +1,10 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD)
+
+[[ "$branch" == "main" ]] || exit 0
+
+zsh "$repo_root/scripts/ci/release.sh" --auto

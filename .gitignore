@@ -29,5 +29,9 @@ Package.resolved
 # Archives
 *.zip
 
+# Local CI/CD outputs
+releases/
+.release-staging/
+
 # CSV files (可能是临时数据)
 *.csv
