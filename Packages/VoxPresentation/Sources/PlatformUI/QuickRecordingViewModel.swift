@@ -174,6 +174,16 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         do {
             try await recordingUseCase.stopRecording()
+
+            // 如果停止时完全没有文字，立刻触发 onNoResult，无需等待识别收敛
+            if liveTranscription.isEmpty {
+                finalResultTask.cancel()
+                recorderStatus = .idle
+                isProcessing = false
+                onNoResult?()
+                return
+            }
+
             rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask)
             liveTranscription = rawTranscription
             logger.log(.debug, "Recording stopped", context: [

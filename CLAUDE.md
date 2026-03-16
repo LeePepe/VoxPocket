@@ -61,3 +61,10 @@ The app entry point is `VoxPocket/VoxPocket/` with `ServiceContainer` as the sin
 ## Platform-Specific Code
 
 macOS services in PlatformAdapters: `MacOSClipboardService`, `MacOSAccessibilityService`, `MacOSGlobalHotkeyService`. Cross-platform protocols exist for each.
+
+## Auto-Commit Workflow
+
+After every logical change, Claude MUST:
+1. Build the affected package with `swift build` to verify no errors
+2. If build passes, immediately commit to `main` with a conventional commit message — no need to ask for permission
+3. Use `git add <specific files>` (never `git add -A`) and commit directly to `main`
