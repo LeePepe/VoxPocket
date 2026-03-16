@@ -4,10 +4,15 @@ import XCTest
 
 final class QuickRecordingLayoutTests: XCTestCase {
     func testQuickRecordingLayoutUsesCompactPillSize() {
-        XCTAssertEqual(QuickRecordingLayout.pillWidth, 220)
-        XCTAssertEqual(QuickRecordingLayout.pillHeight, 56)
-        XCTAssertEqual(QuickRecordingLayout.panelWidth, 240)
-        XCTAssertEqual(QuickRecordingLayout.panelHeight, 64)
+        XCTAssertEqual(QuickRecordingLayout.pillWidth, 132)
+        XCTAssertEqual(QuickRecordingLayout.pillHeight, 34)
+        XCTAssertEqual(QuickRecordingLayout.panelWidth, 164)
+        XCTAssertEqual(QuickRecordingLayout.panelHeight, 58)
+    }
+
+    func testQuickRecordingTextOverlayUsesCompactInsets() {
+        XCTAssertEqual(QuickRecordingLayout.textHorizontalInset, 12)
+        XCTAssertEqual(QuickRecordingLayout.textLeftFadeWidth, 24)
     }
 
     func testQuickRecordingTopInsetMovesPanelUp() {

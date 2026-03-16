@@ -56,6 +56,17 @@ public final class QuickRecordingViewModel: ObservableObject {
         isStartingRecordingInternal
     }
 
+    public var showsLiveTranscription: Bool {
+        guard !liveTranscription.isEmpty else { return false }
+
+        switch recorderStatus {
+        case .listening, .transcribing, .refining:
+            return true
+        case .idle, .done, .error:
+            return false
+        }
+    }
+
     // MARK: - Init
 
     public init(
