@@ -680,6 +680,10 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         let tokenizer = try pipeline.tokenizerRequired()
         nonisolated(unsafe) let tokenizerRef = tokenizer
 
+        // 跟踪峰值已确认文本：只增不减，防止 WhisperKit 窗口切换时丢失历史片段
+        nonisolated(unsafe) var peakConfirmedCount = 0
+        nonisolated(unsafe) var peakConfirmedText = ""
+
         let transcriber = AudioStreamTranscriber(
             audioEncoder: audioEncoder,
             featureExtractor: featureExtractor,
@@ -689,7 +693,17 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             audioProcessor: audioProcessor,
             decodingOptions: options,
             stateChangeCallback: { _, newState in
-                let rawText = LocalWhisperKitEngine.composeRawStreamText(from: newState)
+                // 只在 confirmedSegments 增长时更新峰值文本，防止窗口滑动后丢失旧片段
+                let newCount = newState.confirmedSegments.count
+                if newCount > peakConfirmedCount {
+                    peakConfirmedCount = newCount
+                    peakConfirmedText = newState.confirmedSegments.map(\.text).joined(separator: " ")
+                }
+                let currentHypothesis = newState.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let rawText = [peakConfirmedText, currentHypothesis]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: rawText))
                 let level = newState.bufferEnergy.last ?? 0
                 onAudioLevel(level)
@@ -741,15 +755,6 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
     }
 
 #if canImport(WhisperKit)
-    private nonisolated static func composeRawStreamText(from state: AudioStreamTranscriber.State) -> String {
-        let confirmed = state.confirmedSegments.map(\.text).joined(separator: " ")
-        let current = state.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return [confirmed, current]
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private nonisolated static func cleanStreamText(fromRaw rawText: String) -> String {
         stripWhisperTokens(from: rawText)
     }
