@@ -717,6 +717,10 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             await streamTranscriber.stopStreamTranscription()
         }
         if let streamTask {
+            // Cancel first so the task exits at the next cooperative suspension point.
+            // Without this, stopStreamTranscription() alone may not unblock the task
+            // when the HAL audio device fails (e.g. -10877), causing an indefinite hang.
+            streamTask.cancel()
             _ = try? await streamTask.value
         }
         streamTask = nil
