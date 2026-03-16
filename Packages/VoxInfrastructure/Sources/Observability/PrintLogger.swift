@@ -9,11 +9,14 @@ public final class PrintLogger: Logger, @unchecked Sendable {
 
     private let subsystem: String
     private let lock = NSLock()
-    private let timestampFormatter = ISO8601DateFormatter()
+    private let timestampFormatter: ISO8601DateFormatter
 
     public init(subsystem: String = "", minimumLevel: LogLevel = .debug) {
         self.subsystem = subsystem
         self.minimumLevel = minimumLevel
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions.insert(.withFractionalSeconds)
+        self.timestampFormatter = formatter
     }
 
     public func log(
