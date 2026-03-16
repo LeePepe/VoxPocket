@@ -191,8 +191,8 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
             let current = latest.trimmingCharacters(in: .whitespacesAndNewlines)
             guard sanitized != current else { return nil }
 
-            // Whisper 在停顿时会回退到更短的 hypothesis；不要让它覆盖更完整的文本。
-            if !current.isEmpty, current.hasPrefix(sanitized) {
+            // 只接受更长或等长但不同的文本，防止 Whisper 回退到更短的 hypothesis 覆盖已有内容
+            if sanitized.count < current.count {
                 return nil
             }
 
@@ -699,9 +699,13 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
                 if newConfirmedText.count > peakConfirmedText.count {
                     peakConfirmedText = newConfirmedText
                 }
-                // 只使用已确认的文本，不混入 hypothesis，避免跳动和回退
-                guard !peakConfirmedText.isEmpty else { return }
-                onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: peakConfirmedText))
+                // 确认文本 + hypothesis 组合显示；hypothesis 提供实时反馈
+                let currentHypothesis = newState.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let rawText = [peakConfirmedText, currentHypothesis]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: rawText))
                 let level = newState.bufferEnergy.last ?? 0
                 onAudioLevel(level)
             }
