@@ -21,6 +21,7 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
     private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
 
     // MARK: - State
@@ -65,6 +66,10 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
 
     public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
         liveResultSubject.eraseToAnyPublisher()
+    }
+
+    public var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
     }
 
     public var audioLevelPublisher: AnyPublisher<Float, Never> {
@@ -139,8 +144,12 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                     locale: language
                 )
                 self.liveResultSubject.send(transcriptionResult)
+                if !result.bestTranscription.formattedString.isEmpty {
+                    self.lifecycleEventSubject.send(.speechDetected)
+                }
                 if result.isFinal {
                     self.finalResultSubject.send(transcriptionResult)
+                    self.lifecycleEventSubject.send(.recognitionCompleted)
                     // 任务自然完成，清理 task
                     self.recognitionTask = nil
                 }
@@ -165,6 +174,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         // 不立即 cancel recognitionTask，让其自然完成并返回 isFinal 结果
         recorder.stop()
         recognitionRequest?.endAudio()
+        lifecycleEventSubject.send(.audioEnded)
         recognitionRequest = nil
         captureStateSubject.send(.idle)
         _isTranscribing.withLock { $0 = false }

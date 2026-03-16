@@ -44,6 +44,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     private var isProcessing: Bool = false
     private var isStartingRecordingInternal: Bool = false
     private var shouldStopAfterStart: Bool = false
+    private var latestFinalTranscription: String = ""
 
     public var isStartingRecording: Bool {
         isStartingRecordingInternal
@@ -90,6 +91,17 @@ public final class QuickRecordingViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        transcriptionUseCase.finalResultPublisher
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { _ in },
+                receiveValue: { [weak self] result in
+                    guard let self else { return }
+                    self.latestFinalTranscription = result.text
+                }
+            )
+            .store(in: &cancellables)
+
         refinementUseCase.statePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -120,6 +132,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         liveTranscription = ""
         refinedText = ""
         rawTranscription = ""
+        latestFinalTranscription = ""
         errorMessage = nil
         isProcessing = false
         transcriptionUseCase.clearLiveText()
@@ -158,12 +171,13 @@ public final class QuickRecordingViewModel: ObservableObject {
         isProcessing = true
         recorderStatus = .transcribing
 
-        let finalResultTask = makeFinalResultWaitTask()
+        let recognitionCompletionTask = makeRecognitionCompletionWaitTask()
         await Task.yield()
 
         do {
             try await recordingUseCase.stopRecording()
-            rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask)
+            _ = await recognitionCompletionTask.value
+            rawTranscription = bestAvailableTranscription()
             liveTranscription = rawTranscription
             logger.log(.debug, "Recording stopped", context: [
                 "transcription_length": rawTranscription.count
@@ -182,7 +196,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             recorderStatus = .refining
             await performRefinement()
         } catch {
-            finalResultTask.cancel()
+            recognitionCompletionTask.cancel()
             errorMessage = error.localizedDescription
             recorderStatus = .error
             isProcessing = false
@@ -205,72 +219,38 @@ public final class QuickRecordingViewModel: ObservableObject {
 
     // MARK: - LLM 优化 → 复制粘贴 → 完成
 
-    /// 停止录音后，短暂等待识别流的尾部增量收敛，避免松手瞬间丢字。
-    private func waitForCompletedTranscription(
-        finalResultTask: Task<String?, Never>,
-        settleMaxWait: TimeInterval = 0.8
-    ) async -> String {
-        if let finalText = await finalResultTask.value {
-            return finalText
-        }
-
-        return await waitForTranscriptionToSettle(maxWait: settleMaxWait)
-    }
-
-    private func makeFinalResultWaitTask(timeout: TimeInterval = 1.2) -> Task<String?, Never> {
+    private func makeRecognitionCompletionWaitTask(timeout: TimeInterval = 2.5) -> Task<Bool, Never> {
         Task { [transcriptionUseCase] in
-            await withTaskGroup(of: String?.self) { group in
+            await withTaskGroup(of: Bool.self) { group in
                 group.addTask {
-                    do {
-                        for try await result in transcriptionUseCase.finalResultPublisher.values {
-                            let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !text.isEmpty {
-                                return text
-                            }
+                    for await event in transcriptionUseCase.lifecycleEventPublisher.values {
+                        if event == .recognitionCompleted {
+                            return true
                         }
-                    } catch {
-                        return nil
                     }
 
-                    return nil
+                    return false
                 }
 
                 group.addTask {
                     try? await Task.sleep(for: .seconds(timeout))
-                    return nil
+                    return false
                 }
 
-                let value = await group.next() ?? nil
+                let value = await group.next() ?? false
                 group.cancelAll()
                 return value
             }
         }
     }
 
-    private func waitForTranscriptionToSettle(
-        maxWait: TimeInterval = 0.8,
-        quietWindow: TimeInterval = 0.12,
-        pollInterval: TimeInterval = 0.03
-    ) async -> String {
-        var lastSnapshot = liveTranscription
-        var lastChange = Date()
-        let deadline = Date().addingTimeInterval(maxWait)
-
-        while Date() < deadline {
-            try? await Task.sleep(for: .seconds(pollInterval))
-
-            if liveTranscription != lastSnapshot {
-                lastSnapshot = liveTranscription
-                lastChange = Date()
-                continue
-            }
-
-            if Date().timeIntervalSince(lastChange) >= quietWindow {
-                break
-            }
+    private func bestAvailableTranscription() -> String {
+        let finalText = latestFinalTranscription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !finalText.isEmpty {
+            return finalText
         }
 
-        return liveTranscription
+        return liveTranscription.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func performRefinement() async {

@@ -10,6 +10,7 @@ public final class LoadingFallbackTranscriptionCoordinator: TranscriptionCoordin
 
     private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
     private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
 
@@ -40,6 +41,10 @@ public final class LoadingFallbackTranscriptionCoordinator: TranscriptionCoordin
 
     public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
         liveResultSubject.eraseToAnyPublisher()
+    }
+
+    public var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
     }
 
     public var audioLevelPublisher: AnyPublisher<Float, Never> {
@@ -103,6 +108,13 @@ public final class LoadingFallbackTranscriptionCoordinator: TranscriptionCoordin
             .sink { [weak self] level in
                 guard let self, self.currentSelection() == selection else { return }
                 self.audioLevelSubject.send(level)
+            }
+            .store(in: &cancellables)
+
+        coordinator.lifecycleEventPublisher
+            .sink { [weak self] event in
+                guard let self, self.currentSelection() == selection else { return }
+                self.lifecycleEventSubject.send(event)
             }
             .store(in: &cancellables)
 

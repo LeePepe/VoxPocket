@@ -62,6 +62,31 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
         XCTAssertEqual(finalTexts.last, "这个模型不错但是加载时间太久了有没有什么不错的")
     }
 
+    func testStopPublishesAudioEndedAndRecognitionCompletedLifecycleEvents() async throws {
+        let engine = ScriptedLocalWhisperEngine()
+        let sut = WhisperKitTranscriber(
+            config: LocalWhisperKitConfig(preloadOnStart: false),
+            logger: PrintLogger(subsystem: "WhisperKitTranscriberTests"),
+            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriberTests.Mic")),
+            telemetry: NoopTelemetryService(),
+            permissionRequester: { true },
+            hasPermissionProvider: { true },
+            engineFactory: { _, _ in engine },
+            autoPreload: false
+        )
+
+        var events: [TranscriptionLifecycleEvent] = []
+        let cancellable = sut.lifecycleEventPublisher.sink { events.append($0) }
+        defer { cancellable.cancel() }
+
+        try await sut.start(language: Locale(identifier: "zh-Hans"))
+        await engine.emitPartial("你好世界")
+        await sut.stop()
+
+        XCTAssertTrue(events.contains(.audioEnded))
+        XCTAssertEqual(events.suffix(2), [.audioEnded, .recognitionCompleted])
+    }
+
     func testLiveResultStripsWaitingForSpeechPlaceholder() async throws {
         let engine = ScriptedLocalWhisperEngine()
         let sut = WhisperKitTranscriber(

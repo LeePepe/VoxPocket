@@ -5,6 +5,23 @@ import TranscriptionKit
 import CoreModels
 
 final class UseCasesTests: XCTestCase {
+    func testLifecycleEventPublisherPassesThroughCoordinatorEvents() async {
+        let coordinator = LiveResultTranscriptionCoordinator()
+        let useCase = DefaultTranscriptionUseCase(
+            coordinator: coordinator,
+            editing: FakeEditingUseCase()
+        )
+
+        var events: [TranscriptionLifecycleEvent] = []
+        let cancellable = useCase.lifecycleEventPublisher.sink { events.append($0) }
+        defer { cancellable.cancel() }
+
+        coordinator.sendLifecycleEvent(.recognitionCompleted)
+        await Task.yield()
+
+        XCTAssertEqual(events, [.recognitionCompleted])
+    }
+
     func testRecordingOperationsAreSerialized() async throws {
         let coordinator = FakeTranscriptionCoordinator()
         let useCase = DefaultRecordingUseCase(coordinator: coordinator)
@@ -67,6 +84,7 @@ final class UseCasesTests: XCTestCase {
 private final class FakeTranscriptionCoordinator: TranscriptionCoordinator, @unchecked Sendable {
     let audioCaptureService: AudioCaptureService = FakeAudioCaptureService()
     let speechRecognitionService: SpeechRecognitionService = FakeSpeechRecognitionService()
+    let lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> = Empty().eraseToAnyPublisher()
 
     var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
         Empty().eraseToAnyPublisher()
@@ -211,6 +229,7 @@ private final class LiveResultTranscriptionCoordinator: TranscriptionCoordinator
 
     private let finalSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let liveSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
 
     var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
         finalSubject.eraseToAnyPublisher()
@@ -222,6 +241,10 @@ private final class LiveResultTranscriptionCoordinator: TranscriptionCoordinator
 
     var audioLevelPublisher: AnyPublisher<Float, Never> {
         Empty().eraseToAnyPublisher()
+    }
+
+    var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleSubject.eraseToAnyPublisher()
     }
 
     var isTranscribing: Bool { false }
@@ -241,6 +264,10 @@ private final class LiveResultTranscriptionCoordinator: TranscriptionCoordinator
                 locale: Locale(identifier: "zh-Hans")
             )
         )
+    }
+
+    func sendLifecycleEvent(_ event: TranscriptionLifecycleEvent) {
+        lifecycleSubject.send(event)
     }
 }
 
@@ -264,6 +291,7 @@ private final class FakeEditingUseCase: EditingUseCase, @unchecked Sendable {
 private class NamedTranscriptionCoordinator: TranscriptionCoordinator, @unchecked Sendable {
     let audioCaptureService: AudioCaptureService = FakeAudioCaptureService()
     let speechRecognitionService: SpeechRecognitionService = FakeSpeechRecognitionService()
+    let lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> = Empty().eraseToAnyPublisher()
 
     private actor State {
         var events: [String] = []

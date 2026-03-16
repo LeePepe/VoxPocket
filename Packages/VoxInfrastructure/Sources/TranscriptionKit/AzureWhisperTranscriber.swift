@@ -20,6 +20,7 @@ public final class AzureWhisperTranscriber: NSObject, @unchecked Sendable {
 
     private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
 
     // MARK: - State
@@ -64,6 +65,10 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
 
     public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
         liveResultSubject.eraseToAnyPublisher()
+    }
+
+    public var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
     }
 
     public var audioLevelPublisher: AnyPublisher<Float, Never> {
@@ -111,6 +116,7 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
                         let start = silentSince ?? { silentSince = now; return now }()
                         if now.timeIntervalSince(start) >= silenceDuration {
                             self.logger.info("Auto-stop: silence \(silenceDuration)s")
+                            self.lifecycleEventSubject.send(.silenceDetected)
                             await self.stop()
                             return
                         }
@@ -132,6 +138,7 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
         silenceTask = nil
 
         let fileURL = recorder.stop()
+        lifecycleEventSubject.send(.audioEnded)
         captureStateSubject.send(.idle)
         _isTranscribing.withLock { $0 = false }
 
@@ -140,12 +147,14 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
 
         guard let fileURL else {
             logger.warning("No audio file to transcribe")
+            lifecycleEventSubject.send(.recognitionCompleted)
             return
         }
 
         guard duration >= 0.5 else {
             logger.warning("Recording too short (\(String(format: "%.2f", duration))s), skipping Whisper")
             try? FileManager.default.removeItem(at: fileURL)
+            lifecycleEventSubject.send(.recognitionCompleted)
             return
         }
 
@@ -160,6 +169,8 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
         } catch {
             logger.error("Whisper error: \(error.localizedDescription)")
         }
+
+        lifecycleEventSubject.send(.recognitionCompleted)
 
         try? FileManager.default.removeItem(at: fileURL)
     }

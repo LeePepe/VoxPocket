@@ -26,6 +26,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
     private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
     private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
     private let _modelLoadingStateSubject = CurrentValueSubject<ModelLoadingState, Never>(.idle)
@@ -249,6 +250,10 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         liveResultSubject.eraseToAnyPublisher()
     }
 
+    public var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
+    }
+
     public var audioLevelPublisher: AnyPublisher<Float, Never> {
         audioLevelSubject.eraseToAnyPublisher()
     }
@@ -300,6 +305,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
                         timestamp: Date(),
                         locale: self.recordingLocale
                     )
+                    self.lifecycleEventSubject.send(.speechDetected)
                     self.liveResultSubject.send(result)
                 },
                 onAudioLevel: { [weak self] level in
@@ -333,9 +339,13 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         }
 
         await engine.stopStreaming()
+        lifecycleEventSubject.send(.audioEnded)
 
         let finalText = _latestPartialText.withLock { $0 }.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !finalText.isEmpty else { return }
+        guard !finalText.isEmpty else {
+            lifecycleEventSubject.send(.recognitionCompleted)
+            return
+        }
 
         let result = TranscriptionResult(
             text: finalText,
@@ -346,6 +356,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         )
         liveResultSubject.send(result)
         finalResultSubject.send(result)
+        lifecycleEventSubject.send(.recognitionCompleted)
 
         if let startedAt {
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)

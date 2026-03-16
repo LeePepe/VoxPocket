@@ -45,6 +45,8 @@ final class QuickRecordingViewModelTests: XCTestCase {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 80_000_000)
                 transcription.sendLiveText("你好世界")
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                transcription.sendLifecycleEvent(.recognitionCompleted)
             }
         }
 
@@ -73,6 +75,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 120_000_000)
                 transcription.sendFinalText("你好世界")
+                transcription.sendLifecycleEvent(.recognitionCompleted)
             }
         }
 
@@ -81,6 +84,63 @@ final class QuickRecordingViewModelTests: XCTestCase {
 
         await viewModel.stopRecording()
         try? await Task.sleep(nanoseconds: 260_000_000)
+
+        XCTAssertEqual(viewModel.rawTranscription, "你好世界")
+    }
+
+    func testStopRecordingWaitsForRecognitionCompletedBeforeContinuing() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("你好世界")
+
+        let stopTask = Task {
+            await viewModel.stopRecording()
+        }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+
+        XCTAssertEqual(viewModel.recorderStatus, .transcribing)
+        XCTAssertEqual(viewModel.rawTranscription, "")
+
+        transcription.sendLifecycleEvent(.recognitionCompleted)
+        await stopTask.value
+
+        XCTAssertEqual(viewModel.rawTranscription, "你好世界")
+    }
+
+    func testStopRecordingFallsBackAfterRecognitionCompletionTimeout() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("你好世界")
+
+        let stopTask = Task {
+            await viewModel.stopRecording()
+        }
+
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        XCTAssertEqual(viewModel.recorderStatus, .transcribing)
+        XCTAssertEqual(viewModel.rawTranscription, "")
+
+        await stopTask.value
 
         XCTAssertEqual(viewModel.rawTranscription, "你好世界")
     }
@@ -100,6 +160,12 @@ final class QuickRecordingViewModelTests: XCTestCase {
         var didCallNoResult = false
         viewModel.onNoResult = {
             didCallNoResult = true
+        }
+
+        recording.onStop = {
+            Task { @MainActor in
+                transcription.sendLifecycleEvent(.recognitionCompleted)
+            }
         }
 
         await viewModel.startRecording()
@@ -124,6 +190,11 @@ final class QuickRecordingViewModelTests: XCTestCase {
             await viewModel.startRecording()
         }
         await Task.yield()
+        recording.onStop = {
+            Task { @MainActor in
+                transcription.sendLifecycleEvent(.recognitionCompleted)
+            }
+        }
         await viewModel.stopRecording()
         await startTask.value
 
@@ -169,10 +240,12 @@ private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable 
 private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked Sendable {
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
     private var _currentLanguage = Locale(identifier: "zh-Hans")
 
     var liveTextPublisher: AnyPublisher<String, Never> { liveTextSubject.eraseToAnyPublisher() }
     var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> { finalResultSubject.eraseToAnyPublisher() }
+    var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> { lifecycleEventSubject.eraseToAnyPublisher() }
     var currentLanguage: Locale { _currentLanguage }
     var supportedLanguages: [Locale] { [_currentLanguage] }
 
@@ -191,6 +264,7 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
             )
         )
     }
+    func sendLifecycleEvent(_ event: TranscriptionLifecycleEvent) { lifecycleEventSubject.send(event) }
 }
 
 private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendable {

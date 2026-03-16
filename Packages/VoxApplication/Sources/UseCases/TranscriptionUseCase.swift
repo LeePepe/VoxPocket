@@ -17,6 +17,9 @@ public protocol TranscriptionUseCase: AnyObject, Sendable {
     /// 只发布稳定的最终结果。
     var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> { get }
 
+    /// 转录生命周期事件发布者
+    var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> { get }
+
     /// 当前转录语言
     var currentLanguage: Locale { get }
 

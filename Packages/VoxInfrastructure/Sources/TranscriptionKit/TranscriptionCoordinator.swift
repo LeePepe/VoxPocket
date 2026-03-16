@@ -18,6 +18,9 @@ public protocol TranscriptionCoordinator: AnyObject, Sendable {
     /// 实时转录发布者（包含 partial 结果）
     var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> { get }
 
+    /// 转录生命周期事件发布者
+    var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> { get }
+
     /// 当前音频电平
     var audioLevelPublisher: AnyPublisher<Float, Never> { get }
 

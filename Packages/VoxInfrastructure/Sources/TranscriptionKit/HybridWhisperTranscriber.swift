@@ -25,6 +25,7 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
 
     private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
 
     // MARK: - State
@@ -69,6 +70,10 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
 
     public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
         liveResultSubject.eraseToAnyPublisher()
+    }
+
+    public var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
     }
 
     public var audioLevelPublisher: AnyPublisher<Float, Never> {
@@ -137,7 +142,10 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
 
             if let result {
                 let text = result.bestTranscription.formattedString
-                if !text.isEmpty { self.appleHasContent = true }
+                if !text.isEmpty {
+                    self.appleHasContent = true
+                    self.lifecycleEventSubject.send(.speechDetected)
+                }
 
                 let transcriptionResult = TranscriptionResult(
                     text: text,
@@ -164,6 +172,7 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
         logger.info("stop() called, appleHasContent=\(appleHasContent)")
 
         recognitionRequest?.endAudio()
+        lifecycleEventSubject.send(.audioEnded)
         let fileURL = stopRecorder()
         let hadContent = appleHasContent
         appleHasContent = false
@@ -177,6 +186,7 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
         guard hadContent else {
             logger.info("Apple Speech had no content → skipping Whisper")
             try? FileManager.default.removeItem(at: fileURL)
+            lifecycleEventSubject.send(.recognitionCompleted)
             return
         }
 
@@ -189,8 +199,10 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
             )
             liveResultSubject.send(result)
             finalResultSubject.send(result)
+            lifecycleEventSubject.send(.recognitionCompleted)
         } catch {
             logger.error("Whisper error: \(error.localizedDescription)")
+            lifecycleEventSubject.send(.recognitionCompleted)
         }
 
         try? FileManager.default.removeItem(at: fileURL)

@@ -26,6 +26,10 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
         coordinator.finalResultPublisher
     }
 
+    public var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        coordinator.lifecycleEventPublisher
+    }
+
     public var currentLanguage: Locale { _currentLanguage }
 
     public var supportedLanguages: [Locale] {

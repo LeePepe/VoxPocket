@@ -4,6 +4,29 @@ import XCTest
 @testable import TranscriptionKit
 
 final class LoadingFallbackTranscriptionCoordinatorTests: XCTestCase {
+    func testLifecycleEventsOnlyForwardFromActiveCoordinator() async throws {
+        let primary = FakeLoadingCoordinator(
+            providerType: .whisper,
+            initialLoadingState: .failed("load failed")
+        )
+        let fallback = FakeLoadingCoordinator(
+            providerType: .apple,
+            initialLoadingState: .ready
+        )
+        let sut = LoadingFallbackTranscriptionCoordinator(primary: primary, fallback: fallback)
+
+        var events: [TranscriptionLifecycleEvent] = []
+        let cancellable = sut.lifecycleEventPublisher.sink { events.append($0) }
+        defer { cancellable.cancel() }
+
+        try await sut.start(language: Locale(identifier: "zh-Hans"))
+        primary.sendLifecycleEvent(.recognitionCompleted)
+        fallback.sendLifecycleEvent(.audioEnded)
+        await Task.yield()
+
+        XCTAssertEqual(events, [.audioEnded])
+    }
+
     func testIdlePrimaryStartsPreloadAndUsesFallbackForCurrentSession() async throws {
         let primary = FakeLoadingCoordinator(
             providerType: .whisper,
@@ -50,8 +73,12 @@ private final class FakeLoadingCoordinator: TranscriptionCoordinator, ModelLoadi
     let finalResultPublisher: AnyPublisher<TranscriptionResult, Error>
     let liveResultPublisher: AnyPublisher<TranscriptionResult, Error>
     let audioLevelPublisher: AnyPublisher<Float, Never>
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
 
     var isTranscribing: Bool { startCallCount > stopCallCount }
+    var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
+    }
 
     private let loadingStateSubject: CurrentValueSubject<ModelLoadingState, Never>
     private(set) var preloadStartCount = 0
@@ -96,6 +123,10 @@ private final class FakeLoadingCoordinator: TranscriptionCoordinator, ModelLoadi
 
     func pause() {}
     func resume() {}
+
+    func sendLifecycleEvent(_ event: TranscriptionLifecycleEvent) {
+        lifecycleEventSubject.send(event)
+    }
 }
 
 private final class FakeAudioCaptureService: AudioCaptureService, @unchecked Sendable {
