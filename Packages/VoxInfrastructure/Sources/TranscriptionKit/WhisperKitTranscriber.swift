@@ -292,6 +292,8 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
                 languageCode: languageCode,
                 onPartial: { [weak self] text in
                     guard let self else { return }
+                    // 停止后可能仍有 in-flight partial 到达，忽略避免污染结果
+                    guard self._isTranscribing.withLock({ $0 }) else { return }
                     guard let acceptedText = self.acceptLivePartial(text) else { return }
                     let result = TranscriptionResult(
                         text: acceptedText,
@@ -730,13 +732,13 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         if let streamTranscriber {
             await streamTranscriber.stopStreamTranscription()
         }
-        if let streamTask {
-            // Cancel first so the task exits at the next cooperative suspension point.
-            // Without this, stopStreamTranscription() alone may not unblock the task
-            // when the HAL audio device fails (e.g. -10877), causing an indefinite hang.
-            streamTask.cancel()
-            _ = try? await streamTask.value
-        }
+        // Cancel the task but do NOT await its value:
+        // WhisperKit may continue decoding buffered audio for ~2s after
+        // stopStreamTranscription(), and awaiting here blocks the UI for that
+        // duration. Late onPartial callbacks after stop are harmless because
+        // WhisperKitTranscriber.start()'s onPartial closure guards on
+        // _isTranscribing before forwarding results.
+        streamTask?.cancel()
         streamTask = nil
         streamTranscriber = nil
 #endif
