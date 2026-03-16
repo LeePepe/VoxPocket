@@ -30,6 +30,7 @@ public struct QuickRecordingView: View {
             .font(.system(size: 12, weight: .medium, design: .rounded))
             .foregroundStyle(.white.opacity(0.95))
             .lineLimit(1)
+            .truncationMode(.head)
             .allowsTightening(true)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.horizontal, QuickRecordingLayout.textHorizontalInset)
