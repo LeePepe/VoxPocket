@@ -16,5 +16,11 @@ public enum QuickRecordingLayout {
 
     /// 面板圆角。
     public static let panelCornerRadius: CGFloat = 32
+
+    /// 实时转写文字左右内边距。
+    public static let textHorizontalInset: CGFloat = 12
+
+    /// 左侧旧文字渐出区域宽度。
+    public static let textLeftFadeWidth: CGFloat = 24
 }
 #endif

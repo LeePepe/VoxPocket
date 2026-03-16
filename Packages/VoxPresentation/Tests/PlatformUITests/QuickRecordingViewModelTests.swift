@@ -29,6 +29,54 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.recorderStatus, .listening)
     }
 
+    func testShowsLiveTranscriptionOnlyForDisplayableStatesWithText() async {
+        let viewModel = makeViewModel()
+
+        viewModel.liveTranscription = ""
+        viewModel.recorderStatus = .listening
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+
+        viewModel.liveTranscription = "你好"
+        viewModel.recorderStatus = .listening
+        XCTAssertTrue(viewModel.showsLiveTranscription)
+
+        viewModel.recorderStatus = .transcribing
+        XCTAssertTrue(viewModel.showsLiveTranscription)
+
+        viewModel.recorderStatus = .refining
+        XCTAssertTrue(viewModel.showsLiveTranscription)
+
+        viewModel.recorderStatus = .idle
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+
+        viewModel.recorderStatus = .done
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+
+        viewModel.recorderStatus = .error
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+    }
+
+    func testStopRecordingRetainsLiveTranscriptionForProcessingStates() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("实时转写尾部")
+
+        await viewModel.stopRecording()
+
+        XCTAssertEqual(viewModel.liveTranscription, "实时转写尾部")
+        XCTAssertTrue(viewModel.showsLiveTranscription)
+    }
+
     func testStopRecordingUsesLatestTranscriptionArrivingRightAfterStop() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()
@@ -128,6 +176,15 @@ final class QuickRecordingViewModelTests: XCTestCase {
         await startTask.value
 
         XCTAssertEqual(recording.stopCallCount, 1)
+    }
+
+    private func makeViewModel() -> QuickRecordingViewModel {
+        QuickRecordingViewModel(
+            recordingUseCase: FakeRecordingUseCase(),
+            transcriptionUseCase: FakeTranscriptionUseCase(),
+            refinementUseCase: FakeRefinementUseCase(),
+            clipboardService: FakeClipboardService()
+        )
     }
 }
 

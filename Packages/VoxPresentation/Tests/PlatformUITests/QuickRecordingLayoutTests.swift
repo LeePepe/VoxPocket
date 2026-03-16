@@ -10,6 +10,11 @@ final class QuickRecordingLayoutTests: XCTestCase {
         XCTAssertEqual(QuickRecordingLayout.panelHeight, QuickRecordingLayout.pillHeight)
     }
 
+    func testQuickRecordingTextOverlayUsesCompactInsets() {
+        XCTAssertEqual(QuickRecordingLayout.textHorizontalInset, 12)
+        XCTAssertEqual(QuickRecordingLayout.textLeftFadeWidth, 24)
+    }
+
     func testQuickRecordingTopInsetMovesPanelUp() {
         XCTAssertEqual(QuickRecordingLayout.topInset, 120)
     }
