@@ -77,6 +77,7 @@ private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable 
 private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked Sendable {
     private let liveTextSubject = PassthroughSubject<String, Never>()
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
 
     private(set) var clearLiveTextCallCount = 0
     private var _currentLanguage: Locale = Locale(identifier: "zh-Hans")
@@ -87,6 +88,10 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
 
     var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
         finalResultSubject.eraseToAnyPublisher()
+    }
+
+    var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
     }
 
     var currentLanguage: Locale { _currentLanguage }

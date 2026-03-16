@@ -112,10 +112,14 @@ private final class NoopRecordingUseCase: RecordingUseCase, @unchecked Sendable 
 private final class NoopTranscriptionUseCase: TranscriptionUseCase, @unchecked Sendable {
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let lifecycleEventSubject = PassthroughSubject<TranscriptionLifecycleEvent, Never>()
     private var _currentLanguage: Locale = Locale(identifier: "zh-Hans")
 
     var liveTextPublisher: AnyPublisher<String, Never> { liveTextSubject.eraseToAnyPublisher() }
     var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> { finalResultSubject.eraseToAnyPublisher() }
+    var lifecycleEventPublisher: AnyPublisher<TranscriptionLifecycleEvent, Never> {
+        lifecycleEventSubject.eraseToAnyPublisher()
+    }
     var currentLanguage: Locale { _currentLanguage }
     var supportedLanguages: [Locale] { [_currentLanguage] }
 
