@@ -27,6 +27,7 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
     // MARK: - State
 
     private let _isTranscribing = Mutex(false)
+    private let _hasSentSpeechDetected = Mutex(false)
     private let logger: Logger
 
     // MARK: - Sub-services
@@ -87,6 +88,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             logger.warning("Already transcribing, stopping first")
             await stop()
         }
+        _hasSentSpeechDetected.withLock { $0 = false }
 
         // 请求语音识别权限
         let speechAuthorized = await withCheckedContinuation { continuation in
@@ -134,25 +136,14 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             guard let self else { return }
 
             if let result {
-                let transcriptionResult = TranscriptionResult(
+                self.handleRecognitionResult(
                     text: result.bestTranscription.formattedString,
-                    type: result.isFinal ? .final : .partial,
+                    isFinal: result.isFinal,
                     confidence: result.isFinal
                         ? Double(result.bestTranscription.segments.last?.confidence ?? 0)
                         : nil,
-                    timestamp: Date(),
                     locale: language
                 )
-                self.liveResultSubject.send(transcriptionResult)
-                if !result.bestTranscription.formattedString.isEmpty {
-                    self.lifecycleEventSubject.send(.speechDetected)
-                }
-                if result.isFinal {
-                    self.finalResultSubject.send(transcriptionResult)
-                    self.lifecycleEventSubject.send(.recognitionCompleted)
-                    // 任务自然完成，清理 task
-                    self.recognitionTask = nil
-                }
             }
 
             if let error {
@@ -191,6 +182,56 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         captureStateSubject.send(.recording)
     }
 
+    func handleRecognitionResultForTesting(
+        text: String,
+        isFinal: Bool,
+        confidence: Double?,
+        locale: Locale
+    ) {
+        handleRecognitionResult(
+            text: text,
+            isFinal: isFinal,
+            confidence: confidence,
+            locale: locale
+        )
+    }
+
+    private func handleRecognitionResult(
+        text: String,
+        isFinal: Bool,
+        confidence: Double?,
+        locale: Locale
+    ) {
+        let transcriptionResult = TranscriptionResult(
+            text: text,
+            type: isFinal ? .final : .partial,
+            confidence: confidence,
+            timestamp: Date(),
+            locale: locale
+        )
+        liveResultSubject.send(transcriptionResult)
+        maybeSendSpeechDetected(for: text)
+        if isFinal {
+            finalResultSubject.send(transcriptionResult)
+            lifecycleEventSubject.send(.recognitionCompleted)
+            recognitionTask = nil
+        }
+    }
+
+    private func maybeSendSpeechDetected(for text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+
+        let shouldSend = _hasSentSpeechDetected.withLock { hasSent -> Bool in
+            guard !hasSent else { return false }
+            hasSent = true
+            return true
+        }
+
+        if shouldSend {
+            lifecycleEventSubject.send(.speechDetected)
+        }
+    }
 }
 
 // MARK: - Internal AudioCaptureService

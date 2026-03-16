@@ -116,7 +116,7 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
                         let start = silentSince ?? { silentSince = now; return now }()
                         if now.timeIntervalSince(start) >= silenceDuration {
                             self.logger.info("Auto-stop: silence \(silenceDuration)s")
-                            self.lifecycleEventSubject.send(.silenceDetected)
+                            self.publishSilenceDetected()
                             await self.stop()
                             return
                         }
@@ -183,6 +183,22 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
     public func resume() {
         recorder.resume()
         captureStateSubject.send(.recording)
+    }
+
+    func publishSilenceDetectedForTesting() {
+        publishSilenceDetected()
+    }
+
+    func publishRecognitionCompletedForTesting() {
+        publishRecognitionCompleted()
+    }
+
+    private func publishSilenceDetected() {
+        lifecycleEventSubject.send(.silenceDetected)
+    }
+
+    private func publishRecognitionCompleted() {
+        lifecycleEventSubject.send(.recognitionCompleted)
     }
 }
 

@@ -112,6 +112,30 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
 
         XCTAssertEqual(liveTexts.last, "这个模型不错")
     }
+
+    func testSpeechDetectedLifecycleEventOnlyPublishesOnce() async throws {
+        let engine = ScriptedLocalWhisperEngine()
+        let sut = WhisperKitTranscriber(
+            config: LocalWhisperKitConfig(preloadOnStart: false),
+            logger: PrintLogger(subsystem: "WhisperKitTranscriberTests"),
+            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriberTests.Mic")),
+            telemetry: NoopTelemetryService(),
+            permissionRequester: { true },
+            hasPermissionProvider: { true },
+            engineFactory: { _, _ in engine },
+            autoPreload: false
+        )
+
+        var events: [TranscriptionLifecycleEvent] = []
+        let cancellable = sut.lifecycleEventPublisher.sink { events.append($0) }
+        defer { cancellable.cancel() }
+
+        try await sut.start(language: Locale(identifier: "zh-Hans"))
+        await engine.emitPartial("你好")
+        await engine.emitPartial("你好世界")
+
+        XCTAssertEqual(events.filter { $0 == .speechDetected }.count, 1)
+    }
 }
 
 private final class FakeLocalWhisperEngine: LocalWhisperEngine {

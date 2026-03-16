@@ -31,6 +31,7 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
     // MARK: - State
 
     private let _isTranscribing = Mutex(false)
+    private let _hasSentSpeechDetected = Mutex(false)
     private let logger: Logger
     private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
     /// Apple Speech 是否识别到任何文字（用于决定是否调用 Whisper）
@@ -94,6 +95,7 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
 
         recordingLocale = language
         appleHasContent = false
+        _hasSentSpeechDetected.withLock { $0 = false }
 
         // 请求语音识别权限
         let speechAuthorized = await withCheckedContinuation { continuation in
@@ -142,21 +144,11 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
 
             if let result {
                 let text = result.bestTranscription.formattedString
-                if !text.isEmpty {
-                    self.appleHasContent = true
-                    self.lifecycleEventSubject.send(.speechDetected)
-                }
-
-                let transcriptionResult = TranscriptionResult(
-                    text: text,
-                    type: result.isFinal ? .final : .partial,
-                    confidence: result.isFinal
-                        ? Double(result.bestTranscription.segments.last?.confidence ?? 0)
-                        : nil,
-                    timestamp: Date(),
+                self.handleAppleRecognitionText(
+                    text,
+                    isFinal: result.isFinal,
                     locale: language
                 )
-                self.liveResultSubject.send(transcriptionResult)
                 self.logger.debug("Apple Speech: isFinal=\(result.isFinal), chars=\(text.count)")
             }
 
@@ -193,13 +185,7 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
         do {
             logger.info("Apple Speech had content → submitting to Whisper")
             let text = try await whisperEngine.transcribe(fileURL: fileURL, language: recordingLocale)
-            let result = TranscriptionResult(
-                text: text, type: .final,
-                confidence: nil, timestamp: Date(), locale: recordingLocale
-            )
-            liveResultSubject.send(result)
-            finalResultSubject.send(result)
-            lifecycleEventSubject.send(.recognitionCompleted)
+            publishWhisperCompletion(text: text, locale: recordingLocale)
         } catch {
             logger.error("Whisper error: \(error.localizedDescription)")
             lifecycleEventSubject.send(.recognitionCompleted)
@@ -218,7 +204,67 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
         captureStateSubject.send(.recording)
     }
 
+    func handleAppleRecognitionTextForTesting(
+        _ text: String,
+        isFinal: Bool,
+        locale: Locale
+    ) {
+        handleAppleRecognitionText(text, isFinal: isFinal, locale: locale)
+    }
+
+    func publishWhisperCompletionForTesting(text: String, locale: Locale) {
+        publishWhisperCompletion(text: text, locale: locale)
+    }
+
     // MARK: - Private
+
+    private func handleAppleRecognitionText(
+        _ text: String,
+        isFinal: Bool,
+        locale: Locale
+    ) {
+        if !text.isEmpty {
+            appleHasContent = true
+            maybeSendSpeechDetected(for: text)
+        }
+
+        let transcriptionResult = TranscriptionResult(
+            text: text,
+            type: isFinal ? .final : .partial,
+            confidence: nil,
+            timestamp: Date(),
+            locale: locale
+        )
+        liveResultSubject.send(transcriptionResult)
+    }
+
+    private func publishWhisperCompletion(text: String, locale: Locale) {
+        let result = TranscriptionResult(
+            text: text,
+            type: .final,
+            confidence: nil,
+            timestamp: Date(),
+            locale: locale
+        )
+        liveResultSubject.send(result)
+        finalResultSubject.send(result)
+        lifecycleEventSubject.send(.recognitionCompleted)
+    }
+
+    private func maybeSendSpeechDetected(for text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+
+        let shouldSend = _hasSentSpeechDetected.withLock { hasSent -> Bool in
+            guard !hasSent else { return false }
+            hasSent = true
+            return true
+        }
+
+        if shouldSend {
+            lifecycleEventSubject.send(.speechDetected)
+        }
+    }
 
     @discardableResult
     private func stopRecorder() -> URL? {

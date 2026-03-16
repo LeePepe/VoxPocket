@@ -36,6 +36,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     private let _isTranscribing = Mutex(false)
     private let _engine = Mutex<(any LocalWhisperEngine)?>(nil)
     private let _latestPartialText = Mutex("")
+    private let _hasSentSpeechDetected = Mutex(false)
     private let _startedAt = Mutex<Date?>(nil)
     private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
 
@@ -215,6 +216,21 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
         return collapsedWhitespace.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    private func maybeSendSpeechDetected(for text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+
+        let shouldSend = _hasSentSpeechDetected.withLock { hasSent -> Bool in
+            guard !hasSent else { return false }
+            hasSent = true
+            return true
+        }
+
+        if shouldSend {
+            lifecycleEventSubject.send(.speechDetected)
+        }
+    }
 }
 
 // MARK: - ModelLoadingObservable
@@ -289,6 +305,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
 
         recordingLocale = language
         _latestPartialText.withLock { $0 = "" }
+        _hasSentSpeechDetected.withLock { $0 = false }
 
         let languageCode = config.languageHint(for: language)
 
@@ -305,7 +322,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
                         timestamp: Date(),
                         locale: self.recordingLocale
                     )
-                    self.lifecycleEventSubject.send(.speechDetected)
+                    self.maybeSendSpeechDetected(for: acceptedText)
                     self.liveResultSubject.send(result)
                 },
                 onAudioLevel: { [weak self] level in
