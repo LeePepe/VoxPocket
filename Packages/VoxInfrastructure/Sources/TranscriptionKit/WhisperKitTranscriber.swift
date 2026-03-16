@@ -682,8 +682,7 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         let tokenizer = try pipeline.tokenizerRequired()
         nonisolated(unsafe) let tokenizerRef = tokenizer
 
-        // 跟踪峰值已确认文本：只增不减，防止 WhisperKit 窗口切换时丢失历史片段
-        nonisolated(unsafe) var peakConfirmedCount = 0
+        // 跟踪峰值已确认文本：按字符数比较，只增不减，防止 WhisperKit 窗口切换时丢失历史片段
         nonisolated(unsafe) var peakConfirmedText = ""
 
         let transcriber = AudioStreamTranscriber(
@@ -695,18 +694,14 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             audioProcessor: audioProcessor,
             decodingOptions: options,
             stateChangeCallback: { _, newState in
-                // 只在 confirmedSegments 增长时更新峰值文本，防止窗口滑动后丢失旧片段
-                let newCount = newState.confirmedSegments.count
-                if newCount > peakConfirmedCount {
-                    peakConfirmedCount = newCount
-                    peakConfirmedText = newState.confirmedSegments.map(\.text).joined(separator: " ")
+                // 用字符数做比较：新的确认文本更长才更新，防止窗口滑动后丢失旧内容
+                let newConfirmedText = newState.confirmedSegments.map(\.text).joined(separator: " ")
+                if newConfirmedText.count > peakConfirmedText.count {
+                    peakConfirmedText = newConfirmedText
                 }
-                let currentHypothesis = newState.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                let rawText = [peakConfirmedText, currentHypothesis]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: " ")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: rawText))
+                // 只使用已确认的文本，不混入 hypothesis，避免跳动和回退
+                guard !peakConfirmedText.isEmpty else { return }
+                onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: peakConfirmedText))
                 let level = newState.bufferEnergy.last ?? 0
                 onAudioLevel(level)
             }
