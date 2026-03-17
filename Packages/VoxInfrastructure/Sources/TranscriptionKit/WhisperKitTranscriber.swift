@@ -336,7 +336,13 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
 
         await engine.stopStreaming()
 
-        let finalText = _latestPartialText.withLock { $0 }.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 对全量音频做一次完整转录，捕捉流式解码漏掉的最后 <1s 内容
+        let languageCode = config.languageHint(for: recordingLocale)
+        let fullTranscription = try? await engine.transcribeAccumulatedAudio(languageCode: languageCode)
+
+        let streamingText = _latestPartialText.withLock { $0 }.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 优先用完整转录（更全），fallback 到流式结果
+        let finalText = fullTranscription ?? streamingText
         guard !finalText.isEmpty else { return }
 
         let result = TranscriptionResult(
@@ -439,6 +445,8 @@ protocol LocalWhisperEngine: Sendable {
     func stopStreaming() async
     func pauseStreaming() async
     func resumeStreaming() async
+    /// 停止后对全量音频做一次完整转录，捕捉最后 <1s 的未解码内容
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String?
 }
 
 enum LocalWhisperRawOutputLogger {
@@ -510,6 +518,11 @@ private final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
     func resumeStreaming() async {
         let engine = await engine()
         await engine.resumeStreaming()
+    }
+
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? {
+        let engine = await engine()
+        return try await engine.transcribeAccumulatedAudio(languageCode: languageCode)
     }
 }
 
@@ -740,6 +753,28 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         streamTask?.cancel()
         streamTask = nil
         streamTranscriber = nil
+#endif
+    }
+
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? {
+#if canImport(WhisperKit)
+        guard let pipeline else { return nil }
+        let allSamples = Array(pipeline.audioProcessor.audioSamples)
+        guard !allSamples.isEmpty else { return nil }
+
+        var options = DecodingOptions()
+        options.language = languageCode
+
+        nonisolated(unsafe) let pipelineRef = pipeline
+        let results = try await pipelineRef.transcribe(audioArray: allSamples, decodeOptions: options)
+        let text = results
+            .compactMap { $0.text }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+#else
+        _ = languageCode
+        return nil
 #endif
     }
 
