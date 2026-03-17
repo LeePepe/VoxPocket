@@ -202,6 +202,13 @@ public final class ServiceContainer: ObservableObject {
                 return AzureWhisperTranscriber(config: config)
             }
             return AppleSpeechTranscriber()
+        case .hybridLocalWhisper:
+            return HybridLocalWhisperTranscriber(
+                config: LocalWhisperKitConfig(
+                    model: LocalWhisperKitConfig.platformDefaultModel,
+                    preloadOnStart: preloadOnStart
+                )
+            )
         case .appleSpeech:
             return AppleSpeechTranscriber()
         }

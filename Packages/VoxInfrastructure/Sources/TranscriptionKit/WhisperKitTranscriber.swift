@@ -447,6 +447,8 @@ protocol LocalWhisperEngine: Sendable {
     func resumeStreaming() async
     /// 停止后对全量音频做一次完整转录，捕捉最后 <1s 的未解码内容
     func transcribeAccumulatedAudio(languageCode: String?) async throws -> String?
+    /// 对指定音频文件做完整转录（供 Hybrid 模式使用）
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String?
 }
 
 enum LocalWhisperRawOutputLogger {
@@ -474,7 +476,7 @@ private actor SharedLocalWhisperEnginePool {
     }
 }
 
-private final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
+final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
     private let config: LocalWhisperKitConfig
     private let logger: Logger
 
@@ -523,6 +525,11 @@ private final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
     func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? {
         let engine = await engine()
         return try await engine.transcribeAccumulatedAudio(languageCode: languageCode)
+    }
+
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? {
+        let engine = await engine()
+        return try await engine.transcribeAudioFile(atPath: path, languageCode: languageCode)
     }
 }
 
@@ -773,6 +780,27 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
 #else
+        _ = languageCode
+        return nil
+#endif
+    }
+
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? {
+#if canImport(WhisperKit)
+        guard let pipeline else { return nil }
+
+        var options = DecodingOptions()
+        options.language = languageCode
+
+        nonisolated(unsafe) let pipelineRef = pipeline
+        let results = try await pipelineRef.transcribe(audioPath: path, decodeOptions: options)
+        let text = results
+            .compactMap { $0.text }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+#else
+        _ = path
         _ = languageCode
         return nil
 #endif

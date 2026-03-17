@@ -12,6 +12,8 @@ enum TranscriberProvider {
     case azureWhisper
     /// 混合模式：Apple Speech 提供实时结果 + 自动停止，有内容时再用 Whisper 提升最终质量
     case hybridWhisper
+    /// 混合模式（本地）：Apple Speech 提供实时结果 + 自动停止，有内容时再用本地 WhisperKit 提升最终质量
+    case hybridLocalWhisper
 }
 
 /// App 内 LLM 固定配置（非敏感项）
@@ -23,7 +25,7 @@ enum LLMAppConfig {
     ///
     /// 设为 `.azureWhisper` 时，需在 Scheme 环境变量中配置 `whisperkey`。
     /// 未配置 API Key 时自动回退到 `.appleSpeech`。
-    static let defaultTranscriberProvider: TranscriberProvider = .localWhisperKit
+    static let defaultTranscriberProvider: TranscriberProvider = .hybridLocalWhisper
     /// 默认 provider（当用户未在设置中显式选择时）
     static let defaultProvider: LLMProviderType = .appleIntelligence
 
