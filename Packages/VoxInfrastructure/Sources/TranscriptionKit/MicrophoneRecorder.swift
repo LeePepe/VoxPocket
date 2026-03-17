@@ -96,7 +96,7 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
             audioEngine.stop()
             inputNode.removeTap(onBus: 0)
 
-            let format = inputNode.outputFormat(forBus: 0)
+            let format = inputNode.inputFormat(forBus: 0)
             audioFile = try AVAudioFile(forWriting: tempURL, settings: format.settings)
             logger.debug("Recording to \(tempURL.lastPathComponent), \(format.sampleRate)Hz \(format.channelCount)ch")
 
