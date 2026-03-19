@@ -272,6 +272,12 @@ extension HybridLocalWhisperTranscriber: ModelPreloadControlling {
     }
 }
 
+extension HybridLocalWhisperTranscriber: ModelLoadingStartControlling {
+    public var blocksRecordingUntilModelReady: Bool {
+        false
+    }
+}
+
 // MARK: - Internal AudioCaptureService
 
 private final class HybridLocalAudioCapture: AudioCaptureService, @unchecked Sendable {

@@ -78,8 +78,8 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 - WhisperKit (Core ML 本地模型推理)
 
 **功能**:
-- 默认使用 `WhisperKitTranscriber` 做本地实时转录（`localWhisperKit`）
-- 保留 `AppleSpeechTranscriber`、`HybridWhisperTranscriber`、`AzureWhisperTranscriber` 作为回退路径
+- 默认使用 `HybridLocalWhisperTranscriber`（`hybridLocalWhisper`）：Apple Speech 提供实时 partial 和自动停止，本地 WhisperKit 在录音结束后做最终增强
+- 保留 `WhisperKitTranscriber`、`AppleSpeechTranscriber`、`HybridWhisperTranscriber`、`AzureWhisperTranscriber` 作为可切换路径
 - 提供 partial/final 事件流、音频电平流、失败遥测
 - 错误处理与故障上报（模型加载失败、启动失败）
 

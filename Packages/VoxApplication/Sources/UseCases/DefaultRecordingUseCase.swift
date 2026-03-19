@@ -123,6 +123,11 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
             return primaryCoordinator
         }
 
+        if let startControl = primaryCoordinator as? any ModelLoadingStartControlling,
+           !startControl.blocksRecordingUntilModelReady {
+            return primaryCoordinator
+        }
+
         switch loadable.modelLoadingState {
         case .ready:
             return primaryCoordinator

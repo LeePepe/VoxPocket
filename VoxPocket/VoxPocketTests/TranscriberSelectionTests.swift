@@ -3,41 +3,36 @@ import Testing
 import TranscriptionKit
 
 struct TranscriberSelectionTests {
-    @MainActor @Test func defaultProviderSelectsLocalWhisperKit() {
-        #expect(LLMAppConfig.defaultTranscriberProvider == .localWhisperKit)
+    @MainActor @Test func defaultProviderSelectsHybridLocalWhisper() {
+        #expect(LLMAppConfig.defaultTranscriberProvider == .hybridLocalWhisper)
     }
 
     @MainActor @Test func quickTranscriberUsesDistinctCoordinatorInstance() {
         let main = ServiceContainer.makeTranscriber(preloadOnStart: true)
         let quick = ServiceContainer.makeQuickTranscriber()
 
-        #expect(main is LoadingFallbackTranscriptionCoordinator)
-        #expect(quick is LoadingFallbackTranscriptionCoordinator)
+        #expect(main is HybridLocalWhisperTranscriber)
+        #expect(quick is HybridLocalWhisperTranscriber)
         #expect((main as AnyObject) !== (quick as AnyObject))
     }
 
     @MainActor @Test func quickTranscriberPreloadsLocalWhisperWhenAppStarts() throws {
         let quick = ServiceContainer.makeQuickTranscriber()
-        let coordinator = try #require(quick as? LoadingFallbackTranscriptionCoordinator)
-        let primary = try #require(primaryCoordinator(from: coordinator) as? WhisperKitTranscriber)
-        let config = try #require(localWhisperConfig(from: primary))
+        let coordinator = try #require(quick as? HybridLocalWhisperTranscriber)
+        let config = try #require(localWhisperConfig(from: coordinator))
 
         #expect(config.preloadOnStart)
     }
-}
 
-private func primaryCoordinator(
-    from coordinator: LoadingFallbackTranscriptionCoordinator
-) -> (any TranscriptionCoordinator)? {
-    Mirror(reflecting: coordinator).children
-        .first(where: { $0.label == "primary" })?
-        .value as? any TranscriptionCoordinator
+    @MainActor @Test func defaultConfigurationExposesLocalModelLoadingStatus() {
+        #expect(ServiceContainer.shared.localModelLoadingObservable != nil)
+    }
 }
 
 private func localWhisperConfig(
-    from transcriber: WhisperKitTranscriber
+    from transcriber: HybridLocalWhisperTranscriber
 ) -> LocalWhisperKitConfig? {
     Mirror(reflecting: transcriber).children
-        .first(where: { $0.label == "config" })?
+        .first(where: { $0.label == "whisperConfig" })?
         .value as? LocalWhisperKitConfig
 }

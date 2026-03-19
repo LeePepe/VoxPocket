@@ -6,3 +6,10 @@ public protocol ModelLoadingObservable: AnyObject, Sendable {
     var modelLoadingState: ModelLoadingState { get }
     var modelLoadingStatePublisher: AnyPublisher<ModelLoadingState, Never> { get }
 }
+
+/// 控制模型加载状态是否应阻止开始录音。
+public protocol ModelLoadingStartControlling: AnyObject, Sendable {
+    /// `true` 表示模型未 ready 时应阻止开始录音；
+    /// `false` 表示可以先开始录音，待模型就绪后再补充后处理。
+    var blocksRecordingUntilModelReady: Bool { get }
+}

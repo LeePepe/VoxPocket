@@ -87,14 +87,19 @@ public final class ServiceContainer: ObservableObject {
         let azureConfig = Self.makeAzureFoundryConfig()
 
         // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
-        if LLMAppConfig.defaultTranscriberProvider == .localWhisperKit {
+        switch LLMAppConfig.defaultTranscriberProvider {
+        case .localWhisperKit:
             let whisper = Self.makeLocalWhisperTranscriber(preloadOnStart: true)
             transcriber = LoadingFallbackTranscriptionCoordinator(
                 primary: whisper,
                 fallback: AppleSpeechTranscriber()
             )
             localModelLoadingObservable = whisper
-        } else {
+        case .hybridLocalWhisper:
+            let hybrid = Self.makeHybridLocalWhisperTranscriber(preloadOnStart: true)
+            transcriber = hybrid
+            localModelLoadingObservable = hybrid
+        default:
             transcriber = Self.makeTranscriber(preloadOnStart: true)
             localModelLoadingObservable = nil
         }
@@ -220,6 +225,15 @@ public final class ServiceContainer: ObservableObject {
 
     private static func makeLocalWhisperTranscriber(preloadOnStart: Bool) -> WhisperKitTranscriber {
         WhisperKitTranscriber(
+            config: LocalWhisperKitConfig(
+                model: LocalWhisperKitConfig.platformDefaultModel,
+                preloadOnStart: preloadOnStart
+            )
+        )
+    }
+
+    private static func makeHybridLocalWhisperTranscriber(preloadOnStart: Bool) -> HybridLocalWhisperTranscriber {
+        HybridLocalWhisperTranscriber(
             config: LocalWhisperKitConfig(
                 model: LocalWhisperKitConfig.platformDefaultModel,
                 preloadOnStart: preloadOnStart

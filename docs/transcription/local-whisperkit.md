@@ -2,7 +2,12 @@
 
 ## 概览
 
-VoxPocket 默认使用 `WhisperKitTranscriber` 进行本地实时转录（`LLMAppConfig.defaultTranscriberProvider = .localWhisperKit`）。
+VoxPocket 当前默认使用 `HybridLocalWhisperTranscriber`（`LLMAppConfig.defaultTranscriberProvider = .hybridLocalWhisper`）。
+
+这条默认路径的行为是：
+- Apple Speech 负责录音期间的实时 partial 结果和自动停止触发
+- 本地 WhisperKit 在录音结束后对整段音频做最终增强
+- WhisperKit 模型加载状态仍会预加载并暴露给 UI，但不会阻止 `hybridLocalWhisper` 开始录音
 该路径不依赖云端语音识别服务，保留 `appleSpeech` / `hybridWhisper` / `azureWhisper` 作为回退或调试选项。
 
 ## 模型下载与缓存

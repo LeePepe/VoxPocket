@@ -62,6 +62,29 @@ final class UseCasesTests: XCTestCase {
         XCTAssertEqual(primaryEvents, [])
         XCTAssertEqual(fallbackEvents, ["start:zh-Hans", "stop"])
     }
+
+    func testStartRecordingDoesNotBlockWhenCoordinatorAllowsStartDuringModelLoading() async throws {
+        let coordinator = DeferredModelLoadingTranscriptionCoordinator(state: .loading)
+        let useCase = DefaultRecordingUseCase(coordinator: coordinator)
+
+        try await useCase.startRecording()
+        try await useCase.stopRecording()
+
+        let events = await coordinator.events()
+        XCTAssertEqual(events, ["start:zh-Hans", "stop"])
+    }
+
+    func testStartRecordingThrowsWhenCoordinatorBlocksStartDuringModelLoadingWithoutFallback() async throws {
+        let coordinator = ModelLoadingTranscriptionCoordinator(state: .loading)
+        let useCase = DefaultRecordingUseCase(coordinator: coordinator)
+
+        do {
+            try await useCase.startRecording()
+            XCTFail("Expected startRecording() to throw when loading blocks recording")
+        } catch let error as VoxError {
+            XCTAssertEqual(error.localizedDescription, "转录失败：本地模型正在初始化，请稍候再试")
+        }
+    }
 }
 
 private final class FakeTranscriptionCoordinator: TranscriptionCoordinator, @unchecked Sendable {
@@ -327,5 +350,30 @@ private final class ModelLoadingTranscriptionCoordinator: NamedTranscriptionCoor
 
     var modelLoadingStatePublisher: AnyPublisher<ModelLoadingState, Never> {
         loadingSubject.eraseToAnyPublisher()
+    }
+}
+
+private final class DeferredModelLoadingTranscriptionCoordinator:
+    NamedTranscriptionCoordinator,
+    ModelLoadingObservable,
+    ModelLoadingStartControlling,
+    @unchecked Sendable {
+    private let loadingSubject: CurrentValueSubject<ModelLoadingState, Never>
+
+    init(state: ModelLoadingState) {
+        self.loadingSubject = CurrentValueSubject(state)
+        super.init(name: "deferred")
+    }
+
+    var modelLoadingState: ModelLoadingState {
+        loadingSubject.value
+    }
+
+    var modelLoadingStatePublisher: AnyPublisher<ModelLoadingState, Never> {
+        loadingSubject.eraseToAnyPublisher()
+    }
+
+    var blocksRecordingUntilModelReady: Bool {
+        false
     }
 }
