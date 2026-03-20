@@ -2,6 +2,7 @@
 import XCTest
 import Combine
 import PlatformAdapters
+import LLMKit
 import TranscriptionKit
 import UseCases
 @testable import PlatformUI
@@ -156,6 +157,29 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertTrue(didCallNoResult)
     }
 
+    func testStopRecordingAppendsChineseSentenceTerminatorWhenMissing() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase(
+            streamedChunks: ["再看一下为什么有时候没有能够成功添加标点符号"]
+        )
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("再看一下为什么有时候没有能够成功添加标点符号")
+
+        await viewModel.stopRecording()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(clipboard.copiedText, "再看一下为什么有时候没有能够成功添加标点符号。")
+    }
+
     func testStopRequestedDuringStartStopsAfterStartCompletes() async {
         let recording = FakeRecordingUseCase(startDelayNanoseconds: 300_000_000)
         let transcription = FakeTranscriptionUseCase()
@@ -252,6 +276,11 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
 
 private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RefinementState, Never>(.idle)
+    private let streamedChunks: [String]
+
+    init(streamedChunks: [String] = []) {
+        self.streamedChunks = streamedChunks
+    }
 
     var state: RefinementState { stateSubject.value }
     var statePublisher: AnyPublisher<RefinementState, Never> { stateSubject.eraseToAnyPublisher() }
@@ -260,7 +289,19 @@ private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendabl
     func refine(customPrompt: String?) async throws {}
     func refineSelection(range: NSRange, customPrompt: String?) async throws {}
     func refineStreaming(customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
-        AsyncThrowingStream { continuation in
+        refineStreaming(customPrompt: customPrompt, transcriptionMetadata: nil)
+    }
+
+    func refineStreaming(
+        customPrompt: String?,
+        transcriptionMetadata: TranscriptionMetadata?
+    ) -> AsyncThrowingStream<RefinementEvent, Error> {
+        _ = customPrompt
+        _ = transcriptionMetadata
+        return AsyncThrowingStream { continuation in
+            for chunk in streamedChunks {
+                continuation.yield(RefinementEvent.chunk(chunk))
+            }
             continuation.finish()
         }
     }
@@ -268,8 +309,9 @@ private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendabl
 }
 
 private final class FakeClipboardService: ClipboardService, @unchecked Sendable {
+    private(set) var copiedText: String?
     var hasText: Bool { false }
-    func copy(_ text: String) {}
+    func copy(_ text: String) { copiedText = text }
     func paste() -> String? { nil }
     func clear() {}
     func simulatePaste() async throws {}
