@@ -36,6 +36,14 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
     private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
     /// Apple Speech 是否识别到任何文字（用于决定是否调用 WhisperKit）
     private var appleHasContent = false
+    /// Apple Speech 最新识别文本（用于与 WhisperKit 结果合并）
+    private var appleLatestText: String = ""
+
+    // MARK: - 多识别器结果合并
+
+    /// 可选的 LLM 合并器：当两路识别器都有结果时，将两路文本交给 LLM 得出最终文本。
+    /// 注：此属性在 ServiceContainer 初始化阶段（单线程）设置，之后只读，故标记为 nonisolated(unsafe)。
+    public nonisolated(unsafe) var merger: (any TranscriptionMerger)?
 
     // MARK: - Sub-services
 
@@ -165,7 +173,10 @@ extension HybridLocalWhisperTranscriber: TranscriptionCoordinator {
 
             if let result {
                 let text = result.bestTranscription.formattedString
-                if !text.isEmpty { self.appleHasContent = true }
+                if !text.isEmpty {
+                    self.appleHasContent = true
+                    self.appleLatestText = text
+                }
 
                 let transcriptionResult = TranscriptionResult(
                     text: text,
@@ -193,7 +204,9 @@ extension HybridLocalWhisperTranscriber: TranscriptionCoordinator {
         recognitionRequest?.endAudio()
         let fileURL = stopRecorder()
         let hadContent = appleHasContent
+        let appleSpeechText = appleLatestText
         appleHasContent = false
+        appleLatestText = ""
 
         guard let fileURL else {
             logger.warning("No audio file")
@@ -220,21 +233,36 @@ extension HybridLocalWhisperTranscriber: TranscriptionCoordinator {
                 _modelLoadingStateSubject.send(.ready)
             }
 
-            guard let text = try await whisperEngine.transcribeAudioFile(
+            guard let whisperText = try await whisperEngine.transcribeAudioFile(
                 atPath: fileURL.path,
                 languageCode: languageCode
-            ), !text.isEmpty else {
+            ), !whisperText.isEmpty else {
                 logger.warning("WhisperKit returned empty result")
                 return
             }
+            logger.info("WhisperKit result: \(whisperText.count) chars")
+
+            // 若两路识别器都有结果且配置了合并器，交给 LLM 合并
+            let finalText: String
+            if let merger, !appleSpeechText.isEmpty, appleSpeechText != whisperText {
+                do {
+                    logger.info("Merging Apple Speech + WhisperKit via LLM")
+                    finalText = try await merger.merge(appleSpeech: appleSpeechText, whisper: whisperText)
+                    logger.info("LLM merged result: \(finalText.count) chars")
+                } catch {
+                    logger.warning("LLM merge failed, falling back to WhisperKit: \(error.localizedDescription)")
+                    finalText = whisperText
+                }
+            } else {
+                finalText = whisperText
+            }
 
             let result = TranscriptionResult(
-                text: text, type: .final,
+                text: finalText, type: .final,
                 confidence: nil, timestamp: Date(), locale: recordingLocale
             )
             liveResultSubject.send(result)
             finalResultSubject.send(result)
-            logger.info("WhisperKit final result: \(text.count) chars")
         } catch {
             logger.error("WhisperKit error: \(error.localizedDescription)")
         }

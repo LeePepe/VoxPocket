@@ -140,6 +140,11 @@ public final class ServiceContainer: ObservableObject {
         )
 #endif
 
+        // 为多识别器 Transcriber 注入 LLM 合并器
+        if let hybrid = transcriber as? HybridLocalWhisperTranscriber {
+            hybrid.merger = LLMTranscriptionMerger(llmService: llmService)
+        }
+
         configureLLMService()
         observeProviderPreferenceChanges()
         Task { [weak self] in
