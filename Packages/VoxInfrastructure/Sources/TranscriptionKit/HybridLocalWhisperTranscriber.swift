@@ -99,7 +99,7 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
 
 // MARK: - TranscriptionCoordinator
 
-extension HybridLocalWhisperTranscriber: TranscriptionCoordinator {
+extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
 
     public var audioCaptureService: AudioCaptureService { _audioCaptureService }
     public var speechRecognitionService: SpeechRecognitionService { _speechRecognitionService }
@@ -243,19 +243,14 @@ extension HybridLocalWhisperTranscriber: TranscriptionCoordinator {
             logger.info("WhisperKit result: \(whisperText.count) chars")
 
             // 若两路识别器都有结果且配置了合并器，交给 LLM 合并
-            let finalText: String
-            if let merger, !appleSpeechText.isEmpty, appleSpeechText != whisperText {
-                do {
-                    logger.info("Merging Apple Speech + WhisperKit via LLM")
-                    finalText = try await merger.merge(appleSpeech: appleSpeechText, whisper: whisperText)
-                    logger.info("LLM merged result: \(finalText.count) chars")
-                } catch {
-                    logger.warning("LLM merge failed, falling back to WhisperKit: \(error.localizedDescription)")
-                    finalText = whisperText
-                }
-            } else {
-                finalText = whisperText
+            if merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText {
+                logger.info("Merging Apple Speech + WhisperKit via LLM")
             }
+            let finalText = await mergedTranscription(
+                appleSpeech: appleSpeechText,
+                whisper: whisperText,
+                merger: merger
+            )
 
             let result = TranscriptionResult(
                 text: finalText, type: .final,

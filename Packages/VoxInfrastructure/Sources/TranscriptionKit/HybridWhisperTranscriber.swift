@@ -34,6 +34,13 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
     private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
     /// Apple Speech 是否识别到任何文字（用于决定是否调用 Whisper）
     private var appleHasContent = false
+    /// Apple Speech 最新识别文本（用于与 Whisper 结果合并）
+    private var appleLatestText: String = ""
+
+    // MARK: - 多识别器结果合并
+
+    /// 可选的 LLM 合并器；在 ServiceContainer 初始化阶段（单线程）设置，之后只读
+    public nonisolated(unsafe) var merger: (any TranscriptionMerger)?
 
     // MARK: - Sub-services
 
@@ -58,7 +65,7 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
 
 // MARK: - TranscriptionCoordinator
 
-extension HybridWhisperTranscriber: TranscriptionCoordinator {
+extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
 
     public var audioCaptureService: AudioCaptureService { _audioCaptureService }
     public var speechRecognitionService: SpeechRecognitionService { _speechRecognitionService }
@@ -137,7 +144,10 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
 
             if let result {
                 let text = result.bestTranscription.formattedString
-                if !text.isEmpty { self.appleHasContent = true }
+                if !text.isEmpty {
+                    self.appleHasContent = true
+                    self.appleLatestText = text
+                }
 
                 let transcriptionResult = TranscriptionResult(
                     text: text,
@@ -166,7 +176,9 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
         recognitionRequest?.endAudio()
         let fileURL = stopRecorder()
         let hadContent = appleHasContent
+        let appleSpeechText = appleLatestText
         appleHasContent = false
+        appleLatestText = ""
 
         guard let fileURL else {
             logger.warning("No audio file")
@@ -182,9 +194,17 @@ extension HybridWhisperTranscriber: TranscriptionCoordinator {
 
         do {
             logger.info("Apple Speech had content → submitting to Whisper")
-            let text = try await whisperEngine.transcribe(fileURL: fileURL, language: recordingLocale)
+            let whisperText = try await whisperEngine.transcribe(fileURL: fileURL, language: recordingLocale)
+            if merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText {
+                logger.info("Merging Apple Speech + Whisper via LLM")
+            }
+            let finalText = await mergedTranscription(
+                appleSpeech: appleSpeechText,
+                whisper: whisperText,
+                merger: merger
+            )
             let result = TranscriptionResult(
-                text: text, type: .final,
+                text: finalText, type: .final,
                 confidence: nil, timestamp: Date(), locale: recordingLocale
             )
             liveResultSubject.send(result)

@@ -140,10 +140,11 @@ public final class ServiceContainer: ObservableObject {
         )
 #endif
 
-        // 为多识别器 Transcriber 注入 LLM 合并器
-        if let hybrid = transcriber as? HybridLocalWhisperTranscriber {
-            hybrid.merger = LLMTranscriptionMerger(llmService: llmService)
-        }
+        // 为所有多识别器 Transcriber 统一注入 LLM 合并器
+        injectMergerIfNeeded(into: transcriber)
+#if os(macOS)
+        injectMergerIfNeeded(into: quickTranscriber)
+#endif
 
         configureLLMService()
         observeProviderPreferenceChanges()
@@ -263,6 +264,12 @@ public final class ServiceContainer: ObservableObject {
             return nil
         }
         return deployment.providerConfig
+    }
+
+    /// 若 transcriber 遵循 MultiRecognizerTranscriber，注入 LLM 合并器
+    private func injectMergerIfNeeded(into coordinator: any TranscriptionCoordinator) {
+        guard var multiRecognizer = coordinator as? any MultiRecognizerTranscriber else { return }
+        multiRecognizer.merger = LLMTranscriptionMerger(llmService: llmService)
     }
 
     private func configureLLMService(
