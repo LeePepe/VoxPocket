@@ -3,6 +3,81 @@ import FoundationModels
 import CoreModels
 import Observability
 
+enum AppleIntelligenceLocaleResolver {
+    static func resolve(
+        _ requestedLocale: Locale?,
+        supportedLanguages: [Locale.Language],
+        fallback: Locale = Locale(identifier: "en-US")
+    ) -> Locale {
+        guard let requestedLocale else { return fallback }
+        let requestedLanguage = requestedLocale.language
+
+        // 直接比较 Locale.Language 可能误判（例如 zh-Hans vs zh），优先使用结构化字段匹配。
+        if isExplicitlySupported(requestedLanguage, supportedLanguages: supportedLanguages) {
+            return requestedLocale
+        }
+
+        guard let requestedCode = requestedLanguage.languageCode?.identifier else {
+            return fallback
+        }
+
+        let sameLanguageCandidates = supportedLanguages.filter {
+            $0.languageCode?.identifier == requestedCode
+        }
+
+        guard !sameLanguageCandidates.isEmpty else {
+            return fallback
+        }
+
+        // 优先同 script，其次同 region，最后使用第一个同语种候选。
+        if let requestedScript = requestedLanguage.script?.identifier {
+            let sameScript = sameLanguageCandidates.filter { $0.script?.identifier == requestedScript }
+            if let resolved = selectPreferredLanguage(from: sameScript, requestedLanguage: requestedLanguage) {
+                return Locale(identifier: resolved.minimalIdentifier)
+            }
+        }
+
+        if let resolved = selectPreferredLanguage(from: sameLanguageCandidates, requestedLanguage: requestedLanguage) {
+            return Locale(identifier: resolved.minimalIdentifier)
+        }
+
+        return fallback
+    }
+
+    private static func isExplicitlySupported(
+        _ requestedLanguage: Locale.Language,
+        supportedLanguages: [Locale.Language]
+    ) -> Bool {
+        let requestedKey = languageKey(requestedLanguage)
+        let requestedMinimal = requestedLanguage.minimalIdentifier
+        return supportedLanguages.contains {
+            languageKey($0) == requestedKey || $0.minimalIdentifier == requestedMinimal
+        }
+    }
+
+    private static func selectPreferredLanguage(
+        from candidates: [Locale.Language],
+        requestedLanguage: Locale.Language
+    ) -> Locale.Language? {
+        guard !candidates.isEmpty else { return nil }
+        if let requestedRegion = requestedLanguage.region?.identifier,
+           let sameRegion = candidates.first(where: { $0.region?.identifier == requestedRegion }) {
+            return sameRegion
+        }
+        if let noRegion = candidates.first(where: { $0.region == nil }) {
+            return noRegion
+        }
+        return candidates.first
+    }
+
+    private static func languageKey(_ language: Locale.Language) -> String {
+        let code = language.languageCode?.identifier ?? ""
+        let script = language.script?.identifier ?? ""
+        let region = language.region?.identifier ?? ""
+        return "\(code)|\(script)|\(region)"
+    }
+}
+
 /// Apple Intelligence LLM 提供者
 ///
 /// 使用 `FoundationModels` 框架的设备端语言模型进行文本优化。
@@ -56,22 +131,33 @@ public actor AppleIntelligenceProvider: LLMProvider {
     /// 验证并获取支持的 locale，如果不支持则回退到 en-US
     private nonisolated func validateLocale(_ locale: Locale?) -> Locale {
         // 获取支持的语言列表
-        let supportedLanguages = SystemLanguageModel.default.supportedLanguages
+        let supportedLanguages = Array(SystemLanguageModel.default.supportedLanguages)
+        let defaultFallback = Locale(identifier: "en-US")
 
         // 如果没有提供 locale，使用 en-US
         guard let locale = locale else {
             logger.debug("No locale provided, using en-US")
-            return Locale(identifier: "en-US")
+            return defaultFallback
         }
 
-        // 检查是否支持该语言
-        if supportedLanguages.contains(where: { $0 == locale.language }) {
+        let resolvedLocale = AppleIntelligenceLocaleResolver.resolve(
+            locale,
+            supportedLanguages: supportedLanguages,
+            fallback: defaultFallback
+        )
+
+        if resolvedLocale.identifier == locale.identifier {
             logger.debug("Locale \(locale.identifier) is supported")
-            return locale
-        } else {
-            logger.warning("Locale \(locale.identifier) is NOT supported by Apple Intelligence, falling back to en-US")
-            return Locale(identifier: "en-US")
+            return resolvedLocale
         }
+
+        if resolvedLocale.identifier == defaultFallback.identifier {
+            logger.warning("Locale \(locale.identifier) is NOT supported by Apple Intelligence, falling back to en-US")
+            return resolvedLocale
+        }
+
+        logger.warning("Locale \(locale.identifier) is NOT explicitly supported, falling back to same-language locale \(resolvedLocale.identifier)")
+        return resolvedLocale
     }
 
     // MARK: - Intent & Tone Analysis
