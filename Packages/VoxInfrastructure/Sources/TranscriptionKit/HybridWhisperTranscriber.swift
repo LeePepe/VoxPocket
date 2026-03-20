@@ -195,9 +195,9 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         do {
             logger.info("Apple Speech had content → submitting to Whisper")
             let whisperText = try await whisperEngine.transcribe(fileURL: fileURL, language: recordingLocale)
-            if merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText {
-                logger.info("Merging Apple Speech + Whisper via LLM")
-            }
+            let useMerger = merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText
+            if useMerger { logger.info("Merging Apple Speech + Whisper via LLM") }
+
             let finalText = await mergedTranscription(
                 appleSpeech: appleSpeechText,
                 whisper: whisperText,
@@ -207,7 +207,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                 text: finalText, type: .final,
                 confidence: nil, timestamp: Date(), locale: recordingLocale
             )
-            liveResultSubject.send(result)
+            if !useMerger { liveResultSubject.send(result) }
             finalResultSubject.send(result)
         } catch {
             logger.error("Whisper error: \(error.localizedDescription)")

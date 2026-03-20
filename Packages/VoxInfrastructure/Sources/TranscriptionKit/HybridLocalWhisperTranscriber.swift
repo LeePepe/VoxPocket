@@ -242,10 +242,9 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
             }
             logger.info("WhisperKit result: \(whisperText.count) chars")
 
-            // 若两路识别器都有结果且配置了合并器，交给 LLM 合并
-            if merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText {
-                logger.info("Merging Apple Speech + WhisperKit via LLM")
-            }
+            let useMerger = merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText
+            if useMerger { logger.info("Merging Apple Speech + WhisperKit via LLM") }
+
             let finalText = await mergedTranscription(
                 appleSpeech: appleSpeechText,
                 whisper: whisperText,
@@ -256,7 +255,9 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
                 text: finalText, type: .final,
                 confidence: nil, timestamp: Date(), locale: recordingLocale
             )
-            liveResultSubject.send(result)
+            // LLM 合并后直接 commit，不再通过 liveResultSubject 推中间更新
+            // 非 LLM 路径（纯 WhisperKit）保持原有行为，同时更新 live 显示
+            if !useMerger { liveResultSubject.send(result) }
             finalResultSubject.send(result)
         } catch {
             logger.error("WhisperKit error: \(error.localizedDescription)")

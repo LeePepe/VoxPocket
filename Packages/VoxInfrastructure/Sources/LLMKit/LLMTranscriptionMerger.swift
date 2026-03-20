@@ -14,17 +14,20 @@ public final class LLMTranscriptionMerger: TranscriptionMerger, Sendable {
     }
 
     public func merge(appleSpeech: String, whisper: String) async throws -> String {
+        // 让模型"选择"更准确的一个，而非"合成"——防止模型自由发挥产生幻觉
         let prompt = """
-        你是语音识别结果合并专家。以下是两个识别器对同一段语音的识别结果：
+        以下是对同一段语音的两条识别结果，请选择其中更准确、更完整的一条，原文输出，不做任何增删改动：
 
-        识别器1（Apple Speech，快速实时）：
-        \(appleSpeech)
-
-        识别器2（Whisper，高精度离线）：
-        \(whisper)
-
-        请综合两个识别结果，输出最准确的最终文本。保留原始语言，直接输出文本内容，不要添加任何解释或前缀。
+        结果A：\(appleSpeech)
+        结果B：\(whisper)
         """
-        return try await llmService.complete(prompt: prompt)
+        let output = try await llmService.complete(prompt: prompt)
+
+        // 合理性校验：若输出长度超过两个输入中较长者的 1.5 倍，视为幻觉，回退到 whisper
+        let maxInputLength = max(appleSpeech.count, whisper.count)
+        guard output.count <= Int(Double(maxInputLength) * 1.5) else {
+            return whisper
+        }
+        return output
     }
 }
