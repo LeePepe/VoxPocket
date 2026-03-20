@@ -76,12 +76,23 @@ extension DefaultRefinementUseCase: RefinementUseCase {
     }
 
     public func refineStreaming(customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
+        refineStreaming(customPrompt: customPrompt, transcriptionMetadata: nil)
+    }
+
+    public func refineStreaming(
+        customPrompt: String?,
+        transcriptionMetadata: TranscriptionMetadata?
+    ) -> AsyncThrowingStream<RefinementEvent, Error> {
         let text = editingUseCase.currentText
         guard !text.isEmpty else {
             return AsyncThrowingStream { $0.finish() }
         }
 
-        let request = RefinementRequest(text: text, customPrompt: customPrompt)
+        let request = RefinementRequest(
+            text: text,
+            customPrompt: customPrompt,
+            transcriptionMetadata: transcriptionMetadata
+        )
         nonisolated(unsafe) let stateSubject = self.stateSubject
         let llmService = self.llmService
 

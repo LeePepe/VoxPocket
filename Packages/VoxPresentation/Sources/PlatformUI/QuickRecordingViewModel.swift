@@ -295,7 +295,15 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     private func performRefinement() async {
-        let stream = refinementUseCase.refineStreaming(customPrompt: nil)
+        let metadata = TranscriptionMetadata(
+            type: .final,
+            confidence: nil,
+            locale: transcriptionUseCase.currentLanguage
+        )
+        let stream = refinementUseCase.refineStreaming(
+            customPrompt: nil,
+            transcriptionMetadata: metadata
+        )
 
         streamingTask = Task { [weak self] in
             guard let self else { return }
@@ -312,15 +320,53 @@ public final class QuickRecordingViewModel: ObservableObject {
                 }
 
                 if !Task.isCancelled {
-                    await self.completeWithText(self.refinedText)
+                    let outputText = self.ensureSentenceTerminator(self.refinedText)
+                    self.logger.log(.debug, "Refinement completed", context: [
+                        "raw_length": self.rawTranscription.count,
+                        "refined_length": self.refinedText.count,
+                        "output_length": outputText.count,
+                        "text_changed": outputText != self.rawTranscription
+                    ])
+                    await self.completeWithText(outputText)
                 }
             } catch {
                 if !Task.isCancelled {
                     // 优化失败，使用原始转录
-                    await self.completeWithText(self.rawTranscription)
+                    let outputText = self.ensureSentenceTerminator(self.rawTranscription)
+                    self.logger.log(.debug, "Refinement failed, fallback to raw transcription", context: [
+                        "raw_length": self.rawTranscription.count,
+                        "output_length": outputText.count,
+                        "text_changed": outputText != self.rawTranscription
+                    ])
+                    await self.completeWithText(outputText)
                 }
             }
         }
+    }
+
+    private static let sentenceTerminators = CharacterSet(charactersIn: ".!?。！？")
+    private static let trailingClosers = CharacterSet(charactersIn: "\"'”’）)]】》」』")
+
+    /// 确保输出文本有句末终止标点，避免模型偶发返回无标点结果。
+    private func ensureSentenceTerminator(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        guard !Self.endsWithSentenceTerminator(trimmed) else { return trimmed }
+
+        let code = transcriptionUseCase.currentLanguage.language.languageCode?.identifier ?? ""
+        let terminator = code.hasPrefix("zh") ? "。" : "."
+        return trimmed + terminator
+    }
+
+    private static func endsWithSentenceTerminator(_ text: String) -> Bool {
+        let scalars = Array(text.unicodeScalars)
+        guard !scalars.isEmpty else { return false }
+
+        var index = scalars.count - 1
+        while trailingClosers.contains(scalars[index]), index > 0 {
+            index -= 1
+        }
+        return sentenceTerminators.contains(scalars[index])
     }
 
     /// 复制到剪贴板、模拟粘贴、触发完成回调
@@ -338,7 +384,8 @@ public final class QuickRecordingViewModel: ObservableObject {
         do {
             try await clipboardService.simulatePaste()
             logger.log(.debug, "Pasted refined text", context: [
-                "text_length": text.count
+                "text_length": text.count,
+                "text_changed_from_raw": text != rawTranscription
             ])
         } catch {
             logger.log(.debug, "Paste simulation failed", context: [

@@ -69,9 +69,30 @@ public protocol RefinementUseCase: AnyObject, Sendable {
     /// - Returns: 异步事件流（包含状态和文本块）
     func refineStreaming(customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error>
 
+    /// 流式优化（带转录元数据）
+    ///
+    /// - Parameters:
+    ///   - customPrompt: 自定义提示词
+    ///   - transcriptionMetadata: 转录元数据（可选）
+    /// - Returns: 异步事件流（包含状态和文本块）
+    func refineStreaming(
+        customPrompt: String?,
+        transcriptionMetadata: TranscriptionMetadata?
+    ) -> AsyncThrowingStream<RefinementEvent, Error>
+
     /// 取消当前优化
     func cancel()
 
     /// 检查 LLM 服务是否已配置
     var isConfigured: Bool { get }
+}
+
+public extension RefinementUseCase {
+    func refineStreaming(
+        customPrompt: String?,
+        transcriptionMetadata: TranscriptionMetadata?
+    ) -> AsyncThrowingStream<RefinementEvent, Error> {
+        _ = transcriptionMetadata
+        return refineStreaming(customPrompt: customPrompt)
+    }
 }
