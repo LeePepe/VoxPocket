@@ -34,7 +34,17 @@ public final class LLMTranscriptionMerger: TranscriptionMerger, Sendable {
         - 输出长度不超过 \(maxLen + 5) 个字符
         - 直接输出文本，不加任何解释
         """
-        let output = try await llmService.complete(prompt: prompt)
+        logger.info("merge() — Prompt: '\(prompt)'")
+
+        let output: String
+        do {
+            output = try await llmService.complete(prompt: prompt)
+        } catch {
+            logger.error("merge() — LLM call failed: \(error). Falling back to Whisper.")
+            return whisper
+        }
+
+        logger.info("merge() — LLM raw output: '\(output)'")
 
         // 合理性校验：输出超过较长输入的 1.5 倍视为幻觉，回退到 whisper
         guard output.count <= Int(Double(maxLen) * 1.5) else {
