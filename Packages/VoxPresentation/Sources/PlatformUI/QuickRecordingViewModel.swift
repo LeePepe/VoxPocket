@@ -187,12 +187,14 @@ public final class QuickRecordingViewModel: ObservableObject {
             rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask)
             liveTranscription = rawTranscription
             logger.log(.debug, "Recording stopped", context: [
-                "transcription_length": rawTranscription.count
+                "transcription_length": rawTranscription.count,
+                "transcription_preview": String(rawTranscription.prefix(30))
             ])
 
             guard !rawTranscription.isEmpty else {
                 recorderStatus = .idle
                 isProcessing = false
+                logger.debug("stopRecording: rawTranscription empty → calling onNoResult")
                 onNoResult?()
                 return
             }
@@ -226,26 +228,37 @@ public final class QuickRecordingViewModel: ObservableObject {
 
     // MARK: - LLM 优化 → 复制粘贴 → 完成
 
-    /// 停止录音后，短暂等待识别流的尾部增量收敛，避免松手瞬间丢字。
+    /// 停止录音后，等待识别流的最终结果收敛，避免松手瞬间丢字。
+    ///
+    /// 优先等待 finalResultPublisher（包含 WhisperKit + LLM 合并结果），
+    /// 超时后回退到轮询 liveTranscription 收敛。
     private func waitForCompletedTranscription(
         finalResultTask: Task<String?, Never>,
         settleMaxWait: TimeInterval = 0.8
     ) async -> String {
         if let finalText = await finalResultTask.value {
+            logger.debug("waitForCompletedTranscription: got finalResult '\(finalText.prefix(30))'")
             return finalText
         }
 
+        logger.debug("waitForCompletedTranscription: finalResultTask timed out, falling back to settle (liveTranscription='\(self.liveTranscription.prefix(30))')")
         return await waitForTranscriptionToSettle(maxWait: settleMaxWait)
     }
 
-    private func makeFinalResultWaitTask(timeout: TimeInterval = 1.2) -> Task<String?, Never> {
-        Task { [transcriptionUseCase] in
+    /// 超时时间需覆盖完整的 WhisperKit 解码 + LLM 合并耗时（实测可达 ~2.6s）。
+    /// stopRecording() 本身已 await 完整管道，因此 finalResultSubject.send() 必然在
+    /// stopRecording() 返回前触发——只要本 Task 未超时即可收到。
+    private func makeFinalResultWaitTask(timeout: TimeInterval = 15.0) -> Task<String?, Never> {
+        let startTime = Date()
+        return Task { [transcriptionUseCase, logger] in
             await withTaskGroup(of: String?.self) { group in
                 group.addTask {
                     do {
                         for try await result in transcriptionUseCase.finalResultPublisher.values {
                             let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
                             if !text.isEmpty {
+                                let elapsed = Date().timeIntervalSince(startTime)
+                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s — '\(text.prefix(30))'")
                                 return text
                             }
                         }
@@ -258,6 +271,8 @@ public final class QuickRecordingViewModel: ObservableObject {
 
                 group.addTask {
                     try? await Task.sleep(for: .seconds(timeout))
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    logger.debug("finalResultTask: timed out after \(String(format: "%.2f", elapsed))s (limit=\(timeout)s)")
                     return nil
                 }
 
