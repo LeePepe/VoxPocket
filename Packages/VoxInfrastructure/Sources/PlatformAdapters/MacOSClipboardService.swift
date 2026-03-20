@@ -75,18 +75,14 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
             throw ClipboardError.eventCreationFailed
         }
 
-        // 发送事件序列
+        // 同步发送全部事件——HID 事件队列按顺序处理，无需延迟。
+        // 不可在此使用 Task.sleep：若外层 Task 被取消（如窗口关闭），
+        // sleep 会抛出 CancellationError，导致 cmdDown 已发出但 cmdUp 未发出，
+        // 造成 Command 键卡住，后续所有按键都触发快捷键。
         let tapLocation = CGEventTapLocation.cghidEventTap
-
         cmdDown.post(tap: tapLocation)
-        try await Task.sleep(for: .milliseconds(10))
-
         vDown.post(tap: tapLocation)
-        try await Task.sleep(for: .milliseconds(10))
-
         vUp.post(tap: tapLocation)
-        try await Task.sleep(for: .milliseconds(10))
-
         cmdUp.post(tap: tapLocation)
 
         logger.debug("Paste simulation complete")
