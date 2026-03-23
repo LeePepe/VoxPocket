@@ -7,19 +7,30 @@ Paste the prompt below into Claude Code to spawn the team.
 
 ## Team Roles
 
+### Tier 1 — Claude agents (`.claude/agents/`)
+
+Spawned as Claude Code teammates. Full reasoning, coordination, and tool access.
+
 | Role | Agent | Responsibilities |
 |------|-------|-----------------|
 | **Orchestrator** | `orchestrator` | Single entry point, dispatches work, synthesizes results |
 | **Planner** | `planner` | Implementation plans, layer breakdown, risk assessment |
-| **Domain Expert** | `domain-expert` | VoxDomain models, Patch/Checkpoint, VoxError |
-| **Transcription Expert** | `transcription-expert` | Audio capture, AppleSpeechTranscriber, silence detection |
-| **LLM Expert** | `llm-expert` | LLMKit, refinement pipeline, RefinementPromptBuilder |
-| **Persistence Expert** | `persistence-expert` | SwiftData, SessionRepository, SettingsRepository |
-| **Use Case Orchestrator** | `use-case-orchestrator` | Use cases, ServiceContainer DI, cross-layer flows |
-| **UI Expert** | `ui-expert` | SwiftUI views, ViewModels, ViewState, Theme |
-| **Platform Expert** | `platform-expert` | macOS/iOS adapters, hotkeys, accessibility |
-| **Designer** | `designer` | UI/UX decisions, Liquid Glass, design system |
-| **Local Reviewer Meta** | `local-reviewer-meta` | Review gate config, local-review-skill health |
+
+### Tier 2 — Codex agents (`.claude/codex-agents/`)
+
+Invoked via `codex -q "$(cat .claude/codex-agents/<file>)\n\nTask: ..."`. Focused, cost-efficient specialists.
+
+| Role | File | Responsibilities |
+|------|------|-----------------|
+| **Domain Expert** | `domain-expert.md` | VoxDomain models, Patch/Checkpoint, VoxError |
+| **Transcription Expert** | `transcription-expert.md` | Audio capture, AppleSpeechTranscriber, silence detection |
+| **LLM Expert** | `llm-expert.md` | LLMKit, refinement pipeline, RefinementPromptBuilder |
+| **Persistence Expert** | `persistence-expert.md` | SwiftData, SessionRepository, SettingsRepository |
+| **Use Case Orchestrator** | `use-case-orchestrator.md` | Use cases, ServiceContainer DI, cross-layer flows |
+| **UI Expert** | `ui-expert.md` | SwiftUI views, ViewModels, ViewState, Theme |
+| **Platform Expert** | `platform-expert.md` | macOS/iOS adapters, hotkeys, accessibility |
+| **Designer** | `designer.md` | UI/UX decisions, Liquid Glass, design system |
+| **Local Reviewer Meta** | `local-reviewer-meta.md` | Review gate config, local-review-skill health (read-only auditor) |
 
 ---
 
@@ -35,34 +46,39 @@ Paste the prompt below into Claude Code to spawn the team.
 
 ## Spawn Prompt
 
-Use this prompt in Claude Code to start the VoxPocket team:
+Use this prompt in Claude Code to start the VoxPocket team (2 Claude agents only):
 
 ```
-Create an agent team for VoxPocket with these teammates:
+Create an agent team for VoxPocket with two Claude teammates:
 
-1. **orchestrator** — entry point, coordinates all work, synthesizes results. Use agent definition at .claude/agents/orchestrator.md.
+1. **orchestrator** — single entry point, coordinates all work, invokes planner for complex tasks, calls codex specialists via bash for implementation. Use .claude/agents/orchestrator.md.
 
 2. **planner** — breaks down features into layered steps respecting the VoxDomain→VoxInfrastructure→VoxApplication→VoxPresentation hierarchy. Use .claude/agents/planner.md.
 
-3. **domain-expert** — owns VoxDomain models, Patch mechanism, TextHistory. Use .claude/agents/domain-expert.md.
+Specialist work (domain, ui, persistence, llm, platform, etc.) is handled by codex agents in .claude/codex-agents/ invoked via bash by the orchestrator. Do NOT spawn Claude teammates for those roles.
+```
 
-4. **transcription-expert** — owns audio capture and AppleSpeechTranscriber. Use .claude/agents/transcription-expert.md.
+## Invoking Codex Specialists
 
-5. **llm-expert** — owns LLMKit, refinement pipeline, intent recognition. Use .claude/agents/llm-expert.md.
+From the orchestrator or directly from the team lead:
 
-6. **persistence-expert** — owns SwiftData, SessionRepository, SettingsRepository. Use .claude/agents/persistence-expert.md.
+```bash
+# Single specialist
+codex -q "$(cat .claude/codex-agents/domain-expert.md)
 
-7. **use-case-orchestrator** — owns use cases and ServiceContainer wiring. Use .claude/agents/use-case-orchestrator.md.
+Task: Add a new field 'exportedAt: Date?' to the Session model.
+Context: $(cat Packages/VoxDomain/Sources/VoxDomain/CoreModels/Session.swift)"
 
-8. **ui-expert** — owns SwiftUI views and ViewModels. Use .claude/agents/ui-expert.md.
+# Parallel specialists
+codex -q "$(cat .claude/codex-agents/ui-expert.md)
 
-9. **platform-expert** — owns macOS/iOS platform adapters. Use .claude/agents/platform-expert.md.
+Task: ..." > /tmp/ui_result.txt &
 
-10. **designer** — owns UI/UX design decisions and Liquid Glass design system. Use .claude/agents/designer.md.
+codex -q "$(cat .claude/codex-agents/llm-expert.md)
 
-11. **local-reviewer-meta** — monitors and enforces the local-review-skill configuration. Requirements: pre-commit runs code-quality+performance; pre-merge main runs security+no-microsoft-info. Use .claude/agents/local-reviewer-meta.md.
+Task: ..." > /tmp/llm_result.txt &
 
-Have the orchestrator receive tasks and route to the appropriate specialist. The local-reviewer-meta should audit .local-review.yml on startup and report any drift from requirements.
+wait && cat /tmp/ui_result.txt /tmp/llm_result.txt
 ```
 
 ---

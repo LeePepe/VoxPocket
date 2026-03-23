@@ -29,27 +29,47 @@ Skip planner for pure questions or design-only feedback.
 
 ### Step 3 — Dispatch to Specialist Agents
 
-Based on the planner's output, dispatch work **in parallel** when tasks are independent:
+Based on the planner's output, dispatch work **in parallel** when tasks are independent.
 
-```
-Independent tasks → launch in parallel (use Task tool)
-Sequential tasks  → wait for each before launching next
-```
+**Two tiers of agents:**
 
-**Agent routing table:**
+#### Tier 1 — Claude teammates (spawn via Agent tool)
 
 | Concern | Agent |
 |---------|-------|
-| VoxDomain models, Patch, VoxError | `domain-expert` |
-| Audio capture, speech recognition | `transcription-expert` |
-| LLMKit, providers, refinement, intent | `llm-expert` |
-| SwiftData, repositories, settings | `persistence-expert` |
-| Use cases, ServiceContainer DI | `use-case-orchestrator` |
-| SwiftUI views, ViewModels | `ui-expert` |
-| macOS/iOS platform APIs, hotkeys | `platform-expert` |
-| UI/UX design decisions | `designer` |
-| Cross-layer planning | `planner` |
-| Review gate config / local-review-skill | `local-reviewer-meta` |
+| Cross-layer planning | `planner` (Claude) |
+
+#### Tier 2 — Codex specialists (invoke via Bash)
+
+Specialist agents live at `.claude/codex-agents/`. Invoke them with:
+
+```bash
+codex -q "$(cat /Users/tianpli/Development/VoxPocket/.claude/codex-agents/<agent>.md)
+
+Task: <specific task description>
+
+Diff / context:
+<paste relevant code or diff>"
+```
+
+| Concern | Codex agent file |
+|---------|-----------------|
+| VoxDomain models, Patch, VoxError | `domain-expert.md` |
+| Audio capture, speech recognition | `transcription-expert.md` |
+| LLMKit, providers, refinement, intent | `llm-expert.md` |
+| SwiftData, repositories, settings | `persistence-expert.md` |
+| Use cases, ServiceContainer DI | `use-case-orchestrator.md` |
+| SwiftUI views, ViewModels | `ui-expert.md` |
+| macOS/iOS platform APIs, hotkeys | `platform-expert.md` |
+| UI/UX design decisions | `designer.md` |
+| Review gate config / local-review-skill | `local-reviewer-meta.md` |
+
+Run independent codex tasks in parallel using background bash processes:
+```bash
+codex -q "..." > /tmp/domain_result.txt &
+codex -q "..." > /tmp/ui_result.txt &
+wait
+```
 
 ### Step 4 — Synthesize Results
 
