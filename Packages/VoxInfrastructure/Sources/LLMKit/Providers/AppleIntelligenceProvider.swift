@@ -221,11 +221,14 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
-            // 将待分析文本包裹在引号中，防止模型将其当作指令执行
-            let prompt = """
-            Text to analyze:
-            \"\"\"\(text)\"\"\"
-            """
+            // prompt 与 instruction 使用同一语言，避免 Apple Intelligence
+            // 对混合语言短文本检测失败（如中文被误判为其他语言）
+            let prompt: String
+            if validatedLocale.language.languageCode?.identifier.hasPrefix("zh") == true {
+                prompt = "请分析以下文字的意图：「\(text)」"
+            } else {
+                prompt = "Analyze the intent of this text: \"\(text)\""
+            }
             let response = try await session.respond(to: prompt)
             var jsonText = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -371,11 +374,14 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
-            // 将待分析文本包裹在引号中，防止模型将其当作指令执行
-            let prompt = """
-            Text to analyze:
-            \"\"\"\(text)\"\"\"
-            """
+            // prompt 与 instruction 使用同一语言，避免 Apple Intelligence
+            // 对混合语言短文本检测失败（如中文被误判为其他语言）
+            let prompt: String
+            if validatedLocale.language.languageCode?.identifier.hasPrefix("zh") == true {
+                prompt = "请分析以下文字的语气：「\(text)」"
+            } else {
+                prompt = "Analyze the tone of this text: \"\(text)\""
+            }
             let response = try await session.respond(to: prompt)
             var jsonText = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
 

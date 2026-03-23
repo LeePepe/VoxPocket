@@ -337,8 +337,20 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         await engine.stopStreaming()
 
         // 对全量音频做一次完整转录，捕捉流式解码漏掉的最后 <1s 内容
+        // 加 5 秒超时：避免 WhisperKit 多次 temperature fallback 导致 6+ 秒卡顿
         let languageCode = config.languageHint(for: recordingLocale)
-        let fullTranscription = try? await engine.transcribeAccumulatedAudio(languageCode: languageCode)
+        let fullTranscription: String? = await withTaskGroup(of: String?.self) { group in
+            group.addTask {
+                try? await engine.transcribeAccumulatedAudio(languageCode: languageCode)
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(5))
+                return nil
+            }
+            let result = await group.next()
+            group.cancelAll()
+            return result ?? nil
+        }
 
         let streamingText = _latestPartialText.withLock { $0 }.trimmingCharacters(in: .whitespacesAndNewlines)
         // 优先用完整转录（更全），fallback 到流式结果
@@ -771,6 +783,13 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
 
         var options = DecodingOptions()
         options.language = languageCode
+        // 限制 temperature fallback 次数（默认 5 次 → 2 次），减少短录音批量解码卡顿
+        options.temperatureFallbackCount = 2
+        // 放宽 firstTokenLogProbThreshold 避免在低质量音频上触发过多重试
+        options.firstTokenLogProbThreshold = -2.5
+        // 批量解码不需要 prefill，跳过可加快速度
+        options.usePrefillPrompt = false
+        options.usePrefillCache = false
 
         nonisolated(unsafe) let pipelineRef = pipeline
         let results = try await pipelineRef.transcribe(audioArray: allSamples, decodeOptions: options)
