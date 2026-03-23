@@ -13,9 +13,6 @@ commit:
       - id: code-quality
         prompt: "Review the diff for code quality issues: readability, naming, dead code, unnecessary complexity, missing error handling, code duplication. Flag serious issues as [ERROR] and minor improvements as [WARNING]."
 
-      - id: performance
-        prompt: "Review the diff for performance issues: unnecessary allocations, excessive copying, redundant computation, blocking calls on the main thread, inefficient data structures, missing async/await or Combine optimizations. Flag serious regressions as [ERROR] and minor improvements as [WARNING]."
-
       - id: no-microsoft-info
         prompt: "Review the diff for any Microsoft-specific information or fields: Azure endpoints, Microsoft tenant IDs, Microsoft account references, Office 365 or Teams-specific fields, Windows Registry paths, Microsoft copyright notices, OneDrive or SharePoint references, or any other Microsoft product or service identifiers. Flag any such content as [ERROR]."
 
