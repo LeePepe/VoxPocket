@@ -11,10 +11,10 @@ commit:
     fail_on: critical
     agents:
       - id: code-quality
-        prompt: "Review the diff for code quality issues: readability, naming, dead code, unnecessary complexity, missing error handling, code duplication. Flag serious issues as [ERROR] and minor improvements as [WARNING]."
+        prompt: "Review the diff for code quality issues: readability, naming, dead code, unnecessary complexity, missing error handling, code duplication. Flag serious issues as [ERROR] and minor improvements as [WARNING]. End your response with exactly one line: VERDICT: PASS, VERDICT: WARN, or VERDICT: FAIL."
 
       - id: performance
-        prompt: "Review the diff for performance issues: unnecessary allocations, excessive copying, redundant computation, blocking calls on the main thread, inefficient data structures, missing async/await or Combine optimizations. Flag serious regressions as [ERROR] and minor improvements as [WARNING]."
+        prompt: "Review the diff for performance issues in Swift/SwiftUI code: Thread.sleep or any blocking call on the main thread (ALWAYS [ERROR]), unnecessary allocations or excessive copying, redundant computation, missing async/await or Combine optimizations, inefficient data structures, synchronous network or disk I/O on the main thread. Flag serious regressions as [ERROR] and minor improvements as [WARNING]. End your response with exactly one line: VERDICT: PASS, VERDICT: WARN, or VERDICT: FAIL."
 
 push: []
 
@@ -24,7 +24,7 @@ merge_to_main:
     fail_on: critical
     agents:
       - id: security
-        prompt: "Review the diff for security issues: injection vulnerabilities, insecure data handling, hardcoded secrets, improper authentication or authorization. Flag critical issues as [ERROR] and potential weaknesses as [WARNING]."
+        prompt: "Review the diff for security issues: hardcoded secrets or API keys (ALWAYS [ERROR]), injection vulnerabilities, insecure data handling, improper authentication or authorization, sensitive data in logs. Flag critical issues as [ERROR] and potential weaknesses as [WARNING]. End your response with exactly one line: VERDICT: PASS, VERDICT: WARN, or VERDICT: FAIL."
 
       - id: no-microsoft-info
-        prompt: "Review the diff for any Microsoft-specific information or fields: Azure endpoints, Microsoft tenant IDs, Microsoft account references, Office 365 or Teams-specific fields, Windows Registry paths, Microsoft copyright notices, OneDrive or SharePoint references, or any other Microsoft product or service identifiers. Flag any such content as [ERROR]."
+        prompt: "Review the diff for any Microsoft-specific information or fields: Azure endpoints, Microsoft tenant IDs, Microsoft account references, Office 365 or Teams-specific fields, Windows Registry paths, Microsoft copyright notices, OneDrive or SharePoint references, or any other Microsoft product or service identifiers. Flag any such content as [ERROR]. End your response with exactly one line: VERDICT: PASS, VERDICT: WARN, or VERDICT: FAIL."

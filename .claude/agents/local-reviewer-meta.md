@@ -103,27 +103,28 @@ If reviewers ran but produced no `VERDICT:` tag, the reviewer prompt needs to be
 
 Verify that when a reviewer returns `VERDICT: FAIL`, the auto_fix loop actually modifies the staged files.
 
+Use the `merge_to_main` stage — the `security` reviewer explicitly flags hardcoded secrets as [ERROR], making it the reliable trigger for a FAIL verdict.
+
 ```bash
 cd /Users/tianpli/Development/VoxPocket
 
-# Create a file with a clear [ERROR]-level issue that auto_fix should correct:
-# hardcoded credential string (will be caught by code-quality)
+# Create a file with a hardcoded secret — security reviewer ALWAYS flags these [ERROR]
 cat > /tmp/fix_test.swift << 'EOF'
 import Foundation
-let apiKey = "sk-abc123secret"  // hardcoded secret — should be flagged [ERROR]
+let apiKey = "sk-abc123secret"  // hardcoded secret — caught by security reviewer
 func doSomething() { print(apiKey) }
 EOF
 
 cp /tmp/fix_test.swift ./fix_test_DELETEME.swift
 git add fix_test_DELETEME.swift
 
-# Capture git hash of staged file before review
+# Capture diff hash before
 before_hash=$(git diff --cached -- fix_test_DELETEME.swift | sha256sum)
 
-# Run with auto_fix enabled (no WARN_ONLY, no TTY override needed since we check result)
-# Use LOCAL_REVIEW_AUTO_FIX=1 to force enable even without TTY
+# Run merge_to_main stage (security reviewer runs here)
+# LOCAL_REVIEW_AUTO_FIX=1 forces auto_fix even without TTY
 LOCAL_REVIEW_AUTO_FIX=1 LOCAL_REVIEW_WARN_ONLY=1 \
-  bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit \
+  bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main \
   2>&1 | tee /tmp/autofix_log.txt
 
 after_hash=$(git diff --cached -- fix_test_DELETEME.swift | sha256sum)
@@ -132,55 +133,63 @@ after_hash=$(git diff --cached -- fix_test_DELETEME.swift | sha256sum)
 git restore --staged fix_test_DELETEME.swift
 rm -f fix_test_DELETEME.swift
 
-# Compare
-if [[ "$before_hash" != "$after_hash" ]]; then
-  echo "[auto_fix] PASS — staged diff changed after auto_fix"
+# Assess
+if grep -q "VERDICT: FAIL" /tmp/autofix_log.txt; then
+  if [[ "$before_hash" != "$after_hash" ]]; then
+    echo "[auto_fix] PASS — VERDICT:FAIL triggered and fixer modified the staged diff"
+  else
+    echo "[auto_fix] FAIL — VERDICT:FAIL appeared but fixer did NOT modify staged files"
+    echo "  Check: auto_fix=true in .local-review.yml, LOCAL_REVIEW_AUTO_FIX not set to 0"
+  fi
 else
-  echo "[auto_fix] NOTE — staged diff unchanged (may be expected if VERDICT was PASS/WARN or fixer ran but produced identical output)"
+  echo "[auto_fix] INCONCLUSIVE — security reviewer did not return VERDICT:FAIL"
+  echo "  Check: security reviewer prompt requires VERDICT line; check /tmp/autofix_log.txt"
 fi
 ```
 
 **Interpret results:**
-- If `VERDICT: FAIL` appeared and diff hash changed → auto_fix is working correctly
-- If `VERDICT: FAIL` appeared but diff unchanged → auto_fix is not modifying files; check if `auto_fix: true` is set and `LOCAL_REVIEW_AUTO_FIX` env is not overriding to 0
-- If `VERDICT: PASS` or `VERDICT: WARN` → issue was not flagged as [ERROR]; adjust the test file or the reviewer prompt to force a FAIL
+- `VERDICT: FAIL` + diff changed → auto_fix working correctly ✓
+- `VERDICT: FAIL` + diff unchanged → fixer ran but didn't modify files; escalate to user
+- No `VERDICT: FAIL` → security reviewer prompt missing VERDICT line; update prompt to end with `VERDICT: PASS/WARN/FAIL`
 
-## Fixing Drift
-
-If `.local-review.yml` does not match requirements, overwrite it to match exactly:
-
-```yaml
-# .local-review.yml — VoxPocket local review gates
-
-auto_fix: true
-provider: claude
-model: claude-sonnet-4-6
-fail_on: critical
-
-commit:
-  reviewers:
-    parallel: true
-    fail_on: critical
-    agents:
-      - id: code-quality
-        prompt: "Review the diff for code quality issues: readability, naming, dead code, unnecessary complexity, missing error handling, code duplication. Flag serious issues as [ERROR] and minor improvements as [WARNING]."
-
-      - id: performance
-        prompt: "Review the diff for performance issues: unnecessary allocations, excessive copying, redundant computation, blocking calls on the main thread, inefficient data structures, missing async/await or Combine optimizations. Flag serious regressions as [ERROR] and minor improvements as [WARNING]."
-
-push: []
-
-merge_to_main:
-  reviewers:
-    parallel: true
-    fail_on: critical
-    agents:
-      - id: security
-        prompt: "Review the diff for security issues: injection vulnerabilities, insecure data handling, hardcoded secrets, improper authentication or authorization. Flag critical issues as [ERROR] and potential weaknesses as [WARNING]."
-
-      - id: no-microsoft-info
-        prompt: "Review the diff for any Microsoft-specific information or fields: Azure endpoints, Microsoft tenant IDs, Microsoft account references, Office 365 or Teams-specific fields, Windows Registry paths, Microsoft copyright notices, OneDrive or SharePoint references, or any other Microsoft product or service identifiers. Flag any such content as [ERROR]."
+**Also check for performance reviewer:** For commit stage, use `Thread.sleep` (explicitly flagged [ERROR] in updated prompt):
+```bash
+cat > /tmp/perf_test.swift << 'EOF'
+import Foundation
+func syncWait() { Thread.sleep(forTimeInterval: 3.0) }
+EOF
+cp /tmp/perf_test.swift ./perf_test_DELETEME.swift
+git add perf_test_DELETEME.swift
+LOCAL_REVIEW_AUTO_FIX=1 LOCAL_REVIEW_WARN_ONLY=1 \
+  bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit \
+  2>&1 | tee /tmp/perf_autofix_log.txt
+git restore --staged perf_test_DELETEME.swift
+rm -f perf_test_DELETEME.swift
+grep "VERDICT:" /tmp/perf_autofix_log.txt
 ```
+Expected: performance reviewer returns `VERDICT: FAIL` (Thread.sleep is explicitly marked [ERROR]).
+
+## Reporting Drift — Do NOT Fix Directly
+
+You are a **read-only auditor**. When you detect drift or issues:
+
+1. **Report findings clearly** to the team lead — describe exactly what is wrong and what the correct value should be
+2. **Do NOT edit `.local-review.yml`** or any other file in the repo
+3. **Do NOT commit** anything
+4. Let the team lead (or the skill installer) apply the fix
+
+Example report format:
+```
+[DRIFT] .local-review.yml: commit stage contains unexpected reviewer 'no-microsoft-info'.
+  Expected agents: [code-quality, performance]
+  Actual agents:   [code-quality, performance, no-microsoft-info]
+  Fix: remove the no-microsoft-info entry from commit.reviewers.agents
+
+[DRIFT] .local-review.yml: provider is 'codex', should be 'claude'
+  Fix: set provider: claude
+```
+
+The team lead will decide whether to apply changes directly or invoke the local-review-skill installer.
 
 ## Reviewer Output Format Requirements
 
@@ -215,6 +224,7 @@ Invoke this agent when:
 
 ## What You Do NOT Do
 
-- Do not modify the managed files (hooks, `review.sh`, `merge-to-main.sh`) — use the installer for that
-- Do not add reviewers outside the canonical list without explicit user approval
-- Do not change `provider` or `model` without checking that the CLI is available
+- **Do not edit any file** in the repo — you are read-only. Report drift; let the team lead fix it.
+- Do not commit, stage, or unstage real project files
+- Do not run the skill installer yourself — report the need and let the team lead run it
+- The only files you may create are temporary test files outside `.git` tracking (e.g., `*_DELETEME.swift`) used for check 5/6, which you must clean up immediately after the check
