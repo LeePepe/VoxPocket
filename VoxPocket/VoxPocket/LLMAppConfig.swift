@@ -25,7 +25,7 @@ enum LLMAppConfig {
     ///
     /// 设为 `.azureWhisper` 时，需在 Scheme 环境变量中配置 `whisperkey`。
     /// 未配置 API Key 时自动回退到 `.appleSpeech`。
-    static let defaultTranscriberProvider: TranscriberProvider = .hybridLocalWhisper
+    static let defaultTranscriberProvider: TranscriberProvider = .localWhisperKit
     /// 默认 provider（当用户未在设置中显式选择时）
     static let defaultProvider: LLMProviderType = .appleIntelligence
 
