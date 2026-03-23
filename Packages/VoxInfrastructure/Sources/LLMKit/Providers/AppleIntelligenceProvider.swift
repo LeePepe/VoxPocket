@@ -174,11 +174,16 @@ public actor AppleIntelligenceProvider: LLMProvider {
         logger.debug("开始意图分析（文本完成模式）- 文本长度: \(text.count)字符, locale: \(validatedLocale.identifier)")
         let perfStart = logger.performanceStart()
         do {
-            // 根据 locale 选择合适的指令语言
+            // 根据 locale 选择合适的指令语言。
+            // 重要：用户文本嵌入 instructions 而非 prompt，避免 FoundationModels
+            // 对短 prompt 做语言检测时，因文本含 Latin 字符而误判为非支持语言（如 ro）。
             let instruction: String
+            let prompt: String
             if validatedLocale.language.languageCode?.identifier.hasPrefix("zh") == true {
                 instruction = """
-                你是一个语音意图识别助手。分析用户的语音转录文本，识别用户的真实意图。
+                你是一个语音意图识别助手。分析以下语音转录文字，识别用户的真实意图。
+
+                待分析的文字：「\(text)」
 
                 可能的意图类型：
                 - self_correction: 将口语化内容转为准确的文字表达（默认）
@@ -191,9 +196,12 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 请返回 JSON 格式（只输出 JSON，不要添加任何解释）：
                 {"intent": "意图类型", "confidence": 0.0-1.0}
                 """
+                prompt = "请分析意图，返回JSON格式"
             } else {
                 instruction = """
-                You are a voice intent recognition assistant. Analyze the user's speech transcription to identify their true intent.
+                You are a voice intent recognition assistant. Analyze the following speech transcription to identify the user's true intent.
+
+                Text to analyze: "\(text)"
 
                 Possible intent types:
                 - self_correction: Convert colloquial speech to accurate written text (default)
@@ -206,6 +214,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 Return JSON format only (no explanation):
                 {"intent": "intent_type", "confidence": 0.0-1.0}
                 """
+                prompt = "Analyze the intent and return JSON"
             }
 
             logger.log(.debug, "意图分析配置", context: [
@@ -221,14 +230,6 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
-            // prompt 与 instruction 使用同一语言，避免 Apple Intelligence
-            // 对混合语言短文本检测失败（如中文被误判为其他语言）
-            let prompt: String
-            if validatedLocale.language.languageCode?.identifier.hasPrefix("zh") == true {
-                prompt = "请分析以下文字的意图：「\(text)」"
-            } else {
-                prompt = "Analyze the intent of this text: \"\(text)\""
-            }
             let response = try await session.respond(to: prompt)
             var jsonText = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -327,11 +328,16 @@ public actor AppleIntelligenceProvider: LLMProvider {
         logger.debug("开始语气分析（文本完成模式）- 文本长度: \(text.count)字符, locale: \(validatedLocale.identifier)")
         let perfStart = logger.performanceStart()
         do {
-            // 根据 locale 选择合适的指令语言
+            // 根据 locale 选择合适的指令语言。
+            // 重要：用户文本嵌入 instructions 而非 prompt，避免 FoundationModels
+            // 对短 prompt 做语言检测时，因文本含 Latin 字符而误判为非支持语言（如 ro）。
             let instruction: String
+            let prompt: String
             if validatedLocale.language.languageCode?.identifier.hasPrefix("zh") == true {
                 instruction = """
-                你是一个语气识别助手。分析文本的语气。
+                你是一个语气识别助手。分析以下文字的语气。
+
+                待分析的文字：「\(text)」
 
                 可能的语气类型：
                 - neutral: 中性
@@ -344,10 +350,12 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 请返回 JSON 格式（只输出 JSON，不要添加任何解释）：
                 {"tone": "语气类型", "confidence": 0.0-1.0}
                 """
+                prompt = "请分析语气，返回JSON格式"
             } else {
-                // 默认使用英文指令
                 instruction = """
-                You are a tone analysis assistant. Analyze the tone of the text.
+                You are a tone analysis assistant. Analyze the tone of the following text.
+
+                Text to analyze: "\(text)"
 
                 Possible tone types:
                 - neutral
@@ -360,6 +368,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 Return JSON format only (no explanation):
                 {"tone": "tone_type", "confidence": 0.0-1.0}
                 """
+                prompt = "Analyze the tone and return JSON"
             }
 
             logger.log(.debug, "语气分析配置", context: [
@@ -374,14 +383,6 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 instructions: instruction
             )
 
-            // prompt 与 instruction 使用同一语言，避免 Apple Intelligence
-            // 对混合语言短文本检测失败（如中文被误判为其他语言）
-            let prompt: String
-            if validatedLocale.language.languageCode?.identifier.hasPrefix("zh") == true {
-                prompt = "请分析以下文字的语气：「\(text)」"
-            } else {
-                prompt = "Analyze the tone of this text: \"\(text)\""
-            }
             let response = try await session.respond(to: prompt)
             var jsonText = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
 

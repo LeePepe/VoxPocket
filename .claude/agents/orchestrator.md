@@ -39,37 +39,32 @@ Based on the planner's output, dispatch work **in parallel** when tasks are inde
 |---------|-------|
 | Cross-layer planning | `planner` (Claude) |
 
-#### Tier 2 — Codex specialists (invoke via Bash)
+#### Tier 2 — Specialists (request via team lead)
 
-Specialist agents live at `.claude/codex-agents/`. Invoke them with:
+Specialist agent definitions live at `.claude/codex-agents/`. You cannot invoke them directly.
+**Message the team lead** and they will spawn the appropriate subagent.
 
-```bash
-codex -q "$(cat /Users/tianpli/Development/VoxPocket/.claude/codex-agents/<agent>.md)
-
-Task: <specific task description>
-
-Diff / context:
-<paste relevant code or diff>"
+Message format:
+```
+需要 [specialist] 处理以下任务：
+- 任务描述：…
+- 相关文件：Packages/…/….swift
+- 上下文：（关键信息）
 ```
 
-| Concern | Codex agent file |
-|---------|-----------------|
-| VoxDomain models, Patch, VoxError | `domain-expert.md` |
-| Audio capture, speech recognition | `transcription-expert.md` |
-| LLMKit, providers, refinement, intent | `llm-expert.md` |
-| SwiftData, repositories, settings | `persistence-expert.md` |
-| Use cases, ServiceContainer DI | `use-case-orchestrator.md` |
-| SwiftUI views, ViewModels | `ui-expert.md` |
-| macOS/iOS platform APIs, hotkeys | `platform-expert.md` |
-| UI/UX design decisions | `designer.md` |
-| Review gate config / local-review-skill | `local-reviewer-meta.md` |
+| Concern | Specialist |
+|---------|-----------|
+| VoxDomain models, Patch, VoxError | `domain-expert` |
+| Audio capture, speech recognition | `transcription-expert` |
+| LLMKit, providers, refinement, intent | `llm-expert` |
+| SwiftData, repositories, settings | `persistence-expert` |
+| Use cases, ServiceContainer DI | `use-case-orchestrator` |
+| SwiftUI views, ViewModels | `ui-expert` |
+| macOS/iOS platform APIs, hotkeys | `platform-expert` |
+| UI/UX design decisions | `designer` |
+| Review gate config / local-review-skill | `local-reviewer-meta` |
 
-Run independent codex tasks in parallel using background bash processes:
-```bash
-codex -q "..." > /tmp/domain_result.txt &
-codex -q "..." > /tmp/ui_result.txt &
-wait
-```
+For independent tasks, request multiple specialists in a single message so the team lead can dispatch them in parallel.
 
 ### Step 4 — Synthesize Results
 

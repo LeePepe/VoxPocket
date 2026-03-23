@@ -16,9 +16,9 @@ Spawned as Claude Code teammates. Full reasoning, coordination, and tool access.
 | **Orchestrator** | `orchestrator` | Single entry point, dispatches work, synthesizes results |
 | **Planner** | `planner` | Implementation plans, layer breakdown, risk assessment |
 
-### Tier 2 — Codex agents (`.claude/codex-agents/`)
+### Tier 2 — Specialist agents (`.claude/codex-agents/`)
 
-Invoked via `codex -q "$(cat .claude/codex-agents/<file>)\n\nTask: ..."`. Focused, cost-efficient specialists.
+System prompt definitions for focused specialist roles. Invoked by the team lead as subagents when orchestrator requests them. Codex CLI is not available — the team lead spawns a `general-purpose` subagent with the specialist's `.md` as context.
 
 | Role | File | Responsibilities |
 |------|------|-----------------|
@@ -51,35 +51,34 @@ Use this prompt in Claude Code to start the VoxPocket team (2 Claude agents only
 ```
 Create an agent team for VoxPocket with two Claude teammates:
 
-1. **orchestrator** — single entry point, coordinates all work, invokes planner for complex tasks, calls codex specialists via bash for implementation. Use .claude/agents/orchestrator.md.
+1. **orchestrator** — single entry point, coordinates all work, invokes planner for complex tasks.
+   When specialist work is needed, message the team lead with the task and relevant context —
+   the team lead will spawn the appropriate subagent. Use .claude/agents/orchestrator.md.
 
-2. **planner** — breaks down features into layered steps respecting the VoxDomain→VoxInfrastructure→VoxApplication→VoxPresentation hierarchy. Use .claude/agents/planner.md.
-
-Specialist work (domain, ui, persistence, llm, platform, etc.) is handled by codex agents in .claude/codex-agents/ invoked via bash by the orchestrator. Do NOT spawn Claude teammates for those roles.
+2. **planner** — breaks down features into layered steps respecting the
+   VoxDomain→VoxInfrastructure→VoxApplication→VoxPresentation hierarchy.
+   Use .claude/agents/planner.md.
 ```
 
-## Invoking Codex Specialists
+---
 
-From the orchestrator or directly from the team lead:
+## How Orchestrator Requests Specialist Work
 
-```bash
-# Single specialist
-codex -q "$(cat .claude/codex-agents/domain-expert.md)
+Orchestrator messages the team lead in this format:
 
-Task: Add a new field 'exportedAt: Date?' to the Session model.
-Context: $(cat Packages/VoxDomain/Sources/VoxDomain/CoreModels/Session.swift)"
-
-# Parallel specialists
-codex -q "$(cat .claude/codex-agents/ui-expert.md)
-
-Task: ..." > /tmp/ui_result.txt &
-
-codex -q "$(cat .claude/codex-agents/llm-expert.md)
-
-Task: ..." > /tmp/llm_result.txt &
-
-wait && cat /tmp/ui_result.txt /tmp/llm_result.txt
 ```
+需要 [specialist-name] 处理以下任务：
+- 任务描述：…
+- 相关文件：Packages/…/….swift
+- 上下文：（关键信息）
+```
+
+Team lead will spawn a `general-purpose` subagent with `.claude/codex-agents/<specialist>.md` as its system context.
+
+**Orchestrator does NOT:**
+- Run `codex` or bash commands for implementation work
+- Spawn Claude teammates for specialist roles
+- Edit files directly (delegate to team lead)
 
 ---
 
@@ -94,6 +93,6 @@ The `local-reviewer-meta` agent should be invoked:
 
 Audit command:
 ```bash
-LOCAL_REVIEW_WARN_ONLY=1 bash scripts/review.sh commit
-LOCAL_REVIEW_WARN_ONLY=1 bash scripts/review.sh merge_to_main
+LOCAL_REVIEW_WARN_ONLY=1 bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit
+LOCAL_REVIEW_WARN_ONLY=1 bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main
 ```
