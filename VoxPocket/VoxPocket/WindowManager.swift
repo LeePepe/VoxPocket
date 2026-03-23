@@ -249,9 +249,11 @@ public final class WindowManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.windowVisibility[.quickRecording] = false
-            // 如果正在录音，取消录音
+            // 仅在仍处于录音状态时取消，避免打断转录/优化流程
+            // （refinement 完成后会自行调用 onComplete 关闭窗口）
             if let vm = self?.viewModels[.quickRecording] as? QuickRecordingViewModel {
                 Task { @MainActor in
+                    guard vm.recorderStatus == .listening else { return }
                     await vm.cancelRecording()
                 }
             }

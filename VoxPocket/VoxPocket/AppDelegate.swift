@@ -228,6 +228,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // 兜底清理：如果没有进入转录/优化流程，立即释放录音占用，避免状态卡死
         switch viewModel.recorderStatus {
         case .idle, .error:
+            logger.debug("handleQuickRecordStop: fallback cleanup triggered, status=\(String(describing: viewModel.recorderStatus))")
             serviceContainer.endRecording()
             windowManager.hideWindow(.quickRecording)
         case .listening, .transcribing, .refining, .done:

@@ -170,16 +170,25 @@ public final class QuickRecordingViewModel: ObservableObject {
         recorderStatus = .transcribing
 
         let finalResultTask = makeFinalResultWaitTask()
+
+        // await 之前 snapshot Apple Speech 是否已有内容。
+        // 不能在 await 之后检查 liveTranscription：Apple Speech 结束时可能抛出错误，
+        // DefaultTranscriptionUseCase 的 catch block 会发 ""，Combine 的
+        // receive(on: .main) 会在 await 恢复时把 liveTranscription 覆盖为 ""，
+        // 导致误判为无内容、触发 onNoResult、提前关窗、丢弃 Whisper 结果。
+        let hadSpeechBeforeStop = !liveTranscription.isEmpty
+
         await Task.yield()
 
         do {
             try await recordingUseCase.stopRecording()
 
-            // 如果停止时完全没有文字，立刻触发 onNoResult，无需等待识别收敛
-            if liveTranscription.isEmpty {
+            // 如果停止前完全没有文字，立刻触发 onNoResult，无需等待识别收敛
+            if !hadSpeechBeforeStop {
                 finalResultTask.cancel()
                 recorderStatus = .idle
                 isProcessing = false
+                logger.debug("stopRecording: no speech content before stop → calling onNoResult")
                 onNoResult?()
                 return
             }
