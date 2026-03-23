@@ -49,6 +49,7 @@ Sequential tasks  → wait for each before launching next
 | macOS/iOS platform APIs, hotkeys | `platform-expert` |
 | UI/UX design decisions | `designer` |
 | Cross-layer planning | `planner` |
+| Review gate config / local-review-skill | `local-reviewer-meta` |
 
 ### Step 4 — Synthesize Results
 
