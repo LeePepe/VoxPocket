@@ -21,18 +21,16 @@ public final class LLMTranscriptionMerger: TranscriptionMerger, Sendable {
 
         // 策略：以 Whisper（高精度离线）为基底，用 Apple Speech（实时）交叉校正。
         // 明确限制输出只能来自两路结果中已有的内容，防止模型自由生成。
+        // 注意：避免在标签中使用会出现在候选词汇中的文字，防止 LLM 把标签当输出。
         let maxLen = max(appleSpeech.count, whisper.count)
         let prompt = """
-        以下是同一段语音经过两个识别器处理的结果：
+        A: \(appleSpeech)
+        B: \(whisper)
 
-        实时识别（Apple Speech）：\(appleSpeech)
-        高精度识别（Whisper）：\(whisper)
-
-        请以「高精度识别」为基础，参考「实时识别」校正其中明显的错字或漏字，输出最准确的语音内容。
-        要求：
-        - 只能使用两个结果中已出现的词，不得添加任何新内容
-        - 输出长度不超过 \(maxLen + 5) 个字符
-        - 直接输出文本，不加任何解释
+        以 B 为基础，参考 A 校正明显错字或漏字，输出最准确的语音转录文本。
+        只能使用 A 和 B 中已有的词，不得添加新内容。
+        输出长度不超过 \(maxLen + 5) 个字符。
+        只输出转录文本本身，不输出任何标签或解释。
         """
         logger.info("merge() — Prompt: '\(prompt)'")
 
