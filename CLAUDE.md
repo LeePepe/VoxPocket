@@ -112,6 +112,20 @@ macOS services in `PlatformAdapters`: `MacOSClipboardService`, `MacOSAccessibili
 
 Hooks live in `.githooks/` and are managed by `local-review-skill`. They run Claude Code review on commit, push, and merge-to-main. Config in `.local-review.yml`. If a hook blocks a commit, investigate the review output rather than bypassing with `--no-verify`.
 
+## Task Workflow
+
+When the user submits a problem or task, Claude MUST follow this sequence:
+
+1. **Create or update a Linear issue** under the VoxPocket project (TIA-6) via the Linear GraphQL API (`lin_api_*` key from env or user). The issue should have a clear title and initial description.
+2. **Invoke the planner agent** to expand the issue: break it into subtasks, define acceptance criteria, identify risks and dependencies. Update the Linear issue description with the enriched plan.
+3. **Create sub-issues** in Linear for each subtask, all parented to the main issue.
+4. **Assign subtasks to teammates** using the Agent tool in parallel where tasks are independent.
+
+Linear API endpoint: `https://api.linear.app/graphql`
+Team ID: `56d7d04f-ffb2-43f3-ad40-23fd78f551d8`
+Project ID: `662a9249-b377-47c0-ad20-ccca738f4e8e`
+VoxPocket parent issue: `dc74c224-59f0-4eb1-87d9-81a62a668da7` (TIA-6)
+
 ## Auto-Commit Workflow
 
 After every logical change, Claude MUST:
