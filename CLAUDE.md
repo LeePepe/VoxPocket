@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 VoxPocket is a macOS/iOS voice recording and transcription app built with SwiftUI. It captures audio, transcribes speech (default locale: `zh-Hans`), and refines text using Apple Intelligence LLM. The codebase uses Chinese comments throughout.
 
+**Linear**: https://linear.app/tianpeili/issue/TIA-6/voxpocket
+
 ## Build & Test Commands
 
 ```bash
