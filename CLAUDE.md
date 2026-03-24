@@ -20,11 +20,15 @@ swift build --package-path Packages/VoxPresentation
 
 # Run all tests for a package
 swift test --package-path Packages/VoxDomain
+swift test --package-path Packages/VoxApplication
 swift test --package-path Packages/VoxPresentation
 
-# Run a single test
+# Run a single test class or method
 swift test --package-path Packages/VoxPresentation --filter EditorAutoStopTests
+swift test --package-path Packages/VoxInfrastructure --filter TelemetryQueueTests
 ```
+
+> Note: `swift test` on `VoxInfrastructure` compiles all test targets together. Pre-existing failures in one target will block others from running.
 
 ## Architecture
 
@@ -35,32 +39,76 @@ VoxPresentation  (SwiftUI views, view models)
        ↓
 VoxApplication   (use cases / business logic)
        ↓
-VoxInfrastructure (services: TranscriptionKit, LLMKit, Persistence, Observability, PlatformAdapters, Preferences)
+VoxInfrastructure (TranscriptionKit · LLMKit · Persistence · Observability · PlatformAdapters · Preferences)
        ↓
 VoxDomain        (pure domain models: CoreModels, TextHistory — no external deps)
 ```
 
-The app entry point is `VoxPocket/VoxPocket/` with `ServiceContainer` as the singleton DI container.
+The app entry point is `VoxPocket/VoxPocket/` with `ServiceContainer` as the `@MainActor` singleton DI container.
 
 - **Swift Tools Version**: 6.2 | **Platforms**: iOS 26+, macOS 26+
-- **External dependency**: `swift-async-algorithms` (used in LLMKit)
+- **External dependencies**: `swift-async-algorithms` (LLMKit), `WhisperKit` (TranscriptionKit)
+
+## ServiceContainer Initialization
+
+`ServiceContainer.init()` runs synchronously on the main thread. Order matters:
+
+1. Logger + telemetry service
+2. Transcriber (selected by `LLMAppConfig.defaultTranscriberProvider`)
+3. `DefaultLLMService` + macOS platform services
+4. Use cases: `DefaultEditingUseCase` → `DefaultRecordingUseCase` → `DefaultTranscriptionUseCase` → `DefaultRefinementUseCase`
+5. `ProxySessionUseCase` starts backed by `InMemorySessionUseCase`; call `initializePersistence()` after first UI render to hot-swap to `SwiftDataSessionUseCase`
+6. **Quick recording stack** (macOS only): a fully isolated set of `quickTranscriber`, `quickRecordingUseCase`, `quickTranscriptionUseCase`, `quickRefinementUseCase` — separate from the main editor stack to prevent state pollution
 
 ## Key Patterns
 
-- **Protocol-driven DI**: Core contracts are protocols (`RecordingUseCase`, `EditingUseCase`, `LLMService`, `TextHistoryManaging`). Default implementations prefixed with `Default` (e.g., `DefaultRecordingUseCase`). Test doubles prefixed with `Fake` or `Mock`.
+- **Protocol-driven DI**: Core contracts are protocols (`RecordingUseCase`, `EditingUseCase`, `LLMService`, `TextHistoryManaging`). Default implementations prefixed with `Default`. Test doubles prefixed with `Fake` or `Mock`.
 - **Concurrency**: Hybrid Combine + async/await. Thread-safe state via `Mutex<State>` from the `Synchronization` framework. `@unchecked Sendable` used for Combine compatibility. `@MainActor` on view models and UI code.
 - **Streaming**: `AsyncThrowingStream` for transcription and LLM refinement events.
-- **State management**: ViewState protocols define the view-model contract. `@Published` properties drive SwiftUI updates.
+- **State management**: `ViewState` protocols define the view-model contract. `@Published` properties drive SwiftUI updates.
+- **ProxySessionUseCase**: Wraps any `SessionUseCase` and allows swapping the backing implementation at runtime without changing call sites.
 
 ## Key Flows
 
-- **Recording**: `EditorViewModel` → `RecordingUseCase` → `AppleSpeechTranscriber` (audio capture + speech recognition). Auto-stop triggers after 2.5s silence.
-- **Refinement**: `RefinementUseCase` → `LLMService` (`AppleIntelligenceProvider`) → streaming `RefinementEvent` results.
+- **Quick Recording** (macOS): `AppDelegate` hotkey (Fn) → `ServiceContainer.tryStartRecording()` → `WindowManager` shows floating panel → `QuickRecordingViewModel` orchestrates the full pipeline: `startRecording()` → `stopRecording()` → waits for final transcription (15s timeout) → `refineStreaming()` → `clipboardService.copy()` + `simulatePaste()` → `onComplete` callback → window hides.
+- **Full Editor**: `EditorViewModel` drives recording with 2.5s silence auto-stop. Refinement streamed via `RefinementUseCase.refineStreaming()`.
+- **Transcription**: `DefaultTranscriptionUseCase` bridges the `TranscriptionCoordinator` to two publishers — `liveTextPublisher` (real-time, may change) and `finalResultPublisher` (stable, emits once after stop).
+- **Refinement**: `RefinementUseCase` → `LLMService` → `AppleIntelligenceProvider` → streaming `RefinementEvent` results.
 - **Text History**: Patch-based undo/redo via `TextHistoryManaging` with `Checkpoint` snapshots.
+
+## Transcriber Providers
+
+Configured in `LLMAppConfig.defaultTranscriberProvider`:
+
+| Provider | Description |
+|---|---|
+| `.appleSpeech` | Apple Speech Recognition only |
+| `.localWhisperKit` | WhisperKit local model, falls back to AppleSpeech while loading |
+| `.hybridWhisper` | AppleSpeech real-time preview + Azure Whisper for final quality |
+| `.hybridLocalWhisper` | AppleSpeech real-time preview + local WhisperKit for final quality |
+
+For hybrid providers, `LLMTranscriptionMerger` uses an LLM call to reconcile the two transcripts.
+
+## Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `whisperkey` | Azure Whisper API key |
+| `kimikey` / `AZURE_API_KEY` | Azure AI Foundry API key |
+| `LOKI_ENDPOINT` | Loki push URL (debug defaults to `http://localhost:3100/loki/api/v1/push`) |
+| `LOKI_TOKEN` | Loki Bearer token for Grafana Cloud |
 
 ## Platform-Specific Code
 
-macOS services in PlatformAdapters: `MacOSClipboardService`, `MacOSAccessibilityService`, `MacOSGlobalHotkeyService`. Cross-platform protocols exist for each.
+macOS services in `PlatformAdapters`: `MacOSClipboardService`, `MacOSAccessibilityService`, `MacOSGlobalHotkeyService`, `MacOSClaudeInboxService`. Cross-platform protocols exist for each. `WindowManager` manages floating `NSPanel` windows (`FullPanel`, `QuickRecording`).
+
+## Telemetry
+
+`LokiTelemetryService` (in `Observability`) ships events to Grafana Loki. Offline events are persisted to `~/Library/Application Support/VoxPocket/telemetry/pending/` and retried on next `flush()`. `ServiceContainer.endRecording()` triggers a flush. Local stack: `cd docker/telemetry && docker compose up -d` → Grafana at `http://localhost:3000` (admin / voxpocket).
+
+## Git Hooks
+
+Hooks live in `.githooks/` and are managed by `local-review-skill`. They run Claude Code review on commit, push, and merge-to-main. Config in `.local-review.yml`. If a hook blocks a commit, investigate the review output rather than bypassing with `--no-verify`.
 
 ## Auto-Commit Workflow
 
