@@ -22,9 +22,15 @@ public final class QuickRecordingViewModel: ObservableObject {
     private let refinementUseCase: RefinementUseCase
     private let clipboardService: ClipboardService
     private let logger: Logger
+    private let telemetryService: (any TelemetryService)?
 
     private var cancellables = Set<AnyCancellable>()
     private var streamingTask: Task<Void, Never>?
+
+    // MARK: - 计时
+
+    private var sessionStartTime: Date?
+    private var transcriptionEndTime: Date?
 
     // MARK: - Published 状态
 
@@ -67,13 +73,15 @@ public final class QuickRecordingViewModel: ObservableObject {
         transcriptionUseCase: TranscriptionUseCase,
         refinementUseCase: RefinementUseCase,
         clipboardService: ClipboardService,
-        logger: Logger? = nil
+        logger: Logger? = nil,
+        telemetryService: (any TelemetryService)? = nil
     ) {
         self.recordingUseCase = recordingUseCase
         self.transcriptionUseCase = transcriptionUseCase
         self.refinementUseCase = refinementUseCase
         self.clipboardService = clipboardService
         self.logger = logger ?? PrintLogger(subsystem: "QuickRecordingVM")
+        self.telemetryService = telemetryService
 
         bindUseCases()
     }
@@ -139,6 +147,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             try await recordingUseCase.startRecording()
             isStartingRecordingInternal = false
             recorderStatus = .listening
+            sessionStartTime = Date()
             logger.debug("Recording started")
 
             if shouldStopAfterStart {
@@ -194,11 +203,24 @@ public final class QuickRecordingViewModel: ObservableObject {
             }
 
             rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask)
+            let now = Date()
+            transcriptionEndTime = now
             liveTranscription = rawTranscription
             logger.log(.debug, "Recording stopped", context: [
                 "transcription_length": rawTranscription.count,
                 "transcription_preview": String(rawTranscription.prefix(30))
             ])
+            if let start = sessionStartTime {
+                let durationMs = Int(now.timeIntervalSince(start) * 1000)
+                telemetryService?.track(
+                    name: TelemetryEventName.transcriptionCompleted.rawValue,
+                    properties: [
+                        "duration_ms": String(durationMs),
+                        "char_count": String(rawTranscription.count),
+                        "source": "quick"
+                    ]
+                )
+            }
 
             guard !rawTranscription.isEmpty else {
                 recorderStatus = .idle
@@ -319,6 +341,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     private func performRefinement() async {
+        let refinementStart = Date()
         let metadata = TranscriptionMetadata(
             type: .final,
             confidence: nil,
@@ -345,12 +368,22 @@ public final class QuickRecordingViewModel: ObservableObject {
 
                 if !Task.isCancelled {
                     let outputText = self.ensureSentenceTerminator(self.refinedText)
+                    let refinementMs = Int(Date().timeIntervalSince(refinementStart) * 1000)
                     self.logger.log(.debug, "Refinement completed", context: [
                         "raw_length": self.rawTranscription.count,
                         "refined_length": self.refinedText.count,
                         "output_length": outputText.count,
                         "text_changed": outputText != self.rawTranscription
                     ])
+                    self.telemetryService?.track(
+                        name: TelemetryEventName.refinementCompleted.rawValue,
+                        properties: [
+                            "duration_ms": String(refinementMs),
+                            "raw_length": String(self.rawTranscription.count),
+                            "refined_length": String(outputText.count),
+                            "source": "quick"
+                        ]
+                    )
                     await self.completeWithText(outputText)
                 }
             } catch {

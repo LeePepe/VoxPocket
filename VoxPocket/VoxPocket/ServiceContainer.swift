@@ -72,6 +72,10 @@ public final class ServiceContainer: ObservableObject {
     public let quickRefinementUseCase: DefaultRefinementUseCase
 #endif
 
+    // MARK: - 遥测
+
+    public let telemetryService: any TelemetryService
+
     // MARK: - 状态跟踪
 
     /// 当前是否有录音正在进行
@@ -84,6 +88,7 @@ public final class ServiceContainer: ObservableObject {
 
     private init() {
         logger = PrintLogger(subsystem: "ServiceContainer")
+        telemetryService = Self.makeTelemetryService()
         let azureConfig = Self.makeAzureFoundryConfig()
 
         // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
@@ -355,6 +360,44 @@ public final class ServiceContainer: ObservableObject {
         )
     }
 
+    // MARK: - 遥测工厂
+
+    /// 创建遥测服务
+    ///
+    /// Debug 默认连接本地 Docker Loki（`http://localhost:3100/loki/api/v1/push`）。
+    /// Release 须通过 `LOKI_ENDPOINT` 环境变量显式指定，否则回退到 Noop。
+    /// 可通过 `LOKI_TOKEN` 提供 Bearer token（Grafana Cloud）。
+    private static func makeTelemetryService() -> any TelemetryService {
+        let env = ProcessInfo.processInfo.environment
+
+        let endpoint: URL
+        if let urlString = env["LOKI_ENDPOINT"], let url = URL(string: urlString) {
+            endpoint = url
+        } else {
+            #if DEBUG
+            endpoint = URL(string: "http://localhost:3100/loki/api/v1/push")!
+            #else
+            return NoopTelemetryService()
+            #endif
+        }
+
+        var labels: [String: String] = ["app": "VoxPocket"]
+        #if DEBUG
+        labels["env"] = "development"
+        #else
+        labels["env"] = "production"
+        #endif
+        if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+            labels["version"] = version
+        }
+
+        return LokiTelemetryService(
+            endpoint: endpoint,
+            appLabels: labels,
+            authToken: env["LOKI_TOKEN"]
+        )
+    }
+
     // MARK: - 延迟持久化初始化
 
     /// 延迟初始化 SwiftData 持久化层
@@ -417,7 +460,8 @@ public final class ServiceContainer: ObservableObject {
             recordingUseCase: quickRecordingUseCase,
             transcriptionUseCase: quickTranscriptionUseCase,
             refinementUseCase: quickRefinementUseCase,
-            clipboardService: clipboardService
+            clipboardService: clipboardService,
+            telemetryService: telemetryService
         )
     }
 #endif
@@ -441,6 +485,10 @@ public final class ServiceContainer: ObservableObject {
         logger.log(.debug, "Recording started", context: [
             "source": source.rawValue
         ])
+        telemetryService.track(
+            name: TelemetryEventName.recordingStarted.rawValue,
+            properties: ["source": source.rawValue]
+        )
         return true
     }
 
@@ -449,6 +497,8 @@ public final class ServiceContainer: ObservableObject {
         isRecordingActive = false
         activeRecordingSource = nil
         logger.debug("Recording ended")
+        let svc = telemetryService
+        Task { await svc.flush() }
     }
 }
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 遥测事件
-public struct TelemetryEvent: Sendable {
+public struct TelemetryEvent: Codable, Sendable {
     /// 事件名称
     public let name: String
     /// 事件属性

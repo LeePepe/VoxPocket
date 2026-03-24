@@ -1,0 +1,121 @@
+{
+  "title": "VoxPocket Performance",
+  "uid": "voxpocket-perf",
+  "version": 1,
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Transcription Duration (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "loki" },
+          "expr": "sum by (source) (avg_over_time({app=\"VoxPocket\",event=\"transcription.completed\"} | logfmt | unwrap duration_ms [$__auto]))",
+          "legendFormat": "avg duration_ms ({{source}})",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "loki" },
+          "expr": "quantile_over_time(0.95, {app=\"VoxPocket\",event=\"transcription.completed\"} | logfmt | unwrap duration_ms [$__auto])",
+          "legendFormat": "p95 duration_ms",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Refinement Duration (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "loki" },
+          "expr": "avg_over_time({app=\"VoxPocket\",event=\"refinement.completed\"} | logfmt | unwrap duration_ms [$__auto])",
+          "legendFormat": "avg duration_ms",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "loki" },
+          "expr": "quantile_over_time(0.95, {app=\"VoxPocket\",event=\"refinement.completed\"} | logfmt | unwrap duration_ms [$__auto])",
+          "legendFormat": "p95 duration_ms",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Char Count per Session",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "loki" },
+          "expr": "avg_over_time({app=\"VoxPocket\",event=\"transcription.completed\"} | logfmt | unwrap char_count [$__auto])",
+          "legendFormat": "avg chars transcribed",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Session Rate (recordings / min)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "loki" },
+          "expr": "sum(rate({app=\"VoxPocket\",event=\"transcription.completed\"}[$__auto]))",
+          "legendFormat": "recordings/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Recent Events",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 10 },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki" },
+          "expr": "{app=\"VoxPocket\"}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
