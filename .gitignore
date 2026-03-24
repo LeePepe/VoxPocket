@@ -35,3 +35,9 @@ releases/
 
 # CSV files (可能是临时数据)
 *.csv
+
+# Personal developer hooks (each contributor sets up their own)
+.github/hooks/
+
+# Claude Code local settings
+.claude/settings.local.json

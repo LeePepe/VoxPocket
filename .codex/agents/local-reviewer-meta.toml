@@ -22,7 +22,7 @@ No other reviewers belong in these stages. The `pre-push` stage is intentionally
 ```bash
 # Verify skill is registered
 git config local-review.skill-path
-# Should return: /Users/tianpli/.claude/skills/local-review-skill
+# Should return: $HOME/.claude/skills/local-review-skill
 ```
 
 ## Audit Checklist
@@ -31,25 +31,25 @@ When invoked, run these checks in order:
 
 ### 1. Skill version check
 ```bash
-grep -m1 "local-review-skill version:" /Users/tianpli/Development/VoxPocket/scripts/review.sh
-cat /Users/tianpli/.claude/skills/local-review-skill/VERSION
+grep -m1 "local-review-skill version:" $(git rev-parse --show-toplevel)/scripts/review.sh
+cat $HOME/.claude/skills/local-review-skill/VERSION
 ```
 If installed version < skill version, recommend running:
 ```bash
-bash /Users/tianpli/.claude/skills/local-review-skill/scripts/install_local_review.sh --update /Users/tianpli/Development/VoxPocket
+bash $HOME/.claude/skills/local-review-skill/scripts/install_local_review.sh --update $(git rev-parse --show-toplevel)
 ```
 
 ### 2. Hook wiring check
 ```bash
-git -C /Users/tianpli/Development/VoxPocket config core.hooksPath
+git -C $(git rev-parse --show-toplevel) config core.hooksPath
 # Expected: .githooks
-ls /Users/tianpli/Development/VoxPocket/.githooks/
+ls $(git rev-parse --show-toplevel)/.githooks/
 # Expected: pre-commit, pre-merge-commit, pre-push
 ```
 Each hook must contain `exec "$skill_path/assets/repo-scripts/review.sh" <stage>`.
 
 ### 3. `.local-review.yml` compliance check
-Read `/Users/tianpli/Development/VoxPocket/.local-review.yml` and verify:
+Read `$(git rev-parse --show-toplevel)/.local-review.yml` and verify:
 - `provider: claude`
 - `model: claude-sonnet-4-6`
 - `commit.reviewers.agents` = exactly `[code-quality, performance]`
@@ -58,9 +58,9 @@ Read `/Users/tianpli/Development/VoxPocket/.local-review.yml` and verify:
 
 ### 4. Smoke test (empty diff)
 ```bash
-cd /Users/tianpli/Development/VoxPocket
-LOCAL_REVIEW_WARN_ONLY=1 bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit
-LOCAL_REVIEW_WARN_ONLY=1 bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main
+cd $(git rev-parse --show-toplevel)
+LOCAL_REVIEW_WARN_ONLY=1 bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit
+LOCAL_REVIEW_WARN_ONLY=1 bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main
 ```
 Both should exit 0. `WARN_ONLY` prevents blocking during the audit. Empty diff is expected to print "no diff to review — skipping AI reviewers".
 
@@ -69,7 +69,7 @@ Both should exit 0. `WARN_ONLY` prevents blocking during the audit. Empty diff i
 Create a temporary Swift file with deliberate issues, stage it, and trigger a dry-run review to confirm reviewers actually invoke the AI agent and produce VERDICT output.
 
 ```bash
-cd /Users/tianpli/Development/VoxPocket
+cd $(git rev-parse --show-toplevel)
 
 # Create synthetic test file with a deliberate quality issue (force sleep on main thread)
 cat > /tmp/local_review_test.swift << 'EOF'
@@ -85,7 +85,7 @@ cp /tmp/local_review_test.swift ./local_review_test_DELETEME.swift
 git add local_review_test_DELETEME.swift
 
 # Run commit stage with WARN_ONLY so it doesn't block; capture output
-LOCAL_REVIEW_WARN_ONLY=1 bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit 2>&1 | tee /tmp/review_execution_log.txt
+LOCAL_REVIEW_WARN_ONLY=1 bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit 2>&1 | tee /tmp/review_execution_log.txt
 
 # Clean up
 git restore --staged local_review_test_DELETEME.swift
@@ -107,7 +107,7 @@ Verify that when a reviewer returns `VERDICT: FAIL`, the auto_fix loop actually 
 Use the `merge_to_main` stage — the `security` reviewer explicitly flags hardcoded secrets as [ERROR], making it the reliable trigger for a FAIL verdict.
 
 ```bash
-cd /Users/tianpli/Development/VoxPocket
+cd $(git rev-parse --show-toplevel)
 
 # Create a file with a hardcoded secret — security reviewer ALWAYS flags these [ERROR]
 cat > /tmp/fix_test.swift << 'EOF'
@@ -125,7 +125,7 @@ before_hash=$(git diff --cached -- fix_test_DELETEME.swift | sha256sum)
 # Run merge_to_main stage (security reviewer runs here)
 # LOCAL_REVIEW_AUTO_FIX=1 forces auto_fix even without TTY
 LOCAL_REVIEW_AUTO_FIX=1 LOCAL_REVIEW_WARN_ONLY=1 \
-  bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main \
+  bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main \
   2>&1 | tee /tmp/autofix_log.txt
 
 after_hash=$(git diff --cached -- fix_test_DELETEME.swift | sha256sum)
@@ -162,7 +162,7 @@ EOF
 cp /tmp/perf_test.swift ./perf_test_DELETEME.swift
 git add perf_test_DELETEME.swift
 LOCAL_REVIEW_AUTO_FIX=1 LOCAL_REVIEW_WARN_ONLY=1 \
-  bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit \
+  bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit \
   2>&1 | tee /tmp/perf_autofix_log.txt
 git restore --staged perf_test_DELETEME.swift
 rm -f perf_test_DELETEME.swift

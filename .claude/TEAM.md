@@ -93,6 +93,6 @@ The `local-reviewer-meta` agent should be invoked:
 
 Audit command:
 ```bash
-LOCAL_REVIEW_WARN_ONLY=1 bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit
-LOCAL_REVIEW_WARN_ONLY=1 bash /Users/tianpli/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main
+LOCAL_REVIEW_WARN_ONLY=1 bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit
+LOCAL_REVIEW_WARN_ONLY=1 bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main
 ```

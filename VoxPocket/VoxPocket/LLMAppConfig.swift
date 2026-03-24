@@ -25,16 +25,26 @@ enum LLMAppConfig {
     ///
     /// 设为 `.azureWhisper` 时，需在 Scheme 环境变量中配置 `whisperkey`。
     /// 未配置 API Key 时自动回退到 `.appleSpeech`。
-    static let defaultTranscriberProvider: TranscriberProvider = .localWhisperKit
+    static let defaultTranscriberProvider: TranscriberProvider = .hybridWhisper
     /// 默认 provider（当用户未在设置中显式选择时）
     static let defaultProvider: LLMProviderType = .appleIntelligence
 
-    /// Azure Foundry 固定配置
-    static let azureEndpoint = URL(string: "https://usllm.services.ai.azure.com")!
-    static let azureModelIdentifier = "Kimi-K2.5"
+    /// Azure Foundry 配置
+    ///
+    /// `azureEndpoint`：从环境变量 `AZURE_FOUNDRY_ENDPOINT` 读取；
+    /// 未配置时使用空占位，Azure 功能将不可用。
+    /// `azureModelIdentifier`：可通过 `AZURE_FOUNDRY_MODEL` 覆盖。
+    static let azureEndpoint: URL = {
+        let env = ProcessInfo.processInfo.environment
+        if let raw = env["AZURE_FOUNDRY_ENDPOINT"], let url = URL(string: raw) { return url }
+        return URL(string: "https://your-resource.services.ai.azure.com")!
+    }()
+    static let azureModelIdentifier: String = {
+        ProcessInfo.processInfo.environment["AZURE_FOUNDRY_MODEL"] ?? "gpt-4o"
+    }()
     static let azureAPIVersion = "2024-05-01-preview"
     static let azureAuthMode: AzureFoundryAuthMode = .bearer
-
+    
     /// 分析步骤 provider 覆盖（当前默认不覆盖，跟随当前 provider）
     static let analysisProviderOverrides: [AnalysisStep: LLMProviderType] = [.intent: .appleIntelligence, .tone: .appleIntelligence]
 
