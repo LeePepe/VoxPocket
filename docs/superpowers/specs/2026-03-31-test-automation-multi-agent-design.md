@@ -17,7 +17,7 @@ VoxPocket 当前已有部分单元测试与少量 UI 测试骨架，但在以下
 1. 建立“模块负责完善测试 + 全局负责执行”的多 agent 体系。  
 2. 在 GitHub Actions 上落地 `PR + Nightly` 双流水线。  
 3. 同时覆盖功能正确性、用户视角 E2E、语音质量、性能回归。  
-4. 将截图采集与可选 OCR 归档纳入统一产物，提升问题定位效率。
+4. 将截图采集纳入统一产物，提升问题定位效率。
 
 ## 2. 非目标
 
@@ -67,16 +67,56 @@ VoxPocket 当前已有部分单元测试与少量 UI 测试骨架，但在以下
 - 负责：统一执行编排、重试策略、结果聚合、artifact 上传、告警。  
 - 不负责：新增测试业务逻辑（仅执行与治理）。
 
+### 3.2 仓库路径映射（强约束）
+
+为确保可独立规划与并行执行，agent 与仓库写入/维护边界固定如下：
+
+| Agent | 主要负责路径 | 主要入口/命令 |
+|---|---|---|
+| `automation-test-improver` | `Packages/VoxDomain/Tests/` `Packages/VoxApplication/Tests/` `Packages/VoxInfrastructure/Tests/`（排除 `TranscriptionKitTests`） `Packages/VoxPresentation/Tests/UISharedTests/` | `swift test --package-path Packages/VoxDomain` `swift test --package-path Packages/VoxApplication` `swift test --package-path Packages/VoxInfrastructure --filter -TranscriptionKitTests` |
+| `ui-test-improver` | `VoxPocket/VoxPocketUITests/` `Packages/VoxPresentation/Tests/PlatformUITests/` `Packages/VoxPresentation/Tests/WidgetUITests/` `Packages/VoxPresentation/Sources/**`（仅 UI 测试标识，如 accessibility id） | `xcodebuild test -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket -only-testing:VoxPocketUITests` `swift test --package-path Packages/VoxPresentation --filter PlatformUITests` |
+| `voice-test-improver` | `Packages/VoxInfrastructure/Tests/TranscriptionKitTests/` `Packages/VoxInfrastructure/Sources/TranscriptionKit/` `Packages/VoxApplication/Sources/UseCases/DefaultTranscriptionUseCase.swift` | `swift test --package-path Packages/VoxInfrastructure --filter TranscriptionKitTests` |
+| `performance-test-improver` | `VoxPocket/VoxPocketUITests/Performance/`（新增） `scripts/perf/`（新增） `.github/workflows/`（仅 perf job 模板） | `xcodebuild test ... -only-testing:*Performance*` `scripts/perf/run_perf_suite.sh` |
+| `test-executor` | `.github/workflows/` `scripts/ci/` `scripts/test-executor/`（新增） | `scripts/test-executor/run_pr.sh` `scripts/test-executor/run_nightly.sh` |
+
 ## 4. 交付契约（统一接口）
 
-每个 improver 产出的测试资产必须包含以下契约字段：
+每个 improver 产出的测试资产必须提供 `tests.manifest.json`，schema 固定如下：
 
-- `manifest`：入口命令、标签、预估时长、依赖。  
-- `owner`：模块归属（agent/代码owner）。  
-- `flakyPolicy`：是否可重试、最大重试次数。  
-- `artifactsContract`：日志、截图、质量报告、性能数据路径。  
+```json
+{
+  "suiteId": "voice.smoke.pr",
+  "owner": {
+    "agent": "voice-test-improver",
+    "team": "vox-infra"
+  },
+  "entry": {
+    "command": "swift test --package-path Packages/VoxInfrastructure --filter TranscriptionKitTests/Smoke",
+    "timeoutSeconds": 900
+  },
+  "labels": ["pr", "smoke", "voice"],
+  "dependencies": ["xcode", "swiftpm"],
+  "flakyPolicy": {
+    "allowRetry": true,
+    "maxRetries": 1,
+    "quarantineAfterConsecutiveFailures": 3
+  },
+  "artifactsContract": {
+    "required": ["logs/test.log", "reports/junit.xml"],
+    "optional": ["artifacts/screenshots", "reports/voice-quality-report.json"],
+    "retentionDays": 14
+  }
+}
+```
 
-统一契约目的是让 `test-executor` 可以无条件编排，而不依赖模块内部细节。
+强约束：
+
+- `suiteId` 全局唯一。  
+- `labels` 必须包含一个频率标签：`pr` 或 `nightly`。  
+- `artifactsContract.required` 缺失时，该 suite 判定为执行失败。  
+- `flakyPolicy.allowRetry=false` 时，`maxRetries` 必须为 `0`。
+
+统一契约让 `test-executor` 可无条件编排，而不依赖模块内部实现。
 
 ## 5. CI 编排（GitHub Actions）
 
@@ -142,6 +182,17 @@ E2E 明确纳入体系，执行权在 `test-executor`，内容权在三方 impro
 - 输出 `CER/WER` 与阈值判定。  
 - 失败时保存识别文本、评分与日志，便于回归归因。
 
+通过阈值（硬门槛）：
+
+- PR smoke（最小样本集）  
+  - `CER <= 0.30`  
+  - `WER <= 0.45`
+- Nightly full（全量样本集）  
+  - `CER <= 0.18`  
+  - `WER <= 0.32`
+- 回归判定  
+  - 若相对最近 7 次 Nightly 均值恶化超过 `+0.03 CER` 或 `+0.05 WER`，即判定为语音质量回归。
+
 ## 8. 性能测试策略
 
 性能专项由 `performance-test-improver` 维护，`test-executor` 统一执行。
@@ -158,6 +209,19 @@ E2E 明确纳入体系，执行权在 `test-executor`，内容权在三方 impro
 - PR：仅 `perf-smoke`。  
 - Nightly：`perf-full` + 历史基线 diff。
 
+通过阈值（硬门槛）：
+
+- PR `perf-smoke`（CI runner）  
+  - 冷启动 `p95 <= 4.0s`  
+  - 首段文本出现时延 `p95 <= 6.0s`（fixture 驱动）
+- Nightly `perf-full`  
+  - 冷启动 `p95 <= 3.0s`  
+  - 首段文本出现时延 `p95 <= 4.5s`  
+  - 30 秒标准语音夹具完整转写耗时 `p95 <= 12.0s`  
+  - 峰值内存 `<= 1.2GB`
+- 回归判定  
+  - 任何核心指标相对最近 14 次 Nightly 中位数恶化超过 `15%`，判定为性能回归。
+
 ## 9. 截图获取与归档策略
 
 截图是 UI/E2E 失败定位的一等公民：
@@ -166,10 +230,15 @@ E2E 明确纳入体系，执行权在 `test-executor`，内容权在三方 impro
 - Nightly：关键步骤常规截图 + 失败补充截图。  
 - 统一目录：`artifacts/screenshots/`。
 
-可选扩展（用于自动化分析）：
+OCR 分阶段策略（避免范围膨胀）：
 
-- 对截图执行 OCR（Vision）并生成 `ocr-snapshots/`。  
-- 将 OCR 文本与用例步骤关联，辅助定位“UI 显示与预期不一致”类问题。
+- V1（本 spec 范围）  
+  - 不启用 OCR。  
+  - 仅保存截图与测试日志。
+- V2（后续独立 spec）  
+  - 引入 OCR，并新增产物目录 `artifacts/ocr-snapshots/`。  
+  - 触发规则：仅在 UI/E2E 用例失败且失败原因为“文本断言不匹配”时执行 OCR。  
+  - 不满足触发规则时禁止执行 OCR，避免增加无效时长与复杂度。
 
 ## 10. 失败处理与治理
 
@@ -211,6 +280,6 @@ Phase 3（持续治理）
 1. GitHub Actions 中可见 `PR + Nightly` 两条流水线定义。  
 2. 六类测试能力均有可执行入口：单测、集成、UI、语音、E2E、性能。  
 3. `test-executor` 可统一汇总并输出标准化 artifact。  
-4. PR 可阻断回归，Nightly 可持续输出趋势与告警。  
-5. 各 improver 与 executor 的职责边界清晰，无重叠冲突。
-
+4. 语音与性能存在明确硬阈值并在流水线中自动判定。  
+5. PR 可阻断回归，Nightly 可持续输出趋势与告警。  
+6. 各 improver 与 executor 的职责边界清晰，无重叠冲突。
