@@ -1,64 +1,41 @@
 # AGENTS.md
 
-## Project overview
+Last-Reviewed: 2026-03-31
 
-VoxPocket is a macOS/iOS voice transcription app (SwiftUI). It records audio, transcribes speech via Apple Speech framework (default locale: `zh-Hans`), and refines text with Apple Intelligence. Chinese comments are used throughout the codebase.
+## Project Snapshot
 
-## Architecture
+VoxPocket 是 macOS/iOS 的 SwiftUI 语音转写应用，默认语音识别语言为 `zh-Hans`，并支持 Apple Intelligence 文本精炼。
 
-Four SPM packages in a strict layered hierarchy — each layer only depends on layers below it:
+## Layered Architecture
 
 ```
-VoxPresentation  →  VoxApplication  →  VoxInfrastructure  →  VoxDomain
-(UI/ViewModels)     (UseCases)         (Services)            (Models)
+VoxPresentation  ->  VoxApplication  ->  VoxInfrastructure  ->  VoxDomain
 ```
 
-- **VoxDomain**: Pure domain models (`CoreModels`, `TextHistory`), no external deps
-- **VoxInfrastructure**: `TranscriptionKit`, `LLMKit`, `Persistence`, `Observability`, `PlatformAdapters`, `Preferences`
-- **VoxApplication**: `UseCases` — business logic bridging domain and infrastructure
-- **VoxPresentation**: `UIShared`, `PlatformUI` — SwiftUI views and view models
+- `VoxDomain`: 纯领域模型（`CoreModels`, `TextHistory`）
+- `VoxInfrastructure`: 转写、LLM、持久化、可观测性、平台适配
+- `VoxApplication`: UseCases 业务编排
+- `VoxPresentation`: SwiftUI 视图与 ViewModel
 
-App entry point: `VoxPocket/VoxPocket/` with `ServiceContainer` as singleton DI container.
+## Start Here
 
-Swift Tools Version 6.2 | Platforms: iOS 26+, macOS 26+
+- Fast index: `docs/index.md`
+- Records index (source of truth map): `docs/records/index.md`
+- Architecture docs: `docs/architecture/`
+- Harness baseline: `docs/harness/metrics-baseline.md`
 
-## Setup commands
+## Build And Test
 
 ```bash
-# Build the Xcode project (macOS)
 xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket build
-
-# Build a single package
 swift build --package-path Packages/VoxDomain
-
-# Run all tests for a package
 swift test --package-path Packages/VoxPresentation
-
-# Run a specific test class
-swift test --package-path Packages/VoxPresentation --filter EditorAutoStopTests
+swift test --package-path Packages/VoxApplication
 ```
 
-## Code style
+## Engineering Rules
 
-- Protocol-driven DI: contracts are protocols (`RecordingUseCase`, `LLMService`, `TextHistoryManaging`)
-- Default implementations prefixed with `Default` (e.g. `DefaultRecordingUseCase`)
-- Test doubles prefixed with `Fake` or `Mock`
-- Concurrency: hybrid Combine + async/await; thread-safe state via `Mutex<State>` from `Synchronization`; `@MainActor` on view models and UI code
-- ViewState protocols define the view-model contract; `@Published` properties drive SwiftUI
-
-## Testing instructions
-
-- Tests use XCTest with async/await support
-- Test targets exist per package: `CoreModelsTests`, `TextHistoryTests`, `TranscriptionKitTests`, `LLMKitTests`, `PersistenceTests`, `UseCasesTests`, `UISharedTests`
-- Use `Fake`/`Mock` implementations for isolation — no third-party mocking frameworks
-- Run the relevant package tests before submitting changes:
-  ```bash
-  swift test --package-path Packages/VoxPresentation
-  swift test --package-path Packages/VoxApplication
-  ```
-
-## PR instructions
-
-- Keep PR titles concise, using conventional prefixes: `feat:`, `fix:`, `docs:`, `refactor:`
-- Ensure all tests pass in affected packages before opening a PR
-- Do not add dependencies to `VoxDomain` — it must remain pure Swift with zero external deps
+- 协议驱动 DI，默认实现用 `Default*` 命名。
+- 测试替身使用 `Fake*` / `Mock*` 命名。
+- 不向 `VoxDomain` 引入外部依赖。
+- 变更前后优先保持分层依赖方向不变。

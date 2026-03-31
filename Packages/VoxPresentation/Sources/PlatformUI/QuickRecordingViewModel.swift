@@ -178,7 +178,9 @@ public final class QuickRecordingViewModel: ObservableObject {
         isProcessing = true
         recorderStatus = .transcribing
 
-        let finalResultTask = makeFinalResultWaitTask()
+        // 先让出一次主线程执行片段，确保 receive(on: .main) 排队的 liveText 更新
+        // 在“停止前快照”之前有机会落地，避免误判为无语音内容。
+        await Task.yield()
 
         // await 之前 snapshot Apple Speech 是否已有内容。
         // 不能在 await 之后检查 liveTranscription：Apple Speech 结束时可能抛出错误，
@@ -186,8 +188,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         // receive(on: .main) 会在 await 恢复时把 liveTranscription 覆盖为 ""，
         // 导致误判为无内容、触发 onNoResult、提前关窗、丢弃 Whisper 结果。
         let hadSpeechBeforeStop = !liveTranscription.isEmpty
-
-        await Task.yield()
+        let finalResultTask = makeFinalResultWaitTask(timeout: hadSpeechBeforeStop ? 1.0 : 15.0)
 
         do {
             try await recordingUseCase.stopRecording()
@@ -301,7 +302,16 @@ public final class QuickRecordingViewModel: ObservableObject {
                 }
 
                 group.addTask {
-                    try? await Task.sleep(for: .seconds(timeout))
+                    do {
+                        try await Task.sleep(for: .seconds(timeout))
+                    } catch {
+                        logger.debug("finalResultTask: cancelled before timeout")
+                        return nil
+                    }
+                    guard !Task.isCancelled else {
+                        logger.debug("finalResultTask: cancelled before timeout")
+                        return nil
+                    }
                     let elapsed = Date().timeIntervalSince(startTime)
                     logger.debug("finalResultTask: timed out after \(String(format: "%.2f", elapsed))s (limit=\(timeout)s)")
                     return nil

@@ -1,5 +1,7 @@
 # VoxPocket
 
+Last-Reviewed: 2026-03-31
+
 A macOS/iOS voice recording and transcription app built with SwiftUI. Records audio, transcribes speech using Apple Speech and/or WhisperKit, and refines text using Apple Intelligence on-device LLM.
 
 ## Features
@@ -104,6 +106,32 @@ zsh scripts/perf/run_perf_suite.sh full --dry-run
 ```
 
 Performance runs read metrics from `artifacts/performance/raw-metrics.json` and emit summary files under `artifacts/performance/`.
+
+## Harness Engineering
+
+This repository adopts a phased harness-engineering rollout focused on repo readability and feedback loops for agentic development.
+
+Key entry points:
+
+- Baseline metrics contract: `docs/harness/metrics-baseline.md`
+- Baseline collector: `scripts/docs/collect_harness_baseline.sh`
+- Records map (system of record): `docs/records/index.md`
+- Docs governance workflow: `.github/workflows/docs-governance.yml`
+- Adoption checklist (Phase 0-1): `docs/harness/adoption-checklist-phase0-1.md`
+
+Common local commands:
+
+```bash
+# Collect baseline metrics without writing files
+zsh scripts/docs/collect_harness_baseline.sh \
+  --window-start 2026-03-01 \
+  --window-end 2026-03-31 \
+  --dry-run
+
+# Validate docs map and freshness constraints
+zsh scripts/docs/lint_docs_map.sh
+zsh scripts/docs/lint_docs_freshness.sh
+```
 
 ## Local Code Review
 

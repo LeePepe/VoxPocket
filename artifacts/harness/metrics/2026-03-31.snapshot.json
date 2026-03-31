@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-03-31T11:24:44Z",
+  "window": {
+    "start": "2026-03-01",
+    "end": "2026-03-31"
+  },
+  "metrics": {
+    "prCycleHours": {
+      "value": null,
+      "source": "github.pull_requests",
+      "reason": "not_collected_in_local_scaffold"
+    },
+    "rerunRate": {
+      "value": null,
+      "source": "artifacts/reports/test-report.json",
+      "reason": "no_test_report_found"
+    },
+    "docFreshness": {
+      "value": 1.000000,
+      "source": "scripts/docs/lint_docs_freshness.sh",
+      "reason": null
+    },
+    "archViolationCount": {
+      "value": null,
+      "source": "artifacts/harness/architecture/latest.json",
+      "reason": "phase_2_structure_lint_not_available"
+    }
+  },
+  "notes": [
+    "Phase 0 scaffold snapshot",
+    "null values are expected until upstream collection is wired"
+  ]
+}

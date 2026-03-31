@@ -1,11 +1,14 @@
 # .local-review.yml — VoxPocket local review gates
 
 auto_fix: true
-provider: claude
-model: claude-sonnet-4-6
+provider: codex
+model: gpt-5.4-codex
 fail_on: critical
 
 commit:
+  commands:
+    - "zsh scripts/docs/lint_docs_map.sh"
+    - "zsh scripts/docs/lint_docs_freshness.sh"
   reviewers:
     parallel: true
     fail_on: critical

@@ -134,6 +134,29 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.rawTranscription, "你好世界")
     }
 
+    func testStopRecordingFallsBackQuicklyToSettledLiveTranscriptionWhenNoFinalArrives() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let refinement = FakeRefinementUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(
+            recordingUseCase: recording,
+            transcriptionUseCase: transcription,
+            refinementUseCase: refinement,
+            clipboardService: clipboard
+        )
+
+        await viewModel.startRecording()
+        transcription.sendLiveText("你好世界")
+
+        let startedAt = Date()
+        await viewModel.stopRecording()
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertLessThan(elapsed, 3.0, "stopRecording should not wait for full final-result timeout when live text is already settled")
+        XCTAssertEqual(viewModel.rawTranscription, "你好世界")
+    }
+
     func testStopRecordingWithEmptyTranscriptionTriggersNoResultCallback() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()

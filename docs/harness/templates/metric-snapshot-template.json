@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-03-31T00:00:00Z",
+  "window": {
+    "start": "2026-03-01",
+    "end": "2026-03-31"
+  },
+  "metrics": {
+    "prCycleHours": {
+      "value": null,
+      "source": "github.pull_requests",
+      "reason": "not_collected"
+    },
+    "rerunRate": {
+      "value": null,
+      "source": "artifacts/reports/test-report.json",
+      "reason": "not_collected"
+    },
+    "docFreshness": {
+      "value": null,
+      "source": "scripts/docs/lint_docs_freshness.sh",
+      "reason": "not_collected"
+    },
+    "archViolationCount": {
+      "value": null,
+      "source": "artifacts/harness/architecture/latest.json",
+      "reason": "not_collected"
+    }
+  },
+  "notes": []
+}

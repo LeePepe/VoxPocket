@@ -1,0 +1,25 @@
+name: docs-governance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs-governance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run docs map lint
+        run: zsh scripts/docs/lint_docs_map.sh
+
+      - name: Run docs freshness lint
+        run: zsh scripts/docs/lint_docs_freshness.sh
