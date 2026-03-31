@@ -5,8 +5,8 @@
     "team": "performance-tests"
   },
   "entry": {
-    "command": "print -- '[performance] pr suite'",
-    "timeoutSeconds": 30
+    "command": "zsh scripts/perf/run_perf_suite.sh smoke --dry-run",
+    "timeoutSeconds": 600
   },
   "labels": [
     "pr"

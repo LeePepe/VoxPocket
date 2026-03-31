@@ -5,8 +5,8 @@
     "team": "test-automation"
   },
   "entry": {
-    "command": "print -- '[automation] nightly suite'",
-    "timeoutSeconds": 30
+    "command": "swift test --package-path Packages/VoxDomain && swift test --package-path Packages/VoxApplication && swift test --package-path Packages/VoxPresentation --filter UISharedTests",
+    "timeoutSeconds": 1800
   },
   "labels": [
     "nightly"

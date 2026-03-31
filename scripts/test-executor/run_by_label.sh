@@ -39,7 +39,7 @@ overall_failed=0
 
 for manifest in "${filtered_manifests[@]}"; do
   suite_id="$(jq -r '.suiteId' "$manifest")"
-  suite_label="$(jq -r '.labels[0]' "$manifest")"
+  suite_label="$label"
   command="$(jq -r '.entry.command' "$manifest")"
   timeout_seconds="$(jq -r '.entry.timeoutSeconds' "$manifest")"
   allow_retry="$(jq -r '.flakyPolicy.allowRetry' "$manifest")"
@@ -75,6 +75,21 @@ for manifest in "${filtered_manifests[@]}"; do
       print -- "--- retry $attempts ---" >>"$log_file"
     fi
   done
+
+  # Validate required artifacts declared by manifest contract.
+  suite_artifact_root="$(executor_suite_artifact_dir "$repo_root" "$suite_id")"
+  missing_required=0
+  while IFS= read -r required_path; do
+    [[ -n "$required_path" ]] || continue
+    if [[ ! -f "$suite_artifact_root/$required_path" ]]; then
+      print -- "[test-executor] missing required artifact: $suite_id -> $required_path" >>"$log_file"
+      missing_required=1
+    fi
+  done < <(jq -r '.artifactsContract.required[]? // empty' "$manifest")
+
+  if [[ "$missing_required" -eq 1 ]]; then
+    exit_code=2
+  fi
 
   summary_json="$(executor_suite_summary_json \
     "$suite_id" \

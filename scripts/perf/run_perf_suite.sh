@@ -186,7 +186,7 @@ evaluate_thresholds() {
   local full_transcription_p95="$3"
   local peak_memory_mb="$4"
 
-  local passed=1
+  local failed=0
   local startup_threshold
   local first_text_threshold
   local full_transcription_threshold
@@ -195,17 +195,17 @@ evaluate_thresholds() {
   if [[ "$MODE" == "smoke" ]]; then
     startup_threshold=4.0
     first_text_threshold=6.0
-    if awk -v v="$startup_p95" -v t="$startup_threshold" 'BEGIN { exit !(v <= t) }'; then :; else passed=0; fi
-    if awk -v v="$first_text_p95" -v t="$first_text_threshold" 'BEGIN { exit !(v <= t) }'; then :; else passed=0; fi
+    if awk -v v="$startup_p95" -v t="$startup_threshold" 'BEGIN { exit !(v <= t) }'; then :; else failed=1; fi
+    if awk -v v="$first_text_p95" -v t="$first_text_threshold" 'BEGIN { exit !(v <= t) }'; then :; else failed=1; fi
   else
     startup_threshold=3.0
     first_text_threshold=4.5
     full_transcription_threshold=12.0
     peak_memory_threshold=1200
-    if awk -v v="$startup_p95" -v t="$startup_threshold" 'BEGIN { exit !(v <= t) }'; then :; else passed=0; fi
-    if awk -v v="$first_text_p95" -v t="$first_text_threshold" 'BEGIN { exit !(v <= t) }'; then :; else passed=0; fi
-    if awk -v v="$full_transcription_p95" -v t="$full_transcription_threshold" 'BEGIN { exit !(v <= t) }'; then :; else passed=0; fi
-    if awk -v v="$peak_memory_mb" -v t="$peak_memory_threshold" 'BEGIN { exit !(v <= t) }'; then :; else passed=0; fi
+    if awk -v v="$startup_p95" -v t="$startup_threshold" 'BEGIN { exit !(v <= t) }'; then :; else failed=1; fi
+    if awk -v v="$first_text_p95" -v t="$first_text_threshold" 'BEGIN { exit !(v <= t) }'; then :; else failed=1; fi
+    if awk -v v="$full_transcription_p95" -v t="$full_transcription_threshold" 'BEGIN { exit !(v <= t) }'; then :; else failed=1; fi
+    if awk -v v="$peak_memory_mb" -v t="$peak_memory_threshold" 'BEGIN { exit !(v <= t) }'; then :; else failed=1; fi
   fi
 
   local threshold_result="$ARTIFACT_ROOT/perf-threshold-result.json"
@@ -214,7 +214,7 @@ evaluate_thresholds() {
   jq -n \
     --arg mode "$MODE" \
     --arg command "$(join_quoted "${XCODEBUILD_CMD[@]}")" \
-    --argjson passed "$passed" \
+    --argjson passed "$(( failed == 0 ))" \
     --arg startup_p95 "$startup_p95" \
     --arg first_text_p95 "$first_text_p95" \
     --arg full_transcription_p95 "$full_transcription_p95" \
@@ -243,7 +243,7 @@ evaluate_thresholds() {
 
   cat >"$threshold_summary" <<EOF
 Mode: $MODE
-Passed: $passed
+Passed: $(( failed == 0 ))
 Startup p95: $startup_p95
 First text p95: $first_text_p95
 EOF
@@ -254,7 +254,7 @@ Peak memory MB: $peak_memory_mb
 EOF
   fi
 
-  return "$passed"
+  return "$failed"
 }
 
 evaluate_baseline() {
@@ -268,7 +268,7 @@ evaluate_baseline() {
   local baseline_first_text=""
   local baseline_full_transcription=""
   local baseline_peak_memory=""
-  local diff_passed=1
+  local diff_failed=0
 
   local -a history_files
   history_files=("$HISTORY_DIR"/*.json(N))
@@ -282,17 +282,17 @@ evaluate_baseline() {
 
     local degrade_pct
     degrade_pct=$(awk -v current="$startup_p95" -v baseline="$baseline_startup" 'BEGIN { if (baseline == 0) { print 0 } else { print ((current - baseline) / baseline) * 100 } }')
-    if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_passed=0; fi
+    if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_failed=1; fi
 
     degrade_pct=$(awk -v current="$first_text_p95" -v baseline="$baseline_first_text" 'BEGIN { if (baseline == 0) { print 0 } else { print ((current - baseline) / baseline) * 100 } }')
-    if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_passed=0; fi
+    if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_failed=1; fi
 
     if [[ "$MODE" == "full" ]]; then
       degrade_pct=$(awk -v current="$full_transcription_p95" -v baseline="$baseline_full_transcription" 'BEGIN { if (baseline == 0) { print 0 } else { print ((current - baseline) / baseline) * 100 } }')
-      if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_passed=0; fi
+      if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_failed=1; fi
 
       degrade_pct=$(awk -v current="$peak_memory_mb" -v baseline="$baseline_peak_memory" 'BEGIN { if (baseline == 0) { print 0 } else { print ((current - baseline) / baseline) * 100 } }')
-      if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_passed=0; fi
+      if awk -v v="$degrade_pct" 'BEGIN { exit !(v <= 15) }'; then :; else diff_failed=1; fi
     fi
   fi
 
@@ -307,7 +307,7 @@ evaluate_baseline() {
     --arg baseline_first_text "$baseline_first_text" \
     --arg baseline_full_transcription "$baseline_full_transcription" \
     --arg baseline_peak_memory "$baseline_peak_memory" \
-    --argjson passed "$diff_passed" \
+    --argjson passed "$(( diff_failed == 0 ))" \
     '{
       mode: $mode,
       baselineStatus: $baselineStatus,
@@ -329,10 +329,10 @@ evaluate_baseline() {
   cat >"$ARTIFACT_ROOT/perf-baseline-summary.txt" <<EOF
 Mode: $MODE
 Baseline status: $baseline_status
-Passed: $diff_passed
+Passed: $(( diff_failed == 0 ))
 EOF
 
-  return "$diff_passed"
+  return "$diff_failed"
 }
 
 main() {
@@ -387,24 +387,24 @@ main() {
 
   IFS='|' read -r startup_p95 first_text_p95 full_transcription_p95 peak_memory_mb <<<"$metrics"
 
-  local threshold_passed=0
+  local threshold_failed=0
   if evaluate_thresholds "$startup_p95" "$first_text_p95" "$full_transcription_p95" "$peak_memory_mb"; then
-    threshold_passed=0
+    threshold_failed=0
   else
-    threshold_passed=1
+    threshold_failed=1
   fi
 
-  local baseline_passed=0
+  local baseline_failed=0
   if [[ "$MODE" == "full" ]]; then
     if evaluate_baseline "$startup_p95" "$first_text_p95" "$full_transcription_p95" "$peak_memory_mb"; then
-      baseline_passed=0
+      baseline_failed=0
     else
-      baseline_passed=1
+      baseline_failed=1
     fi
   fi
 
-  if [[ "$threshold_passed" -ne 0 || "$baseline_passed" -ne 0 ]]; then
-    fail "performance gate failed (threshold_failed=$threshold_passed baseline_failed=$baseline_passed)"
+  if [[ "$threshold_failed" -ne 0 || "$baseline_failed" -ne 0 ]]; then
+    fail "performance gate failed (threshold_failed=$threshold_failed baseline_failed=$baseline_failed)"
   fi
 
   log "Performance gate passed"

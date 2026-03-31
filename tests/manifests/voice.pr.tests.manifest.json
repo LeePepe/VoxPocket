@@ -5,8 +5,8 @@
     "team": "voice-tests"
   },
   "entry": {
-    "command": "print -- '[voice] pr suite'",
-    "timeoutSeconds": 30
+    "command": "swift test --package-path Packages/VoxInfrastructure --filter TranscriptionKitTests",
+    "timeoutSeconds": 1200
   },
   "labels": [
     "pr"

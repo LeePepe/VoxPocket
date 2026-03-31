@@ -5,8 +5,8 @@
     "team": "test-automation"
   },
   "entry": {
-    "command": "print -- '[automation] pr suite'",
-    "timeoutSeconds": 30
+    "command": "swift test --package-path Packages/VoxDomain",
+    "timeoutSeconds": 900
   },
   "labels": [
     "pr"

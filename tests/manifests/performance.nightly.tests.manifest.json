@@ -5,8 +5,8 @@
     "team": "performance-tests"
   },
   "entry": {
-    "command": "print -- '[performance] nightly suite'",
-    "timeoutSeconds": 30
+    "command": "zsh scripts/perf/run_perf_suite.sh full --dry-run",
+    "timeoutSeconds": 1200
   },
   "labels": [
     "nightly"

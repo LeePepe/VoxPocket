@@ -5,8 +5,8 @@
     "team": "ui-tests"
   },
   "entry": {
-    "command": "print -- '[ui] pr suite'",
-    "timeoutSeconds": 30
+    "command": "xcodebuild test -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket -destination 'platform=macOS' -only-testing:VoxPocketUITests/VoxPocketUITests/testExample",
+    "timeoutSeconds": 1200
   },
   "labels": [
     "pr"
