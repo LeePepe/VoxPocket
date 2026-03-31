@@ -82,6 +82,29 @@ swift test --package-path Packages/VoxDomain
 swift test --package-path Packages/VoxPresentation
 ```
 
+## Test Automation
+
+The repository now uses manifest-driven test automation with separate PR and nightly workflows.
+
+Key pieces:
+
+- Test manifests: `tests/manifests/*.tests.manifest.json`
+- Test executor entrypoints: `scripts/test-executor/run_pr.sh` and `scripts/test-executor/run_nightly.sh`
+- GitHub Actions workflows: `tests-pr` and `tests-nightly`
+- Performance runner: `scripts/perf/run_perf_suite.sh`
+
+Local dry-run commands:
+
+```bash
+# Resolve the PR performance command and thresholds without running xcodebuild
+zsh scripts/perf/run_perf_suite.sh smoke --dry-run
+
+# Resolve the full performance command and thresholds without running xcodebuild
+zsh scripts/perf/run_perf_suite.sh full --dry-run
+```
+
+Performance runs read metrics from `artifacts/performance/raw-metrics.json` and emit summary files under `artifacts/performance/`.
+
 ## Local Code Review
 
 This repo uses a local AI review gate on commits and merges. See [`docs/LOCAL_REVIEW.md`](docs/LOCAL_REVIEW.md).
