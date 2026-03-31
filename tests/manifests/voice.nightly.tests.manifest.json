@@ -1,0 +1,30 @@
+{
+  "suiteId": "voice.nightly",
+  "owner": {
+    "agent": "voice-test-improver",
+    "team": "voice-tests"
+  },
+  "entry": {
+    "command": "print -- '[voice] nightly suite'",
+    "timeoutSeconds": 30
+  },
+  "labels": [
+    "nightly"
+  ],
+  "dependencies": [
+    "zsh",
+    "jq"
+  ],
+  "flakyPolicy": {
+    "allowRetry": true,
+    "maxRetries": 1,
+    "quarantineAfterConsecutiveFailures": 3
+  },
+  "artifactsContract": {
+    "required": [
+      "logs/test.log"
+    ],
+    "optional": [],
+    "retentionDays": 14
+  }
+}

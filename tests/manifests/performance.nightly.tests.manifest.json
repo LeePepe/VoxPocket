@@ -1,0 +1,30 @@
+{
+  "suiteId": "performance.nightly",
+  "owner": {
+    "agent": "performance-test-improver",
+    "team": "performance-tests"
+  },
+  "entry": {
+    "command": "print -- '[performance] nightly suite'",
+    "timeoutSeconds": 30
+  },
+  "labels": [
+    "nightly"
+  ],
+  "dependencies": [
+    "zsh",
+    "jq"
+  ],
+  "flakyPolicy": {
+    "allowRetry": true,
+    "maxRetries": 1,
+    "quarantineAfterConsecutiveFailures": 3
+  },
+  "artifactsContract": {
+    "required": [
+      "logs/test.log"
+    ],
+    "optional": [],
+    "retentionDays": 14
+  }
+}

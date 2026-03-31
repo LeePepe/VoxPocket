@@ -1,0 +1,30 @@
+{
+  "suiteId": "ui.nightly",
+  "owner": {
+    "agent": "ui-test-improver",
+    "team": "ui-tests"
+  },
+  "entry": {
+    "command": "print -- '[ui] nightly suite'",
+    "timeoutSeconds": 30
+  },
+  "labels": [
+    "nightly"
+  ],
+  "dependencies": [
+    "zsh",
+    "jq"
+  ],
+  "flakyPolicy": {
+    "allowRetry": true,
+    "maxRetries": 1,
+    "quarantineAfterConsecutiveFailures": 3
+  },
+  "artifactsContract": {
+    "required": [
+      "logs/test.log"
+    ],
+    "optional": [],
+    "retentionDays": 14
+  }
+}

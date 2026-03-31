@@ -1,0 +1,30 @@
+{
+  "suiteId": "performance.pr",
+  "owner": {
+    "agent": "performance-test-improver",
+    "team": "performance-tests"
+  },
+  "entry": {
+    "command": "print -- '[performance] pr suite'",
+    "timeoutSeconds": 30
+  },
+  "labels": [
+    "pr"
+  ],
+  "dependencies": [
+    "zsh",
+    "jq"
+  ],
+  "flakyPolicy": {
+    "allowRetry": true,
+    "maxRetries": 1,
+    "quarantineAfterConsecutiveFailures": 3
+  },
+  "artifactsContract": {
+    "required": [
+      "logs/test.log"
+    ],
+    "optional": [],
+    "retentionDays": 14
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "suiteId": "automation.nightly",
+  "owner": {
+    "agent": "automation-test-improver",
+    "team": "test-automation"
+  },
+  "entry": {
+    "command": "print -- '[automation] nightly suite'",
+    "timeoutSeconds": 30
+  },
+  "labels": [
+    "nightly"
+  ],
+  "dependencies": [
+    "zsh",
+    "jq"
+  ],
+  "flakyPolicy": {
+    "allowRetry": true,
+    "maxRetries": 1,
+    "quarantineAfterConsecutiveFailures": 3
+  },
+  "artifactsContract": {
+    "required": [
+      "logs/test.log"
+    ],
+    "optional": [],
+    "retentionDays": 14
+  }
+}
