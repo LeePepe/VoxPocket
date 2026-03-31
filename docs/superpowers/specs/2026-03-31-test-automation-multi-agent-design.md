@@ -27,7 +27,7 @@ VoxPocket 当前已有部分单元测试与少量 UI 测试骨架，但在以下
 
 ## 3. Agent 拓扑与职责
 
-采用 `5 个改进 agent + 1 个执行 agent`：
+采用 `4 个改进 agent + 1 个执行 agent`：
 
 1. `automation-test-improver`  
 2. `ui-test-improver`  
@@ -76,7 +76,7 @@ VoxPocket 当前已有部分单元测试与少量 UI 测试骨架，但在以下
 | `automation-test-improver` | `Packages/VoxDomain/Tests/` `Packages/VoxApplication/Tests/` `Packages/VoxInfrastructure/Tests/`（排除 `TranscriptionKitTests`） `Packages/VoxPresentation/Tests/UISharedTests/` | `swift test --package-path Packages/VoxDomain` `swift test --package-path Packages/VoxApplication` `swift test --package-path Packages/VoxInfrastructure --filter -TranscriptionKitTests` |
 | `ui-test-improver` | `VoxPocket/VoxPocketUITests/` `Packages/VoxPresentation/Tests/PlatformUITests/` `Packages/VoxPresentation/Tests/WidgetUITests/` `Packages/VoxPresentation/Sources/**`（仅 UI 测试标识，如 accessibility id） | `xcodebuild test -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket -only-testing:VoxPocketUITests` `swift test --package-path Packages/VoxPresentation --filter PlatformUITests` |
 | `voice-test-improver` | `Packages/VoxInfrastructure/Tests/TranscriptionKitTests/` `Packages/VoxInfrastructure/Sources/TranscriptionKit/` `Packages/VoxApplication/Sources/UseCases/DefaultTranscriptionUseCase.swift` | `swift test --package-path Packages/VoxInfrastructure --filter TranscriptionKitTests` |
-| `performance-test-improver` | `VoxPocket/VoxPocketUITests/Performance/`（新增） `scripts/perf/`（新增） `.github/workflows/`（仅 perf job 模板） | `xcodebuild test ... -only-testing:*Performance*` `scripts/perf/run_perf_suite.sh` |
+| `performance-test-improver` | `VoxPocket/VoxPocketUITests/Performance/`（新增） `scripts/perf/`（新增） `.github/workflows/`（仅 perf job 模板） | `xcodebuild test -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket -destination 'platform=macOS' -only-testing:VoxPocketUITests/VoxPocketPerformanceTests` `scripts/perf/run_perf_suite.sh` |
 | `test-executor` | `.github/workflows/` `scripts/ci/` `scripts/test-executor/`（新增） | `scripts/test-executor/run_pr.sh` `scripts/test-executor/run_nightly.sh` |
 
 ## 4. 交付契约（统一接口）
