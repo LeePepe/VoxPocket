@@ -1,0 +1,38 @@
+name: tests-pr
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run PR test executor
+        run: zsh scripts/test-executor/run_pr.sh
+
+      - name: Print test report
+        if: always()
+        run: |
+          if [ -f artifacts/reports/test-report.json ]; then
+            cat artifacts/reports/test-report.json
+          else
+            echo "artifacts/reports/test-report.json not found"
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-pr-artifacts
+          path: artifacts/
+          if-no-files-found: warn
