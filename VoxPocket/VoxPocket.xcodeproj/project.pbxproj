@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		70398B052F2706AA007D1E07 /* PlatformUI in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B042F2706AA007D1E07 /* PlatformUI */; };
 		70398B072F2706AA007D1E07 /* UIShared in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B062F2706AA007D1E07 /* UIShared */; };
+		4DF96898B44E4633905FD9E1 /* UITestingBridge in Frameworks */ = {isa = PBXBuildFile; productRef = A378F2FABCE0405B9F75D938 /* UITestingBridge */; };
 		70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B0F2F270800007D1E07 /* WidgetKit.framework */; };
 		70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B112F270800007D1E07 /* SwiftUI.framework */; };
 		70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -115,6 +116,7 @@
 			files = (
 				70398B052F2706AA007D1E07 /* PlatformUI in Frameworks */,
 				70398B072F2706AA007D1E07 /* UIShared in Frameworks */,
+				4DF96898B44E4633905FD9E1 /* UITestingBridge in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -201,6 +203,7 @@
 			packageProductDependencies = (
 				70398B042F2706AA007D1E07 /* PlatformUI */,
 				70398B062F2706AA007D1E07 /* UIShared */,
+				A378F2FABCE0405B9F75D938 /* UITestingBridge */,
 			);
 			productName = VoxPocket;
 			productReference = 70398AD42F27048D007D1E07 /* VoxPocket.app */;
@@ -312,6 +315,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				70398B032F2706AA007D1E07 /* XCLocalSwiftPackageReference "../Packages/VoxPresentation" */,
+				B6658B107DA04182AC7B52E3 /* XCLocalSwiftPackageReference "../../AppleUITesting" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 70398AD52F27048D007D1E07 /* Products */;
@@ -865,6 +869,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../Packages/VoxPresentation;
 		};
+		B6658B107DA04182AC7B52E3 /* XCLocalSwiftPackageReference "../../AppleUITesting" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../AppleUITesting;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -879,6 +887,11 @@
 		70398B1F2F270900007D1E07 /* WidgetUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = WidgetUI;
+		};
+		A378F2FABCE0405B9F75D938 /* UITestingBridge */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6658B107DA04182AC7B52E3 /* XCLocalSwiftPackageReference "../../AppleUITesting" */;
+			productName = UITestingBridge;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -13,12 +13,21 @@ import PlatformAdapters
 import Carbon
 #endif
 import UIShared
+#if DEBUG
+import UITestingBridge
+#endif
 
 @main
 struct VoxPocketApp: App {
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
+
+    init() {
+        #if DEBUG
+        UITestingBridge.start()
+        #endif
+    }
 
     var body: some Scene {
         #if os(macOS)
