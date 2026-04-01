@@ -181,8 +181,10 @@ final class EvalReportTests: XCTestCase {
         let data = try report.exportJSON()
         XCTAssertFalse(data.isEmpty)
 
-        // 验证可以反序列化
-        let decoded = try JSONDecoder().decode(EvalReport.self, from: data)
+        // 验证可以反序列化（exportJSON 使用 .iso8601，解码器须保持一致）
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(EvalReport.self, from: data)
         XCTAssertEqual(decoded.title, report.title)
         XCTAssertEqual(decoded.totalCount, report.totalCount)
     }
