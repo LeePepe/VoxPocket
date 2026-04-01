@@ -23,6 +23,7 @@ public struct QuickRecordingView: View {
             Capsule()
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         )
+        .accessibilityIdentifier("vox.quick.panel")
     }
 
     private var liveTranscriptionOverlay: some View {
@@ -34,6 +35,7 @@ public struct QuickRecordingView: View {
             .allowsTightening(true)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.horizontal, QuickRecordingLayout.textHorizontalInset)
+            .accessibilityIdentifier("vox.quick.status")
             .compositingGroup()
             .mask {
                 HStack(spacing: 0) {

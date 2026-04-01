@@ -138,6 +138,7 @@ struct RefinedTextPane: View {
                 .foregroundColor(.textPrimary)
                 .lineSpacing(7)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("vox.transcript.final")
         }
         .padding(22)
     }
@@ -163,6 +164,7 @@ struct RawInlinePane: View {
             Text(text)
                 .font(FontToken.body)
                 .foregroundColor(.textSecondary)
+                .accessibilityIdentifier("vox.transcript.live")
         }
         .padding(18)
     }
@@ -252,6 +254,11 @@ struct BottomControls: View {
             .buttonStyle(GlassIconButtonStyle())
 
             ControlButton(primaryTitle, systemImage: primaryIcon, color: primaryColor, emphasis: true, action: onStopOrRestart)
+                .accessibilityIdentifier(
+                    (status == .listening || status == .transcribing || status == .refining)
+                        ? "vox.stop.button"
+                        : "vox.record.button"
+                )
         }
     }
 }

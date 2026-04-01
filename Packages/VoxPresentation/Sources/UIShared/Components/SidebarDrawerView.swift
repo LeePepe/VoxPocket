@@ -28,6 +28,7 @@ struct SidebarDrawerView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
+                            .accessibilityIdentifier("vox.session.list.item")
                     }
                     .onDelete { indexSet in
                         for index in indexSet {
@@ -38,6 +39,7 @@ struct SidebarDrawerView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .contentMargins(.top, 110, for: .scrollContent)
+                .accessibilityIdentifier("vox.session.list")
 
                 // 固定头部 + 搜索栏（悬浮，模糊背景 + 渐变淡出边界）
                 VStack(spacing: 0) {
