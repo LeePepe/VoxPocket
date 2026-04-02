@@ -1,0 +1,156 @@
+name: Code Review (Codex)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  review-code-quality:
+    name: "Review: Code Quality"
+    runs-on: [self-hosted, macOS, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Swift diff
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DIFF=$(git diff ${{ github.event.pull_request.base.sha }}..HEAD -- '*.swift')
+          else
+            DIFF=$(git diff HEAD~1 -- '*.swift' 2>/dev/null || echo "")
+          fi
+          if [ -z "$DIFF" ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run codex review
+        if: steps.diff.outputs.empty == 'false'
+        run: |
+          PROMPT="Review the following Swift code diff for code quality issues: naming conventions, code duplication, complexity, readability, SwiftUI best practices. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ~/.superset/bin/codex review "$PROMPT" --base "${{ github.event.pull_request.base.sha }}" 2>&1 | tee review-output.txt
+          else
+            ~/.superset/bin/codex review "$PROMPT" --commit HEAD 2>&1 | tee review-output.txt
+          fi
+
+      - name: No changes detected
+        if: steps.diff.outputs.empty == 'true'
+        run: echo "No Swift changes detected." > review-output.txt
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## 🔍 Code Review: Code Quality"
+            echo ""
+            cat review-output.txt
+          } > comment-body.txt
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment-body.txt --repo ${{ github.repository }}
+
+  review-performance:
+    name: "Review: Performance"
+    runs-on: [self-hosted, macOS, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Swift diff
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DIFF=$(git diff ${{ github.event.pull_request.base.sha }}..HEAD -- '*.swift')
+          else
+            DIFF=$(git diff HEAD~1 -- '*.swift' 2>/dev/null || echo "")
+          fi
+          if [ -z "$DIFF" ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run codex review
+        if: steps.diff.outputs.empty == 'false'
+        run: |
+          PROMPT="Review the following Swift code diff for performance issues: unnecessary recomputation, memory leaks, excessive view updates, inefficient algorithms, async/await misuse. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ~/.superset/bin/codex review "$PROMPT" --base "${{ github.event.pull_request.base.sha }}" 2>&1 | tee review-output.txt
+          else
+            ~/.superset/bin/codex review "$PROMPT" --commit HEAD 2>&1 | tee review-output.txt
+          fi
+
+      - name: No changes detected
+        if: steps.diff.outputs.empty == 'true'
+        run: echo "No Swift changes detected." > review-output.txt
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## 🔍 Code Review: Performance"
+            echo ""
+            cat review-output.txt
+          } > comment-body.txt
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment-body.txt --repo ${{ github.repository }}
+
+  review-security:
+    name: "Review: Security"
+    runs-on: [self-hosted, macOS, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Swift diff
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DIFF=$(git diff ${{ github.event.pull_request.base.sha }}..HEAD -- '*.swift')
+          else
+            DIFF=$(git diff HEAD~1 -- '*.swift' 2>/dev/null || echo "")
+          fi
+          if [ -z "$DIFF" ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run codex review
+        if: steps.diff.outputs.empty == 'false'
+        run: |
+          PROMPT="Review the following Swift code diff for security issues: hardcoded secrets, insecure data storage, improper input validation, unsafe API usage, privacy violations. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ~/.superset/bin/codex review "$PROMPT" --base "${{ github.event.pull_request.base.sha }}" 2>&1 | tee review-output.txt
+          else
+            ~/.superset/bin/codex review "$PROMPT" --commit HEAD 2>&1 | tee review-output.txt
+          fi
+
+      - name: No changes detected
+        if: steps.diff.outputs.empty == 'true'
+        run: echo "No Swift changes detected." > review-output.txt
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## 🔍 Code Review: Security"
+            echo ""
+            cat review-output.txt
+          } > comment-body.txt
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment-body.txt --repo ${{ github.repository }}
