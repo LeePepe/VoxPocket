@@ -106,6 +106,8 @@ private final class FakeLocalWhisperEngine: LocalWhisperEngine {
     func stopStreaming() async {}
     func pauseStreaming() async {}
     func resumeStreaming() async {}
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? { nil }
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? { nil }
 }
 
 private final class ScriptedLocalWhisperEngine: LocalWhisperEngine {
@@ -145,6 +147,8 @@ private final class ScriptedLocalWhisperEngine: LocalWhisperEngine {
     func stopStreaming() async {}
     func pauseStreaming() async {}
     func resumeStreaming() async {}
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? { nil }
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? { nil }
 
     func emitPartial(_ text: String) async {
         await state.emitPartial(text)

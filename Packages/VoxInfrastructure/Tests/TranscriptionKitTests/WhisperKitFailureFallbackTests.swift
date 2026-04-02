@@ -67,6 +67,8 @@ private final class FailingLocalWhisperEngine: LocalWhisperEngine {
     func stopStreaming() async {}
     func pauseStreaming() async {}
     func resumeStreaming() async {}
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? { nil }
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? { nil }
 }
 
 private final class FailOnceEngineFactory: @unchecked Sendable {
@@ -114,6 +116,8 @@ private final class FailOnceLocalWhisperEngine: LocalWhisperEngine {
     func stopStreaming() async {}
     func pauseStreaming() async {}
     func resumeStreaming() async {}
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? { nil }
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? { nil }
 }
 
 private func XCTAssertThrowsErrorAsync(
