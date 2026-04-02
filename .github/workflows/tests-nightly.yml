@@ -10,14 +10,14 @@ permissions:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: brew install jq
 
       - name: Run nightly test executor
         run: zsh scripts/test-executor/run_nightly.sh
