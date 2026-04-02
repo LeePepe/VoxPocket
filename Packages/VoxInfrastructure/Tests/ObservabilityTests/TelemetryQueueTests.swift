@@ -47,11 +47,14 @@ final class TelemetryQueueTests: XCTestCase {
     func testPendingCount() async {
         let q = TelemetryQueue(storeDirectory: tmpDir)
 
-        XCTAssertEqual(await q.pendingCount, 0)
+        let count0 = await q.pendingCount
+        XCTAssertEqual(count0, 0)
         await q.enqueue(TelemetryEvent(name: "x"))
-        XCTAssertEqual(await q.pendingCount, 1)
+        let count1 = await q.pendingCount
+        XCTAssertEqual(count1, 1)
         await q.enqueue(TelemetryEvent(name: "y"))
-        XCTAssertEqual(await q.pendingCount, 2)
+        let count2 = await q.pendingCount
+        XCTAssertEqual(count2, 2)
     }
 
     // MARK: - Disk persistence

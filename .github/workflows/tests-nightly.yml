@@ -16,6 +16,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout AppleUITesting
+        uses: actions/checkout@v4
+        with:
+          repository: LeePepe/AppleUITesting
+          path: ../AppleUITesting
+
       - name: Run nightly test executor
         run: zsh scripts/test-executor/run_nightly.sh
 
