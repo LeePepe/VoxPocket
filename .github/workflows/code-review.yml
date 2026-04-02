@@ -3,8 +3,6 @@ name: Code Review (Codex)
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  push:
-    branches: [main]
 
 permissions:
   pull-requests: write
@@ -38,11 +36,11 @@ jobs:
       - name: Run codex review
         if: steps.diff.outputs.empty == 'false'
         run: |
-          DIFF=$(cat swift.diff)
-          PROMPT="Review the following Swift code diff for code quality issues: naming conventions, code duplication, complexity, readability, SwiftUI best practices. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS.
-
-$DIFF"
-          ~/.superset/bin/codex -p "$PROMPT" --yolo 2>&1 | tee review-output.txt
+          TOPIC_PROMPT="Review the following Swift code diff for code quality issues: naming conventions, code duplication, complexity, readability, SwiftUI best practices. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
+          printf '%s\n\n' "$TOPIC_PROMPT" > prompt.txt
+          cat swift.diff >> prompt.txt
+          FULL_PROMPT=$(cat prompt.txt)
+          ~/.superset/bin/codex -p "$FULL_PROMPT" --yolo 2>&1 | tee review-output.txt
 
       - name: No changes detected
         if: steps.diff.outputs.empty == 'true'
@@ -86,11 +84,11 @@ $DIFF"
       - name: Run codex review
         if: steps.diff.outputs.empty == 'false'
         run: |
-          DIFF=$(cat swift.diff)
-          PROMPT="Review the following Swift code diff for performance issues: unnecessary recomputation, memory leaks, excessive view updates, inefficient algorithms, async/await misuse. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS.
-
-$DIFF"
-          ~/.superset/bin/codex -p "$PROMPT" --yolo 2>&1 | tee review-output.txt
+          TOPIC_PROMPT="Review the following Swift code diff for performance issues: unnecessary recomputation, memory leaks, excessive view updates, inefficient algorithms, async/await misuse. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
+          printf '%s\n\n' "$TOPIC_PROMPT" > prompt.txt
+          cat swift.diff >> prompt.txt
+          FULL_PROMPT=$(cat prompt.txt)
+          ~/.superset/bin/codex -p "$FULL_PROMPT" --yolo 2>&1 | tee review-output.txt
 
       - name: No changes detected
         if: steps.diff.outputs.empty == 'true'
@@ -134,11 +132,11 @@ $DIFF"
       - name: Run codex review
         if: steps.diff.outputs.empty == 'false'
         run: |
-          DIFF=$(cat swift.diff)
-          PROMPT="Review the following Swift code diff for security issues: hardcoded secrets, insecure data storage, improper input validation, unsafe API usage, privacy violations. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS.
-
-$DIFF"
-          ~/.superset/bin/codex -p "$PROMPT" --yolo 2>&1 | tee review-output.txt
+          TOPIC_PROMPT="Review the following Swift code diff for security issues: hardcoded secrets, insecure data storage, improper input validation, unsafe API usage, privacy violations. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
+          printf '%s\n\n' "$TOPIC_PROMPT" > prompt.txt
+          cat swift.diff >> prompt.txt
+          FULL_PROMPT=$(cat prompt.txt)
+          ~/.superset/bin/codex -p "$FULL_PROMPT" --yolo 2>&1 | tee review-output.txt
 
       - name: No changes detected
         if: steps.diff.outputs.empty == 'true'
