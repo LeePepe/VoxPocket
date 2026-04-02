@@ -10,14 +10,11 @@ permissions:
 
 jobs:
   tests:
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, arm64]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install jq
-        run: brew install jq
 
       - name: Run nightly test executor
         run: zsh scripts/test-executor/run_nightly.sh
