@@ -31,17 +31,18 @@ jobs:
             echo "empty=true" >> "$GITHUB_OUTPUT"
           else
             echo "empty=false" >> "$GITHUB_OUTPUT"
+            # Write diff to file to avoid arg length limits
+            echo "$DIFF" > swift.diff
           fi
 
       - name: Run codex review
         if: steps.diff.outputs.empty == 'false'
         run: |
-          PROMPT="Review the following Swift code diff for code quality issues: naming conventions, code duplication, complexity, readability, SwiftUI best practices. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ~/.superset/bin/codex review "$PROMPT" --base "${{ github.event.pull_request.base.sha }}" 2>&1 | tee review-output.txt
-          else
-            ~/.superset/bin/codex review "$PROMPT" --commit HEAD 2>&1 | tee review-output.txt
-          fi
+          DIFF=$(cat swift.diff)
+          PROMPT="Review the following Swift code diff for code quality issues: naming conventions, code duplication, complexity, readability, SwiftUI best practices. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS.
+
+$DIFF"
+          ~/.superset/bin/codex -p "$PROMPT" --yolo 2>&1 | tee review-output.txt
 
       - name: No changes detected
         if: steps.diff.outputs.empty == 'true'
@@ -79,17 +80,17 @@ jobs:
             echo "empty=true" >> "$GITHUB_OUTPUT"
           else
             echo "empty=false" >> "$GITHUB_OUTPUT"
+            echo "$DIFF" > swift.diff
           fi
 
       - name: Run codex review
         if: steps.diff.outputs.empty == 'false'
         run: |
-          PROMPT="Review the following Swift code diff for performance issues: unnecessary recomputation, memory leaks, excessive view updates, inefficient algorithms, async/await misuse. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ~/.superset/bin/codex review "$PROMPT" --base "${{ github.event.pull_request.base.sha }}" 2>&1 | tee review-output.txt
-          else
-            ~/.superset/bin/codex review "$PROMPT" --commit HEAD 2>&1 | tee review-output.txt
-          fi
+          DIFF=$(cat swift.diff)
+          PROMPT="Review the following Swift code diff for performance issues: unnecessary recomputation, memory leaks, excessive view updates, inefficient algorithms, async/await misuse. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS.
+
+$DIFF"
+          ~/.superset/bin/codex -p "$PROMPT" --yolo 2>&1 | tee review-output.txt
 
       - name: No changes detected
         if: steps.diff.outputs.empty == 'true'
@@ -127,17 +128,17 @@ jobs:
             echo "empty=true" >> "$GITHUB_OUTPUT"
           else
             echo "empty=false" >> "$GITHUB_OUTPUT"
+            echo "$DIFF" > swift.diff
           fi
 
       - name: Run codex review
         if: steps.diff.outputs.empty == 'false'
         run: |
-          PROMPT="Review the following Swift code diff for security issues: hardcoded secrets, insecure data storage, improper input validation, unsafe API usage, privacy violations. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS."
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ~/.superset/bin/codex review "$PROMPT" --base "${{ github.event.pull_request.base.sha }}" 2>&1 | tee review-output.txt
-          else
-            ~/.superset/bin/codex review "$PROMPT" --commit HEAD 2>&1 | tee review-output.txt
-          fi
+          DIFF=$(cat swift.diff)
+          PROMPT="Review the following Swift code diff for security issues: hardcoded secrets, insecure data storage, improper input validation, unsafe API usage, privacy violations. Output a concise markdown report with findings grouped as CRITICAL, HIGH, MEDIUM, LOW. If no issues, say PASS.
+
+$DIFF"
+          ~/.superset/bin/codex -p "$PROMPT" --yolo 2>&1 | tee review-output.txt
 
       - name: No changes detected
         if: steps.diff.outputs.empty == 'true'
