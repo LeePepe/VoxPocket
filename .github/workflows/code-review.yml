@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   code-review:
-    uses: LeePepe/codex-pr-reviewer/.github/workflows/review.yml@v1
+    uses: LeePepe/local-agent-reviewer/.github/workflows/review.yml@v1
     with:
       file_pattern: '*.swift'
       topics: 'code-quality,performance,security'
