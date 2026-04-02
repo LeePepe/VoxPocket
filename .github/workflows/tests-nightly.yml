@@ -16,8 +16,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Checkout AppleUITesting
-        run: git clone https://github.com/LeePepe/AppleUITesting.git ../AppleUITesting
+      - name: Link AppleUITesting
+        run: ln -sfn /Users/tianpli/Development/AppleUITesting ../AppleUITesting
 
       - name: Run nightly test executor
         run: zsh scripts/test-executor/run_nightly.sh
