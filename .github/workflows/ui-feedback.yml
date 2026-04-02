@@ -1,0 +1,91 @@
+name: UI Feedback Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  contents: read
+  statuses: write
+
+jobs:
+  ui-feedback:
+    name: UI Feedback Review
+    # Run on PR events, or when a PR comment contains /ui-review
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '/ui-review'))
+    runs-on: [self-hosted, macos]
+
+    steps:
+      - name: Resolve PR metadata
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            PR_NUMBER="${{ github.event.issue.number }}"
+            HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid -q '.headRefOid')
+          fi
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+
+      - name: Collect PR diff and comments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR="${{ steps.pr.outputs.number }}"
+          gh pr diff "$PR" | head -c 10000 > /tmp/vox_pr_diff.txt
+          gh pr view "$PR" --json comments \
+            -q '.comments | map("[@" + .author.login + "]: " + .body) | join("\n---\n")' \
+            > /tmp/vox_pr_comments.txt
+          gh pr view "$PR" --json title,body \
+            -q '"Title: " + .title + "\n\nBody:\n" + .body' \
+            > /tmp/vox_pr_desc.txt
+
+      - name: Run UI Feedback Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          TRIGGER_COMMENT: ${{ github.event.comment.body || '' }}
+        run: |
+          {
+            echo "UI Feedback Review for PR #${PR_NUMBER}."
+            echo ""
+            echo "Trigger: ${EVENT_NAME}"
+            echo "Trigger comment: ${TRIGGER_COMMENT}"
+            echo ""
+            echo "== PR Description =="
+            cat /tmp/vox_pr_desc.txt
+            echo ""
+            echo "== Diff (first 10KB) =="
+            cat /tmp/vox_pr_diff.txt
+            echo ""
+            echo "== Existing PR Comments =="
+            cat /tmp/vox_pr_comments.txt
+          } > /tmp/vox_agent_prompt.txt
+
+          ~/.superset/bin/codex -p ".claude/codex-agents/ui-feedback-reviewer.md" \
+            "$(cat /tmp/vox_agent_prompt.txt)"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-feedback-screenshots-pr${{ steps.pr.outputs.number }}
+          path: /tmp/vox_scenario_*.png
+          if-no-files-found: ignore
