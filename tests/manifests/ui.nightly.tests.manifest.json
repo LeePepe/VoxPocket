@@ -5,7 +5,7 @@
     "team": "ui-tests"
   },
   "entry": {
-    "command": "xcodebuild test -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket -destination 'platform=macOS' -only-testing:VoxPocketUITests CODE_SIGN_IDENTITY='-' CODE_SIGNING_REQUIRED=YES AD_HOC_CODE_SIGNING_ALLOWED=YES",
+    "command": "xcodebuild clean test -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket -destination 'platform=macOS' -only-testing:VoxPocketUITests CODE_SIGN_IDENTITY='-' CODE_SIGNING_REQUIRED=YES AD_HOC_CODE_SIGNING_ALLOWED=YES",
     "timeoutSeconds": 1800
   },
   "labels": [
