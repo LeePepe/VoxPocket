@@ -109,11 +109,13 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                             Image(systemName: "arrow.uturn.left")
                         }
                         .disabled(!viewModel.editorState.canUndo)
+                        .accessibilityIdentifier("vox.editor.undo")
 
                         Button(action: { viewModel.editorState.redo() }) {
                             Image(systemName: "arrow.uturn.right")
                         }
                         .disabled(!viewModel.editorState.canRedo)
+                        .accessibilityIdentifier("vox.editor.redo")
 
                         Button(action: { viewModel.showRawSheet = true }) {
                             Label("Raw", systemImage: "waveform.and.mic")
@@ -125,6 +127,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                             Image(systemName: llmSettings.skipContentAnalysis ? "wand.and.sparkles.inverse" : "wand.and.sparkles")
                         }
                         .help(llmSettings.skipContentAnalysis ? "跳过意图分析（已开启）" : "意图分析中（点击跳过）")
+                        .accessibilityIdentifier("vox.editor.refine.toggle")
                     }
                 }
             }
@@ -244,11 +247,13 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                             Image(systemName: "arrow.uturn.left")
                         }
                         .disabled(!viewModel.editorState.canUndo)
+                        .accessibilityIdentifier("vox.editor.undo")
 
                         Button(action: { viewModel.editorState.redo() }) {
                             Image(systemName: "arrow.uturn.right")
                         }
                         .disabled(!viewModel.editorState.canRedo)
+                        .accessibilityIdentifier("vox.editor.redo")
 
 #if os(iOS)
                         Button(action: { viewModel.showRawSheet = true }) {
@@ -262,6 +267,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                             Image(systemName: llmSettings.skipContentAnalysis ? "wand.and.sparkles.inverse" : "wand.and.sparkles")
                         }
                         .help(llmSettings.skipContentAnalysis ? "跳过意图分析（已开启）" : "意图分析中（点击跳过）")
+                        .accessibilityIdentifier("vox.editor.refine.toggle")
                     }
                 }
                 .sheet(isPresented: $viewModel.showRawSheet) {
