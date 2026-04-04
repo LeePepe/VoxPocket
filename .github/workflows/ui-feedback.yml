@@ -9,12 +9,10 @@ on:
 permissions:
   pull-requests: write
   contents: read
-  statuses: write
 
 jobs:
   ui-feedback:
     name: UI Feedback Review
-    # Run on PR events, or when a PR comment contains /ui-review
     if: |
       github.event_name == 'pull_request' ||
       (github.event.issue.pull_request != null &&
@@ -42,7 +40,7 @@ jobs:
         with:
           ref: ${{ steps.pr.outputs.head_sha }}
 
-      - name: Collect PR diff and comments
+      - name: Collect PR context
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -55,7 +53,7 @@ jobs:
             -q '"Title: " + .title + "\n\nBody:\n" + .body' \
             > /tmp/vox_pr_desc.txt
 
-      - name: Run UI Feedback Agent
+      - name: Run UI Feedback Review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -65,7 +63,6 @@ jobs:
         run: |
           {
             echo "UI Feedback Review for PR #${PR_NUMBER}."
-            echo ""
             echo "Trigger: ${EVENT_NAME}"
             echo "Trigger comment: ${TRIGGER_COMMENT}"
             echo ""
@@ -79,8 +76,16 @@ jobs:
             cat /tmp/vox_pr_comments.txt
           } > /tmp/vox_agent_prompt.txt
 
-          ~/.superset/bin/codex -p "$PWD/.claude/codex-agents/ui-feedback-reviewer.md" \
-            "$(cat /tmp/vox_agent_prompt.txt)"
+          claude \
+            --system-prompt "$PWD/.claude/codex-agents/ui-feedback-reviewer.md" \
+            --dangerously-skip-permissions \
+            --print \
+            "$(cat /tmp/vox_agent_prompt.txt)" \
+            > /tmp/vox_review_output.txt 2>&1
+
+          if [ -s /tmp/vox_review_output.txt ]; then
+            gh pr comment "$PR_NUMBER" --body "$(cat /tmp/vox_review_output.txt)"
+          fi
 
       - name: Upload screenshots
         if: always()

@@ -1,0 +1,116 @@
+name: Actions Monitor
+
+on:
+  workflow_run:
+    workflows:
+      - "docs-governance"
+      - "tests-pr"
+      - "UI Feedback Review"
+      - "Code Review (Codex)"
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  contents: write
+  issues: write
+  actions: read
+
+jobs:
+  handle-failure:
+    name: Handle Workflow Failure
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: [self-hosted, macOS, ARM64]
+
+    steps:
+      - name: Resolve PR for this run
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          WORKFLOW="${{ github.event.workflow_run.name }}"
+
+          # Find associated PR
+          PR_NUMBER=$(gh pr list \
+            --head "$BRANCH" \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
+          echo "run_id=$RUN_ID"         >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA"     >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH"         >> "$GITHUB_OUTPUT"
+          echo "workflow=$WORKFLOW"     >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER"   >> "$GITHUB_OUTPUT"
+
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Fetch failure logs
+        id: logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID="${{ steps.pr.outputs.run_id }}"
+          mkdir -p /tmp/vox_action_logs
+
+          # Download logs for failed jobs
+          gh run view "$RUN_ID" --log-failed > /tmp/vox_action_logs/failed.log 2>&1 || true
+          # Truncate to 15KB to stay within prompt limits
+          head -c 15000 /tmp/vox_action_logs/failed.log > /tmp/vox_action_logs/failed_truncated.log
+
+      - name: Run orchestrator to fix failure
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          FAILED_WORKFLOW: ${{ steps.pr.outputs.workflow }}
+          RUN_ID: ${{ steps.pr.outputs.run_id }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+        run: |
+          {
+            echo "A GitHub Actions workflow failed. Analyze the failure and fix it."
+            echo ""
+            echo "== Failed Workflow =="
+            echo "Name: $FAILED_WORKFLOW"
+            echo "Run ID: $RUN_ID"
+            echo "Branch: $BRANCH"
+            echo "Head SHA: $HEAD_SHA"
+            echo "PR: ${PR_NUMBER:-none}"
+            echo ""
+            echo "== Failure Logs (truncated at 15KB) =="
+            cat /tmp/vox_action_logs/failed_truncated.log
+            echo ""
+            echo "== Task =="
+            echo "1. Identify the root cause from the logs."
+            echo "2. Determine which file(s) need changing."
+            echo "3. Apply the minimal fix."
+            echo "4. Run 'swift build' if Swift files were changed."
+            echo "5. Commit with: fix(ci): <description>"
+            echo "6. If PR_NUMBER is set, post a comment summarizing the fix."
+          } > /tmp/vox_fix_prompt.txt
+
+          claude \
+            --system-prompt "$PWD/.claude/agents/orchestrator.md" \
+            --dangerously-skip-permissions \
+            --print \
+            "$(cat /tmp/vox_fix_prompt.txt)" \
+            > /tmp/vox_fix_output.txt 2>&1
+
+          # Post summary to PR if available
+          if [ -n "$PR_NUMBER" ] && [ -s /tmp/vox_fix_output.txt ]; then
+            gh pr comment "$PR_NUMBER" --body "$(cat <<'COMMENT'
+## Actions Monitor — Auto-fix Attempt
+
+**Failed workflow:** $FAILED_WORKFLOW (run [$RUN_ID](https://github.com/${{ github.repository }}/actions/runs/$RUN_ID))
+
+$(cat /tmp/vox_fix_output.txt)
+COMMENT
+)"
+          fi

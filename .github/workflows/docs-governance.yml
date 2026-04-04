@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq zsh
+        run: sudo apt-get update && sudo apt-get install -y jq zsh ripgrep
 
       - name: Run docs map lint
         run: zsh scripts/docs/lint_docs_map.sh
