@@ -3,6 +3,7 @@ import Combine
 import LLMKit
 import CoreModels
 import TranscriptionKit
+import Observability
 
 /// LLM 优化用例默认实现
 ///
@@ -12,12 +13,14 @@ public final class DefaultRefinementUseCase: @unchecked Sendable {
 
     private let llmService: LLMService
     private let editingUseCase: EditingUseCase
+    private let telemetry: any TelemetryService
 
     private let stateSubject = CurrentValueSubject<RefinementState, Never>(.idle)
 
-    public init(llmService: LLMService, editing: EditingUseCase) {
+    public init(llmService: LLMService, editing: EditingUseCase, telemetry: any TelemetryService = NoopTelemetryService()) {
         self.llmService = llmService
         self.editingUseCase = editing
+        self.telemetry = telemetry
     }
 }
 
@@ -41,6 +44,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
         let text = editingUseCase.currentText
         guard !text.isEmpty else { return }
 
+        let startTime = Date()
         stateSubject.send(.refining(progress: "处理中..."))
 
         do {
@@ -48,8 +52,15 @@ extension DefaultRefinementUseCase: RefinementUseCase {
             let response = try await llmService.refine(request)
             try editingUseCase.replaceAll(with: response.refinedText)
             stateSubject.send(.completed)
+            telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
+            ])
         } catch {
             stateSubject.send(.error(error.localizedDescription))
+            telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
+                "error": error.localizedDescription
+            ])
             throw error
         }
     }
@@ -96,9 +107,12 @@ extension DefaultRefinementUseCase: RefinementUseCase {
         nonisolated(unsafe) let stateSubject = self.stateSubject
         let llmService = self.llmService
 
+        let telemetry = self.telemetry
+
         return AsyncThrowingStream { continuation in
             let task = Task { @Sendable in
                 // 发送开始状态
+                let startTime = Date()
                 let refiningState = RefinementState.refining(progress: "处理中...")
                 stateSubject.send(refiningState)
                 continuation.yield(.state(refiningState))
@@ -117,6 +131,9 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                     if !Task.isCancelled {
                         stateSubject.send(.completed)
                         continuation.yield(.state(.completed))
+                        telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
+                        ])
                     }
                     continuation.finish()
                 } catch {
@@ -124,6 +141,10 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                     if !Task.isCancelled {
                         let errorState = RefinementState.error(error.localizedDescription)
                         stateSubject.send(errorState)
+                        telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
+                            "error": error.localizedDescription
+                        ])
                         continuation.finish(throwing: error)
                     }
                 }
@@ -156,6 +177,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
     ) async throws {
         guard !result.text.isEmpty else { return }
 
+        let startTime = Date()
         let progressMessage = result.isFinal ? "分析语音内容..." : "处理中..."
         stateSubject.send(.refining(progress: progressMessage))
 
@@ -171,8 +193,15 @@ extension DefaultRefinementUseCase: RefinementUseCase {
 
             try editingUseCase.replaceAll(with: response.refinedText)
             stateSubject.send(.completed)
+            telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
+            ])
         } catch {
             stateSubject.send(.error(error.localizedDescription))
+            telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
+                "error": error.localizedDescription
+            ])
             throw error
         }
     }

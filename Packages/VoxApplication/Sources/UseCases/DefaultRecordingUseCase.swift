@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Observability
 import TranscriptionKit
 import CoreModels
 
@@ -14,7 +15,9 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
     private var cancellables = Set<AnyCancellable>()
+    private let telemetry: any TelemetryService
     private var language: Locale
+    private var recordingStartTime: Date?
     private let activeSelectionLock = NSLock()
     private var activeSelection: ActiveSelection = .primary
 
@@ -31,11 +34,13 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     public init(
         coordinator: TranscriptionCoordinator,
         fallbackCoordinator: (any TranscriptionCoordinator)? = nil,
-        language: Locale = Locale(identifier: "zh-Hans")
+        language: Locale = Locale(identifier: "zh-Hans"),
+        telemetry: any TelemetryService = NoopTelemetryService()
     ) {
         self.primaryCoordinator = coordinator
         self.fallbackCoordinator = fallbackCoordinator
         self.language = language
+        self.telemetry = telemetry
 
         bindCoordinatorPublishers(coordinator, selection: .primary)
         if let fallbackCoordinator {
@@ -50,13 +55,20 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
             guard let self else { return }
             self.setActiveSelection(self.selection(for: coordinator))
             try await coordinator.start(language: language)
+            self.recordingStartTime = Date()
         }
     }
 
     public func stopRecording() async throws {
         let coordinator = currentCoordinator()
-        await operationGate.withExclusiveAccess {
+        await operationGate.withExclusiveAccess { [weak self] in
             await coordinator.stop()
+            guard let self else { return }
+            let duration = self.recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
+            self.recordingStartTime = nil
+            self.telemetry.track(name: TelemetryEventName.recordingStopped.rawValue, properties: [
+                "duration_s": String(format: "%.1f", duration)
+            ])
         }
     }
 

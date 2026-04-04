@@ -12,6 +12,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
     private let coordinator: TranscriptionCoordinator
     private let editingUseCase: EditingUseCase
     private let logger: Logger
+    private let telemetry: any TelemetryService
 
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
     private var cancellables = Set<AnyCancellable>()
@@ -36,12 +37,14 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
         coordinator: TranscriptionCoordinator,
         editing: EditingUseCase,
         language: Locale = Locale(identifier: "zh-Hans"),
-        logger: Logger? = nil
+        logger: Logger? = nil,
+        telemetry: any TelemetryService = NoopTelemetryService()
     ) {
         self.coordinator = coordinator
         self.editingUseCase = editing
         self._currentLanguage = language
         self.logger = logger ?? PrintLogger(subsystem: "TranscriptionUseCase")
+        self.telemetry = telemetry
 
         bindCoordinator()
     }
@@ -76,6 +79,11 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
                     // 用最终文本替换当前内容（SFSpeechRecognizer 返回累积文本）
                     try? self.editingUseCase.replaceAll(with: newText)
                     self.lastCommittedText = newText
+                    let wordCount = newText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+                    self.telemetry.track(name: TelemetryEventName.transcriptionCompleted.rawValue, properties: [
+                        "word_count": String(wordCount),
+                        "source": "apple_speech"
+                    ])
                 }
             )
             .store(in: &cancellables)

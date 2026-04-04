@@ -118,10 +118,10 @@ public final class ServiceContainer: ObservableObject {
 
         // 初始化 Use Cases
         editingUseCase = DefaultEditingUseCase()
-        recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber)
-        transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase)
+        recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber, telemetry: telemetryService)
+        transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase, telemetry: telemetryService)
         historyUseCase = DefaultHistoryUseCase(editing: editingUseCase)
-        refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase)
+        refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase, telemetry: telemetryService)
 
         // 启动时先用内存实现，避免 ModelContainer 创建阻塞 UI
         sessionUseCase = ProxySessionUseCase(backing: InMemorySessionUseCase())
@@ -134,14 +134,16 @@ public final class ServiceContainer: ObservableObject {
         // 本地 Whisper engine 在底层共享，不会重复下载同一模型。
         quickTranscriber = Self.makeQuickTranscriber()
         quickEditingUseCase = DefaultEditingUseCase()
-        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber)
+        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService)
         quickTranscriptionUseCase = DefaultTranscriptionUseCase(
             coordinator: quickTranscriber,
-            editing: quickEditingUseCase
+            editing: quickEditingUseCase,
+            telemetry: telemetryService
         )
         quickRefinementUseCase = DefaultRefinementUseCase(
             llmService: llmService,
-            editing: quickEditingUseCase
+            editing: quickEditingUseCase,
+            telemetry: telemetryService
         )
 #endif
 
@@ -413,7 +415,7 @@ public final class ServiceContainer: ObservableObject {
         do {
             let container = try ModelContainer(for: schema, configurations: [config])
             let repository = SwiftDataSessionRepository(container: container)
-            let swiftDataUseCase = DefaultSessionUseCase(repository: repository)
+            let swiftDataUseCase = DefaultSessionUseCase(repository: repository, telemetry: telemetryService)
             await sessionUseCase.switchBacking(to: swiftDataUseCase)
             logger.debug("SwiftData persistence initialized")
         } catch {
