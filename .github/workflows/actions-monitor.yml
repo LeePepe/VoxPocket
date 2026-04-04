@@ -189,9 +189,14 @@ jobs:
             2>/dev/null || echo "0")
 
           # Check for human (non-bot) PR comments
+          # GitHub returns bot logins without the "[bot]" suffix in REST API (e.g. "github-actions" not "github-actions[bot]")
           HUMAN_COMMENTS=$(gh pr view "$PR" \
             --json comments \
-            --jq '[.comments[] | select(.author.login != "github-actions[bot]" and .author.login != "github-advanced-security[bot]")] | length' \
+            --jq '[.comments[] | select(
+              .author.login != "github-actions" and
+              .author.login != "github-advanced-security" and
+              (.author.login | endswith("[bot]") | not)
+            )] | length' \
             2>/dev/null || echo "0")
 
           echo "review_decision=$REVIEW_DECISION"   >> "$GITHUB_OUTPUT"
