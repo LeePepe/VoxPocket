@@ -6,7 +6,8 @@ on:
 
 permissions:
   pull-requests: write
-  contents: read
+  contents: write   # needed for git push after fixes
+  issues: write     # needed to post reply comments
 
 jobs:
   orchestrate-pr-comment:
@@ -30,6 +31,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.pr.outputs.head_sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Run orchestrator for PR comment
         env:

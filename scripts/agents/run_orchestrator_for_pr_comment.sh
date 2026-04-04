@@ -19,20 +19,20 @@ require_env "COMMENT_BODY"
 require_env "COMMENT_AUTHOR"
 require_env "COMMENT_ID"
 
-CODEX_BIN="${CODEX_BIN:-$HOME/.superset/bin/codex}"
-ORCHESTRATOR_PROMPT_PATH="${ORCHESTRATOR_PROMPT_PATH:-$REPO_ROOT/.claude/agents/orchestrator.md}"
+CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude 2>/dev/null || true)}"
+HANDLER_PROMPT_PATH="${HANDLER_PROMPT_PATH:-$REPO_ROOT/.claude/agents/pr-comment-handler.md}"
 
-if [[ ! -x "$CODEX_BIN" ]]; then
-  print -u2 -- "codex binary is not executable: $CODEX_BIN"
+if [[ ! -x "$CLAUDE_BIN" ]]; then
+  print -u2 -- "claude binary not found or not executable: $CLAUDE_BIN"
   exit 1
 fi
 
-if [[ ! -f "$ORCHESTRATOR_PROMPT_PATH" ]]; then
-  print -u2 -- "orchestrator prompt not found: $ORCHESTRATOR_PROMPT_PATH"
+if [[ ! -f "$HANDLER_PROMPT_PATH" ]]; then
+  print -u2 -- "pr-comment-handler prompt not found: $HANDLER_PROMPT_PATH"
   exit 1
 fi
 
-tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/vox-orchestrator.XXXXXX")"
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/vox-pr-handler.XXXXXX")"
 cleanup() {
   rm -rf "$tmp_dir"
 }
@@ -44,9 +44,9 @@ pr_diff_raw="$tmp_dir/pr_diff_raw.txt"
 pr_diff="$tmp_dir/pr_diff.txt"
 pr_comments_raw="$tmp_dir/pr_comments_raw.txt"
 pr_comments="$tmp_dir/pr_comments.txt"
-prompt_file="$tmp_dir/orchestrator_prompt.txt"
-orchestrator_output="$tmp_dir/orchestrator_output.txt"
-orchestrator_error="$tmp_dir/orchestrator_error.txt"
+prompt_file="$tmp_dir/handler_prompt.txt"
+handler_output="$tmp_dir/handler_output.txt"
+handler_error="$tmp_dir/handler_error.txt"
 comment_body_file="$tmp_dir/comment_body.md"
 
 gh pr view "$PR_NUMBER" --json title,body \
@@ -61,81 +61,74 @@ gh pr view "$PR_NUMBER" --json comments \
 head -c 12000 "$pr_comments_raw" > "$pr_comments"
 
 {
-  echo "VoxPocket PR comment received. You are required to orchestrate specialist task dispatch."
+  echo "You are the VoxPocket pr-comment-handler. A new PR comment has arrived."
+  echo "Follow your agent definition exactly: classify → plan → Codex review loop → fix → build → commit → resolve."
   echo
-  echo "Trigger:"
-  echo "- PR: #$PR_NUMBER"
-  echo "- Comment ID: $COMMENT_ID"
-  echo "- Author: @$COMMENT_AUTHOR"
-  echo "- Body:"
+  echo "== Inputs =="
+  echo "PR_NUMBER: $PR_NUMBER"
+  echo "COMMENT_ID: $COMMENT_ID"
+  echo "COMMENT_AUTHOR: @$COMMENT_AUTHOR"
+  echo
+  echo "== Comment Body =="
   echo "$COMMENT_BODY"
   echo
-  echo "Context:"
-  echo "== PR Description (truncated) =="
+  echo "== PR Description (truncated at 12k) =="
   cat "$pr_desc"
   echo
-  echo "== PR Diff (truncated) =="
+  echo "== PR Diff (truncated at 12k) =="
   cat "$pr_diff"
   echo
-  echo "== Existing PR Comments (truncated) =="
+  echo "== Existing PR Comments (truncated at 12k) =="
   cat "$pr_comments"
-  echo
-  echo "Task:"
-  echo "1) Classify this feedback/request."
-  echo "2) Produce task dispatch to relevant specialists."
-  echo "3) State which work can run in parallel and which is sequential."
-  echo "4) Provide concrete file paths and acceptance checks."
-  echo "5) Keep response concise and actionable for engineers."
 } > "$prompt_file"
 
 set +e
-"$CODEX_BIN" -p "$ORCHESTRATOR_PROMPT_PATH" "$(cat "$prompt_file")" >"$orchestrator_output" 2>"$orchestrator_error"
-codex_exit="$?"
+"$CLAUDE_BIN" \
+  --system-prompt "$HANDLER_PROMPT_PATH" \
+  --dangerously-skip-permissions \
+  --print \
+  "$(cat "$prompt_file")" \
+  >"$handler_output" 2>"$handler_error"
+claude_exit="$?"
 set -e
 
-if [[ "$codex_exit" -ne 0 ]]; then
+if [[ "$claude_exit" -ne 0 ]]; then
   {
-    echo "## Orchestrator Dispatch Failed"
+    echo "## PR Comment Handler Failed"
     echo
     echo "Triggered by comment #$COMMENT_ID from @$COMMENT_AUTHOR on PR #$PR_NUMBER."
     echo
-    echo "Codex exited with code: $codex_exit"
+    echo "Claude exited with code: $claude_exit"
     echo
     echo "Error excerpt:"
     echo '```text'
-    tail -n 40 "$orchestrator_error"
+    tail -n 40 "$handler_error"
     echo '```'
   } > "$comment_body_file"
 
   gh pr comment "$PR_NUMBER" --body-file "$comment_body_file"
-  exit "$codex_exit"
+  exit "$claude_exit"
 fi
 
-{
-  echo "## Orchestrator Task Dispatch"
-  echo
-  echo "Triggered by comment #$COMMENT_ID from @$COMMENT_AUTHOR on PR #$PR_NUMBER."
-  echo
-  echo "Original comment:"
-  echo '```text'
-  echo "$COMMENT_BODY"
-  echo '```'
-  echo
-  echo "---"
-  echo
-  cat "$orchestrator_output"
-} > "$comment_body_file"
-
-if [[ "$(wc -c < "$comment_body_file")" -gt 60000 ]]; then
+# Handler may have already posted comments and resolved threads as part of its tool use.
+# Only post a summary comment if the handler produced substantial output.
+if [[ "$(wc -c < "$handler_output")" -gt 100 ]]; then
   {
-    echo "## Orchestrator Task Dispatch (Truncated)"
+    echo "## PR Comment Handler Summary"
     echo
-    head -c 59000 "$comment_body_file"
+    echo "Triggered by comment #$COMMENT_ID from @$COMMENT_AUTHOR on PR #$PR_NUMBER."
     echo
-    echo
-    echo "[truncated]"
-  } > "$comment_body_file.truncated"
-  mv "$comment_body_file.truncated" "$comment_body_file"
-fi
+    cat "$handler_output"
+  } > "$comment_body_file"
 
-gh pr comment "$PR_NUMBER" --body-file "$comment_body_file"
+  if [[ "$(wc -c < "$comment_body_file")" -gt 60000 ]]; then
+    {
+      head -c 59000 "$comment_body_file"
+      echo
+      echo "[truncated]"
+    } > "$comment_body_file.truncated"
+    mv "$comment_body_file.truncated" "$comment_body_file"
+  fi
+
+  gh pr comment "$PR_NUMBER" --body-file "$comment_body_file"
+fi
