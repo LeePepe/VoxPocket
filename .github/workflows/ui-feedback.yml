@@ -79,7 +79,7 @@ jobs:
             cat /tmp/vox_pr_comments.txt
           } > /tmp/vox_agent_prompt.txt
 
-          ~/.superset/bin/codex -p ".claude/codex-agents/ui-feedback-reviewer.md" \
+          ~/.superset/bin/codex -p "$PWD/.claude/codex-agents/ui-feedback-reviewer.md" \
             "$(cat /tmp/vox_agent_prompt.txt)"
 
       - name: Upload screenshots
