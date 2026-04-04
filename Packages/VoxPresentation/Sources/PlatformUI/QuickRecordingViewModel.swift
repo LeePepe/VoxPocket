@@ -436,8 +436,17 @@ public final class QuickRecordingViewModel: ObservableObject {
         return sentenceTerminators.contains(scalars[index])
     }
 
+    // DEBUG: 追踪 completeWithText 调用次数，排查双次粘贴问题
+    private var completeCallCount = 0
+
     /// 复制到剪贴板、模拟粘贴、触发完成回调
     private func completeWithText(_ text: String) async {
+        completeCallCount += 1
+        logger.log(.debug, "completeWithText called", context: [
+            "call_count": completeCallCount,
+            "text_length": text.count,
+            "text_preview": String(text.prefix(20))
+        ])
         guard !text.isEmpty else {
             recorderStatus = .idle
             isProcessing = false

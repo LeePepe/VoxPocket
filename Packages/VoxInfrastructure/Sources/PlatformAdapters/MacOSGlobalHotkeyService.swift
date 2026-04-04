@@ -126,14 +126,14 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         // 全局键盘事件监听
         globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
             Task { @MainActor in
-                self?.handleKeyEvent(event)
+                self?.handleKeyEvent(event, source: "global")
             }
         }
 
         // 本地键盘事件监听（当应用在前台时）
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
             Task { @MainActor in
-                self?.handleKeyEvent(event)
+                self?.handleKeyEvent(event, source: "local")
             }
             return event
         }
@@ -163,7 +163,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         info.handler()
     }
 
-    private func handleKeyEvent(_ event: NSEvent) {
+    private func handleKeyEvent(_ event: NSEvent, source: String = "unknown") {
         let keyCode = event.keyCode
         let modifiers = carbonModifiers(from: event.modifierFlags)
         let functionKeyCode = UInt16(kVK_Function)
@@ -183,10 +183,12 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                     info.hasTriggeredPress = true
                     longPressHotkeys[identifier] = info
 
-                    logger.log(.debug, "Function key down", context: ["identifier": identifier])
+                    logger.log(.debug, "Function key down", context: ["identifier": identifier, "source": source])
                     Task {
                         await info.onPress()
                     }
+                } else if isFunctionPressed && info.isPressed {
+                    logger.log(.debug, "Function key down IGNORED (already pressed)", context: ["identifier": identifier, "source": source])
                 } else if !isFunctionPressed && info.isPressed {
                     info.isPressed = false
                     info.keyDownTime = nil
@@ -194,12 +196,14 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                     info.hasTriggeredPress = false
                     longPressHotkeys[identifier] = info
 
-                    logger.log(.debug, "Function key up", context: ["identifier": identifier])
+                    logger.log(.debug, "Function key up", context: ["identifier": identifier, "source": source, "will_release": shouldRelease])
                     if shouldRelease {
                         Task {
                             await info.onRelease()
                         }
                     }
+                } else if !isFunctionPressed && !info.isPressed {
+                    logger.log(.debug, "Function key up IGNORED (already released)", context: ["identifier": identifier, "source": source])
                 }
                 continue
             }

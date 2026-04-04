@@ -33,6 +33,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = UserDefaultsPreferencesStore.shared
     private let logger: Logger = PrintLogger(subsystem: "AppDelegate")
 
+    // DEBUG: 追踪 start/stop 调用次数
+    private var quickRecordStartCount = 0
+    private var quickRecordStopCount = 0
+
     // MARK: - NSApplicationDelegate
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -167,7 +171,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 处理快速录音开始（按下触发）
     private func handleQuickRecordStart() async {
-        logger.debug("Quick record start triggered")
+        quickRecordStartCount += 1
+        logger.log(.debug, "Quick record start triggered", context: ["call_count": quickRecordStartCount])
 
         guard serviceContainer.tryStartRecording(source: .quickRecording) else {
             return
@@ -204,7 +209,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 处理快速录音结束（释放触发）
     private func handleQuickRecordStop() async {
-        logger.debug("Quick record stop triggered")
+        quickRecordStopCount += 1
+        logger.log(.debug, "Quick record stop triggered", context: ["call_count": quickRecordStopCount])
 
         guard serviceContainer.activeRecordingSource == .quickRecording else {
             logger.log(.debug, "Recording source mismatch on quick record stop", context: [
