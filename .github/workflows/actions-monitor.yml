@@ -105,12 +105,13 @@ jobs:
 
           # Post summary to PR if available
           if [ -n "$PR_NUMBER" ] && [ -s /tmp/vox_fix_output.txt ]; then
-            gh pr comment "$PR_NUMBER" --body "$(cat <<'COMMENT'
-## Actions Monitor — Auto-fix Attempt
-
-**Failed workflow:** $FAILED_WORKFLOW (run [$RUN_ID](https://github.com/${{ github.repository }}/actions/runs/$RUN_ID))
-
-$(cat /tmp/vox_fix_output.txt)
-COMMENT
-)"
+            REPO="${{ github.repository }}"
+            {
+              echo "## Actions Monitor — Auto-fix Attempt"
+              echo ""
+              echo "**Failed workflow:** ${FAILED_WORKFLOW} (run [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID}))"
+              echo ""
+              cat /tmp/vox_fix_output.txt
+            } > /tmp/vox_comment_body.txt
+            gh pr comment "$PR_NUMBER" --body-file /tmp/vox_comment_body.txt
           fi
