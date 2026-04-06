@@ -269,6 +269,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
             // 避免静默录音（无语音）时对已有内容重复优化
             guard newTranscriptionAdded else {
                 logger.log(.debug, "Skipping refinement: no new transcription content from this recording session")
+                snackbarService?.showWarning("未检测到语音内容")
                 return
             }
 
