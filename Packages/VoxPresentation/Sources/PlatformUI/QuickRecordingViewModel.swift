@@ -188,7 +188,8 @@ public final class QuickRecordingViewModel: ObservableObject {
         // receive(on: .main) 会在 await 恢复时把 liveTranscription 覆盖为 ""，
         // 导致误判为无内容、触发 onNoResult、提前关窗、丢弃 Whisper 结果。
         let hadSpeechBeforeStop = !liveTranscription.isEmpty
-        let finalResultTask = makeFinalResultWaitTask(timeout: hadSpeechBeforeStop ? 1.0 : 15.0)
+        let liveTranscriptionSnapshot = liveTranscription
+        let finalResultTask = makeFinalResultWaitTask(timeout: 15.0)
 
         do {
             try await recordingUseCase.stopRecording()
@@ -203,7 +204,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                 return
             }
 
-            rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask)
+            rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask, liveSnapshot: liveTranscriptionSnapshot)
             let now = Date()
             transcriptionEndTime = now
             liveTranscription = rawTranscription
@@ -263,9 +264,11 @@ public final class QuickRecordingViewModel: ObservableObject {
     /// 停止录音后，等待识别流的最终结果收敛，避免松手瞬间丢字。
     ///
     /// 优先等待 finalResultPublisher（包含 WhisperKit + LLM 合并结果），
-    /// 超时后回退到轮询 liveTranscription 收敛。
+    /// 超时后回退到轮询 liveTranscription 收敛；若 liveTranscription 被 Apple Speech
+    /// 错误清空，则使用 liveSnapshot 兜底，避免丢弃已识别内容。
     private func waitForCompletedTranscription(
         finalResultTask: Task<String?, Never>,
+        liveSnapshot: String = "",
         settleMaxWait: TimeInterval = 0.8
     ) async -> String {
         if let finalText = await finalResultTask.value {
@@ -274,7 +277,12 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
 
         logger.debug("waitForCompletedTranscription: finalResultTask timed out, falling back to settle (liveTranscription='\(self.liveTranscription.prefix(30))')")
-        return await waitForTranscriptionToSettle(maxWait: settleMaxWait)
+        let settled = await waitForTranscriptionToSettle(maxWait: settleMaxWait)
+        if !settled.isEmpty { return settled }
+        if !liveSnapshot.isEmpty {
+            logger.debug("waitForCompletedTranscription: settled empty, using liveSnapshot '\(liveSnapshot.prefix(30))'")
+        }
+        return liveSnapshot
     }
 
     /// 超时时间需覆盖完整的 WhisperKit 解码 + LLM 合并耗时（实测可达 ~2.6s）。
