@@ -110,7 +110,7 @@ macOS services in `PlatformAdapters`: `MacOSClipboardService`, `MacOSAccessibili
 
 ## Telemetry
 
-`LokiTelemetryService` (in `Observability`) ships events to Grafana Loki. Offline events are persisted to `~/Library/Application Support/VoxPocket/telemetry/pending/` and retried on next `flush()`. `ServiceContainer.endRecording()` triggers a flush. Local stack: `cd docker/telemetry && docker compose up -d` → Grafana at `http://localhost:3010` (admin / voxpocket), Loki at `http://localhost:3100`.
+`LokiTelemetryService` (in `Observability`) ships events to Grafana Loki. Offline events are persisted to `~/Library/Application Support/VoxPocket/telemetry/pending/` and retried on next `flush()`. `ServiceContainer.endRecording()` triggers a flush. Local stack: `cd ~/Development/loki-telemetry-stack && docker compose up -d` → Grafana at `http://localhost:3010` (admin / telemetry), Loki at `http://localhost:3100`.
 
 ## Git Hooks
 
