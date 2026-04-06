@@ -233,7 +233,8 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         do {
             try await recordingUseCase.stopRecording()
 
-            // 提交转录到编辑区
+            // 提交转录到编辑区；同时跟踪本次录音是否产生了新内容
+            let newTranscriptionAdded: Bool
             if hadPreviousContent {
                 // 续写模式：追加到现有文本 → History 记录 1
                 let newText = liveTranscription
@@ -244,6 +245,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                 if !newText.isEmpty {
                     try? editingUseCase.append("\n" + newText)
                 }
+                newTranscriptionAdded = !newText.isEmpty
                 logger.log(.debug, "Append mode commit completed", context: [
                     "current_text_length": editingUseCase.currentText.count
                 ])
@@ -253,13 +255,22 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
                     "transcription_length": liveTranscription.count
                 ])
                 try? await transcriptionUseCase.commitCurrentTranscription()
+                newTranscriptionAdded = !editingUseCase.currentText.isEmpty
             }
 
             // 冻结整个 text 用于优化（包括旧内容 + 新转录）
             rawTranscription = editingUseCase.currentText
             logger.log(.debug, "Prepared text for refinement", context: [
-                "raw_text_length": rawTranscription.count
+                "raw_text_length": rawTranscription.count,
+                "new_transcription_added": newTranscriptionAdded
             ])
+
+            // 只有本次录音产生了新转录内容，才触发自动优化
+            // 避免静默录音（无语音）时对已有内容重复优化
+            guard newTranscriptionAdded else {
+                logger.log(.debug, "Skipping refinement: no new transcription content from this recording session")
+                return
+            }
 
             // 自动执行优化（针对整个 text）
             await autoRefine()
