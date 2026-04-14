@@ -35,4 +35,18 @@ public protocol TranscriptionUseCase: AnyObject, Sendable {
 
     /// 清除临时转录内容
     func clearLiveText()
+
+    // MARK: - Streaming Snapshot Gate
+
+    /// 全量快照发布者
+    ///
+    /// 当 `snapshotGateActive` 为 true 时，每次最终识别结果到来时发布完整转录文本。
+    /// 用于流式输入模式下的增量精炼。
+    var snapshotPublisher: AnyPublisher<String, Never> { get }
+
+    /// 快照门控开关
+    ///
+    /// true：最终识别结果路由到 snapshotPublisher，不写入 EditingUseCase
+    /// false：最终识别结果通过 replaceAll 写入 EditingUseCase（默认行为）
+    var snapshotGateActive: Bool { get set }
 }

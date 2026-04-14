@@ -156,6 +156,53 @@ extension DefaultRefinementUseCase: RefinementUseCase {
         }
     }
 
+    public func refineText(_ text: String, customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
+        guard !text.isEmpty else {
+            return AsyncThrowingStream { $0.finish() }
+        }
+
+        let request = RefinementRequest(text: text, customPrompt: customPrompt)
+        nonisolated(unsafe) let stateSubject = self.stateSubject
+        let llmService = self.llmService
+        let telemetry = self.telemetry
+
+        return AsyncThrowingStream { continuation in
+            let task = Task { @Sendable in
+                let startTime = Date()
+                let refiningState = RefinementState.refining(progress: "处理中...")
+                stateSubject.send(refiningState)
+                continuation.yield(.state(refiningState))
+
+                do {
+                    let innerStream = try await llmService.refineStreaming(request)
+                    for try await chunk in innerStream {
+                        guard !Task.isCancelled else { break }
+                        continuation.yield(.chunk(chunk))
+                    }
+                    if !Task.isCancelled {
+                        stateSubject.send(.completed)
+                        continuation.yield(.state(.completed))
+                        telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
+                        ])
+                    }
+                    continuation.finish()
+                } catch {
+                    if !Task.isCancelled {
+                        let errorState = RefinementState.error(error.localizedDescription)
+                        stateSubject.send(errorState)
+                        telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
+                            "error": error.localizedDescription
+                        ])
+                        continuation.finish(throwing: error)
+                    }
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     public func cancel() {
         llmService.cancel()
         stateSubject.send(.idle)

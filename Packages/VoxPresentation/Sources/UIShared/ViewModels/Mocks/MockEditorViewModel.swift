@@ -20,6 +20,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     @Published public var rawTranscription: String = ""
     @Published public var streamingRefinedText: String = ""
     @Published public var autoCopiedText: String?
+    @Published public var isVoiceZoneEditing: Bool = false
 
     private var mockTask: Task<Void, Never>?
 

@@ -80,6 +80,17 @@ public protocol RefinementUseCase: AnyObject, Sendable {
         transcriptionMetadata: TranscriptionMetadata?
     ) -> AsyncThrowingStream<RefinementEvent, Error>
 
+    /// 流式优化指定文本（不读取也不写入 EditingUseCase）
+    ///
+    /// 用于流式输入模式，由调用方提供文本并自行处理输出。
+    /// 此方法为 required，无默认实现。
+    ///
+    /// - Parameters:
+    ///   - text: 要优化的文本
+    ///   - customPrompt: 自定义提示词（可选）
+    /// - Returns: 异步事件流（包含状态和文本块）
+    func refineText(_ text: String, customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error>
+
     /// 取消当前优化
     func cancel()
 

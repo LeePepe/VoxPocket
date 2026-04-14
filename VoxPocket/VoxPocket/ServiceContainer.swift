@@ -49,6 +49,7 @@ public final class ServiceContainer: ObservableObject {
     public let transcriptionUseCase: DefaultTranscriptionUseCase
     public let historyUseCase: DefaultHistoryUseCase
     public let refinementUseCase: DefaultRefinementUseCase
+    public let streamingInputCoordinator: DefaultStreamingInputCoordinator
 
     /// 会话用例代理（启动时用内存实现，UI 就绪后延迟切换到 SwiftData）
     public let sessionUseCase: ProxySessionUseCase
@@ -70,6 +71,7 @@ public final class ServiceContainer: ObservableObject {
     public let quickRecordingUseCase: DefaultRecordingUseCase
     public let quickTranscriptionUseCase: DefaultTranscriptionUseCase
     public let quickRefinementUseCase: DefaultRefinementUseCase
+    public let quickStreamingInputCoordinator: DefaultStreamingInputCoordinator
 #endif
 
     // MARK: - 遥测
@@ -123,6 +125,12 @@ public final class ServiceContainer: ObservableObject {
         historyUseCase = DefaultHistoryUseCase(editing: editingUseCase)
         refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase, telemetry: telemetryService)
 
+        streamingInputCoordinator = DefaultStreamingInputCoordinator(
+            editing: editingUseCase,
+            transcription: transcriptionUseCase,
+            refinement: refinementUseCase
+        )
+
         // 启动时先用内存实现，避免 ModelContainer 创建阻塞 UI
         sessionUseCase = ProxySessionUseCase(backing: InMemorySessionUseCase())
 
@@ -144,6 +152,11 @@ public final class ServiceContainer: ObservableObject {
             llmService: llmService,
             editing: quickEditingUseCase,
             telemetry: telemetryService
+        )
+        quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(
+            editing: quickEditingUseCase,
+            transcription: quickTranscriptionUseCase,
+            refinement: quickRefinementUseCase
         )
 #endif
 
@@ -444,7 +457,8 @@ public final class ServiceContainer: ObservableObject {
             refinement: refinementUseCase,
             clipboard: clipboard,
             session: sessionUseCase,
-            inbox: inbox
+            inbox: inbox,
+            streamingCoordinator: streamingInputCoordinator
         )
     }
 
@@ -463,6 +477,7 @@ public final class ServiceContainer: ObservableObject {
             transcriptionUseCase: quickTranscriptionUseCase,
             refinementUseCase: quickRefinementUseCase,
             clipboardService: clipboardService,
+            streamingCoordinator: quickStreamingInputCoordinator,
             telemetryService: telemetryService
         )
     }

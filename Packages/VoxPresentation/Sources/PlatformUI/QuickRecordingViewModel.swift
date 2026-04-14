@@ -21,6 +21,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     private let transcriptionUseCase: TranscriptionUseCase
     private let refinementUseCase: RefinementUseCase
     private let clipboardService: ClipboardService
+    private let streamingCoordinator: (any StreamingInputCoordinator)?
     private let logger: Logger
     private let telemetryService: (any TelemetryService)?
 
@@ -73,6 +74,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         transcriptionUseCase: TranscriptionUseCase,
         refinementUseCase: RefinementUseCase,
         clipboardService: ClipboardService,
+        streamingCoordinator: (any StreamingInputCoordinator)? = nil,
         logger: Logger? = nil,
         telemetryService: (any TelemetryService)? = nil
     ) {
@@ -80,6 +82,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         self.transcriptionUseCase = transcriptionUseCase
         self.refinementUseCase = refinementUseCase
         self.clipboardService = clipboardService
+        self.streamingCoordinator = streamingCoordinator
         self.logger = logger ?? PrintLogger(subsystem: "QuickRecordingVM")
         self.telemetryService = telemetryService
 
@@ -118,6 +121,20 @@ public final class QuickRecordingViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // 流式协调器：订阅已精炼的语音文本用于实时显示
+        if let coordinator = streamingCoordinator {
+            coordinator.refinedVoiceTextPublisher
+                .sink { [weak self] text in
+                    guard let self else { return }
+                    // send() 从 MainActor 发出，直接更新 refinedText
+                    self.refinedText = text
+                    if !text.isEmpty {
+                        self.recorderStatus = .refining
+                    }
+                }
+                .store(in: &cancellables)
+        }
     }
 
     // MARK: - 录音操作
@@ -149,6 +166,11 @@ public final class QuickRecordingViewModel: ObservableObject {
             recorderStatus = .listening
             sessionStartTime = Date()
             logger.debug("Recording started")
+
+            // 流式模式：启动协调器（设置语音锚点、激活快照门控）
+            if let coordinator = streamingCoordinator {
+                await coordinator.startStreaming()
+            }
 
             if shouldStopAfterStart {
                 shouldStopAfterStart = false
@@ -225,6 +247,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             }
 
             guard !rawTranscription.isEmpty else {
+                streamingCoordinator?.cancel()
                 recorderStatus = .idle
                 isProcessing = false
                 logger.debug("stopRecording: rawTranscription empty → calling onNoResult")
@@ -232,11 +255,19 @@ public final class QuickRecordingViewModel: ObservableObject {
                 return
             }
 
-            // 将转录文本提交到 EditingUseCase，供 RefinementUseCase 读取
-            try await transcriptionUseCase.commitCurrentTranscription()
-
             recorderStatus = .refining
-            await performRefinement()
+
+            if let coordinator = streamingCoordinator {
+                // 流式模式：等待协调器完成最后一次精炼
+                await coordinator.stopStreaming()
+                let outputText = ensureSentenceTerminator(refinedText.isEmpty ? rawTranscription : refinedText)
+                await completeWithText(outputText)
+            } else {
+                // 非流式模式：提交转录后统一精炼
+                // 将转录文本提交到 EditingUseCase，供 RefinementUseCase 读取
+                try await transcriptionUseCase.commitCurrentTranscription()
+                await performRefinement()
+            }
         } catch {
             finalResultTask.cancel()
             errorMessage = error.localizedDescription
@@ -248,6 +279,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     public func cancelRecording() async {
         streamingTask?.cancel()
         streamingTask = nil
+        streamingCoordinator?.cancel()
         refinementUseCase.cancel()
 
         if recorderStatus == .listening {
