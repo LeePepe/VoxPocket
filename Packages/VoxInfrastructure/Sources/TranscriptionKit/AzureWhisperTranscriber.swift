@@ -1,7 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
-import Observability
+import LokiKit
 import Synchronization
 
 /// Azure OpenAI Whisper 转录协调器（纯批量模式）

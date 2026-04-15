@@ -14,7 +14,7 @@ import PlatformUI
 import UIShared
 import UseCases
 import Preferences
-import Observability
+import LokiKit
 
 /// macOS 应用代理
 ///

@@ -1,7 +1,7 @@
 import Foundation
 import FoundationModels
 import CoreModels
-import Observability
+import LokiKit
 
 enum AppleIntelligenceLocaleResolver {
     static func resolve(

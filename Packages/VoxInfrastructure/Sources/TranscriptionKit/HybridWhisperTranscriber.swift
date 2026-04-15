@@ -1,7 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
-import Observability
+import LokiKit
 import Speech
 import Synchronization
 

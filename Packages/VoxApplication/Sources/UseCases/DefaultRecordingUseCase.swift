@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import Observability
+import LokiKit
 import TranscriptionKit
 import CoreModels
 

@@ -3,7 +3,7 @@ import Foundation
 import Combine
 import Carbon
 import AppKit
-import Observability
+import LokiKit
 
 /// macOS 全局快捷键服务实现
 ///

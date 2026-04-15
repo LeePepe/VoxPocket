@@ -3,7 +3,7 @@ import Combine
 import LLMKit
 import CoreModels
 import TranscriptionKit
-import Observability
+import LokiKit
 
 /// LLM 优化用例默认实现
 ///

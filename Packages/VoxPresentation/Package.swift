@@ -27,6 +27,7 @@ let package = Package(
         .package(path: "../VoxDomain"),
         .package(path: "../VoxInfrastructure"),
         .package(path: "../VoxApplication"),
+        .package(path: "../../../LokiKit"),
     ],
     targets: [
         .target(
@@ -38,6 +39,7 @@ let package = Package(
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "Preferences", package: "VoxInfrastructure"),
+                .product(name: "LokiKit", package: "LokiKit"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
         ),
@@ -50,6 +52,7 @@ let package = Package(
                 .product(name: "Preferences", package: "VoxInfrastructure"),
                 .product(name: "LLMKit", package: "VoxInfrastructure"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+                .product(name: "LokiKit", package: "LokiKit"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
         ),

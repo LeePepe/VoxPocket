@@ -2,7 +2,7 @@
 import Foundation
 import AppKit
 import Carbon
-import Observability
+import LokiKit
 
 /// macOS 剪贴板服务实现
 ///

@@ -17,7 +17,7 @@ import Persistence
 import PlatformAdapters
 import Preferences
 import UIShared
-import Observability
+import LokiKit
 #if os(macOS)
 import PlatformUI
 #endif

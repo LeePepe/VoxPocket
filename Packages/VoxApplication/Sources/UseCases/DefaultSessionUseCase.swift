@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 import CoreModels
-import Observability
+import LokiKit
 import Persistence
 
 /// 持久化会话用例

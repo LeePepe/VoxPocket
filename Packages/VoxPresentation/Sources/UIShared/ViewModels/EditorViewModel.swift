@@ -3,7 +3,7 @@ import Combine
 import CoreModels
 import LLMKit
 import UseCases
-import Observability
+import LokiKit
 import PlatformAdapters
 import TranscriptionKit
 

@@ -2,7 +2,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
-import Observability
+import LokiKit
 
 /// macOS 辅助功能服务实现
 ///

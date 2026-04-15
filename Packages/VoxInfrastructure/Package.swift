@@ -22,10 +22,6 @@ let package = Package(
             targets: ["Persistence"]
         ),
         .library(
-            name: "Observability",
-            targets: ["Observability"]
-        ),
-        .library(
             name: "PlatformAdapters",
             targets: ["PlatformAdapters"]
         ),
@@ -36,6 +32,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../VoxDomain"),
+        .package(path: "../../../LokiKit"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
         .package(url: "https://github.com/argmaxinc/WhisperKit", from: "0.12.0"),
     ],
@@ -44,7 +41,7 @@ let package = Package(
             name: "TranscriptionKit",
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
-                "Observability",
+                .product(name: "LokiKit", package: "LokiKit"),
                 .product(name: "WhisperKit", package: "WhisperKit"),
             ]
         ),
@@ -53,7 +50,7 @@ let package = Package(
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
                 "TranscriptionKit",
-                "Observability",
+                .product(name: "LokiKit", package: "LokiKit"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
             ]
         ),
@@ -65,16 +62,10 @@ let package = Package(
             ]
         ),
         .target(
-            name: "Observability",
-            dependencies: [
-                .product(name: "CoreModels", package: "VoxDomain"),
-            ]
-        ),
-        .target(
             name: "PlatformAdapters",
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
-                "Observability",
+                .product(name: "LokiKit", package: "LokiKit"),
             ]
         ),
         .target(
@@ -92,10 +83,6 @@ let package = Package(
         .testTarget(
             name: "PersistenceTests",
             dependencies: ["Persistence"]
-        ),
-        .testTarget(
-            name: "ObservabilityTests",
-            dependencies: ["Observability"]
         ),
     ]
 )

@@ -1,6 +1,6 @@
 import Foundation
 import CoreModels
-import Observability
+import LokiKit
 
 /// Azure Foundry 鉴权模式
 public enum AzureFoundryAuthMode: String, Sendable {

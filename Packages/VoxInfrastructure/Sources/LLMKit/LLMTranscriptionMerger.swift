@@ -1,5 +1,5 @@
 import Foundation
-import Observability
+import LokiKit
 import TranscriptionKit
 
 /// 基于 LLM 的转录结果合并器

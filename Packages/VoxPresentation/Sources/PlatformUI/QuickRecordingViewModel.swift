@@ -6,7 +6,7 @@ import LLMKit
 import UseCases
 import PlatformAdapters
 import UIShared
-import Observability
+import LokiKit
 
 /// 快速录音 ViewModel
 ///

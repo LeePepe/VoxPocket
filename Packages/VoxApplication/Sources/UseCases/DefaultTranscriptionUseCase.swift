@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 import TranscriptionKit
-import Observability
+import LokiKit
 
 /// 转录用例默认实现
 ///
@@ -12,7 +12,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
 
     private let coordinator: TranscriptionCoordinator
     private let editingUseCase: EditingUseCase
-    private let logger: any Observability.Logger
+    private let logger: any LokiKit.Logger
     private let telemetry: any TelemetryService
 
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
@@ -51,7 +51,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
         coordinator: TranscriptionCoordinator,
         editing: EditingUseCase,
         language: Locale = Locale(identifier: "zh-Hans"),
-        logger: (any Observability.Logger)? = nil,
+        logger: (any LokiKit.Logger)? = nil,
         telemetry: any TelemetryService = NoopTelemetryService()
     ) {
         self.coordinator = coordinator

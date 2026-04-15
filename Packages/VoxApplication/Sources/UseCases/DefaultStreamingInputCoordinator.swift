@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 import Synchronization
-import Observability
+import LokiKit
 
 /// 流式输入协调器默认实现
 ///
