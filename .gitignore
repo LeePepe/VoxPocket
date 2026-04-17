@@ -33,6 +33,10 @@ Package.resolved
 releases/
 .release-staging/
 
+# Test executor artifacts
+artifacts/reports/
+artifacts/suites/
+
 # CSV files (可能是临时数据)
 *.csv
 

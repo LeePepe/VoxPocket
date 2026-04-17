@@ -1,17 +1,18 @@
 # VoxInfrastructure overview
 
 Purpose
-- Platform services and adapters: LLM, transcription, persistence, observability.
+- Platform services and adapters: LLM, transcription, persistence, platform integration, and preferences. Observability now lives in the standalone `LokiKit` package.
 
 Public products
 - `TranscriptionKit`
 - `LLMKit`
 - `Persistence`
-- `Observability`
 - `PlatformAdapters`
+- `Preferences`
 
 Depends on
 - VoxDomain (`CoreModels`, `TextHistory`)
+- LokiKit
 - Swift Async Algorithms
 - WhisperKit (Core ML 本地语音转录)
 
@@ -20,16 +21,17 @@ Primary entry points
 - `Packages/VoxInfrastructure/Sources/LLMKit/`
 - `Packages/VoxInfrastructure/Sources/TranscriptionKit/`
 - `Packages/VoxInfrastructure/Sources/Persistence/`
-- `Packages/VoxInfrastructure/Sources/Observability/`
 - `Packages/VoxInfrastructure/Sources/PlatformAdapters/`
+- `Packages/VoxInfrastructure/Sources/Preferences/`
 
 Recommended read order
 1) `Packages/VoxInfrastructure/Package.swift`
 2) `Packages/VoxInfrastructure/Sources/LLMKit/`
 3) `Packages/VoxInfrastructure/Sources/TranscriptionKit/`
 4) `Packages/VoxInfrastructure/Sources/Persistence/`
-5) `Packages/VoxInfrastructure/Sources/Observability/`
-6) `Packages/VoxInfrastructure/Sources/PlatformAdapters/`
+5) `Packages/VoxInfrastructure/Sources/PlatformAdapters/`
+6) `Packages/VoxInfrastructure/Sources/Preferences/`
+7) `~/Development/LokiKit/`
 
 Notes for LLM context
 - Start with service boundaries and protocols, then implementations.

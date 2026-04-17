@@ -13,11 +13,11 @@ graph TB
         UseCases[UseCases<br/>Business Logic Flows]
     end
 
-    subgraph Infrastructure["🔧 VoxInfrastructure<br/>(基础设施层)"]
+    subgraph Infrastructure["🔧 VoxInfrastructure + LokiKit<br/>(基础设施/遥测层)"]
         TranscriptionKit[TranscriptionKit<br/>Speech Recognition]
         LLMKit[LLMKit<br/>LLM Services]
         Persistence[Persistence<br/>Data Storage]
-        Observability[Observability<br/>Logging & Monitoring]
+        LokiKit[LokiKit<br/>Logging, Monitoring & Telemetry]
         PlatformAdapters[PlatformAdapters<br/>System Integration]
         Preferences[Preferences<br/>User Settings]
     end
@@ -49,20 +49,20 @@ graph TB
     UseCases --> TranscriptionKit
     UseCases --> LLMKit
     UseCases --> Persistence
-    UseCases --> Observability
+    UseCases --> LokiKit
     UseCases --> PlatformAdapters
 
     %% Infrastructure dependencies
     LLMKit --> CoreModels
     LLMKit --> TranscriptionKit
-    LLMKit --> Observability
+    LLMKit --> LokiKit
     TranscriptionKit --> CoreModels
-    TranscriptionKit --> Observability
+    TranscriptionKit --> LokiKit
     Persistence --> CoreModels
     Persistence --> TextHistory
-    Observability --> CoreModels
+    LokiKit --> CoreModels
     PlatformAdapters --> CoreModels
-    PlatformAdapters --> Observability
+    PlatformAdapters --> LokiKit
 
     %% Domain dependencies
     TextHistory --> CoreModels
@@ -74,7 +74,7 @@ graph TB
     classDef presStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
 
     class CoreModels,TextHistory domainStyle
-    class TranscriptionKit,LLMKit,Persistence,Observability,PlatformAdapters,Preferences infraStyle
+    class TranscriptionKit,LLMKit,Persistence,LokiKit,PlatformAdapters,Preferences infraStyle
     class UseCases appStyle
     class UIShared,PlatformUI presStyle
 ```
@@ -101,7 +101,7 @@ graph LR
     Services --> Utilities
 
     CoreModels --> Protocols
-    Observability --> Services
+    LokiKit --> Services
 ```
 
 ### UIShared 内部结构
@@ -195,7 +195,7 @@ graph TD
         TK[TranscriptionKit]
         LLM[LLMKit]
         PS[Persistence]
-        OBS[Observability]
+        LK[LokiKit]
     end
 
     subgraph Domain Layer
@@ -219,8 +219,8 @@ graph TD
     EditUC --> PS
     RefineUC --> PS
 
-    RecUC --> OBS
-    RefineUC --> OBS
+    RecUC --> LK
+    RefineUC --> LK
 
     TK -.creates.-> Session
     EditUC -.creates.-> Checkpoint
@@ -282,15 +282,15 @@ graph LR
    ├─ CoreModels
    └─ TextHistory
 
-2. VoxInfrastructure (依赖 Domain)
-   ├─ Observability
+2. VoxInfrastructure + LokiKit (依赖 Domain)
+   ├─ LokiKit
    ├─ Preferences
    ├─ TranscriptionKit
    ├─ PlatformAdapters
    ├─ Persistence
    └─ LLMKit
 
-3. VoxApplication (依赖 Domain + Infrastructure)
+3. VoxApplication (依赖 Domain + Infrastructure + LokiKit)
    └─ UseCases
 
 4. VoxPresentation (依赖所有，最后编译)
@@ -304,7 +304,7 @@ graph LR
 
 - ✅ Domain 完全独立
 - ✅ Infrastructure 单向依赖 Domain
-- ✅ Application 依赖 Domain + Infrastructure，无反向依赖
+- ✅ Application 依赖 Domain + Infrastructure + LokiKit，无反向依赖
 - ✅ Presentation 作为最外层，只向内依赖
 
 **如何避免循环依赖**：

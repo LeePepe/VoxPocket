@@ -8,7 +8,8 @@ Public product
 
 Depends on
 - VoxDomain (`CoreModels`, `TextHistory`)
-- VoxInfrastructure (`TranscriptionKit`, `LLMKit`, `Persistence`, `Observability`, `PlatformAdapters`)
+- VoxInfrastructure (`TranscriptionKit`, `LLMKit`, `Persistence`, `PlatformAdapters`, `Preferences`)
+- LokiKit
 
 Primary entry points
 - `Packages/VoxApplication/Package.swift`
