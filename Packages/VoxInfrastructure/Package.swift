@@ -74,11 +74,17 @@ let package = Package(
         ),
         .testTarget(
             name: "TranscriptionKitTests",
-            dependencies: ["TranscriptionKit"]
+            dependencies: [
+                "TranscriptionKit",
+                .product(name: "LokiKit", package: "LokiKit"),
+            ]
         ),
         .testTarget(
             name: "LLMKitTests",
-            dependencies: ["LLMKit"]
+            dependencies: [
+                "LLMKit",
+                .product(name: "LokiKit", package: "LokiKit"),
+            ]
         ),
         .testTarget(
             name: "PersistenceTests",

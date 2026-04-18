@@ -1,6 +1,6 @@
 import XCTest
 @testable import LLMKit
-import Observability
+import LokiKit
 
 /// 测试集成后的 AppleIntelligenceProvider（使用文本完成方法）
 final class IntegratedProviderTest: XCTestCase {

@@ -1,5 +1,5 @@
 import XCTest
-import Observability
+import LokiKit
 @testable import TranscriptionKit
 
 final class LocalWhisperRawOutputLoggerTests: XCTestCase {

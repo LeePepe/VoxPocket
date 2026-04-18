@@ -1,5 +1,5 @@
 import Foundation
-import Observability
+import LokiKit
 import XCTest
 @testable import TranscriptionKit
 
