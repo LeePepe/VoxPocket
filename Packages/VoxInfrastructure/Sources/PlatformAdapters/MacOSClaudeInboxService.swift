@@ -1,6 +1,6 @@
 #if os(macOS)
 import Foundation
-import Observability
+import LokiKit
 
 /// macOS Claude inbox 服务实现
 ///

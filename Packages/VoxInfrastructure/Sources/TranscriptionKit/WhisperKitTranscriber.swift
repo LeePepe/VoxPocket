@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-import Observability
+import LokiKit
 import Synchronization
 
 #if canImport(WhisperKit)

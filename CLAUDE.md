@@ -21,6 +21,7 @@ swift build --package-path Packages/VoxApplication
 swift build --package-path Packages/VoxPresentation
 
 # Run all tests for a package
+swift test --package-path Packages/VoxUITesting
 swift test --package-path Packages/VoxDomain
 swift test --package-path Packages/VoxApplication
 swift test --package-path Packages/VoxPresentation
@@ -41,9 +42,13 @@ VoxPresentation  (SwiftUI views, view models)
        ↓
 VoxApplication   (use cases / business logic)
        ↓
-VoxInfrastructure (TranscriptionKit · LLMKit · Persistence · Observability · PlatformAdapters · Preferences)
+VoxInfrastructure (TranscriptionKit · LLMKit · Persistence · PlatformAdapters · Preferences)
+       ↓
+LokiKit          (standalone observability / telemetry package)
        ↓
 VoxDomain        (pure domain models: CoreModels, TextHistory — no external deps)
+
+VoxUITesting     (standalone — VoxFunctionalTest snapshot tests · VoxAgentEval Claude Vision UI eval)
 ```
 
 The app entry point is `VoxPocket/VoxPocket/` with `ServiceContainer` as the `@MainActor` singleton DI container.
@@ -99,6 +104,7 @@ For hybrid providers, `LLMTranscriptionMerger` uses an LLM call to reconcile the
 | `kimikey` / `AZURE_API_KEY` | Azure AI Foundry API key |
 | `LOKI_ENDPOINT` | Loki push URL (debug defaults to `http://localhost:3100/loki/api/v1/push`) |
 | `LOKI_TOKEN` | Loki Bearer token for Grafana Cloud |
+| `CLAUDE_API_KEY` / `ANTHROPIC_API_KEY` | Claude Vision API key for `VoxAgentEval` UI evaluation |
 
 ## Platform-Specific Code
 
@@ -106,7 +112,7 @@ macOS services in `PlatformAdapters`: `MacOSClipboardService`, `MacOSAccessibili
 
 ## Telemetry
 
-`LokiTelemetryService` (in `Observability`) ships events to Grafana Loki. Offline events are persisted to `~/Library/Application Support/VoxPocket/telemetry/pending/` and retried on next `flush()`. `ServiceContainer.endRecording()` triggers a flush. Local stack: `cd docker/telemetry && docker compose up -d` → Grafana at `http://localhost:3000` (admin / voxpocket).
+`LokiTelemetryService` (from the standalone `LokiKit` package) ships events to Grafana Loki. Offline events are persisted to `~/Library/Application Support/VoxPocket/telemetry/pending/` and retried on next `flush()`. `ServiceContainer.endRecording()` triggers a flush. Local stack: `cd ~/Development/loki-telemetry-stack && docker compose up -d` → Grafana at `http://localhost:3010` (admin / telemetry), Loki at `http://localhost:3100`.
 
 ## Git Hooks
 
@@ -125,6 +131,19 @@ Linear API endpoint: `https://api.linear.app/graphql`
 Team ID: `56d7d04f-ffb2-43f3-ad40-23fd78f551d8`
 Project ID: `662a9249-b377-47c0-ad20-ccca738f4e8e`
 VoxPocket parent issue: `dc74c224-59f0-4eb1-87d9-81a62a668da7` (TIA-6)
+
+## Plan-Review Loop (MANDATORY)
+
+When creating or modifying any implementation plan, Claude MUST follow this loop autonomously — never wait for the user to trigger review:
+
+1. **Plan** — planner agent creates/updates the plan
+2. **Review** — reviewer agent reviews the plan immediately after
+3. **Revise** — if reviewer raises CRITICAL or MEDIUM issues, update the plan
+4. **Re-review** — reviewer reviews again automatically
+5. **Repeat** until reviewer outputs `APPROVED` with no CRITICAL issues
+6. **Only then** present the final plan to the user for execution approval
+
+This loop is Claude's responsibility. The user should never need to ask for a re-review.
 
 ## Auto-Commit Workflow
 

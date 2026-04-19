@@ -50,6 +50,9 @@ public protocol EditorViewState: ObservableObject {
     /// 自动复制完成时的文本（用于触发 snackbar 通知，显示后重置为 nil）
     var autoCopiedText: String? { get set }
 
+    /// 是否正在流式语音输入（语音区域已锁定，用户手动编辑被限制在锚点之前）
+    var isVoiceZoneEditing: Bool { get }
+
     // MARK: - 录音操作
 
     /// 开始录音

@@ -1,5 +1,5 @@
 import Foundation
-import Observability
+import LokiKit
 
 /// Azure OpenAI Whisper 转录器配置
 public struct AzureWhisperConfig: Sendable {

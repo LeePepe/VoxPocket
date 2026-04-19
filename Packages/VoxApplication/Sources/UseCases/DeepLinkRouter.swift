@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import Observability
+import LokiKit
 
 /// Deep Link 路由协议
 ///

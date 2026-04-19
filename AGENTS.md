@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last-Reviewed: 2026-03-31
+Last-Reviewed: 2026-04-16
 
 ## Project Snapshot
 
@@ -9,11 +9,12 @@ VoxPocket 是 macOS/iOS 的 SwiftUI 语音转写应用，默认语音识别语�
 ## Layered Architecture
 
 ```
-VoxPresentation  ->  VoxApplication  ->  VoxInfrastructure  ->  VoxDomain
+VoxPresentation  ->  VoxApplication  ->  VoxInfrastructure + LokiKit  ->  VoxDomain
 ```
 
 - `VoxDomain`: 纯领域模型（`CoreModels`, `TextHistory`）
-- `VoxInfrastructure`: 转写、LLM、持久化、可观测性、平台适配
+- `VoxInfrastructure`: 转写、LLM、持久化、平台适配、偏好设置
+- `LokiKit`: 独立可观测性/遥测包（日志、监控、Loki telemetry）
 - `VoxApplication`: UseCases 业务编排
 - `VoxPresentation`: SwiftUI 视图与 ViewModel
 

@@ -177,7 +177,7 @@ struct StatusBar: View {
         HStack(spacing: 12) {
             if status == .listening {
                 Image(systemName: "mic.fill")
-                    .foregroundColor(.textSecondary)
+                    .foregroundColor(.statusListening)
                 Text("Listening")
                     .font(FontToken.callout)
                     .foregroundColor(.textSecondary)
@@ -190,7 +190,7 @@ struct StatusBar: View {
                     .background(GlassCapsuleBackground())
             } else {
                 Image(systemName: status == .error ? "exclamationmark.triangle" : "sparkles")
-                    .foregroundColor(.textSecondary)
+                    .foregroundColor(status == .error ? .statusError : .accentPrimary)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(status == .error ? "Refine failed" : "Refine status")
@@ -270,6 +270,7 @@ struct ControlButton: View {
     let color: Color
     let emphasis: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     init(
         _ title: String,
@@ -286,11 +287,14 @@ struct ControlButton: View {
     }
 
     var body: some View {
+        let theme = Theme.current(colorScheme)
+        let iconColor = emphasis ? theme.palette.textPrimary : theme.palette.accentPrimary
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: systemImage)
                     .font(.system(size: 13))
                     .frame(width: 16)
+                    .foregroundStyle(iconColor)
                 Text(title)
                     .font(FontToken.caption)
             }

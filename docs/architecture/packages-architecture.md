@@ -2,7 +2,7 @@
 
 ## 概览
 
-VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Package Manager 将代码组织成4个独立的包，实现清晰的依赖方向和职责分离。
+VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Package Manager 将代码组织成 4 个核心包，并接入一个独立的本地依赖 `LokiKit`，实现清晰的依赖方向和职责分离。
 
 ```
 ┌─────────────────────────────────────────┐
@@ -16,12 +16,12 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 │  └─ UseCases: Business logic flows      │
 └─────────────────┬───────────────────────┘
                   │ depends on
-      ┌───────────┴───────────┐
-      │                       │
-┌─────▼──────────┐  ┌─────────▼──────────┐
-│  VoxDomain     │  │ VoxInfrastructure  │
-│  (Entities)    │  │  (Adapters)        │
-└────────────────┘  └────────────────────┘
+      ┌───────────┴───────────────┐
+      │                           │
+┌─────▼──────────┐  ┌─────────────▼─────────────┐
+│  VoxDomain     │  │ VoxInfrastructure +       │
+│  (Entities)    │  │ LokiKit (Adapters/Telemetry) │
+└────────────────┘  └───────────────────────────┘
 ```
 
 ## 依赖规则
@@ -29,8 +29,8 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 **核心原则**: 依赖方向永远指向内层（Domain），外层依赖内层，内层不知道外层的存在。
 
 - **VoxDomain**: 无外部依赖（纯业务实体）
-- **VoxInfrastructure**: 仅依赖 VoxDomain
-- **VoxApplication**: 依赖 VoxDomain + VoxInfrastructure
+- **VoxInfrastructure**: 依赖 VoxDomain，并通过独立的 `LokiKit` 包接入遥测能力
+- **VoxApplication**: 依赖 VoxDomain + VoxInfrastructure + LokiKit
 - **VoxPresentation**: 依赖所有层（最外层）
 
 ---
@@ -74,7 +74,7 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 
 **依赖**:
 - CoreModels (数据模型)
-- Observability (日志/监控)
+- LokiKit (日志/监控)
 - WhisperKit (Core ML 本地模型推理)
 
 **功能**:
@@ -89,7 +89,7 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 **依赖**:
 - CoreModels
 - TranscriptionKit (转录结果处理)
-- Observability
+- LokiKit
 - AsyncAlgorithms (异步流处理)
 
 **结构**:
@@ -120,8 +120,8 @@ LLMKit/
 - 文本历史持久化
 - 本地缓存管理
 
-### 2.4 Observability
-**职责**: 可观测性（日志、监控、追踪）
+### 2.4 LokiKit
+**职责**: 独立可观测性与遥测能力（日志、监控、追踪）
 
 **依赖**: CoreModels
 
@@ -129,13 +129,14 @@ LLMKit/
 - 结构化日志
 - 性能追踪
 - 错误上报
+- Loki telemetry 上报与离线重试
 
 ### 2.5 PlatformAdapters
 **职责**: 平台特定功能适配
 
 **依赖**:
 - CoreModels
-- Observability
+- LokiKit
 
 **功能**:
 - 系统剪贴板访问
@@ -161,7 +162,8 @@ LLMKit/
 
 **依赖**:
 - VoxDomain: CoreModels, TextHistory
-- VoxInfrastructure: TranscriptionKit, LLMKit, Persistence, Observability, PlatformAdapters
+- VoxInfrastructure: TranscriptionKit, LLMKit, Persistence, PlatformAdapters
+- LokiKit
 
 **用例列表**:
 
@@ -196,6 +198,7 @@ LLMKit/
 - VoxDomain: CoreModels, TextHistory
 - VoxInfrastructure: LLMKit, TranscriptionKit, PlatformAdapters, Preferences
 - VoxApplication: UseCases
+- LokiKit
 
 **结构**:
 ```
@@ -231,6 +234,7 @@ UIShared/
 - VoxDomain: CoreModels
 - VoxInfrastructure: PlatformAdapters, Preferences, LLMKit, TranscriptionKit
 - VoxApplication: UseCases
+- LokiKit
 
 **职责**:
 - iOS/macOS 平台特定视图

@@ -17,7 +17,7 @@ import Persistence
 import PlatformAdapters
 import Preferences
 import UIShared
-import Observability
+import LokiKit
 #if os(macOS)
 import PlatformUI
 #endif
@@ -49,6 +49,7 @@ public final class ServiceContainer: ObservableObject {
     public let transcriptionUseCase: DefaultTranscriptionUseCase
     public let historyUseCase: DefaultHistoryUseCase
     public let refinementUseCase: DefaultRefinementUseCase
+    public let streamingInputCoordinator: DefaultStreamingInputCoordinator
 
     /// 会话用例代理（启动时用内存实现，UI 就绪后延迟切换到 SwiftData）
     public let sessionUseCase: ProxySessionUseCase
@@ -70,6 +71,7 @@ public final class ServiceContainer: ObservableObject {
     public let quickRecordingUseCase: DefaultRecordingUseCase
     public let quickTranscriptionUseCase: DefaultTranscriptionUseCase
     public let quickRefinementUseCase: DefaultRefinementUseCase
+    public let quickStreamingInputCoordinator: DefaultStreamingInputCoordinator
 #endif
 
     // MARK: - 遥测
@@ -118,10 +120,16 @@ public final class ServiceContainer: ObservableObject {
 
         // 初始化 Use Cases
         editingUseCase = DefaultEditingUseCase()
-        recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber)
-        transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase)
+        recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber, telemetry: telemetryService)
+        transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase, telemetry: telemetryService)
         historyUseCase = DefaultHistoryUseCase(editing: editingUseCase)
-        refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase)
+        refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase, telemetry: telemetryService)
+
+        streamingInputCoordinator = DefaultStreamingInputCoordinator(
+            editing: editingUseCase,
+            transcription: transcriptionUseCase,
+            refinement: refinementUseCase
+        )
 
         // 启动时先用内存实现，避免 ModelContainer 创建阻塞 UI
         sessionUseCase = ProxySessionUseCase(backing: InMemorySessionUseCase())
@@ -134,14 +142,21 @@ public final class ServiceContainer: ObservableObject {
         // 本地 Whisper engine 在底层共享，不会重复下载同一模型。
         quickTranscriber = Self.makeQuickTranscriber()
         quickEditingUseCase = DefaultEditingUseCase()
-        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber)
+        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService)
         quickTranscriptionUseCase = DefaultTranscriptionUseCase(
             coordinator: quickTranscriber,
-            editing: quickEditingUseCase
+            editing: quickEditingUseCase,
+            telemetry: telemetryService
         )
         quickRefinementUseCase = DefaultRefinementUseCase(
             llmService: llmService,
-            editing: quickEditingUseCase
+            editing: quickEditingUseCase,
+            telemetry: telemetryService
+        )
+        quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(
+            editing: quickEditingUseCase,
+            transcription: quickTranscriptionUseCase,
+            refinement: quickRefinementUseCase
         )
 #endif
 
@@ -413,7 +428,7 @@ public final class ServiceContainer: ObservableObject {
         do {
             let container = try ModelContainer(for: schema, configurations: [config])
             let repository = SwiftDataSessionRepository(container: container)
-            let swiftDataUseCase = DefaultSessionUseCase(repository: repository)
+            let swiftDataUseCase = DefaultSessionUseCase(repository: repository, telemetry: telemetryService)
             await sessionUseCase.switchBacking(to: swiftDataUseCase)
             logger.debug("SwiftData persistence initialized")
         } catch {
@@ -442,7 +457,8 @@ public final class ServiceContainer: ObservableObject {
             refinement: refinementUseCase,
             clipboard: clipboard,
             session: sessionUseCase,
-            inbox: inbox
+            inbox: inbox,
+            streamingCoordinator: streamingInputCoordinator
         )
     }
 
@@ -461,6 +477,7 @@ public final class ServiceContainer: ObservableObject {
             transcriptionUseCase: quickTranscriptionUseCase,
             refinementUseCase: quickRefinementUseCase,
             clipboardService: clipboardService,
+            streamingCoordinator: quickStreamingInputCoordinator,
             telemetryService: telemetryService
         )
     }

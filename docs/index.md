@@ -1,6 +1,6 @@
 # VoxPocket Context Index
 
-Last-Reviewed: 2026-03-31
+Last-Reviewed: 2026-04-16
 
 这是仓库的快速入口。先看这里，再按需下钻。
 
@@ -15,7 +15,8 @@ Last-Reviewed: 2026-03-31
 
 - `VoxPresentation`: `UIShared`, `PlatformUI`
 - `VoxApplication`: `UseCases`
-- `VoxInfrastructure`: `TranscriptionKit`, `LLMKit`, `Persistence`, `Observability`, `PlatformAdapters`, `Preferences`
+- `VoxInfrastructure`: `TranscriptionKit`, `LLMKit`, `Persistence`, `PlatformAdapters`, `Preferences`
+- `LokiKit`: 独立日志与遥测包
 - `VoxDomain`: `CoreModels`, `TextHistory`
 
 ## Common Paths

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CoreModels
+import LokiKit
 import Persistence
 
 /// 持久化会话用例
@@ -9,6 +10,7 @@ import Persistence
 public final class DefaultSessionUseCase: SessionUseCase, @unchecked Sendable {
 
     private let repository: SessionRepository
+    private let telemetry: any TelemetryService
     private let currentSessionSubject = CurrentValueSubject<Session?, Never>(nil)
 
     public var currentSession: Session? {
@@ -23,8 +25,9 @@ public final class DefaultSessionUseCase: SessionUseCase, @unchecked Sendable {
         repository.observe()
     }
 
-    public init(repository: SessionRepository) {
+    public init(repository: SessionRepository, telemetry: any TelemetryService = NoopTelemetryService()) {
         self.repository = repository
+        self.telemetry = telemetry
     }
 
     public func createSession(title: String?) async throws -> Session {
@@ -38,6 +41,7 @@ public final class DefaultSessionUseCase: SessionUseCase, @unchecked Sendable {
         )
         try await repository.save(session)
         currentSessionSubject.send(session)
+        telemetry.track(name: TelemetryEventName.sessionCreated.rawValue, properties: ["session_id": session.id.uuidString])
         return session
     }
 
@@ -60,6 +64,7 @@ public final class DefaultSessionUseCase: SessionUseCase, @unchecked Sendable {
 
     public func deleteSession(_ id: UUID) async throws {
         try await repository.delete(by: id)
+        telemetry.track(name: TelemetryEventName.sessionDeleted.rawValue, properties: ["session_id": id.uuidString])
         if currentSession?.id == id {
             currentSessionSubject.send(nil)
         }

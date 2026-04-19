@@ -55,9 +55,9 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
             syncSidebarSelection()
         }
         .onChange(of: viewModel.sessionListState.filteredSessions.map(\.id)) { _, _ in
-            if viewModel.sessionListState.selectedSessionId == nil,
-               let firstID = viewModel.sessionListState.filteredSessions.first?.id {
-                viewModel.selectSession(firstID)
+            if viewModel.sessionListState.selectedSessionId == nil {
+                // 启动时始终创建新 session，保证编辑器以空白状态开始
+                viewModel.createNewSession()
             } else {
                 syncSidebarSelection()
             }

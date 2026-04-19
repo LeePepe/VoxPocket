@@ -12,7 +12,7 @@ import SwiftUI
 import Combine
 import UIShared
 import PlatformUI
-import Observability
+import LokiKit
 
 /// 窗口类型
 public enum WindowType: String, CaseIterable {

@@ -17,6 +17,7 @@ let package = Package(
     dependencies: [
         .package(path: "../VoxDomain"),
         .package(path: "../VoxInfrastructure"),
+        .package(path: "../../../LokiKit"),
     ],
     targets: [
         .target(
@@ -27,7 +28,7 @@ let package = Package(
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
                 .product(name: "LLMKit", package: "VoxInfrastructure"),
                 .product(name: "Persistence", package: "VoxInfrastructure"),
-                .product(name: "Observability", package: "VoxInfrastructure"),
+                .product(name: "LokiKit", package: "LokiKit"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
             ]
         ),

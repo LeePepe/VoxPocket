@@ -3,7 +3,7 @@ import Combine
 import CoreModels
 import LLMKit
 import UseCases
-import Observability
+import LokiKit
 import PlatformAdapters
 import TranscriptionKit
 
@@ -24,6 +24,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     private let clipboardService: ClipboardService?
     private let sessionUseCase: SessionUseCase?
     private let inboxService: (any ClaudeInboxService)?
+    private let streamingCoordinator: (any StreamingInputCoordinator)?
     private let logger: Logger
 
     /// 用于在录音被阻止时显示 snackbar 通知（可选，由外部注入）
@@ -60,6 +61,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     @Published public var rawTranscription: String = ""
     @Published public var streamingRefinedText: String = ""
     @Published public var autoCopiedText: String?
+    @Published public var isVoiceZoneEditing: Bool = false
 
     // MARK: - Init
 
@@ -72,6 +74,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         clipboard: ClipboardService? = nil,
         session: SessionUseCase? = nil,
         inbox: (any ClaudeInboxService)? = nil,
+        streamingCoordinator: (any StreamingInputCoordinator)? = nil,
         logger: Logger? = nil
     ) {
         self.recordingUseCase = recording
@@ -82,6 +85,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         self.clipboardService = clipboard
         self.sessionUseCase = session
         self.inboxService = inbox
+        self.streamingCoordinator = streamingCoordinator
         self.logger = logger ?? PrintLogger(subsystem: "EditorViewModel")
 
         bindUseCases()
@@ -207,6 +211,10 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
 
         do {
             try await recordingUseCase.startRecording()
+            if let coordinator = streamingCoordinator {
+                await coordinator.startStreaming()
+                isVoiceZoneEditing = true
+            }
         } catch VoxError.modelNotReady {
             snackbarService?.showWarning("本地模型正在加载中，请稍候再试")
         } catch {
@@ -233,37 +241,78 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         do {
             try await recordingUseCase.stopRecording()
 
-            // 提交转录到编辑区
-            if hadPreviousContent {
-                // 续写模式：追加到现有文本 → History 记录 1
-                let newText = liveTranscription
-                logger.log(.debug, "Committing transcription in append mode", context: [
-                    "previous_text_length": text.count,
-                    "new_transcription_length": newText.count
+            if let coordinator = streamingCoordinator {
+                // 流式模式：协调器处理转录快照 + 增量精炼 → 直接写入语音区域
+                await coordinator.stopStreaming()
+                isVoiceZoneEditing = false
+                rawTranscription = liveTranscription
+                let finalText = editingUseCase.currentText
+                logger.log(.debug, "Streaming mode stop completed", context: [
+                    "raw_length": liveTranscription.count,
+                    "refined_length": finalText.count
                 ])
-                if !newText.isEmpty {
-                    try? editingUseCase.append("\n" + newText)
+                // 自动复制精炼结果到剪贴板
+                if !finalText.isEmpty {
+                    clipboardService?.copy(finalText)
+                    autoCopiedText = finalText
                 }
-                logger.log(.debug, "Append mode commit completed", context: [
-                    "current_text_length": editingUseCase.currentText.count
-                ])
+                // 保存会话
+                if let sessionUseCase = sessionUseCase, !finalText.isEmpty {
+                    Task {
+                        try? await sessionUseCase.saveCompletedSession(
+                            title: nil,
+                            rawText: liveTranscription,
+                            refinedText: finalText
+                        )
+                    }
+                }
             } else {
-                // New session 模式：替换全部 → History 记录 1
-                logger.log(.debug, "Committing transcription in new session mode", context: [
-                    "transcription_length": liveTranscription.count
+                // 非流式模式：现有提交 + 自动优化流程
+
+                // 提交转录到编辑区；同时跟踪本次录音是否产生了新内容
+                let newTranscriptionAdded: Bool
+                if hadPreviousContent {
+                    // 续写模式：追加到现有文本 → History 记录 1
+                    let newText = liveTranscription
+                    logger.log(.debug, "Committing transcription in append mode", context: [
+                        "previous_text_length": text.count,
+                        "new_transcription_length": newText.count
+                    ])
+                    if !newText.isEmpty {
+                        try? editingUseCase.append("\n" + newText)
+                    }
+                    newTranscriptionAdded = !newText.isEmpty
+                    logger.log(.debug, "Append mode commit completed", context: [
+                        "current_text_length": editingUseCase.currentText.count
+                    ])
+                } else {
+                    // New session 模式：替换全部 → History 记录 1
+                    logger.log(.debug, "Committing transcription in new session mode", context: [
+                        "transcription_length": liveTranscription.count
+                    ])
+                    try? await transcriptionUseCase.commitCurrentTranscription()
+                    newTranscriptionAdded = !editingUseCase.currentText.isEmpty
+                }
+
+                // 冻结整个 text 用于优化（包括旧内容 + 新转录）
+                rawTranscription = editingUseCase.currentText
+                logger.log(.debug, "Prepared text for refinement", context: [
+                    "raw_text_length": rawTranscription.count,
+                    "new_transcription_added": newTranscriptionAdded
                 ])
-                try? await transcriptionUseCase.commitCurrentTranscription()
+
+                // 只有本次录音产生了新转录内容，才触发自动优化
+                guard newTranscriptionAdded else {
+                    logger.log(.debug, "Skipping refinement: no new transcription content from this recording session")
+                    snackbarService?.showWarning("未检测到语音内容")
+                    return
+                }
+
+                // 自动执行优化（针对整个 text）
+                await autoRefine()
             }
-
-            // 冻结整个 text 用于优化（包括旧内容 + 新转录）
-            rawTranscription = editingUseCase.currentText
-            logger.log(.debug, "Prepared text for refinement", context: [
-                "raw_text_length": rawTranscription.count
-            ])
-
-            // 自动执行优化（针对整个 text）
-            await autoRefine()
         } catch {
+            isVoiceZoneEditing = false
             errorMessage = error.localizedDescription
         }
     }
@@ -408,6 +457,10 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
     ///
     /// 注意：当前 History 功能未实现，此方法暂时只清空临时状态
     public func cancelRecording() {
+        // 取消流式输入（如果活跃）
+        streamingCoordinator?.cancel()
+        isVoiceZoneEditing = false
+
         // 取消正在进行的优化
         cancelRefinement()
 
@@ -465,6 +518,7 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
         cancelRefinement()
         rawTranscription = ""
         streamingRefinedText = ""
+        editingUseCase.clearVoiceAnchor()
         do {
             try editingUseCase.replaceAll(with: "")
         } catch {

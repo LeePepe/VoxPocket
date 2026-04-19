@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import CoreModels
 import Synchronization
-import Observability
+import LokiKit
 import AsyncAlgorithms
 
 /// LLM 服务默认实现
