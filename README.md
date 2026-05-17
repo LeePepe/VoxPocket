@@ -23,7 +23,7 @@ A macOS/iOS voice recording and transcription app built with SwiftUI. Records au
 ## Getting Started
 
 ```bash
-git clone https://github.com/your-org/VoxPocket.git
+git clone https://github.com/LeePepe/VoxPocket.git
 cd VoxPocket
 open VoxPocket/VoxPocket.xcodeproj
 ```
