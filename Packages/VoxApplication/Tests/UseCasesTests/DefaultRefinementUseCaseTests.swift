@@ -89,4 +89,12 @@ private final class CapturingEditingUseCase: EditingUseCase, @unchecked Sendable
     func append(_ text: String) throws {}
 
     func mergeRecentEdits() {}
+
+    // MARK: - Voice Zone
+    private(set) var voiceAnchorLocation: Int?
+    private(set) var isVoiceZoneLocked: Bool = false
+    func setVoiceAnchor(_ location: Int) { voiceAnchorLocation = location }
+    func clearVoiceAnchor() { voiceAnchorLocation = nil }
+    func setVoiceZoneLocked(_ locked: Bool) { isVoiceZoneLocked = locked }
+    func replaceVoiceZone(with text: String) throws { currentTextSubject.send(text) }
 }
