@@ -54,7 +54,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
 
     /// 是否显示下方原始转录面板
     private var shouldShowRawPane: Bool {
-        // TODO: Verify iOS compact hides raw pane; regular width shows.
+        // iPhone 竖屏(compact)隐藏原始面板以省空间；iPad/横屏/macOS(regular)显示
         let hasContent = !viewModel.rawTranscription.isEmpty || viewModel.isRecording
 #if os(iOS)
         let isCompact = horizontalSizeClass == .compact
@@ -360,6 +360,9 @@ struct GlassIconButtonStyle: ButtonStyle {
                 .frame(width: 34, height: 34)
                 .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 12))
                 .scaleEffect(configuration.isPressed ? 0.96 : 1)
+                // 视觉保持 34pt，命中区扩到 HIG 最小 44pt
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         } else {
             let theme = Theme.current(colorScheme)
             configuration.label
@@ -374,6 +377,9 @@ struct GlassIconButtonStyle: ButtonStyle {
                         )
                 )
                 .scaleEffect(configuration.isPressed ? 0.96 : 1)
+                // 视觉保持 34pt，命中区扩到 HIG 最小 44pt
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
     }
 }
