@@ -132,7 +132,7 @@ struct LLMProviderCard: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .tint(MePalette.primaryText)
+                .tint(Color.accentColor)
             }
 
             Divider().overlay(MePalette.divider)
@@ -149,7 +149,7 @@ struct LLMProviderCard: View {
                 Spacer()
                 Toggle("", isOn: skipAnalysisBinding)
                     .labelsHidden()
-                    .tint(MePalette.primaryText.opacity(0.8))
+                    .tint(Color.accentColor)
             }
         }
         .modifier(CardStyle())
@@ -260,8 +260,7 @@ struct ShortcutsCard: View {
                 Task { await viewModel.resetToDefaults() }
             }
             .buttonStyle(.borderedProminent)
-            .tint(MePalette.primaryText.opacity(0.16))
-            .foregroundColor(MePalette.primaryText)
+            .tint(Color.accentColor)
         }
         .modifier(CardStyle())
         .onAppear {
@@ -305,7 +304,7 @@ struct ShortcutPickerRow: View {
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .tint(MePalette.primaryText)
+            .tint(Color.accentColor)
         }
     }
 }

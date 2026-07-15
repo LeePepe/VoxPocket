@@ -97,7 +97,7 @@ struct Theme {
         palette: Palette(
             textPrimary: Color.black.opacity(0.9),
             textSecondary: Color.black.opacity(0.65),
-            textTertiary: Color.black.opacity(0.45),
+            textTertiary: Color.black.opacity(0.58),
             surfaceGlass: Color.white.opacity(0.7),
             surfaceGlassStrong: Color.white.opacity(0.82),
             surfaceElevated: Color.white.opacity(0.9),
@@ -125,7 +125,7 @@ struct Theme {
         palette: Palette(
             textPrimary: Color.white.opacity(0.96),
             textSecondary: Color.white.opacity(0.7),
-            textTertiary: Color.white.opacity(0.5),
+            textTertiary: Color.white.opacity(0.62),
             surfaceGlass: Color.white.opacity(0.12),
             surfaceGlassStrong: Color.white.opacity(0.2),
             surfaceElevated: Color.white.opacity(0.16),
