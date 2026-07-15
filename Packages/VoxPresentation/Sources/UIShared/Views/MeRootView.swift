@@ -39,13 +39,6 @@ struct MeRootView: View {
     }
 }
 
-private enum MePalette {
-    static let primaryText = Color.primary
-    static let secondaryText = Color.secondary
-    static let divider = Color.primary.opacity(0.12)
-    static let cardBorder = Color.primary.opacity(0.08)
-}
-
 struct ProfileCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -61,15 +54,15 @@ struct ProfileCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Tianpei Li")
                         .font(.system(.title3, design: .rounded).weight(.semibold))
-                        .foregroundColor(MePalette.primaryText)
+                        .foregroundColor(Color.primary)
                     Text("Pro Plan · Active")
                         .font(.system(.footnote, design: .rounded))
-                        .foregroundColor(MePalette.secondaryText)
+                        .foregroundColor(Color.secondary)
                 }
                 Spacer()
             }
 
-            Divider().overlay(MePalette.divider)
+            Divider().overlay(Color.primary.opacity(0.12))
 
             ProviderRow(provider: "ChatGPT", status: "Connected")
             ProviderRow(provider: "Claude", status: "Not linked")
@@ -86,11 +79,11 @@ struct ProviderRow: View {
         HStack {
             Text(provider)
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
             Spacer()
             Text(status)
                 .font(.system(.footnote, design: .rounded))
-                .foregroundColor(MePalette.secondaryText)
+                .foregroundColor(Color.secondary)
         }
     }
 }
@@ -100,7 +93,7 @@ struct BehaviorCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Behavior")
                 .font(.system(.headline, design: .rounded))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
 
             SettingRow(title: "Auto-stop silence", value: "2s")
             SettingRow(title: "VAD Advanced", value: "Off")
@@ -118,12 +111,12 @@ struct LLMProviderCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("LLM Provider")
                 .font(.system(.headline, design: .rounded))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
 
             HStack {
                 Text("Provider")
                     .font(.system(.subheadline, design: .rounded).weight(.medium))
-                    .foregroundColor(MePalette.primaryText)
+                    .foregroundColor(Color.primary)
                 Spacer()
                 Picker("", selection: providerBinding) {
                     ForEach(LLMProviderSelection.allCases, id: \.self) { provider in
@@ -135,16 +128,16 @@ struct LLMProviderCard: View {
                 .tint(Color.accentColor)
             }
 
-            Divider().overlay(MePalette.divider)
+            Divider().overlay(Color.primary.opacity(0.12))
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Skip intent analysis")
                         .font(.system(.subheadline, design: .rounded).weight(.medium))
-                        .foregroundColor(MePalette.primaryText)
+                        .foregroundColor(Color.primary)
                     Text("直接使用默认改写，跳过意图/语气前置分析")
                         .font(.system(.caption2, design: .rounded))
-                        .foregroundColor(MePalette.secondaryText)
+                        .foregroundColor(Color.secondary)
                 }
                 Spacer()
                 Toggle("", isOn: skipAnalysisBinding)
@@ -185,7 +178,7 @@ struct PrivacyCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Privacy & Data")
                 .font(.system(.headline, design: .rounded))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
 
             SettingRow(title: "Data retention", value: "30 days")
             SettingRow(title: "Export data", value: "Ready")
@@ -222,7 +215,7 @@ struct DiagnosticsCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Diagnostics")
                 .font(.system(.headline, design: .rounded))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
 
             SettingRow(title: "Logger level", value: "Verbose")
             SettingRow(title: "Share logs", value: "Tap")
@@ -239,7 +232,7 @@ struct ShortcutsCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Shortcuts")
                 .font(.system(.headline, design: .rounded))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
 
             ShortcutPickerRow(
                 title: "Show Panel",
@@ -295,7 +288,7 @@ struct ShortcutPickerRow: View {
         HStack {
             Text(title)
                 .font(.system(.subheadline, design: .rounded).weight(.medium))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
             Spacer()
             Picker("", selection: $selection) {
                 ForEach(FunctionKey.allCases, id: \.self) { key in
@@ -316,7 +309,7 @@ struct AboutCard: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("About")
                 .font(.system(.headline, design: .rounded))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
 
             SettingRow(title: "Version", value: "0.1.0")
             SettingRow(title: "Privacy policy", value: "View")
@@ -334,11 +327,11 @@ struct SettingRow: View {
         HStack {
             Text(title)
                 .font(.system(.subheadline, design: .rounded).weight(.medium))
-                .foregroundColor(MePalette.primaryText)
+                .foregroundColor(Color.primary)
             Spacer()
             Text(value)
                 .font(.system(.footnote, design: .rounded))
-                .foregroundColor(MePalette.secondaryText)
+                .foregroundColor(Color.secondary)
         }
     }
 }
@@ -351,7 +344,7 @@ struct LocalModelLoadingCard: View {
             HStack {
                 Text("本地模型")
                     .font(.system(.headline, design: .rounded))
-                    .foregroundColor(MePalette.primaryText)
+                    .foregroundColor(Color.primary)
                 Spacer()
                 statusBadge
             }
@@ -360,7 +353,7 @@ struct LocalModelLoadingCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(status.statusText)
                         .font(.system(.footnote, design: .rounded))
-                        .foregroundColor(MePalette.secondaryText)
+                        .foregroundColor(Color.secondary)
                     ProgressView(value: progress)
                         .tint(.blue)
                 }
@@ -372,7 +365,7 @@ struct LocalModelLoadingCard: View {
                     }
                     Text(status.statusText)
                         .font(.system(.footnote, design: .rounded))
-                        .foregroundColor(MePalette.secondaryText)
+                        .foregroundColor(Color.secondary)
                 }
             }
         }
@@ -419,7 +412,7 @@ struct CardStyle: ViewModifier {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(MePalette.cardBorder, lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
             )
     }
 }
