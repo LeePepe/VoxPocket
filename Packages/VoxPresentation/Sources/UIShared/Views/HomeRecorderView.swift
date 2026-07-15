@@ -21,6 +21,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
 
     @State private var reveal = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 上方面板（精炼文本）显示内容
     private var refinedPaneText: String {
@@ -64,6 +65,11 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
 #endif
     }
 
+    /// 原始面板入场/退场过渡：开启「减弱动态效果」时使用纯淡入，避免位移
+    private var rawPaneTransition: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
+    }
+
     public var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 16) {
@@ -80,7 +86,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
                             text: rawPaneText,
                             onCopy: { onCopyRaw(rawPaneText) }
                         )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(rawPaneTransition)
                     }
                 }
             }
@@ -112,8 +118,8 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
             )
         )
         .opacity(reveal ? 1 : 0)
-        .offset(y: reveal ? 0 : 12)
-        .animation(.easeOut(duration: 0.4), value: reveal)
+        .offset(y: reduceMotion ? 0 : (reveal ? 0 : 12))
+        .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.4), value: reveal)
         .onAppear {
             reveal = true
         }
