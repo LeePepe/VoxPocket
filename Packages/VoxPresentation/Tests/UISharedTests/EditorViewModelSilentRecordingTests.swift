@@ -140,6 +140,11 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
     func setLanguage(_ locale: Locale) { _currentLanguage = locale }
     func commitCurrentTranscription() async throws {}
     func clearLiveText() { liveTextSubject.send("") }
+
+    // MARK: - Snapshot
+    private let snapshotSubject = PassthroughSubject<String, Never>()
+    var snapshotPublisher: AnyPublisher<String, Never> { snapshotSubject.eraseToAnyPublisher() }
+    var snapshotGateActive: Bool = false
 }
 
 private final class FakeEditingUseCase: EditingUseCase, @unchecked Sendable {
@@ -159,6 +164,14 @@ private final class FakeEditingUseCase: EditingUseCase, @unchecked Sendable {
     func delete(range: CoreModels.TextRange) throws {}
     func append(_ text: String) throws { appendCallCount += 1 }
     func mergeRecentEdits() {}
+
+    // MARK: - Voice Zone
+    private(set) var voiceAnchorLocation: Int?
+    private(set) var isVoiceZoneLocked: Bool = false
+    func setVoiceAnchor(_ location: Int) { voiceAnchorLocation = location }
+    func clearVoiceAnchor() { voiceAnchorLocation = nil }
+    func setVoiceZoneLocked(_ locked: Bool) { isVoiceZoneLocked = locked }
+    func replaceVoiceZone(with text: String) throws { currentTextSubject.send(text) }
 }
 
 private final class FakeHistoryUseCase: HistoryUseCase, @unchecked Sendable {
@@ -194,6 +207,10 @@ private final class FakeConfiguredRefinementUseCase: RefinementUseCase, @uncheck
     func refineStreaming(customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
         refineStreamingCallCount += 1
         return AsyncThrowingStream { $0.finish() }
+    }
+
+    func refineText(_ text: String, customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
     }
 
     func cancel() { stateSubject.send(.idle) }

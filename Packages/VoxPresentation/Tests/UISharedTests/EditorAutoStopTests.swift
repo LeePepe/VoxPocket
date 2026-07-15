@@ -104,6 +104,11 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
         clearLiveTextCallCount += 1
         liveTextSubject.send("")
     }
+
+    // MARK: - Snapshot
+    private let snapshotSubject = PassthroughSubject<String, Never>()
+    var snapshotPublisher: AnyPublisher<String, Never> { snapshotSubject.eraseToAnyPublisher() }
+    var snapshotGateActive: Bool = false
 }
 
 private final class FakeEditingUseCase: EditingUseCase, @unchecked Sendable {
@@ -133,6 +138,14 @@ private final class FakeEditingUseCase: EditingUseCase, @unchecked Sendable {
 
     func mergeRecentEdits() {
     }
+
+    // MARK: - Voice Zone
+    private(set) var voiceAnchorLocation: Int?
+    private(set) var isVoiceZoneLocked: Bool = false
+    func setVoiceAnchor(_ location: Int) { voiceAnchorLocation = location }
+    func clearVoiceAnchor() { voiceAnchorLocation = nil }
+    func setVoiceZoneLocked(_ locked: Bool) { isVoiceZoneLocked = locked }
+    func replaceVoiceZone(with text: String) throws { currentTextSubject.send(text) }
 }
 
 private final class FakeHistoryUseCase: HistoryUseCase, @unchecked Sendable {
@@ -184,6 +197,10 @@ private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendabl
         AsyncThrowingStream { continuation in
             continuation.finish()
         }
+    }
+
+    func refineText(_ text: String, customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
     }
 
     func cancel() {

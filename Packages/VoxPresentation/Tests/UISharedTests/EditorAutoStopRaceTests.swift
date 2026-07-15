@@ -103,6 +103,11 @@ private final class ManualTranscriptionUseCase: TranscriptionUseCase, @unchecked
     func emitLiveText(_ text: String) {
         liveTextSubject.send(text)
     }
+
+    // MARK: - Snapshot
+    private let snapshotSubject = PassthroughSubject<String, Never>()
+    var snapshotPublisher: AnyPublisher<String, Never> { snapshotSubject.eraseToAnyPublisher() }
+    var snapshotGateActive: Bool = false
 }
 
 private final class NoopEditingUseCase: EditingUseCase, @unchecked Sendable {
@@ -115,6 +120,14 @@ private final class NoopEditingUseCase: EditingUseCase, @unchecked Sendable {
     func delete(range: CoreModels.TextRange) throws {}
     func append(_ text: String) throws {}
     func mergeRecentEdits() {}
+
+    // MARK: - Voice Zone
+    private(set) var voiceAnchorLocation: Int?
+    private(set) var isVoiceZoneLocked: Bool = false
+    func setVoiceAnchor(_ location: Int) { voiceAnchorLocation = location }
+    func clearVoiceAnchor() { voiceAnchorLocation = nil }
+    func setVoiceZoneLocked(_ locked: Bool) { isVoiceZoneLocked = locked }
+    func replaceVoiceZone(with text: String) throws { currentTextSubject.send(text) }
 }
 
 private final class NoopHistoryUseCase: HistoryUseCase, @unchecked Sendable {
@@ -149,6 +162,9 @@ private final class NoopRefinementUseCase: RefinementUseCase, @unchecked Sendabl
         AsyncThrowingStream { continuation in
             continuation.finish()
         }
+    }
+    func refineText(_ text: String, customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
     }
     func cancel() { stateSubject.send(.idle) }
 }
