@@ -91,14 +91,14 @@ struct ProviderRow: View {
 struct BehaviorCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Behavior")
+            Text("行为")
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(Color.primary)
 
-            SettingRow(title: "Auto-stop silence", value: "2s")
+            SettingRow(title: "静音自动停止", value: "2s")
             SettingRow(title: "VAD Advanced", value: "Off")
-            SettingRow(title: "Auto-save", value: "On")
-            SettingRow(title: "Streaming", value: "Off")
+            SettingRow(title: "自动保存", value: "On")
+            SettingRow(title: "流式", value: "Off")
         }
         .modifier(CardStyle())
     }
@@ -109,12 +109,12 @@ struct LLMProviderCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("LLM Provider")
+            Text("模型服务")
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(Color.primary)
 
             HStack {
-                Text("Provider")
+                Text("服务商")
                     .font(.system(.subheadline, design: .rounded).weight(.medium))
                     .foregroundColor(Color.primary)
                 Spacer()
@@ -176,18 +176,18 @@ struct PrivacyCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Privacy & Data")
+            Text("隐私与数据")
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(Color.primary)
 
-            SettingRow(title: "Data retention", value: "30 days")
-            SettingRow(title: "Export data", value: "Ready")
+            SettingRow(title: "数据保留", value: "30 days")
+            SettingRow(title: "导出数据", value: "Ready")
 
             Button {
                 showDeleteConfirmation = true
             } label: {
                 HStack {
-                    Text("Clear history")
+                    Text("清除历史")
                         .font(.system(.subheadline, design: .rounded).weight(.medium))
                         .foregroundColor(.red)
                     Spacer()
@@ -213,12 +213,12 @@ struct PrivacyCard: View {
 struct DiagnosticsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Diagnostics")
+            Text("诊断")
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(Color.primary)
 
-            SettingRow(title: "Logger level", value: "Verbose")
-            SettingRow(title: "Share logs", value: "Tap")
+            SettingRow(title: "日志级别", value: "Verbose")
+            SettingRow(title: "分享日志", value: "Tap")
         }
         .modifier(CardStyle())
     }
@@ -230,12 +230,12 @@ struct ShortcutsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Shortcuts")
+            Text("快捷键")
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(Color.primary)
 
             ShortcutPickerRow(
-                title: "Show Panel",
+                title: "显示面板",
                 selection: showPanelBinding
             )
             ShortcutPickerRow(
@@ -249,7 +249,7 @@ struct ShortcutsCard: View {
                     .foregroundColor(.orange)
             }
 
-            Button("Reset Hotkeys") {
+            Button("重置快捷键") {
                 Task { await viewModel.resetToDefaults() }
             }
             .buttonStyle(.borderedProminent)
@@ -307,13 +307,13 @@ struct ShortcutPickerRow: View {
 struct AboutCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("About")
+            Text("关于")
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(Color.primary)
 
-            SettingRow(title: "Version", value: "0.1.0")
-            SettingRow(title: "Privacy policy", value: "View")
-            SettingRow(title: "Feedback", value: "Send")
+            SettingRow(title: "版本", value: "0.1.0")
+            SettingRow(title: "隐私政策", value: "View")
+            SettingRow(title: "反馈", value: "Send")
         }
         .modifier(CardStyle())
     }

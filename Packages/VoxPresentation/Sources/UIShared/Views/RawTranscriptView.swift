@@ -29,15 +29,15 @@ struct RawTranscriptView: View {
                     .padding(20)
             }
             .background(BackgroundAtmosphere(status: status))
-            .navigationTitle("Raw Transcript")
+            .navigationTitle("原始转写")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Copy Raw", action: onCopyRaw)
+                    Button("复制原始", action: onCopyRaw)
                         .disabled(!canCopyRaw)
                         .opacity(canCopyRaw ? 1 : 0.4)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
+                    Button("关闭") {
                         dismiss()
                     }
                 }
