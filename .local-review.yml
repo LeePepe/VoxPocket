@@ -7,6 +7,7 @@ fail_on: critical
 
 commit:
   commands:
+    - "bash scripts/gates/gate-precommit.sh"
     - "zsh scripts/docs/lint_docs_map.sh"
     - "zsh scripts/docs/lint_docs_freshness.sh"
   reviewers:
@@ -19,7 +20,9 @@ commit:
       - id: performance
         prompt: "Focus on Swift/SwiftUI performance: Thread.sleep or any blocking call on the main thread (always [CRITICAL]), unnecessary allocations, excessive copying, redundant computation, synchronous I/O on the main thread, missing async/await where applicable. Flag regressions as [HIGH] and minor improvements as [MEDIUM]."
 
-push: []
+push:
+  commands:
+    - "bash scripts/gates/gate-prepush.sh"
 
 merge_to_main:
   reviewers:
