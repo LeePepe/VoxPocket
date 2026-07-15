@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "2620"
+   LastUpgradeVersion = "1430"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
-      buildArchitectures = "Automatic">
+      runPostActionsOnFailure = "NO">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -15,9 +15,23 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "70398AD32F27048D007D1E07"
+               BlueprintIdentifier = "33B669CC114F7A017AE007FC"
                BuildableName = "VoxPocket.app"
                BlueprintName = "VoxPocket"
+               ReferencedContainer = "container:VoxPocket.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FD9E1C0C9635ECE7235611E0"
+               BuildableName = "VoxPocketWidgetExtension.appex"
+               BlueprintName = "VoxPocketWidgetExtension"
                ReferencedContainer = "container:VoxPocket.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -28,14 +42,23 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "YES">
+      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "33B669CC114F7A017AE007FC"
+            BuildableName = "VoxPocket.app"
+            BlueprintName = "VoxPocket"
+            ReferencedContainer = "container:VoxPocket.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
       <Testables>
          <TestableReference
             skipped = "NO"
-            parallelizable = "YES">
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "70398AE42F270490007D1E07"
+               BlueprintIdentifier = "6FDEA8FCEE42DCE8109F0F0A"
                BuildableName = "VoxPocketTests.xctest"
                BlueprintName = "VoxPocketTests"
                ReferencedContainer = "container:VoxPocket.xcodeproj">
@@ -43,16 +66,18 @@
          </TestableReference>
          <TestableReference
             skipped = "NO"
-            parallelizable = "YES">
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "70398AEE2F270490007D1E07"
+               BlueprintIdentifier = "3264A80B732C81FE377EB71C"
                BuildableName = "VoxPocketUITests.xctest"
                BlueprintName = "VoxPocketUITests"
                ReferencedContainer = "container:VoxPocket.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -68,27 +93,29 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "70398AD32F27048D007D1E07"
+            BlueprintIdentifier = "33B669CC114F7A017AE007FC"
             BuildableName = "VoxPocket.app"
             BlueprintName = "VoxPocket"
             ReferencedContainer = "container:VoxPocket.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+      </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "VOX_AZURE_FOUNDRY_API_KEY"
-            value = "94qa71QIfNenUTuhTByQ9xohhQvP24UfqTJvEDFD1H03nSTrUMLyJQQJ99CBACqBBLyXJ3w3AAAAACOGuCJI"
-            isEnabled = "YES">
+            value = ""
+            isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "kimikey"
-            value = "69TZwDmseMDe1NfjpYUTDbKacjjwlvSVG3OkT90QGejbNP5gaGwfJQQJ99CBACYeBjFXJ3w3AAAAACOG9O5d"
-            isEnabled = "YES">
+            value = ""
+            isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "whisperkey"
-            value = "CG74E1aIj57sp3qufYt3QoAoIZ60UbwtzfLXtFIFOh6Kt8P4bOerJQQJ99CCACfhMk5XJ3w3AAAAACOGgdOr"
-            isEnabled = "YES">
+            value = ""
+            isEnabled = "NO">
          </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
@@ -102,12 +129,14 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "70398AD32F27048D007D1E07"
+            BlueprintIdentifier = "33B669CC114F7A017AE007FC"
             BuildableName = "VoxPocket.app"
             BlueprintName = "VoxPocket"
             ReferencedContainer = "container:VoxPocket.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">

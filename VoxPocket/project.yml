@@ -1,0 +1,229 @@
+name: VoxPocket
+options:
+  bundleIdPrefix: com.leepepe
+  deploymentTarget:
+    iOS: "26.2"
+    macOS: "26.2"
+    visionOS: "26.2"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: 4Z8GG667QD
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: true
+
+packages:
+  # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
+  VoxPresentation:
+    path: ../Packages/VoxPresentation
+  # 外部 UI 测试桥接包
+  AppleUITesting:
+    path: ../../AppleUITesting
+
+targets:
+  # ── 主 App：单 target 多平台（SDKROOT=auto，iOS + macOS + visionOS）──
+  VoxPocket:
+    type: application
+    supportedDestinations: [iOS, macOS, visionOS]
+    sources:
+      - path: VoxPocket
+        excludes:
+          - Info.plist
+          - "*.entitlements"
+    dependencies:
+      - package: VoxPresentation
+        product: PlatformUI
+      - package: VoxPresentation
+        product: UIShared
+      - package: AppleUITesting
+        product: UITestingBridge
+      # 内嵌 Widget 扩展（仅 iOS 平台）
+      - target: VoxPocketWidgetExtension
+        platformFilter: iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_FILE: VoxPocket/Info.plist
+        ENABLE_PREVIEWS: true
+        ENABLE_APP_SANDBOX: true
+        ENABLE_HARDENED_RUNTIME: true
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: true
+        ENABLE_RESOURCE_ACCESS_AUDIO_INPUT: true
+        ENABLE_RESOURCE_ACCESS_BLUETOOTH: false
+        ENABLE_RESOURCE_ACCESS_CALENDARS: false
+        ENABLE_RESOURCE_ACCESS_CAMERA: false
+        ENABLE_RESOURCE_ACCESS_CONTACTS: false
+        ENABLE_RESOURCE_ACCESS_LOCATION: false
+        ENABLE_RESOURCE_ACCESS_PRINTING: false
+        ENABLE_RESOURCE_ACCESS_USB: false
+        ENABLE_USER_SELECTED_FILES: readonly
+        REGISTER_APP_GROUPS: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        STRING_CATALOG_GENERATE_SYMBOLS: true
+        SWIFT_EMIT_LOC_STRINGS: true
+        SWIFT_APPROACHABLE_CONCURRENCY: true
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: true
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2,7"
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/Frameworks"
+        "LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]": "@executable_path/../Frameworks"
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "VoxPocket 需要使用麦克风进行语音录入"
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "VoxPocket 需要语音识别权限以将语音转换为文字"
+        "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]": true
+        "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]": true
+        "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]": true
+        "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]": true
+        "INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]": true
+        "INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]": true
+        "INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]": UIStatusBarStyleDefault
+        "INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]": UIStatusBarStyleDefault
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+      configs:
+        # Debug 允许入站网络连接（本地遥测 / 调试），Release 关闭
+        Debug:
+          ENABLE_INCOMING_NETWORK_CONNECTIONS: true
+        Release:
+          ENABLE_INCOMING_NETWORK_CONNECTIONS: false
+
+  # ── Widget 扩展：仅 iOS ──
+  VoxPocketWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ../VoxPocketWidget
+        excludes:
+          - Info.plist
+    dependencies:
+      - package: VoxPresentation
+        product: WidgetUI
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.widget
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_FILE: ../VoxPocketWidget/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: VoxPocketWidget
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        SKIP_INSTALL: true
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: WidgetBackground
+        SWIFT_EMIT_LOC_STRINGS: true
+        SWIFT_APPROACHABLE_CONCURRENCY: true
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: true
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_DIR)/../Packages/VoxPresentation/build/$(CONFIGURATION)-$(PLATFORM_NAME)"
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
+
+  # ── 单元测试 ──
+  VoxPocketTests:
+    type: bundle.unit-test
+    supportedDestinations: [iOS, macOS, visionOS]
+    sources:
+      - path: VoxPocketTests
+    dependencies:
+      - target: VoxPocket
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.tests
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: true
+        STRING_CATALOG_GENERATE_SYMBOLS: false
+        SWIFT_EMIT_LOC_STRINGS: false
+        SWIFT_APPROACHABLE_CONCURRENCY: true
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: true
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2,7"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/VoxPocket.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VoxPocket"
+
+  # ── UI 测试 ──
+  VoxPocketUITests:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS, macOS, visionOS]
+    sources:
+      - path: VoxPocketUITests
+    dependencies:
+      - target: VoxPocket
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.uitests
+        PRODUCT_NAME: "$(TARGET_NAME)"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: true
+        STRING_CATALOG_GENERATE_SYMBOLS: false
+        SWIFT_EMIT_LOC_STRINGS: false
+        SWIFT_APPROACHABLE_CONCURRENCY: true
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: true
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2,7"
+        TEST_TARGET_NAME: VoxPocket
+
+schemes:
+  VoxPocket:
+    build:
+      targets:
+        VoxPocket: all
+        VoxPocketWidgetExtension: all
+    run:
+      config: Debug
+      # 运行期需注入 Azure/Kimi/Whisper 凭据。为避免把密钥提交进仓库，
+      # 此处仅保留变量名占位（isEnabled: false）。本地开发时在 Xcode
+      # scheme 的 Run > Arguments > Environment Variables 中填入真实值，
+      # 或改用 gitignore 的本地配置注入。
+      environmentVariables:
+        - variable: VOX_AZURE_FOUNDRY_API_KEY
+          value: ""
+          isEnabled: false
+        - variable: kimikey
+          value: ""
+          isEnabled: false
+        - variable: whisperkey
+          value: ""
+          isEnabled: false
+    test:
+      config: Debug
+      targets:
+        - VoxPocketTests
+        - VoxPocketUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  VoxPocketWidgetExtension:
+    build:
+      targets:
+        VoxPocketWidgetExtension: all
+        VoxPocket: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

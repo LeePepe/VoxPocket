@@ -85,6 +85,11 @@ jobs:
           latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
           if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
           xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Regenerate xcodeproj from project.yml
+        working-directory: repo/VoxPocket
+        run: xcodegen generate --spec project.yml
       - name: Build app (full, no log truncation)
         working-directory: repo
         run: |
