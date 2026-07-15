@@ -17,7 +17,7 @@ public final class MockRefinementViewModel: ObservableObject, RefinementPanelVie
 
     public func refine() async {
         isRefining = true
-        progressMessage = "优化中..."
+        progressMessage = "优化中…"
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         isRefining = false
         progressMessage = ""

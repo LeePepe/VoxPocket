@@ -7,47 +7,61 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		70398B052F2706AA007D1E07 /* PlatformUI in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B042F2706AA007D1E07 /* PlatformUI */; };
-		70398B072F2706AA007D1E07 /* UIShared in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B062F2706AA007D1E07 /* UIShared */; };
-		4DF96898B44E4633905FD9E1 /* UITestingBridge in Frameworks */ = {isa = PBXBuildFile; productRef = A378F2FABCE0405B9F75D938 /* UITestingBridge */; };
-		70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B0F2F270800007D1E07 /* WidgetKit.framework */; };
-		70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70398B112F270800007D1E07 /* SwiftUI.framework */; };
-		70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		70398B202F270900007D1E07 /* WidgetUI in Frameworks */ = {isa = PBXBuildFile; productRef = 70398B1F2F270900007D1E07 /* WidgetUI */; };
+		05BC9CB67F6F7DB573173C19 /* VoxPocketWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A9B8C0385BA4849453043ED /* VoxPocketWidgetBundle.swift */; };
+		08DB2234C39F8AF9CDFFC333 /* StartRecordingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B712E72C2083CF6273C87C /* StartRecordingIntent.swift */; };
+		1A76D389C98E4BDD802CD409 /* ServiceContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ECDBBC78A8F624C19D4B1F /* ServiceContainer.swift */; };
+		30DD3A9EAE5E989CCD68C633 /* VoxPocketUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CEEFA4650BE23A84A46F56 /* VoxPocketUITestsLaunchTests.swift */; };
+		4754CD05B924E4EDE528B6A3 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4CA3A932239127C1D4F7BBC4 /* VoxPocketUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBA06204946E030AFE05371 /* VoxPocketUITests.swift */; };
+		6E644F205F37B430742C1599 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73E018E9065109FF12437540 /* SwiftUI.framework */; };
+		6F6475AB782E4C903B7B99F1 /* TranscriberSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */; };
+		753150564083C6F80527BB81 /* PlatformUI in Frameworks */ = {isa = PBXBuildFile; productRef = 51ABF4EE6A69D0E882B3B36D /* PlatformUI */; };
+		8BAF52832DE538C9ECFBF660 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6E1123F8B038F5E5132BADB9 /* Assets.xcassets */; };
+		8E089D9B9CE0539C13928EA8 /* VoxPocketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E33A98E778BE211E1AC3970 /* VoxPocketTests.swift */; };
+		9C5C0A1AE4C4FD9952E83FF1 /* UITestingBridge in Frameworks */ = {isa = PBXBuildFile; productRef = BD8AD9C9D354B8A78973E655 /* UITestingBridge */; };
+		A8A08A4F4C292489D4B0719F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B4322401C88433C576C972 /* AppDelegate.swift */; };
+		A8E0D7098CE2D4706AEBA0DE /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189133DA376CDFC9A1BB61F5 /* WindowManager.swift */; };
+		A99AF295270AC00A2BFF3835 /* UIShared in Frameworks */ = {isa = PBXBuildFile; productRef = 4DC7AD1FF6D20051BB6E0EAA /* UIShared */; };
+		AAFB270D9720E863F23F07BA /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A33B759B18AF93DC1CEAD42D /* WidgetKit.framework */; };
+		AD4F2E900A5F3AF188BCCFA2 /* VoxPocketApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF62A71944E1E1B0DE53C00F /* VoxPocketApp.swift */; };
+		D106C5B2E507C744805EFD01 /* QuickRecordingWindowLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */; };
+		DE4CDB33A72CDAB46E009C9D /* WidgetUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1BBF52B228A0B16EC6FA6CF1 /* WidgetUI */; };
+		EE40B4FFE177EE0350CA9411 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007D223D190CA65066429E21 /* ContentView.swift */; };
+		EF64233609A8744936963A02 /* LLMAppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		70398AE62F270490007D1E07 /* PBXContainerItemProxy */ = {
+		0008CCCCA9631580FFB0E24E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 70398ACC2F27048D007D1E07 /* Project object */;
+			containerPortal = 320FAE1BD658482CA2F68005 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 70398AD32F27048D007D1E07;
+			remoteGlobalIDString = 33B669CC114F7A017AE007FC;
 			remoteInfo = VoxPocket;
 		};
-		70398AF02F270490007D1E07 /* PBXContainerItemProxy */ = {
+		1C8E1AFF34413EF167BD72D8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 70398ACC2F27048D007D1E07 /* Project object */;
+			containerPortal = 320FAE1BD658482CA2F68005 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 70398AD32F27048D007D1E07;
+			remoteGlobalIDString = 33B669CC114F7A017AE007FC;
 			remoteInfo = VoxPocket;
 		};
-		70398B182F270800007D1E07 /* PBXContainerItemProxy */ = {
+		9EBDE172D535E7CEE1D60091 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 70398ACC2F27048D007D1E07 /* Project object */;
+			containerPortal = 320FAE1BD658482CA2F68005 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 70398B0D2F270800007D1E07;
+			remoteGlobalIDString = FD9E1C0C9635ECE7235611E0;
 			remoteInfo = VoxPocketWidgetExtension;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		70398B1E2F270800007D1E07 /* Embed Foundation Extensions */ = {
+		B197807BC1F4F48C50C13856 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				70398B1A2F270800007D1E07 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */,
+				4754CD05B924E4EDE528B6A3 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -55,371 +69,431 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		70398AD42F27048D007D1E07 /* VoxPocket.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoxPocket.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		70398AE52F270490007D1E07 /* VoxPocketTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoxPocketTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		70398AEF2F270490007D1E07 /* VoxPocketUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoxPocketUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VoxPocketWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		70398B0F2F270800007D1E07 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
-		70398B112F270800007D1E07 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		007D223D190CA65066429E21 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMAppConfig.swift; sourceTree = "<group>"; };
+		0A9B8C0385BA4849453043ED /* VoxPocketWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketWidgetBundle.swift; sourceTree = "<group>"; };
+		0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriberSelectionTests.swift; sourceTree = "<group>"; };
+		189133DA376CDFC9A1BB61F5 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
+		1E33A98E778BE211E1AC3970 /* VoxPocketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketTests.swift; sourceTree = "<group>"; };
+		35CEEFA4650BE23A84A46F56 /* VoxPocketUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		3CBA06204946E030AFE05371 /* VoxPocketUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketUITests.swift; sourceTree = "<group>"; };
+		42FE417692BCAA5D8FFA454A /* VoxPocketUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = VoxPocketUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4AE728A4CB97A8BD457088F0 /* VoxPresentation */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VoxPresentation; path = ../Packages/VoxPresentation; sourceTree = SOURCE_ROOT; };
+		6E1123F8B038F5E5132BADB9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		73E018E9065109FF12437540 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		77AB160FC41A2F4691F66612 /* VoxPocket.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = VoxPocket.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1ECDBBC78A8F624C19D4B1F /* ServiceContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceContainer.swift; sourceTree = "<group>"; };
+		A33B759B18AF93DC1CEAD42D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		AF62A71944E1E1B0DE53C00F /* VoxPocketApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketApp.swift; sourceTree = "<group>"; };
+		B1B712E72C2083CF6273C87C /* StartRecordingIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartRecordingIntent.swift; sourceTree = "<group>"; };
+		B5F29C424186AA3BC9023F26 /* AppleUITesting */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AppleUITesting; path = ../../AppleUITesting; sourceTree = SOURCE_ROOT; };
+		BDE99DFE18C941D2ED2AE6D4 /* VoxPocketTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = VoxPocketTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VoxPocketWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickRecordingWindowLifecycleTests.swift; sourceTree = "<group>"; };
+		D9B4322401C88433C576C972 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		70398AF72F270490007D1E07 /* Exceptions for "VoxPocket" folder in "VoxPocket" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 70398AD32F27048D007D1E07 /* VoxPocket */;
-		};
-		70398B262F270A00007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		70398AD62F27048D007D1E07 /* VoxPocket */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				70398AF72F270490007D1E07 /* Exceptions for "VoxPocket" folder in "VoxPocket" target */,
-			);
-			path = VoxPocket;
-			sourceTree = "<group>";
-		};
-		70398AE82F270490007D1E07 /* VoxPocketTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = VoxPocketTests;
-			sourceTree = "<group>";
-		};
-		70398AF22F270490007D1E07 /* VoxPocketUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = VoxPocketUITests;
-			sourceTree = "<group>";
-		};
-		70398B252F270A00007D1E07 /* VoxPocketWidget */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				70398B262F270A00007D1E07 /* Exceptions for "VoxPocketWidget" folder in "VoxPocketWidgetExtension" target */,
-			);
-			path = ../VoxPocketWidget;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
-
 /* Begin PBXFrameworksBuildPhase section */
-		70398AD12F27048D007D1E07 /* Frameworks */ = {
+		293C58CBE90A08437938619D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				70398B052F2706AA007D1E07 /* PlatformUI in Frameworks */,
-				70398B072F2706AA007D1E07 /* UIShared in Frameworks */,
-				4DF96898B44E4633905FD9E1 /* UITestingBridge in Frameworks */,
+				753150564083C6F80527BB81 /* PlatformUI in Frameworks */,
+				A99AF295270AC00A2BFF3835 /* UIShared in Frameworks */,
+				9C5C0A1AE4C4FD9952E83FF1 /* UITestingBridge in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		70398AE22F270490007D1E07 /* Frameworks */ = {
+		93180CED18317EF0942FF023 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		70398AEC2F270490007D1E07 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		70398B0C2F270800007D1E07 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				70398B202F270900007D1E07 /* WidgetUI in Frameworks */,
-				70398B122F270800007D1E07 /* SwiftUI.framework in Frameworks */,
-				70398B102F270800007D1E07 /* WidgetKit.framework in Frameworks */,
+				DE4CDB33A72CDAB46E009C9D /* WidgetUI in Frameworks */,
+				AAFB270D9720E863F23F07BA /* WidgetKit.framework in Frameworks */,
+				6E644F205F37B430742C1599 /* SwiftUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		70398ACB2F27048D007D1E07 = {
+		18A027A45C4CEE5764B9246E = {
 			isa = PBXGroup;
 			children = (
-				70398AD62F27048D007D1E07 /* VoxPocket */,
-				70398AE82F270490007D1E07 /* VoxPocketTests */,
-				70398AF22F270490007D1E07 /* VoxPocketUITests */,
-				70398B252F270A00007D1E07 /* VoxPocketWidget */,
-				70398B142F270800007D1E07 /* Frameworks */,
-				70398AD52F27048D007D1E07 /* Products */,
+				E880414C837FCED3D3F95A6F /* Packages */,
+				A2930B3FEE096864AC84D8E0 /* VoxPocket */,
+				C74BB5D5B74CB5E0C6E4999E /* VoxPocket */,
+				F29FC60138230519690F7019 /* VoxPocketTests */,
+				B85C45BCA880F35001417245 /* VoxPocketUITests */,
+				986585298D0AEEE2E74DEC6B /* Frameworks */,
+				48A5D3C782F6F9761D3DBADF /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		70398AD52F27048D007D1E07 /* Products */ = {
+		48A5D3C782F6F9761D3DBADF /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				70398AD42F27048D007D1E07 /* VoxPocket.app */,
-				70398AE52F270490007D1E07 /* VoxPocketTests.xctest */,
-				70398AEF2F270490007D1E07 /* VoxPocketUITests.xctest */,
-				70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */,
+				77AB160FC41A2F4691F66612 /* VoxPocket.app */,
+				BDE99DFE18C941D2ED2AE6D4 /* VoxPocketTests.xctest */,
+				42FE417692BCAA5D8FFA454A /* VoxPocketUITests.xctest */,
+				C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		70398B142F270800007D1E07 /* Frameworks */ = {
+		7AF9A23BA0E6741F710FFE1B /* Intents */ = {
 			isa = PBXGroup;
 			children = (
-				70398B0F2F270800007D1E07 /* WidgetKit.framework */,
-				70398B112F270800007D1E07 /* SwiftUI.framework */,
+				B1B712E72C2083CF6273C87C /* StartRecordingIntent.swift */,
+			);
+			path = Intents;
+			sourceTree = "<group>";
+		};
+		986585298D0AEEE2E74DEC6B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				73E018E9065109FF12437540 /* SwiftUI.framework */,
+				A33B759B18AF93DC1CEAD42D /* WidgetKit.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A2930B3FEE096864AC84D8E0 /* VoxPocket */ = {
+			isa = PBXGroup;
+			children = (
+				D9B4322401C88433C576C972 /* AppDelegate.swift */,
+				6E1123F8B038F5E5132BADB9 /* Assets.xcassets */,
+				007D223D190CA65066429E21 /* ContentView.swift */,
+				0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */,
+				A1ECDBBC78A8F624C19D4B1F /* ServiceContainer.swift */,
+				AF62A71944E1E1B0DE53C00F /* VoxPocketApp.swift */,
+				189133DA376CDFC9A1BB61F5 /* WindowManager.swift */,
+				7AF9A23BA0E6741F710FFE1B /* Intents */,
+			);
+			path = VoxPocket;
+			sourceTree = "<group>";
+		};
+		A4A34C1BAFC56040AAD54A0F /* VoxPocketWidget */ = {
+			isa = PBXGroup;
+			children = (
+				0A9B8C0385BA4849453043ED /* VoxPocketWidgetBundle.swift */,
+			);
+			path = VoxPocketWidget;
+			sourceTree = "<group>";
+		};
+		B85C45BCA880F35001417245 /* VoxPocketUITests */ = {
+			isa = PBXGroup;
+			children = (
+				3CBA06204946E030AFE05371 /* VoxPocketUITests.swift */,
+				35CEEFA4650BE23A84A46F56 /* VoxPocketUITestsLaunchTests.swift */,
+			);
+			path = VoxPocketUITests;
+			sourceTree = "<group>";
+		};
+		C74BB5D5B74CB5E0C6E4999E /* VoxPocket */ = {
+			isa = PBXGroup;
+			children = (
+				A4A34C1BAFC56040AAD54A0F /* VoxPocketWidget */,
+			);
+			name = VoxPocket;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		E880414C837FCED3D3F95A6F /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				B5F29C424186AA3BC9023F26 /* AppleUITesting */,
+				4AE728A4CB97A8BD457088F0 /* VoxPresentation */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		F29FC60138230519690F7019 /* VoxPocketTests */ = {
+			isa = PBXGroup;
+			children = (
+				D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */,
+				0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */,
+				1E33A98E778BE211E1AC3970 /* VoxPocketTests.swift */,
+			);
+			path = VoxPocketTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		70398AD32F27048D007D1E07 /* VoxPocket */ = {
+		3264A80B732C81FE377EB71C /* VoxPocketUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 70398AF82F270490007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocket" */;
+			buildConfigurationList = D22AD6263146AAD01E58516E /* Build configuration list for PBXNativeTarget "VoxPocketUITests" */;
 			buildPhases = (
-				70398AD02F27048D007D1E07 /* Sources */,
-				70398AD12F27048D007D1E07 /* Frameworks */,
-				70398AD22F27048D007D1E07 /* Resources */,
-				70398B1E2F270800007D1E07 /* Embed Foundation Extensions */,
+				FA2C86E3EA85CE1ACE3FCC35 /* Sources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				70398B192F270800007D1E07 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				70398AD62F27048D007D1E07 /* VoxPocket */,
-			);
-			name = VoxPocket;
-			packageProductDependencies = (
-				70398B042F2706AA007D1E07 /* PlatformUI */,
-				70398B062F2706AA007D1E07 /* UIShared */,
-				A378F2FABCE0405B9F75D938 /* UITestingBridge */,
-			);
-			productName = VoxPocket;
-			productReference = 70398AD42F27048D007D1E07 /* VoxPocket.app */;
-			productType = "com.apple.product-type.application";
-		};
-		70398AE42F270490007D1E07 /* VoxPocketTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 70398AFD2F270490007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketTests" */;
-			buildPhases = (
-				70398AE12F270490007D1E07 /* Sources */,
-				70398AE22F270490007D1E07 /* Frameworks */,
-				70398AE32F270490007D1E07 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				70398AE72F270490007D1E07 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				70398AE82F270490007D1E07 /* VoxPocketTests */,
-			);
-			name = VoxPocketTests;
-			packageProductDependencies = (
-			);
-			productName = VoxPocketTests;
-			productReference = 70398AE52F270490007D1E07 /* VoxPocketTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		70398AEE2F270490007D1E07 /* VoxPocketUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 70398B002F270490007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketUITests" */;
-			buildPhases = (
-				70398AEB2F270490007D1E07 /* Sources */,
-				70398AEC2F270490007D1E07 /* Frameworks */,
-				70398AED2F270490007D1E07 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				70398AF12F270490007D1E07 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				70398AF22F270490007D1E07 /* VoxPocketUITests */,
+				4ECBF9B7A30A49BB60C56829 /* PBXTargetDependency */,
 			);
 			name = VoxPocketUITests;
 			packageProductDependencies = (
 			);
 			productName = VoxPocketUITests;
-			productReference = 70398AEF2F270490007D1E07 /* VoxPocketUITests.xctest */;
+			productReference = 42FE417692BCAA5D8FFA454A /* VoxPocketUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */ = {
+		33B669CC114F7A017AE007FC /* VoxPocket */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 70398B1B2F270800007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketWidgetExtension" */;
+			buildConfigurationList = A211FEACFEAF934C42C00138 /* Build configuration list for PBXNativeTarget "VoxPocket" */;
 			buildPhases = (
-				70398B0B2F270800007D1E07 /* Sources */,
-				70398B0C2F270800007D1E07 /* Frameworks */,
-				70398B0A2F270800007D1E07 /* Resources */,
+				AFA8E14B2F34A0A40045A8E9 /* Sources */,
+				25C8A4CAF6A1DCBBDAEA979E /* Resources */,
+				293C58CBE90A08437938619D /* Frameworks */,
+				B197807BC1F4F48C50C13856 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4496533F1F64C30D4BE2FD05 /* PBXTargetDependency */,
+			);
+			name = VoxPocket;
+			packageProductDependencies = (
+				51ABF4EE6A69D0E882B3B36D /* PlatformUI */,
+				4DC7AD1FF6D20051BB6E0EAA /* UIShared */,
+				BD8AD9C9D354B8A78973E655 /* UITestingBridge */,
+			);
+			productName = VoxPocket;
+			productReference = 77AB160FC41A2F4691F66612 /* VoxPocket.app */;
+			productType = "com.apple.product-type.application";
+		};
+		6FDEA8FCEE42DCE8109F0F0A /* VoxPocketTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EF9C43AEF53706DC6DBE6C8B /* Build configuration list for PBXNativeTarget "VoxPocketTests" */;
+			buildPhases = (
+				8091F576F3BFE18910DF2535 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				52364FCC98AB397E897E55DE /* PBXTargetDependency */,
+			);
+			name = VoxPocketTests;
+			packageProductDependencies = (
+			);
+			productName = VoxPocketTests;
+			productReference = BDE99DFE18C941D2ED2AE6D4 /* VoxPocketTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		FD9E1C0C9635ECE7235611E0 /* VoxPocketWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E4927CAC33B9F103A800CA9C /* Build configuration list for PBXNativeTarget "VoxPocketWidgetExtension" */;
+			buildPhases = (
+				B75D784AA631390302906B0E /* Sources */,
+				93180CED18317EF0942FF023 /* Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				70398B252F270A00007D1E07 /* VoxPocketWidget */,
-			);
 			name = VoxPocketWidgetExtension;
 			packageProductDependencies = (
-				70398B1F2F270900007D1E07 /* WidgetUI */,
+				1BBF52B228A0B16EC6FA6CF1 /* WidgetUI */,
 			);
 			productName = VoxPocketWidgetExtension;
-			productReference = 70398B0E2F270800007D1E07 /* VoxPocketWidgetExtension.appex */;
+			productReference = C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		70398ACC2F27048D007D1E07 /* Project object */ = {
+		320FAE1BD658482CA2F68005 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2620;
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					70398AD32F27048D007D1E07 = {
-						CreatedOnToolsVersion = 26.2;
+					3264A80B732C81FE377EB71C = {
+						DevelopmentTeam = 4Z8GG667QD;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 33B669CC114F7A017AE007FC;
 					};
-					70398AE42F270490007D1E07 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = 70398AD32F27048D007D1E07;
+					33B669CC114F7A017AE007FC = {
+						DevelopmentTeam = 4Z8GG667QD;
+						ProvisioningStyle = Automatic;
 					};
-					70398AEE2F270490007D1E07 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = 70398AD32F27048D007D1E07;
+					6FDEA8FCEE42DCE8109F0F0A = {
+						DevelopmentTeam = 4Z8GG667QD;
+						ProvisioningStyle = Automatic;
 					};
-					70398B0D2F270800007D1E07 = {
-						CreatedOnToolsVersion = 26.2;
+					FD9E1C0C9635ECE7235611E0 = {
+						DevelopmentTeam = 4Z8GG667QD;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
-			buildConfigurationList = 70398ACF2F27048D007D1E07 /* Build configuration list for PBXProject "VoxPocket" */;
+			buildConfigurationList = 0EDEB3091B79910B4F91A7C6 /* Build configuration list for PBXProject "VoxPocket" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
 				Base,
+				en,
 			);
-			mainGroup = 70398ACB2F27048D007D1E07;
+			mainGroup = 18A027A45C4CEE5764B9246E;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				70398B032F2706AA007D1E07 /* XCLocalSwiftPackageReference "../Packages/VoxPresentation" */,
-				B6658B107DA04182AC7B52E3 /* XCLocalSwiftPackageReference "../../AppleUITesting" */,
+				8FEB8EF4787D655C9246DD3E /* XCLocalSwiftPackageReference "../../AppleUITesting" */,
+				7D95E37BD0C216839B6851F8 /* XCLocalSwiftPackageReference "../Packages/VoxPresentation" */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 70398AD52F27048D007D1E07 /* Products */;
+			productRefGroup = 48A5D3C782F6F9761D3DBADF /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				70398AD32F27048D007D1E07 /* VoxPocket */,
-				70398AE42F270490007D1E07 /* VoxPocketTests */,
-				70398AEE2F270490007D1E07 /* VoxPocketUITests */,
-				70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */,
+				33B669CC114F7A017AE007FC /* VoxPocket */,
+				6FDEA8FCEE42DCE8109F0F0A /* VoxPocketTests */,
+				3264A80B732C81FE377EB71C /* VoxPocketUITests */,
+				FD9E1C0C9635ECE7235611E0 /* VoxPocketWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		70398AD22F27048D007D1E07 /* Resources */ = {
+		25C8A4CAF6A1DCBBDAEA979E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		70398AE32F270490007D1E07 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		70398AED2F270490007D1E07 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		70398B0A2F270800007D1E07 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				8BAF52832DE538C9ECFBF660 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		70398AD02F27048D007D1E07 /* Sources */ = {
+		8091F576F3BFE18910DF2535 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D106C5B2E507C744805EFD01 /* QuickRecordingWindowLifecycleTests.swift in Sources */,
+				6F6475AB782E4C903B7B99F1 /* TranscriberSelectionTests.swift in Sources */,
+				8E089D9B9CE0539C13928EA8 /* VoxPocketTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		70398AE12F270490007D1E07 /* Sources */ = {
+		AFA8E14B2F34A0A40045A8E9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8A08A4F4C292489D4B0719F /* AppDelegate.swift in Sources */,
+				EE40B4FFE177EE0350CA9411 /* ContentView.swift in Sources */,
+				EF64233609A8744936963A02 /* LLMAppConfig.swift in Sources */,
+				1A76D389C98E4BDD802CD409 /* ServiceContainer.swift in Sources */,
+				08DB2234C39F8AF9CDFFC333 /* StartRecordingIntent.swift in Sources */,
+				AD4F2E900A5F3AF188BCCFA2 /* VoxPocketApp.swift in Sources */,
+				A8E0D7098CE2D4706AEBA0DE /* WindowManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		70398AEB2F270490007D1E07 /* Sources */ = {
+		B75D784AA631390302906B0E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				05BC9CB67F6F7DB573173C19 /* VoxPocketWidgetBundle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		70398B0B2F270800007D1E07 /* Sources */ = {
+		FA2C86E3EA85CE1ACE3FCC35 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4CA3A932239127C1D4F7BBC4 /* VoxPocketUITests.swift in Sources */,
+				30DD3A9EAE5E989CCD68C633 /* VoxPocketUITestsLaunchTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		70398AE72F270490007D1E07 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 70398AD32F27048D007D1E07 /* VoxPocket */;
-			targetProxy = 70398AE62F270490007D1E07 /* PBXContainerItemProxy */;
-		};
-		70398AF12F270490007D1E07 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 70398AD32F27048D007D1E07 /* VoxPocket */;
-			targetProxy = 70398AF02F270490007D1E07 /* PBXContainerItemProxy */;
-		};
-		70398B192F270800007D1E07 /* PBXTargetDependency */ = {
+		4496533F1F64C30D4BE2FD05 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			platformFilter = ios;
-			target = 70398B0D2F270800007D1E07 /* VoxPocketWidgetExtension */;
-			targetProxy = 70398B182F270800007D1E07 /* PBXContainerItemProxy */;
+			target = FD9E1C0C9635ECE7235611E0 /* VoxPocketWidgetExtension */;
+			targetProxy = 9EBDE172D535E7CEE1D60091 /* PBXContainerItemProxy */;
+		};
+		4ECBF9B7A30A49BB60C56829 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 33B669CC114F7A017AE007FC /* VoxPocket */;
+			targetProxy = 0008CCCCA9631580FFB0E24E /* PBXContainerItemProxy */;
+		};
+		52364FCC98AB397E897E55DE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 33B669CC114F7A017AE007FC /* VoxPocket */;
+			targetProxy = 1C8E1AFF34413EF167BD72D8 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		70398AF92F270490007D1E07 /* Debug */ = {
+		1265799241281BD95F879369 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VoxPocket.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VoxPocket";
+			};
+			name = Debug;
+		};
+		1644554BBA5FF8BD30F0049F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = VoxPocket;
+			};
+			name = Release;
+		};
+		489E40965BE35970213C29E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
@@ -449,35 +523,219 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocket;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Debug;
+		};
+		70E746839C31417F986D6921 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = VoxPocket;
+			};
+			name = Debug;
+		};
+		84145F4A7AD7C62D1F6F4D97 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 4Z8GG667QD;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				XROS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Release;
+		};
+		8A430BFC0B783F0F09F04251 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VoxPocket.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VoxPocket";
+			};
+			name = Release;
+		};
+		939CCC575A7458954CB815F7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 4Z8GG667QD;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
 				XROS_DEPLOYMENT_TARGET = 26.2;
 			};
 			name = Debug;
 		};
-		70398AFA2F270490007D1E07 /* Release */ = {
+		C42F15964F9234EBB655F756 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
@@ -507,269 +765,47 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocket;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				XROS_DEPLOYMENT_TARGET = 26.2;
 			};
 			name = Release;
 		};
-		70398AFB2F270490007D1E07 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-			};
-			name = Debug;
-		};
-		70398AFC2F270490007D1E07 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-			};
-			name = Release;
-		};
-		70398AFE2F270490007D1E07 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocketTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VoxPocket.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VoxPocket";
-				XROS_DEPLOYMENT_TARGET = 26.2;
-			};
-			name = Debug;
-		};
-		70398AFF2F270490007D1E07 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocketTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VoxPocket.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VoxPocket";
-				XROS_DEPLOYMENT_TARGET = 26.2;
-			};
-			name = Release;
-		};
-		70398B012F270490007D1E07 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocketUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = VoxPocket;
-				XROS_DEPLOYMENT_TARGET = 26.2;
-			};
-			name = Debug;
-		};
-		70398B022F270490007D1E07 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocketUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = VoxPocket;
-				XROS_DEPLOYMENT_TARGET = 26.2;
-			};
-			name = Release;
-		};
-		70398B1C2F270800007D1E07 /* Debug */ = {
+		D9174823D30E85FBD185B406 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocket.Widget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -780,30 +816,26 @@
 			};
 			name = Debug;
 		};
-		70398B1D2F270800007D1E07 /* Release */ = {
+		E7E3AC5C766854FC266E328F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q4R6JFFF33;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.tianpeili.VoxPocket.Widget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -817,83 +849,82 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		70398ACF2F27048D007D1E07 /* Build configuration list for PBXProject "VoxPocket" */ = {
+		0EDEB3091B79910B4F91A7C6 /* Build configuration list for PBXProject "VoxPocket" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				70398AFB2F270490007D1E07 /* Debug */,
-				70398AFC2F270490007D1E07 /* Release */,
+				939CCC575A7458954CB815F7 /* Debug */,
+				84145F4A7AD7C62D1F6F4D97 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
-		70398AF82F270490007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocket" */ = {
+		A211FEACFEAF934C42C00138 /* Build configuration list for PBXNativeTarget "VoxPocket" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				70398AF92F270490007D1E07 /* Debug */,
-				70398AFA2F270490007D1E07 /* Release */,
+				489E40965BE35970213C29E4 /* Debug */,
+				C42F15964F9234EBB655F756 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
-		70398AFD2F270490007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketTests" */ = {
+		D22AD6263146AAD01E58516E /* Build configuration list for PBXNativeTarget "VoxPocketUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				70398AFE2F270490007D1E07 /* Debug */,
-				70398AFF2F270490007D1E07 /* Release */,
+				70E746839C31417F986D6921 /* Debug */,
+				1644554BBA5FF8BD30F0049F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
-		70398B002F270490007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketUITests" */ = {
+		E4927CAC33B9F103A800CA9C /* Build configuration list for PBXNativeTarget "VoxPocketWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				70398B012F270490007D1E07 /* Debug */,
-				70398B022F270490007D1E07 /* Release */,
+				D9174823D30E85FBD185B406 /* Debug */,
+				E7E3AC5C766854FC266E328F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
-		70398B1B2F270800007D1E07 /* Build configuration list for PBXNativeTarget "VoxPocketWidgetExtension" */ = {
+		EF9C43AEF53706DC6DBE6C8B /* Build configuration list for PBXNativeTarget "VoxPocketTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				70398B1C2F270800007D1E07 /* Debug */,
-				70398B1D2F270800007D1E07 /* Release */,
+				1265799241281BD95F879369 /* Debug */,
+				8A430BFC0B783F0F09F04251 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		70398B032F2706AA007D1E07 /* XCLocalSwiftPackageReference "../Packages/VoxPresentation" */ = {
+		7D95E37BD0C216839B6851F8 /* XCLocalSwiftPackageReference "../Packages/VoxPresentation" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../Packages/VoxPresentation;
 		};
-		B6658B107DA04182AC7B52E3 /* XCLocalSwiftPackageReference "../../AppleUITesting" */ = {
+		8FEB8EF4787D655C9246DD3E /* XCLocalSwiftPackageReference "../../AppleUITesting" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../AppleUITesting;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		70398B042F2706AA007D1E07 /* PlatformUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = PlatformUI;
-		};
-		70398B062F2706AA007D1E07 /* UIShared */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = UIShared;
-		};
-		70398B1F2F270900007D1E07 /* WidgetUI */ = {
+		1BBF52B228A0B16EC6FA6CF1 /* WidgetUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = WidgetUI;
 		};
-		A378F2FABCE0405B9F75D938 /* UITestingBridge */ = {
+		4DC7AD1FF6D20051BB6E0EAA /* UIShared */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B6658B107DA04182AC7B52E3 /* XCLocalSwiftPackageReference "../../AppleUITesting" */;
+			productName = UIShared;
+		};
+		51ABF4EE6A69D0E882B3B36D /* PlatformUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PlatformUI;
+		};
+		BD8AD9C9D354B8A78973E655 /* UITestingBridge */ = {
+			isa = XCSwiftPackageProductDependency;
 			productName = UITestingBridge;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = 70398ACC2F27048D007D1E07 /* Project object */;
+	rootObject = 320FAE1BD658482CA2F68005 /* Project object */;
 }

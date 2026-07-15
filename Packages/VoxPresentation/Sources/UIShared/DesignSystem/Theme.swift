@@ -97,7 +97,7 @@ struct Theme {
         palette: Palette(
             textPrimary: Color.black.opacity(0.9),
             textSecondary: Color.black.opacity(0.65),
-            textTertiary: Color.black.opacity(0.45),
+            textTertiary: Color.black.opacity(0.58),
             surfaceGlass: Color.white.opacity(0.7),
             surfaceGlassStrong: Color.white.opacity(0.82),
             surfaceElevated: Color.white.opacity(0.9),
@@ -113,11 +113,11 @@ struct Theme {
             backgroundVignette: Color.black
         ),
         typography: Typography(
-            title: .system(size: 22, weight: .semibold, design: .rounded),
-            headline: .system(size: 17, weight: .semibold, design: .rounded),
-            body: .system(size: 15, weight: .regular, design: .rounded),
-            callout: .system(size: 13, weight: .medium, design: .rounded),
-            caption: .system(size: 11, weight: .regular, design: .rounded)
+            title: .system(.title2, design: .rounded).weight(.semibold),
+            headline: .system(.headline, design: .rounded),
+            body: .system(.body, design: .rounded),
+            callout: .system(.subheadline, design: .rounded).weight(.medium),
+            caption: .system(.caption, design: .rounded)
         )
     )
 
@@ -125,7 +125,7 @@ struct Theme {
         palette: Palette(
             textPrimary: Color.white.opacity(0.96),
             textSecondary: Color.white.opacity(0.7),
-            textTertiary: Color.white.opacity(0.5),
+            textTertiary: Color.white.opacity(0.62),
             surfaceGlass: Color.white.opacity(0.12),
             surfaceGlassStrong: Color.white.opacity(0.2),
             surfaceElevated: Color.white.opacity(0.16),
@@ -141,11 +141,11 @@ struct Theme {
             backgroundVignette: Color.black
         ),
         typography: Typography(
-            title: .system(size: 22, weight: .semibold, design: .rounded),
-            headline: .system(size: 17, weight: .semibold, design: .rounded),
-            body: .system(size: 15, weight: .regular, design: .rounded),
-            callout: .system(size: 13, weight: .medium, design: .rounded),
-            caption: .system(size: 11, weight: .regular, design: .rounded)
+            title: .system(.title2, design: .rounded).weight(.semibold),
+            headline: .system(.headline, design: .rounded),
+            body: .system(.body, design: .rounded),
+            callout: .system(.subheadline, design: .rounded).weight(.medium),
+            caption: .system(.caption, design: .rounded)
         )
     )
 }

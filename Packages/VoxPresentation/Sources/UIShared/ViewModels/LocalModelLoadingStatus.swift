@@ -32,9 +32,9 @@ public final class LocalModelLoadingStatus: ObservableObject {
         case .idle:
             return "未启动"
         case .downloading(let progress):
-            return "正在下载模型... \(Int(progress * 100))%"
+            return "正在下载模型… \(Int(progress * 100))%"
         case .loading:
-            return "正在初始化模型..."
+            return "正在初始化模型…"
         case .ready:
             return "模型已就绪"
         case .failed(let reason):

@@ -23,21 +23,21 @@ struct RawTranscriptView: View {
         NavigationStack {
             ScrollView {
                 Text(rawText.isEmpty ? "暂无原始转写内容。" : rawText)
-                    .font(.custom("Avenir Next", size: 16))
+                    .font(.system(.body, design: .rounded))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(20)
             }
             .background(BackgroundAtmosphere(status: status))
-            .navigationTitle("Raw Transcript")
+            .navigationTitle("原始转写")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Copy Raw", action: onCopyRaw)
+                    Button("复制原始", action: onCopyRaw)
                         .disabled(!canCopyRaw)
                         .opacity(canCopyRaw ? 1 : 0.4)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
+                    Button("关闭") {
                         dismiss()
                     }
                 }

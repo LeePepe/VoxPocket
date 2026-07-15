@@ -51,6 +51,7 @@ struct SidebarDrawerView: View {
                                 .foregroundColor(.textSecondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("新建会话")
                         .padding(.trailing, 18)
                     }
 
@@ -105,7 +106,7 @@ struct SidebarHeaderView: View {
                     Circle()
                         .fill(isRecording ? theme.palette.statusListening : theme.palette.statusDone)
                         .frame(width: 8, height: 8)
-                    Text(isRecording ? "Recording" : "Ready")
+                    Text(isRecording ? "录音中" : "就绪")
                         .font(.caption)
                         .foregroundColor(.textTertiary)
                 }
@@ -128,7 +129,8 @@ struct SearchField: View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.textTertiary)
-            TextField("Search history", text: $text)
+                .accessibilityHidden(true)
+            TextField("搜索历史", text: $text)
                 .textFieldStyle(.plain)
                 .foregroundColor(.textPrimary)
         }
@@ -190,10 +192,10 @@ struct MeEntryRow: View {
                         .foregroundColor(.white)
                 )
             VStack(alignment: .leading, spacing: 4) {
-                Text("Me")
+                Text("我")
                     .font(.headline)
                     .foregroundColor(.textPrimary)
-                Text("Profile & Settings")
+                Text("个人与设置")
                     .font(.caption)
                     .foregroundColor(.textSecondary)
             }

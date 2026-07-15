@@ -21,16 +21,17 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
 
     @State private var reveal = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 上方面板（精炼文本）显示内容
     private var refinedPaneText: String {
         if viewModel.isRecording {
             return viewModel.liveTranscription.isEmpty
-                ? "正在聆听..."
+                ? "正在聆听…"
                 : viewModel.liveTranscription
         } else if viewModel.isRefining {
             return viewModel.streamingRefinedText.isEmpty
-                ? "正在优化..."
+                ? "正在优化…"
                 : viewModel.streamingRefinedText
         } else {
             return viewModel.text.isEmpty
@@ -54,7 +55,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
 
     /// 是否显示下方原始转录面板
     private var shouldShowRawPane: Bool {
-        // TODO: Verify iOS compact hides raw pane; regular width shows.
+        // iPhone 竖屏(compact)隐藏原始面板以省空间；iPad/横屏/macOS(regular)显示
         let hasContent = !viewModel.rawTranscription.isEmpty || viewModel.isRecording
 #if os(iOS)
         let isCompact = horizontalSizeClass == .compact
@@ -62,6 +63,11 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
 #else
         return hasContent
 #endif
+    }
+
+    /// 原始面板入场/退场过渡：开启「减弱动态效果」时使用纯淡入，避免位移
+    private var rawPaneTransition: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
     }
 
     public var body: some View {
@@ -80,7 +86,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
                             text: rawPaneText,
                             onCopy: { onCopyRaw(rawPaneText) }
                         )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(rawPaneTransition)
                     }
                 }
             }
@@ -112,8 +118,8 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
             )
         )
         .opacity(reveal ? 1 : 0)
-        .offset(y: reveal ? 0 : 12)
-        .animation(.easeOut(duration: 0.4), value: reveal)
+        .offset(y: reduceMotion ? 0 : (reveal ? 0 : 12))
+        .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.4), value: reveal)
         .onAppear {
             reveal = true
         }
@@ -151,7 +157,7 @@ struct RawInlinePane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Raw Transcript")
+                Text("原始转写")
                     .font(FontToken.callout)
                     .foregroundColor(.textSecondary)
                 Spacer()
@@ -160,6 +166,7 @@ struct RawInlinePane: View {
                         .foregroundColor(.textTertiary)
                 }
                 .buttonStyle(GlassIconButtonStyle())
+                .accessibilityLabel("复制原始转写")
             }
             Text(text)
                 .font(FontToken.body)
@@ -178,11 +185,11 @@ struct StatusBar: View {
             if status == .listening {
                 Image(systemName: "mic.fill")
                     .foregroundColor(.statusListening)
-                Text("Listening")
+                Text("聆听中")
                     .font(FontToken.callout)
                     .foregroundColor(.textSecondary)
                 Spacer()
-                Text("Mic Live")
+                Text("麦克风已开")
                     .font(FontToken.callout)
                     .foregroundColor(.textSecondary)
                     .padding(.horizontal, 12)
@@ -193,10 +200,10 @@ struct StatusBar: View {
                     .foregroundColor(status == .error ? .statusError : .accentPrimary)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(status == .error ? "Refine failed" : "Refine status")
+                    Text(status == .error ? "精炼失败" : "精炼状态")
                         .font(FontToken.callout)
                         .foregroundColor(.textPrimary)
-                    Text(status == .error ? "Tap to retry" : "Ready for next segment")
+                    Text(status == .error ? "点按重试" : "准备就绪")
                         .font(FontToken.caption)
                         .foregroundColor(.textTertiary)
                 }
@@ -216,7 +223,7 @@ struct BottomControls: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var primaryTitle: String {
-        (status == .listening || status == .transcribing || status == .refining) ? "Stop" : "Resume"
+        (status == .listening || status == .transcribing || status == .refining) ? "停止" : "继续"
     }
 
     private var primaryIcon: String {
@@ -242,7 +249,7 @@ struct BottomControls: View {
         let theme = Theme.current(colorScheme)
         let primaryColor = primaryColor(for: theme)
         HStack(spacing: 10) {
-            ControlButton("New", systemImage: "plus", color: theme.palette.surfaceElevated, action: onNewSession)
+            ControlButton("新建", systemImage: "plus", color: theme.palette.surfaceElevated, action: onNewSession)
 
             Spacer()
 
@@ -252,6 +259,7 @@ struct BottomControls: View {
                     .foregroundColor(.textTertiary)
             }
             .buttonStyle(GlassIconButtonStyle())
+            .accessibilityLabel("复制精炼文本")
 
             ControlButton(primaryTitle, systemImage: primaryIcon, color: primaryColor, emphasis: true, action: onStopOrRestart)
                 .accessibilityIdentifier(
@@ -358,6 +366,9 @@ struct GlassIconButtonStyle: ButtonStyle {
                 .frame(width: 34, height: 34)
                 .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 12))
                 .scaleEffect(configuration.isPressed ? 0.96 : 1)
+                // 视觉保持 34pt，命中区扩到 HIG 最小 44pt
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         } else {
             let theme = Theme.current(colorScheme)
             configuration.label
@@ -372,6 +383,9 @@ struct GlassIconButtonStyle: ButtonStyle {
                         )
                 )
                 .scaleEffect(configuration.isPressed ? 0.96 : 1)
+                // 视觉保持 34pt，命中区扩到 HIG 最小 44pt
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
     }
 }

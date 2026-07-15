@@ -35,7 +35,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
 
         mockTask = Task { @MainActor in
             isRecording = true
-            liveTranscription = "正在识别语音..."
+            liveTranscription = "正在识别语音…"
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
 

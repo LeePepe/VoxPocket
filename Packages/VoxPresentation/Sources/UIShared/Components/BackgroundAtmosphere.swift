@@ -6,6 +6,7 @@ public struct BackgroundAtmosphere: View {
     @State private var stateStart = Date()
     @State private var smoothedAudioLevel: Double = 0
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(status: RecorderStatus = .idle, audioLevel: Double? = nil) {
         self.status = status
@@ -13,18 +14,22 @@ public struct BackgroundAtmosphere: View {
     }
 
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 0.05, paused: false)) { context in
-            let elapsed = context.date.timeIntervalSince(stateStart)
+        // 「减弱动态效果」开启时暂停时间轴动画，冻结持续脉动/抖动，仅保留静态渐变
+        TimelineView(.animation(minimumInterval: 0.05, paused: reduceMotion)) { context in
+            // reduceMotion 时冻结 elapsed，使 slowPulse / error 抖动 / doneSettle 全部保持静态
+            let elapsed = reduceMotion ? 0 : context.date.timeIntervalSince(stateStart)
+            // reduceMotion 时忽略音频电平驱动的缩放/位移脉动
+            let effectiveAudioLevel = reduceMotion ? 0 : smoothedAudioLevel
             let theme = Theme.current(colorScheme)
             let config = atmosphereConfig(
                 for: status,
                 elapsed: elapsed,
-                audioLevel: smoothedAudioLevel,
+                audioLevel: effectiveAudioLevel,
                 theme: theme
             )
 
             ZStack {
-                AtmospherePlate(config: config, audioLevel: smoothedAudioLevel, elapsed: elapsed)
+                AtmospherePlate(config: config, audioLevel: effectiveAudioLevel, elapsed: elapsed)
             }
             .ignoresSafeArea()
             .animation(.easeInOut(duration: 0.6), value: status)
@@ -38,6 +43,8 @@ public struct BackgroundAtmosphere: View {
             }
         }
         .onChange(of: audioLevel ?? 0) { _, newLevel in
+            // reduceMotion 时不追踪音频电平，避免背景随声音脉动
+            guard !reduceMotion else { return }
             let clamped = clamp(newLevel, min: 0, max: 1)
             smoothedAudioLevel = smoothedAudioLevel * 0.76 + clamped * 0.24
         }
@@ -172,7 +179,8 @@ public struct BackgroundAtmosphere: View {
                 darkShadowOpacity: 0.07
             )
         case .error:
-            let jitter = Double(sin(elapsed * 6)) * 2
+            // reduceMotion 时不做左右抖动，保持静态偏移
+            let jitter = reduceMotion ? 0 : Double(sin(elapsed * 6)) * 2
             return AtmosphereConfig(
                 primaryShadow: Color(red: 0.8, green: 0.4, blue: 0.45),
                 primaryOpacity: 0.4,
