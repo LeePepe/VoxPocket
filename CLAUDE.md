@@ -35,7 +35,7 @@ swift test --package-path Packages/VoxInfrastructure --filter TelemetryQueueTest
 
 ## Architecture
 
-Four SPM packages in a strict layered dependency hierarchy:
+Five SPM packages (four in the runtime dependency chain + `VoxUITesting` standalone), in a strict layered hierarchy. Full per-layer detail lives in `docs/architecture/tech-context.md` and each `Packages/<pkg>/tech-context.md`.
 
 ```
 VoxPresentation  (SwiftUI views, view models)
@@ -55,6 +55,18 @@ The app entry point is `VoxPocket/VoxPocket/` with `ServiceContainer` as the `@M
 
 - **Swift Tools Version**: 6.2 | **Platforms**: iOS 26+, macOS 26+
 - **External dependencies**: `swift-async-algorithms` (LLMKit), `WhisperKit` (TranscriptionKit)
+
+## Layered Agent Context
+
+This repo is set up to be self-describing for AI agents. Before touching code, read the relevant layer's context (see `AGENTS.md` for the full Read Contract + Layer Map):
+
+- **Constitution (iron laws)**: `.specify/memory/constitution.md` — read on every task; each layer's `red_lines` project from it.
+- **Feature docs (spec)**: spec-kit (`.specify/`, `/speckit-*` skills); historical plans in `docs/plans/`.
+- **Tech-context**: top-level `docs/architecture/tech-context.md` (declares `canonical_roles`) + one `Packages/<pkg>/tech-context.md` per layer, each with machine-readable frontmatter (`layer`/`depends_on`/`red_lines`/`roles`/`test`).
+- **Directory index**: `AGENTS.md` is a thin router — read it first, then drill into the one relevant layer (progressive disclosure). Scope work by layer: a change crossing 2+ layers is too big — split it.
+- **Gates**: `scripts/gates/` — `check_frontmatter.py` (anti-rot), `gate-precommit.sh` (incremental per-layer build/test), `gate-prepush.sh` (fast checks only, <60s). Heavy verification (`xcodebuild` app target) is CI-only (`.github/workflows/ci.yml`), not local hooks.
+
+> **LokiKit** is an external package at `~/Development/LokiKit` (`../../../LokiKit`), not in this repo. **`VoxPocket/VoxPocket/`** is the Xcode app shell, not a layer; its `xcodebuild` verification is CI-only.
 
 ## ServiceContainer Initialization
 
@@ -116,7 +128,7 @@ macOS services in `PlatformAdapters`: `MacOSClipboardService`, `MacOSAccessibili
 
 ## Git Hooks
 
-Hooks live in `.githooks/` and are managed by `local-review-skill`. They run Claude Code review on commit, push, and merge-to-main. Config in `.local-review.yml`. If a hook blocks a commit, investigate the review output rather than bypassing with `--no-verify`.
+Hooks live in `.githooks/` (`core.hooksPath=.githooks`) and are managed by `local-review-skill` (v2.3.0; skill path resolved via `git config local-review.skill-path`). On commit/push/merge-to-main they run the commands in `.local-review.yml` plus Codex-based review agents (`provider: codex`, `fail_on: critical`). The `.local-review.yml` commands now also invoke the layered gate scripts (`scripts/gates/gate-precommit.sh` on commit, `scripts/gates/gate-prepush.sh` on push). If a hook blocks a commit, investigate the review output rather than bypassing with `--no-verify`.
 
 ## Task Workflow
 
@@ -151,3 +163,8 @@ After every logical change, Claude MUST:
 1. Build the affected package with `swift build` to verify no errors
 2. If build passes, immediately commit to `main` with a conventional commit message — no need to ask for permission
 3. Use `git add <specific files>` (never `git add -A`) and commit directly to `main`
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

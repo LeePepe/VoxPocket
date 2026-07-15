@@ -1,0 +1,96 @@
+name: CI (required)
+
+# 唯一"不可绕过"的门禁:全量 per-package 测试 + app-target 构建 + frontmatter 防腐。
+# 重验证(xcodebuild app target)只在这里,不在本地 pre-push(见 AGENTS.md 门禁小节)。
+# 需在仓库 Settings → Branch ruleset 手动把下方 job 勾为 required status check。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontmatter:
+    name: Frontmatter anti-rot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate layered tech-context frontmatter
+        run: python3 scripts/gates/check_frontmatter.py
+
+  packages:
+    name: Per-package tests
+    runs-on: macos-26            # 与本地 Xcode 26 对齐;避免"本地过 CI 挂"的 toolchain 割裂
+    steps:
+      - name: Checkout VoxPocket
+        uses: actions/checkout@v4
+        with:
+          path: repo
+
+      # LokiKit 是外部本地依赖(../../../LokiKit)。从 Packages/<pkg>/ 解析后需落在
+      # 仓库 checkout 的【上两级目录】的 LokiKit。GITHUB_WORKSPACE/repo/Packages/<pkg>
+      # → ../../../LokiKit = GITHUB_WORKSPACE/LokiKit。故克隆到 $GITHUB_WORKSPACE/LokiKit。
+      - name: Checkout LokiKit (external local dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: LeePepe/LokiKit
+          path: LokiKit
+
+      - name: Select latest Xcode
+        run: |
+          # macOS runner 上 Xcode app 名带具体版本(如 Xcode_26.0.app),不固定;
+          # 选已安装的最新一个,并打印版本便于与本地(Xcode 26)比对 toolchain。
+          latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
+          xcodebuild -version
+          swift --version
+
+      - name: Test SPM packages
+        working-directory: repo
+        run: |
+          set -o pipefail
+          for p in VoxDomain VoxInfrastructure VoxApplication VoxPresentation VoxUITesting; do
+            echo "::group::swift test $p"
+            swift test --package-path "Packages/$p" 2>&1 | tee "/tmp/test-$p.log"
+            echo "::endgroup::"
+          done
+
+  app-build:
+    name: App target build (xcodebuild)
+    runs-on: macos-26
+    steps:
+      - name: Checkout VoxPocket
+        uses: actions/checkout@v4
+        with:
+          path: repo
+      - name: Checkout LokiKit (external local dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: LeePepe/LokiKit
+          path: LokiKit
+      # xcodeproj 还通过 XCLocalSwiftPackageReference 引用 ../../AppleUITesting
+      # (外部本地包)。从 repo/VoxPocket/ 解析 → $GITHUB_WORKSPACE/AppleUITesting。
+      - name: Checkout AppleUITesting (external local dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: LeePepe/AppleUITesting
+          path: AppleUITesting
+      - name: Select latest Xcode
+        run: |
+          latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
+          xcodebuild -version
+      - name: Build app (full, no log truncation)
+        working-directory: repo
+        run: |
+          set -o pipefail
+          # CI runner 无开发者签名证书;build 验证不需要签名,显式禁用。
+          xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee /tmp/xcodebuild.log

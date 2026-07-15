@@ -282,6 +282,14 @@ private final class FakeEditingUseCase: EditingUseCase, @unchecked Sendable {
     func delete(range: CoreModels.TextRange) throws {}
     func append(_ text: String) throws {}
     func mergeRecentEdits() {}
+
+    // MARK: - Voice Zone
+    private(set) var voiceAnchorLocation: Int?
+    private(set) var isVoiceZoneLocked: Bool = false
+    func setVoiceAnchor(_ location: Int) { voiceAnchorLocation = location }
+    func clearVoiceAnchor() { voiceAnchorLocation = nil }
+    func setVoiceZoneLocked(_ locked: Bool) { isVoiceZoneLocked = locked }
+    func replaceVoiceZone(with text: String) throws { currentTextSubject.send(text) }
 }
 
 private class NamedTranscriptionCoordinator: TranscriptionCoordinator, @unchecked Sendable {

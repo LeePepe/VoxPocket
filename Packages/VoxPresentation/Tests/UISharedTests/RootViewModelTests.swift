@@ -75,6 +75,7 @@ private final class EditorStateSpy: ObservableObject, EditorViewState {
     @Published var rawTranscription: String = ""
     @Published var streamingRefinedText: String = ""
     @Published var autoCopiedText: String?
+    @Published var isVoiceZoneEditing: Bool = false
 
     func startRecording() async {}
     func stopRecording() async {}
