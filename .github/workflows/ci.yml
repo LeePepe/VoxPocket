@@ -73,6 +73,13 @@ jobs:
         with:
           repository: LeePepe/LokiKit
           path: LokiKit
+      # xcodeproj 还通过 XCLocalSwiftPackageReference 引用 ../../AppleUITesting
+      # (外部本地包)。从 repo/VoxPocket/ 解析 → $GITHUB_WORKSPACE/AppleUITesting。
+      - name: Checkout AppleUITesting (external local dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: LeePepe/AppleUITesting
+          path: AppleUITesting
       - name: Select latest Xcode
         run: |
           latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
