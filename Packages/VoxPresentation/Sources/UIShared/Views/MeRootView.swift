@@ -55,15 +55,15 @@ struct ProfileCard: View {
                     .frame(width: 56, height: 56)
                     .overlay(
                         Text("TP")
-                            .font(.custom("Avenir Next", size: 18).weight(.bold))
+                            .font(.system(.title3, design: .rounded).weight(.bold))
                             .foregroundColor(.white)
                     )
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Tianpei Li")
-                        .font(.custom("Avenir Next", size: 18).weight(.semibold))
+                        .font(.system(.title3, design: .rounded).weight(.semibold))
                         .foregroundColor(MePalette.primaryText)
                     Text("Pro Plan · Active")
-                        .font(.custom("Avenir Next", size: 12))
+                        .font(.system(.footnote, design: .rounded))
                         .foregroundColor(MePalette.secondaryText)
                 }
                 Spacer()
@@ -85,11 +85,11 @@ struct ProviderRow: View {
     var body: some View {
         HStack {
             Text(provider)
-                .font(.custom("Avenir Next", size: 14).weight(.semibold))
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
                 .foregroundColor(MePalette.primaryText)
             Spacer()
             Text(status)
-                .font(.custom("Avenir Next", size: 12))
+                .font(.system(.footnote, design: .rounded))
                 .foregroundColor(MePalette.secondaryText)
         }
     }
@@ -99,7 +99,7 @@ struct BehaviorCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Behavior")
-                .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                .font(.system(.headline, design: .rounded))
                 .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Auto-stop silence", value: "2s")
@@ -117,12 +117,12 @@ struct LLMProviderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("LLM Provider")
-                .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                .font(.system(.headline, design: .rounded))
                 .foregroundColor(MePalette.primaryText)
 
             HStack {
                 Text("Provider")
-                    .font(.custom("Avenir Next", size: 13).weight(.medium))
+                    .font(.system(.subheadline, design: .rounded).weight(.medium))
                     .foregroundColor(MePalette.primaryText)
                 Spacer()
                 Picker("", selection: providerBinding) {
@@ -140,10 +140,10 @@ struct LLMProviderCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Skip intent analysis")
-                        .font(.custom("Avenir Next", size: 13).weight(.medium))
+                        .font(.system(.subheadline, design: .rounded).weight(.medium))
                         .foregroundColor(MePalette.primaryText)
                     Text("直接使用默认改写，跳过意图/语气前置分析")
-                        .font(.custom("Avenir Next", size: 11))
+                        .font(.system(.caption2, design: .rounded))
                         .foregroundColor(MePalette.secondaryText)
                 }
                 Spacer()
@@ -184,7 +184,7 @@ struct PrivacyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Privacy & Data")
-                .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                .font(.system(.headline, design: .rounded))
                 .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Data retention", value: "30 days")
@@ -195,11 +195,11 @@ struct PrivacyCard: View {
             } label: {
                 HStack {
                     Text("Clear history")
-                        .font(.custom("Avenir Next", size: 13).weight(.medium))
+                        .font(.system(.subheadline, design: .rounded).weight(.medium))
                         .foregroundColor(.red)
                     Spacer()
                     Text("删除全部")
-                        .font(.custom("Avenir Next", size: 12))
+                        .font(.system(.footnote, design: .rounded))
                         .foregroundColor(.red.opacity(0.7))
                 }
             }
@@ -221,7 +221,7 @@ struct DiagnosticsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Diagnostics")
-                .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                .font(.system(.headline, design: .rounded))
                 .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Logger level", value: "Verbose")
@@ -238,7 +238,7 @@ struct ShortcutsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Shortcuts")
-                .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                .font(.system(.headline, design: .rounded))
                 .foregroundColor(MePalette.primaryText)
 
             ShortcutPickerRow(
@@ -252,7 +252,7 @@ struct ShortcutsCard: View {
 
             if viewModel.hasConflict {
                 Text("Conflict: both actions use the same key")
-                    .font(.custom("Avenir Next", size: 12))
+                    .font(.system(.footnote, design: .rounded))
                     .foregroundColor(.orange)
             }
 
@@ -295,7 +295,7 @@ struct ShortcutPickerRow: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.custom("Avenir Next", size: 13).weight(.medium))
+                .font(.system(.subheadline, design: .rounded).weight(.medium))
                 .foregroundColor(MePalette.primaryText)
             Spacer()
             Picker("", selection: $selection) {
@@ -316,7 +316,7 @@ struct AboutCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("About")
-                .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                .font(.system(.headline, design: .rounded))
                 .foregroundColor(MePalette.primaryText)
 
             SettingRow(title: "Version", value: "0.1.0")
@@ -334,11 +334,11 @@ struct SettingRow: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.custom("Avenir Next", size: 13).weight(.medium))
+                .font(.system(.subheadline, design: .rounded).weight(.medium))
                 .foregroundColor(MePalette.primaryText)
             Spacer()
             Text(value)
-                .font(.custom("Avenir Next", size: 12))
+                .font(.system(.footnote, design: .rounded))
                 .foregroundColor(MePalette.secondaryText)
         }
     }
@@ -351,7 +351,7 @@ struct LocalModelLoadingCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("本地模型")
-                    .font(.custom("Avenir Next", size: 16).weight(.semibold))
+                    .font(.system(.headline, design: .rounded))
                     .foregroundColor(MePalette.primaryText)
                 Spacer()
                 statusBadge
@@ -360,7 +360,7 @@ struct LocalModelLoadingCard: View {
             if let progress = status.downloadProgress {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(status.statusText)
-                        .font(.custom("Avenir Next", size: 12))
+                        .font(.system(.footnote, design: .rounded))
                         .foregroundColor(MePalette.secondaryText)
                     ProgressView(value: progress)
                         .tint(.blue)
@@ -372,7 +372,7 @@ struct LocalModelLoadingCard: View {
                             .scaleEffect(0.75)
                     }
                     Text(status.statusText)
-                        .font(.custom("Avenir Next", size: 12))
+                        .font(.system(.footnote, design: .rounded))
                         .foregroundColor(MePalette.secondaryText)
                 }
             }
@@ -385,21 +385,21 @@ struct LocalModelLoadingCard: View {
         switch status.state {
         case .downloading, .loading:
             Text("加载中")
-                .font(.custom("Avenir Next", size: 11).weight(.medium))
+                .font(.system(.caption2, design: .rounded).weight(.medium))
                 .foregroundColor(.orange)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(Color.orange.opacity(0.12), in: Capsule())
         case .ready:
             Text("就绪")
-                .font(.custom("Avenir Next", size: 11).weight(.medium))
+                .font(.system(.caption2, design: .rounded).weight(.medium))
                 .foregroundColor(.green)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(Color.green.opacity(0.12), in: Capsule())
         case .failed:
             Text("失败")
-                .font(.custom("Avenir Next", size: 11).weight(.medium))
+                .font(.system(.caption2, design: .rounded).weight(.medium))
                 .foregroundColor(.red)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)

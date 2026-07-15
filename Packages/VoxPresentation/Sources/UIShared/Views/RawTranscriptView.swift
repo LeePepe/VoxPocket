@@ -23,7 +23,7 @@ struct RawTranscriptView: View {
         NavigationStack {
             ScrollView {
                 Text(rawText.isEmpty ? "暂无原始转写内容。" : rawText)
-                    .font(.custom("Avenir Next", size: 16))
+                    .font(.system(.body, design: .rounded))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(20)

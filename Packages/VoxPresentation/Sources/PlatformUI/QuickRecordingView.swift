@@ -28,7 +28,7 @@ public struct QuickRecordingView: View {
 
     private var liveTranscriptionOverlay: some View {
         Text(viewModel.liveTranscription)
-            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .font(.system(.footnote, design: .rounded).weight(.medium))
             .foregroundStyle(.white.opacity(0.95))
             .lineLimit(1)
             .truncationMode(.head)

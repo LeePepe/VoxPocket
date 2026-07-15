@@ -113,11 +113,11 @@ struct Theme {
             backgroundVignette: Color.black
         ),
         typography: Typography(
-            title: .system(size: 22, weight: .semibold, design: .rounded),
-            headline: .system(size: 17, weight: .semibold, design: .rounded),
-            body: .system(size: 15, weight: .regular, design: .rounded),
-            callout: .system(size: 13, weight: .medium, design: .rounded),
-            caption: .system(size: 11, weight: .regular, design: .rounded)
+            title: .system(.title2, design: .rounded).weight(.semibold),
+            headline: .system(.headline, design: .rounded),
+            body: .system(.body, design: .rounded),
+            callout: .system(.subheadline, design: .rounded).weight(.medium),
+            caption: .system(.caption, design: .rounded)
         )
     )
 
@@ -141,11 +141,11 @@ struct Theme {
             backgroundVignette: Color.black
         ),
         typography: Typography(
-            title: .system(size: 22, weight: .semibold, design: .rounded),
-            headline: .system(size: 17, weight: .semibold, design: .rounded),
-            body: .system(size: 15, weight: .regular, design: .rounded),
-            callout: .system(size: 13, weight: .medium, design: .rounded),
-            caption: .system(size: 11, weight: .regular, design: .rounded)
+            title: .system(.title2, design: .rounded).weight(.semibold),
+            headline: .system(.headline, design: .rounded),
+            body: .system(.body, design: .rounded),
+            callout: .system(.subheadline, design: .rounded).weight(.medium),
+            caption: .system(.caption, design: .rounded)
         )
     )
 }
