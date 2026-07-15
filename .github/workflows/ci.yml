@@ -41,10 +41,12 @@ jobs:
           repository: LeePepe/LokiKit
           path: LokiKit
 
-      - name: Select Xcode 26
+      - name: Select latest Xcode
         run: |
-          ls /Applications | grep -i Xcode || true
-          sudo xcode-select -s /Applications/Xcode_26.app || sudo xcode-select -s /Applications/Xcode.app
+          # macOS runner 上 Xcode app 名带具体版本(如 Xcode_26.0.app),不固定;
+          # 选已安装的最新一个,并打印版本便于与本地(Xcode 26)比对 toolchain。
+          latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
           xcodebuild -version
           swift --version
 
@@ -71,9 +73,10 @@ jobs:
         with:
           repository: LeePepe/LokiKit
           path: LokiKit
-      - name: Select Xcode 26
+      - name: Select latest Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode_26.app || sudo xcode-select -s /Applications/Xcode.app
+          latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
           xcodebuild -version
       - name: Build app (full, no log truncation)
         working-directory: repo
