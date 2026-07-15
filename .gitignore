@@ -45,3 +45,8 @@ artifacts/suites/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Local secrets (API keys injected via xcconfig). Config.xcconfig is committed;
+# Secrets.xcconfig holds real values and must never be committed.
+Secrets.xcconfig
+**/Secrets.xcconfig

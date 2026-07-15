@@ -104,18 +104,18 @@
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "VOX_AZURE_FOUNDRY_API_KEY"
-            value = ""
-            isEnabled = "NO">
+            value = "$(AZURE_FOUNDRY_KEY)"
+            isEnabled = "YES">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "kimikey"
-            value = ""
-            isEnabled = "NO">
+            value = "$(KIMI_KEY)"
+            isEnabled = "YES">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "whisperkey"
-            value = ""
-            isEnabled = "NO">
+            value = "$(WHISPER_KEY)"
+            isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
