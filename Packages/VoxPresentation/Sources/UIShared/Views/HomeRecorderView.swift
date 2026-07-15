@@ -160,6 +160,7 @@ struct RawInlinePane: View {
                         .foregroundColor(.textTertiary)
                 }
                 .buttonStyle(GlassIconButtonStyle())
+                .accessibilityLabel("复制原始转写")
             }
             Text(text)
                 .font(FontToken.body)
@@ -252,6 +253,7 @@ struct BottomControls: View {
                     .foregroundColor(.textTertiary)
             }
             .buttonStyle(GlassIconButtonStyle())
+            .accessibilityLabel("复制精炼文本")
 
             ControlButton(primaryTitle, systemImage: primaryIcon, color: primaryColor, emphasis: true, action: onStopOrRestart)
                 .accessibilityIdentifier(

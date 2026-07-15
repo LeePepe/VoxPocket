@@ -47,15 +47,15 @@ struct ProfileCard: View {
                     .fill(LinearGradient(colors: [Color.orange, Color.pink], startPoint: .top, endPoint: .bottom))
                     .frame(width: 56, height: 56)
                     .overlay(
-                        Text("TP")
+                        Text("VP")
                             .font(.system(.title3, design: .rounded).weight(.bold))
                             .foregroundColor(.white)
                     )
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Tianpei Li")
+                    Text("VoxPocket 用户")
                         .font(.system(.title3, design: .rounded).weight(.semibold))
                         .foregroundColor(Color.primary)
-                    Text("Pro Plan · Active")
+                    Text("本地账户")
                         .font(.system(.footnote, design: .rounded))
                         .foregroundColor(Color.secondary)
                 }
@@ -64,8 +64,8 @@ struct ProfileCard: View {
 
             Divider().overlay(Color.primary.opacity(0.12))
 
-            ProviderRow(provider: "ChatGPT", status: "Connected")
-            ProviderRow(provider: "Claude", status: "Not linked")
+            ProviderRow(provider: "ChatGPT", status: "未连接")
+            ProviderRow(provider: "Claude", status: "未连接")
         }
         .modifier(CardStyle())
     }

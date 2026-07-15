@@ -51,6 +51,7 @@ struct SidebarDrawerView: View {
                                 .foregroundColor(.textSecondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("新建会话")
                         .padding(.trailing, 18)
                     }
 
@@ -128,6 +129,7 @@ struct SearchField: View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.textTertiary)
+                .accessibilityHidden(true)
             TextField("Search history", text: $text)
                 .textFieldStyle(.plain)
                 .foregroundColor(.textPrimary)
