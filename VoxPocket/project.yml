@@ -27,6 +27,9 @@ targets:
   VoxPocket:
     type: application
     supportedDestinations: [iOS, macOS, visionOS]
+    configFiles:
+      Debug: Config.xcconfig
+      Release: Config.xcconfig
     sources:
       - path: VoxPocket
         excludes:
@@ -188,20 +191,19 @@ schemes:
         VoxPocketWidgetExtension: all
     run:
       config: Debug
-      # 运行期需注入 Azure/Kimi/Whisper 凭据。为避免把密钥提交进仓库，
-      # 此处仅保留变量名占位（isEnabled: false）。本地开发时在 Xcode
-      # scheme 的 Run > Arguments > Environment Variables 中填入真实值，
-      # 或改用 gitignore 的本地配置注入。
+      # 运行期凭据经由 xcconfig 注入：真实值在 gitignore 的 Secrets.xcconfig，
+      # 经 Config.xcconfig 汇入构建设置，再由下方环境变量以 $(NAME) 桥接到
+      # ProcessInfo.environment（ServiceContainer 据此读取）。仓库不含明文密钥。
       environmentVariables:
         - variable: VOX_AZURE_FOUNDRY_API_KEY
-          value: ""
-          isEnabled: false
+          value: "$(AZURE_FOUNDRY_KEY)"
+          isEnabled: true
         - variable: kimikey
-          value: ""
-          isEnabled: false
+          value: "$(KIMI_KEY)"
+          isEnabled: true
         - variable: whisperkey
-          value: ""
-          isEnabled: false
+          value: "$(WHISPER_KEY)"
+          isEnabled: true
     test:
       config: Debug
       targets:

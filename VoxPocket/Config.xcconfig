@@ -1,0 +1,16 @@
+// VoxPocket 构建配置 — 可安全提交。
+//
+// 真实密钥放在同目录的 Secrets.xcconfig（已 gitignore）。此处仅声明
+// 空默认值，并通过 #include? 可选引入本地密钥文件：本地存在则覆盖，
+// CI/克隆无该文件时回落到空值，构建照常通过（运行期无密钥的功能自然禁用）。
+//
+// 对应关系（scheme 环境变量 <- 构建设置）：
+//   whisperkey                <- WHISPER_KEY
+//   kimikey                   <- KIMI_KEY
+//   VOX_AZURE_FOUNDRY_API_KEY <- AZURE_FOUNDRY_KEY
+
+WHISPER_KEY =
+KIMI_KEY =
+AZURE_FOUNDRY_KEY =
+
+#include? "Secrets.xcconfig"
