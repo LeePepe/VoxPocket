@@ -2,7 +2,7 @@ import SwiftUI
 import CoreModels
 
 struct SidebarDrawerView: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     let sessions: [Session]
     let selectedSessionID: UUID
     let isRecording: Bool
@@ -11,8 +11,6 @@ struct SidebarDrawerView: View {
     let onDeleteSession: (Session) -> Void
     let onNewSession: () -> Void
     let onOpenMe: () -> Void
-
-    private var theme: Theme { Theme.current(colorScheme) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,10 +89,8 @@ struct SidebarDrawerView: View {
 }
 
 struct SidebarHeaderView: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     let isRecording: Bool
-
-    private var theme: Theme { Theme.current(colorScheme) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -120,10 +116,8 @@ struct SidebarHeaderView: View {
 }
 
 struct SearchField: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     @Binding var text: String
-
-    private var theme: Theme { Theme.current(colorScheme) }
 
     var body: some View {
         HStack {
@@ -144,11 +138,9 @@ struct SearchField: View {
 }
 
 struct HistoryRowView: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     let session: Session
     var isSelected: Bool = false
-
-    private var theme: Theme { Theme.current(colorScheme) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

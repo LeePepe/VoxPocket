@@ -93,6 +93,12 @@ struct Theme {
         scheme == .dark ? .dark : .light
     }
 
+    // MARK: - Empty (typography-only) default
+
+    /// Environment 未注入时的兜底主题。配色取 light，字体两套主题一致，
+    /// 故仅依赖 typography 的子树（如 Snackbar）即便读到兜底值也表现正确。
+    static let fallback = Theme.light
+
     static let light = Theme(
         palette: Palette(
             textPrimary: Color.black.opacity(0.9),
@@ -148,4 +154,35 @@ struct Theme {
             caption: .system(.caption, design: .rounded)
         )
     )
+}
+
+// MARK: - Environment 注入
+
+private struct ThemeEnvironmentKey: EnvironmentKey {
+    static let defaultValue: Theme = .fallback
+}
+
+extension EnvironmentValues {
+    /// 当前主题。由根视图的 `.voxTheme()` 按 `colorScheme` 注入一次，下游直接读取，
+    /// 避免每个节点重复 `Theme.current(colorScheme)` 并各自订阅 colorScheme。
+    var theme: Theme {
+        get { self[ThemeEnvironmentKey.self] }
+        set { self[ThemeEnvironmentKey.self] = newValue }
+    }
+}
+
+private struct ThemeInjectionModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.environment(\.theme, Theme.current(colorScheme))
+    }
+}
+
+extension View {
+    /// 在窗口根部注入随 `colorScheme` 解析出的主题。整棵子树共享同一个 `Theme` 实例，
+    /// 仅此处订阅 colorScheme；切换深浅色时统一在根部重算并向下传播。
+    func voxTheme() -> some View {
+        modifier(ThemeInjectionModifier())
+    }
 }

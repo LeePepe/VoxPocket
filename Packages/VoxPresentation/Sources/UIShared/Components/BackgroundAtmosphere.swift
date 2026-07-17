@@ -5,7 +5,7 @@ public struct BackgroundAtmosphere: View {
     let audioLevel: Double?
     @State private var stateStart = Date()
     @State private var smoothedAudioLevel: Double = 0
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(status: RecorderStatus = .idle, audioLevel: Double? = nil) {
@@ -20,7 +20,6 @@ public struct BackgroundAtmosphere: View {
             let elapsed = reduceMotion ? 0 : context.date.timeIntervalSince(stateStart)
             // reduceMotion 时忽略音频电平驱动的缩放/位移脉动
             let effectiveAudioLevel = reduceMotion ? 0 : smoothedAudioLevel
-            let theme = Theme.current(colorScheme)
             let config = atmosphereConfig(
                 for: status,
                 elapsed: elapsed,

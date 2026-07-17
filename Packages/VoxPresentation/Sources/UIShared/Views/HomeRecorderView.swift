@@ -111,6 +111,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 28)
+        .voxTheme()
         .background(
             BackgroundAtmosphere(
                 status: recorderStatus,
@@ -220,7 +221,7 @@ struct BottomControls: View {
     let onStopOrRestart: () -> Void
     let onCopy: () -> Void
     let onNewSession: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     private var primaryTitle: String {
         (status == .listening || status == .transcribing || status == .refining) ? "停止" : "继续"
@@ -246,7 +247,6 @@ struct BottomControls: View {
     }
 
     var body: some View {
-        let theme = Theme.current(colorScheme)
         let primaryColor = primaryColor(for: theme)
         HStack(spacing: 10) {
             ControlButton("新建", systemImage: "plus", color: theme.palette.surfaceElevated, action: onNewSession)
@@ -278,7 +278,7 @@ struct ControlButton: View {
     let color: Color
     let emphasis: Bool
     let action: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     init(
         _ title: String,
@@ -295,7 +295,6 @@ struct ControlButton: View {
     }
 
     var body: some View {
-        let theme = Theme.current(colorScheme)
         let iconColor = emphasis ? theme.palette.textPrimary : theme.palette.accentPrimary
         Button(action: action) {
             HStack(spacing: 6) {
@@ -319,7 +318,7 @@ struct ControlButton: View {
 struct PrimaryControlStyle: ButtonStyle {
     let color: Color
     let emphasis: Bool
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     func makeBody(configuration: Configuration) -> some View {
         if #available(iOS 26.0, macOS 26.0, *) {
@@ -335,7 +334,6 @@ struct PrimaryControlStyle: ButtonStyle {
                     .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
             }
         } else {
-            let theme = Theme.current(colorScheme)
             let strokeColor = emphasis ? theme.palette.strokeStrong : theme.palette.strokeSubtle
             configuration.label
                 .background(
@@ -358,7 +356,7 @@ struct PrimaryControlStyle: ButtonStyle {
 }
 
 struct GlassIconButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     func makeBody(configuration: Configuration) -> some View {
         if #available(iOS 26.0, macOS 26.0, *) {
@@ -370,7 +368,6 @@ struct GlassIconButtonStyle: ButtonStyle {
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         } else {
-            let theme = Theme.current(colorScheme)
             configuration.label
                 .frame(width: 34, height: 34)
                 .foregroundColor(theme.palette.textPrimary)
@@ -391,7 +388,7 @@ struct GlassIconButtonStyle: ButtonStyle {
 }
 
 struct GlassCapsuleStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     func makeBody(configuration: Configuration) -> some View {
         if #available(iOS 26.0, macOS 26.0, *) {
@@ -399,7 +396,6 @@ struct GlassCapsuleStyle: ButtonStyle {
                 .glassEffect(.regular.interactive(), in: .capsule)
                 .scaleEffect(configuration.isPressed ? 0.98 : 1)
         } else {
-            let theme = Theme.current(colorScheme)
             configuration.label
                 .background(
                     Capsule()
@@ -415,7 +411,7 @@ struct GlassCapsuleStyle: ButtonStyle {
 }
 
 struct GlassCapsuleBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     var body: some View {
         if #available(iOS 26.0, macOS 26.0, *) {
@@ -423,7 +419,6 @@ struct GlassCapsuleBackground: View {
                 .fill(.clear)
                 .glassEffect(.regular, in: .capsule)
         } else {
-            let theme = Theme.current(colorScheme)
             Capsule()
                 .fill(theme.palette.surfaceGlass)
                 .overlay(
@@ -435,7 +430,7 @@ struct GlassCapsuleBackground: View {
 }
 
 struct GlassBarBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     var body: some View {
         if #available(iOS 26.0, macOS 26.0, *) {
@@ -443,7 +438,6 @@ struct GlassBarBackground: View {
                 .fill(.clear)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18))
         } else {
-            let theme = Theme.current(colorScheme)
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(theme.palette.surfaceGlass)
                 .overlay(
@@ -462,7 +456,7 @@ struct GlassBarBackground: View {
 struct GlassCardBackground: View {
     let cornerRadius: CGFloat
     let strength: Double
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     var body: some View {
         if #available(iOS 26.0, macOS 26.0, *) {
@@ -470,7 +464,6 @@ struct GlassCardBackground: View {
                 .fill(.clear)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
         } else {
-            let theme = Theme.current(colorScheme)
             let fillColor = strength >= 0.2 ? theme.palette.surfaceGlassStrong : theme.palette.surfaceGlass
             let strokeColor = strength >= 0.2 ? theme.palette.strokeStrong : theme.palette.strokeSubtle
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

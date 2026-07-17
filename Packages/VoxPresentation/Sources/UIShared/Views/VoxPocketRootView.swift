@@ -46,6 +46,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                 splitViewShell
             }
         }
+        .voxTheme()
         .ignoresSafeArea()
         .onAppear {
             syncSidebarSelection()

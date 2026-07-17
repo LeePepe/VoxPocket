@@ -12,20 +12,18 @@ extension View {
 
 private struct ThemedForegroundModifier: ViewModifier {
     let token: ColorToken
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     func body(content: Content) -> some View {
-        let theme = Theme.current(colorScheme)
-        return content.foregroundColor(theme.palette.resolve(token))
+        content.foregroundColor(theme.palette.resolve(token))
     }
 }
 
 private struct ThemedFontModifier: ViewModifier {
     let token: FontToken
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     func body(content: Content) -> some View {
-        let theme = Theme.current(colorScheme)
-        return content.font(theme.typography.resolve(token))
+        content.font(theme.typography.resolve(token))
     }
 }
