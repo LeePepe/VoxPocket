@@ -522,20 +522,13 @@ struct AtmosphereDirectionalGradient {
 }
 
 enum AtmosphereGradientPresets {
+    /// 每个阶段仅一层方向光晕（less is more：原本 2–3 层 .screen 叠加是「高级感过载」，
+    /// 砍到单层即足以表达空间倾向，画面更干净、更柔和）。保留各阶段最具代表性的方向与色。
     static func directions(for status: RecorderStatus, modulation: Double) -> [AtmosphereDirectionalGradient] {
         let amount = clamp(modulation, min: 0, max: 1)
         switch status {
         case .idle:
             return [
-                AtmosphereDirectionalGradient(
-                    start: .topLeading,
-                    end: .bottomTrailing,
-                    colors: [
-                        Color(red: 0.98, green: 0.91, blue: 0.98),
-                        Color.clear
-                    ],
-                    opacity: 0.18 + amount * 0.08
-                ),
                 AtmosphereDirectionalGradient(
                     start: .bottomLeading,
                     end: .topTrailing,
@@ -556,24 +549,6 @@ enum AtmosphereGradientPresets {
                         Color.clear
                     ],
                     opacity: 0.18 + amount * 0.2
-                ),
-                AtmosphereDirectionalGradient(
-                    start: .top,
-                    end: .bottom,
-                    colors: [
-                        Color(red: 0.54, green: 0.89, blue: 1.0),
-                        Color.clear
-                    ],
-                    opacity: 0.16 + amount * 0.16
-                ),
-                AtmosphereDirectionalGradient(
-                    start: .topTrailing,
-                    end: .bottomLeading,
-                    colors: [
-                        Color(red: 0.86, green: 1.0, blue: 0.8),
-                        Color.clear
-                    ],
-                    opacity: 0.08 + amount * 0.12
                 )
             ]
         case .transcribing:
@@ -586,28 +561,10 @@ enum AtmosphereGradientPresets {
                         Color.clear
                     ],
                     opacity: 0.2 + amount * 0.14
-                ),
-                AtmosphereDirectionalGradient(
-                    start: .bottom,
-                    end: .top,
-                    colors: [
-                        Color(red: 0.66, green: 0.76, blue: 1.0),
-                        Color.clear
-                    ],
-                    opacity: 0.18 + amount * 0.1
                 )
             ]
         case .refining:
             return [
-                AtmosphereDirectionalGradient(
-                    start: .leading,
-                    end: .trailing,
-                    colors: [
-                        Color(red: 0.96, green: 0.74, blue: 1.0),
-                        Color.clear
-                    ],
-                    opacity: 0.18 + amount * 0.12
-                ),
                 AtmosphereDirectionalGradient(
                     start: .top,
                     end: .bottom,
@@ -628,15 +585,6 @@ enum AtmosphereGradientPresets {
                         Color.clear
                     ],
                     opacity: 0.18 + amount * 0.14
-                ),
-                AtmosphereDirectionalGradient(
-                    start: .top,
-                    end: .bottom,
-                    colors: [
-                        Color(red: 0.9, green: 1.0, blue: 0.78),
-                        Color.clear
-                    ],
-                    opacity: 0.14 + amount * 0.08
                 )
             ]
         case .error:
@@ -649,15 +597,6 @@ enum AtmosphereGradientPresets {
                         Color.clear
                     ],
                     opacity: 0.2 + amount * 0.12
-                ),
-                AtmosphereDirectionalGradient(
-                    start: .topTrailing,
-                    end: .bottomLeading,
-                    colors: [
-                        Color(red: 1.0, green: 0.56, blue: 0.62),
-                        Color.clear
-                    ],
-                    opacity: 0.16 + amount * 0.12
                 )
             ]
         }
