@@ -4,7 +4,10 @@ public struct BackgroundAtmosphere: View {
     let status: RecorderStatus
     let audioLevel: Double?
     @State private var stateStart = Date()
-    @State private var smoothedAudioLevel: Double = 0
+    // 音频电平的弹簧积分状态（位置 + 速度），由渲染帧驱动 → velocity-aware 且 display-synced
+    @State private var springLevel: Double = 0
+    @State private var springVelocity: Double = 0
+    @State private var lastFrame: Date?
     @State private var previousStatus: RecorderStatus?
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,8 +26,8 @@ public struct BackgroundAtmosphere: View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             // reduceMotion 时冻结 elapsed，使 slowPulse / error 抖动 / doneSettle / 转场全部保持静态
             let elapsed = reduceMotion ? 0 : context.date.timeIntervalSince(stateStart)
-            // reduceMotion 时忽略音频电平驱动的缩放/位移脉动
-            let effectiveAudioLevel = reduceMotion ? 0 : smoothedAudioLevel
+            // reduceMotion 时忽略音频电平驱动的脉动
+            let effectiveAudioLevel = reduceMotion ? 0 : springLevel
             let config = atmosphereConfig(
                 for: status,
                 elapsed: elapsed,
@@ -60,23 +63,41 @@ public struct BackgroundAtmosphere: View {
                 }
             }
             .ignoresSafeArea()
-        }
-        .onChange(of: status) { oldValue, _ in
-            // 记录上一阶段用于交叉淡出；重置 stateStart 使转场/脉动从 0 起算
-            previousStatus = oldValue
-            withAnimation(.easeInOut(duration: 0.6)) {
-                stateStart = Date()
-                if status != .listening {
-                    smoothedAudioLevel = 0
-                }
+            .onChange(of: context.date) { _, now in
+                // 每渲染帧推进音频弹簧：从当前值以真实 dt 追踪目标电平，继承速度
+                stepAudioSpring(now: now)
             }
         }
-        .onChange(of: audioLevel ?? 0) { _, newLevel in
-            // reduceMotion 时不追踪音频电平，避免背景随声音脉动
-            guard !reduceMotion else { return }
-            let clamped = clamp(newLevel, min: 0, max: 1)
-            smoothedAudioLevel = smoothedAudioLevel * 0.76 + clamped * 0.24
+        .onChange(of: status) { oldValue, _ in
+            // 记录上一阶段用于交叉淡出；重置 stateStart 使转场/脉动从 0 起算（Date 非 animatable，
+            // 直接赋值，不再包 no-op 的 withAnimation）
+            previousStatus = oldValue
+            stateStart = Date()
+            if status != .listening {
+                // 离开录音：目标归零，弹簧自然衰减回落
+                springLevel = 0
+                springVelocity = 0
+            }
         }
+    }
+
+    /// 用渲染帧的真实时间步进音频弹簧。reduceMotion 时不追踪，保持静止。
+    private func stepAudioSpring(now: Date) {
+        guard !reduceMotion else {
+            lastFrame = now
+            return
+        }
+        let dt = lastFrame.map { now.timeIntervalSince($0) } ?? 0
+        lastFrame = now
+        let target = clamp(audioLevel ?? 0, min: 0, max: 1)
+        let stepped = AtmosphereTransition.springStep(
+            position: springLevel,
+            velocity: springVelocity,
+            target: target,
+            dt: dt
+        )
+        springLevel = clamp(stepped.position, min: 0, max: 1.2)
+        springVelocity = stepped.velocity
     }
 
     // MARK: - 转场节奏

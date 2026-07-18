@@ -92,4 +92,47 @@ final class AtmosphereTransitionTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - 音频弹簧（velocity-aware 呼吸）
+
+    func testSpringConvergesToTarget() {
+        var pos = 0.0, vel = 0.0
+        // 60 帧 @ ~30fps 追踪恒定目标 0.8，应收敛到目标附近
+        for _ in 0..<60 {
+            let s = AtmosphereTransition.springStep(position: pos, velocity: vel, target: 0.8, dt: 1.0 / 30.0)
+            pos = s.position; vel = s.velocity
+        }
+        XCTAssertEqual(pos, 0.8, accuracy: 0.02, "弹簧应收敛到目标电平")
+        XCTAssertEqual(vel, 0, accuracy: 0.1, "收敛后速度趋近 0")
+    }
+
+    func testSpringInheritsVelocityNotInstant() {
+        // 单帧不应瞬达目标（区别于「直接赋值」），体现惯性
+        let s = AtmosphereTransition.springStep(position: 0, velocity: 0, target: 1, dt: 1.0 / 30.0)
+        XCTAssertGreaterThan(s.position, 0, "应开始朝目标移动")
+        XCTAssertLessThan(s.position, 0.2, "但不瞬达——有惯性")
+        XCTAssertGreaterThan(s.velocity, 0, "获得朝目标的速度")
+    }
+
+    func testSpringClampsLargeDtNoExplosion() {
+        // 掉帧/切后台回来 dt 很大时，内部夹 dt 防显式积分发散
+        let s = AtmosphereTransition.springStep(position: 0, velocity: 0, target: 1, dt: 5.0)
+        XCTAssertTrue(s.position.isFinite && s.velocity.isFinite, "大 dt 不应发散为 NaN/Inf")
+        XCTAssertLessThan(s.position, 1.5, "大 dt 单步仍受控")
+    }
+
+    func testSpringZeroDtIsNoOp() {
+        let s = AtmosphereTransition.springStep(position: 0.5, velocity: 0.3, target: 1, dt: 0)
+        XCTAssertEqual(s.position, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(s.velocity, 0.3, accuracy: 0.0001)
+    }
+
+    func testSpringDecaysBackToZeroWhenTargetZero() {
+        var pos = 0.9, vel = 0.0
+        for _ in 0..<90 {
+            let s = AtmosphereTransition.springStep(position: pos, velocity: vel, target: 0, dt: 1.0 / 30.0)
+            pos = s.position; vel = s.velocity
+        }
+        XCTAssertEqual(pos, 0, accuracy: 0.02, "目标归零时应柔和衰减回落（离开录音）")
+    }
 }
