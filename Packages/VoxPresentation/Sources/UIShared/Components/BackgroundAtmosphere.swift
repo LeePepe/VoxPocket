@@ -5,8 +5,12 @@ public struct BackgroundAtmosphere: View {
     let audioLevel: Double?
     @State private var stateStart = Date()
     @State private var smoothedAudioLevel: Double = 0
+    @State private var previousStatus: RecorderStatus?
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 阶段交叉淡出时长：色彩缓缓 morph 而非硬切，是「丝滑流转」的核心。
+    private static let crossfadeDuration: TimeInterval = 0.72
 
     public init(status: RecorderStatus = .idle, audioLevel: Double? = nil) {
         self.status = status
@@ -14,9 +18,9 @@ public struct BackgroundAtmosphere: View {
     }
 
     public var body: some View {
-        // 「减弱动态效果」开启时暂停时间轴动画，冻结持续脉动/抖动，仅保留静态渐变
-        TimelineView(.animation(minimumInterval: 0.05, paused: reduceMotion)) { context in
-            // reduceMotion 时冻结 elapsed，使 slowPulse / error 抖动 / doneSettle 全部保持静态
+        // 「减弱动态效果」开启时暂停时间轴动画，冻结持续脉动/抖动 + 转场，仅保留静态渐变
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            // reduceMotion 时冻结 elapsed，使 slowPulse / error 抖动 / doneSettle / 转场全部保持静态
             let elapsed = reduceMotion ? 0 : context.date.timeIntervalSince(stateStart)
             // reduceMotion 时忽略音频电平驱动的缩放/位移脉动
             let effectiveAudioLevel = reduceMotion ? 0 : smoothedAudioLevel
@@ -26,14 +30,39 @@ public struct BackgroundAtmosphere: View {
                 audioLevel: effectiveAudioLevel,
                 theme: theme
             )
+            // 阶段切换的「呼吸」：入场膨胀/完成内收 + 同色光晕，纯靠色彩语言传达流转
+            let dynamics = transitionDynamics(status: status, transitionElapsed: elapsed)
 
             ZStack {
+                // 上一阶段画面在过渡窗口内交叉淡出，色彩流转而非硬切
+                if !reduceMotion,
+                   let previous = previousStatus,
+                   let progress = crossfadeProgress(elapsed: elapsed),
+                   progress < 1 {
+                    let previousConfig = atmosphereConfig(
+                        for: previous,
+                        elapsed: 0,
+                        audioLevel: 0,
+                        theme: theme
+                    )
+                    AtmospherePlate(config: previousConfig, audioLevel: 0, elapsed: 0)
+                        .opacity(1 - progress)
+                }
+
                 AtmospherePlate(config: config, audioLevel: effectiveAudioLevel, elapsed: elapsed)
+                    .opacity(incomingOpacity(elapsed: elapsed))
+                    .scaleEffect(dynamics.scale)
+
+                // 转场「呼吸」光晕：入场时中心泛起一层与阶段同色的柔光，随即消散
+                if dynamics.bloom > 0.001 {
+                    TransitionBloom(color: config.primaryShadow, opacity: dynamics.bloom)
+                }
             }
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.6), value: status)
         }
-        .onChange(of: status) { _, _ in
+        .onChange(of: status) { oldValue, _ in
+            // 记录上一阶段用于交叉淡出；重置 stateStart 使转场/脉动从 0 起算
+            previousStatus = oldValue
             withAnimation(.easeInOut(duration: 0.6)) {
                 stateStart = Date()
                 if status != .listening {
@@ -47,6 +76,29 @@ public struct BackgroundAtmosphere: View {
             let clamped = clamp(newLevel, min: 0, max: 1)
             smoothedAudioLevel = smoothedAudioLevel * 0.76 + clamped * 0.24
         }
+    }
+
+    // MARK: - 转场节奏
+
+    /// 交叉淡出进度（0→1，smoothstep）。首次出现（无上一阶段）返回 nil，不做淡出。
+    private func crossfadeProgress(elapsed: TimeInterval) -> Double? {
+        guard previousStatus != nil else { return nil }
+        return AtmosphereTransition.crossfade(elapsed: elapsed, duration: Self.crossfadeDuration)
+    }
+
+    /// 入场画面的不透明度：随交叉淡出淡入；首次出现或 reduceMotion 时直接满值。
+    private func incomingOpacity(elapsed: TimeInterval) -> Double {
+        guard !reduceMotion, previousStatus != nil else { return 1 }
+        return AtmosphereTransition.crossfade(elapsed: elapsed, duration: Self.crossfadeDuration)
+    }
+
+    /// 阶段入场的「呼吸」动力学：整层缩放 + 中心光晕强度。reduceMotion 时静止。
+    private func transitionDynamics(
+        status: RecorderStatus,
+        transitionElapsed te: TimeInterval
+    ) -> (scale: CGFloat, bloom: Double) {
+        guard !reduceMotion else { return (1, 0) }
+        return AtmosphereTransition.dynamics(status: status, transitionElapsed: te)
     }
 
     private func atmosphereConfig(
@@ -233,6 +285,35 @@ public struct BackgroundAtmosphere: View {
 
 #Preview {
     BackgroundAtmosphere(status: .listening, audioLevel: 0.7)
+}
+
+// MARK: - TransitionBloom
+
+/// 阶段入场/完成时中心泛起的一层同色柔光。纯 opacity + 径向渐变，不触发布局，
+/// 由调用方按呼吸曲线传入 opacity，随即消散——即「呼吸」的可见部分。
+private struct TransitionBloom: View {
+    let color: Color
+    let opacity: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            let maxDim = max(proxy.size.width, proxy.size.height)
+            RadialGradient(
+                colors: [
+                    color.opacity(0.55),
+                    color.opacity(0.14),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: maxDim * 0.62
+            )
+            .blendMode(.screen)
+            .opacity(opacity)
+            .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
+    }
 }
 
 // MARK: - AtmospherePlate
