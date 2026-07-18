@@ -36,44 +36,45 @@ final class AtmosphereTransitionTests: XCTestCase {
         XCTAssertEqual(AtmosphereTransition.crossfade(elapsed: 0, duration: 0), 1, accuracy: 0.0001)
     }
 
-    // MARK: - 入场「呼吸」（吸气）
+    // MARK: - 入场「呼吸」（less is more：柔光为主，不缩放）
 
-    func testActiveStagesInhaleThenReturn() {
+    func testActiveStagesBreatheWithGlowNoScale() {
         for status in [RecorderStatus.listening, .transcribing, .refining] {
             let start = AtmosphereTransition.dynamics(status: status, transitionElapsed: 0)
-            let peak = AtmosphereTransition.dynamics(status: status, transitionElapsed: 0.45)
-            let settled = AtmosphereTransition.dynamics(status: status, transitionElapsed: 0.9)
+            let peak = AtmosphereTransition.dynamics(status: status, transitionElapsed: 0.5)
+            let settled = AtmosphereTransition.dynamics(status: status, transitionElapsed: 1.0)
 
-            XCTAssertEqual(start.scale, 1, accuracy: 0.001, "\(status) 起点应静止")
-            XCTAssertGreaterThan(peak.scale, start.scale, "\(status) 中途应膨胀（吸气）")
-            XCTAssertGreaterThan(peak.bloom, 0.3, "\(status) 峰值应有明显光晕")
-            XCTAssertEqual(settled.scale, 1, accuracy: 0.001, "\(status) 呼吸结束回到静止")
-            XCTAssertLessThan(settled.bloom, 0.02, "\(status) 光晕消散")
+            XCTAssertEqual(start.scale, 1, accuracy: 0.0001, "\(status) 不缩放")
+            XCTAssertEqual(peak.scale, 1, accuracy: 0.0001, "\(status) 全程不缩放（去膨胀）")
+            XCTAssertEqual(start.bloom, 0, accuracy: 0.001, "\(status) 起点无柔光")
+            XCTAssertGreaterThan(peak.bloom, 0.15, "\(status) 中途有明显但克制的柔光")
+            XCTAssertLessThan(settled.bloom, 0.02, "\(status) 柔光消散")
         }
     }
 
-    func testInhaleScaleIsSubtle() {
-        // 「更大胆」但不失控：整层缩放峰值不应超过 2%
-        let peak = AtmosphereTransition.dynamics(status: .listening, transitionElapsed: 0.45)
-        XCTAssertLessThan(peak.scale, 1.02)
+    func testBreathGlowIsRestrained() {
+        // less is more：柔光峰值应克制，不超过 0.26
+        let peak = AtmosphereTransition.dynamics(status: .listening, transitionElapsed: 0.5)
+        XCTAssertLessThanOrEqual(peak.bloom, 0.26)
     }
 
-    // MARK: - 完成「安定内收」
+    // MARK: - 完成「安定内收」（极轻微）
 
     func testDoneSettlesInward() {
         let entry = AtmosphereTransition.dynamics(status: .done, transitionElapsed: 0)
-        let settled = AtmosphereTransition.dynamics(status: .done, transitionElapsed: 0.85)
+        let settled = AtmosphereTransition.dynamics(status: .done, transitionElapsed: 0.9)
 
-        XCTAssertGreaterThan(entry.scale, 1, "结果入场时轻微放大")
-        XCTAssertGreaterThan(entry.bloom, 0.3, "结果入场时光晕升起")
+        XCTAssertGreaterThan(entry.scale, 1, "结果入场时极轻微放大")
+        XCTAssertLessThanOrEqual(entry.scale, 1.02, "但收敛克制，不超过 2%")
+        XCTAssertGreaterThan(entry.bloom, 0.15, "结果入场时柔光升起")
         XCTAssertEqual(settled.scale, 1, accuracy: 0.001, "收拢到静止（安定）")
-        XCTAssertLessThan(settled.bloom, 0.02, "光晕沉降")
+        XCTAssertLessThan(settled.bloom, 0.02, "柔光沉降")
     }
 
     func testDoneScaleIsMonotonicDecreasing() {
         var last = CGFloat.greatestFiniteMagnitude
         for i in 0...10 {
-            let te = Double(i) / 10 * 0.85
+            let te = Double(i) / 10 * 0.9
             let s = AtmosphereTransition.dynamics(status: .done, transitionElapsed: te).scale
             XCTAssertLessThanOrEqual(s, last + 0.0001, "结果内收应单调收拢，不回弹")
             last = s

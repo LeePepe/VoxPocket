@@ -10,7 +10,8 @@ public struct BackgroundAtmosphere: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 阶段交叉淡出时长：色彩缓缓 morph 而非硬切，是「丝滑流转」的核心。
-    private static let crossfadeDuration: TimeInterval = 0.72
+    /// 调长以求更从容柔和（less is more）。
+    private static let crossfadeDuration: TimeInterval = 0.9
 
     public init(status: RecorderStatus = .idle, audioLevel: Double? = nil) {
         self.status = status
@@ -300,8 +301,8 @@ private struct TransitionBloom: View {
             let maxDim = max(proxy.size.width, proxy.size.height)
             RadialGradient(
                 colors: [
-                    color.opacity(0.55),
-                    color.opacity(0.14),
+                    color.opacity(0.32),
+                    color.opacity(0.08),
                     Color.clear
                 ],
                 center: .center,
