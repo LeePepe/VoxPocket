@@ -102,12 +102,15 @@ platform :ios do
     next_build = next_build_number(api_key)
 
     # 为 app + widget 拉 App Store distribution profile（付费 team）。
-    # 需要时自动在 Developer Portal 创建。
+    # provisioning_name 显式指定名字，与 project.yml 的 PROVISIONING_PROFILE_SPECIFIER 一致
+    # （否则 fastlane 自动生成 "<bundleid> AppStore"，与 project.yml 的人起名字对不上 → archive 找不到 profile）。
+    # 需要时自动在 Developer Portal 以该名字创建。
     app_profile = get_provisioning_profile(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
       team_id: TEAM_ID,
       platform: "ios",
+      provisioning_name: "VoxPocket App Store",
       skip_install: false
     )
     widget_profile = get_provisioning_profile(
@@ -115,6 +118,7 @@ platform :ios do
       app_identifier: WIDGET_IDENTIFIER,
       team_id: TEAM_ID,
       platform: "ios",
+      provisioning_name: "VoxPocket Widget App Store",
       skip_install: false
     )
 
@@ -161,11 +165,13 @@ platform :mac do
     next_build = next_build_number(api_key)
 
     # macOS 只有主 app（无 widget，widget 仅 iOS）。拉 macOS App Store profile。
+    # provisioning_name 与 project.yml 的 macosx specifier 一致。
     app_profile = get_provisioning_profile(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
       team_id: TEAM_ID,
       platform: "macos",
+      provisioning_name: "VoxPocket Mac App Store",
       skip_install: false
     )
 
