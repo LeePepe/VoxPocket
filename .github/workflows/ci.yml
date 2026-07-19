@@ -82,14 +82,24 @@ jobs:
       - name: Regenerate xcodeproj from project.yml
         working-directory: repo/VoxPocket
         run: xcodegen generate --spec project.yml
-      - name: Build app (no signing)
+      - name: Build app — macOS (no signing)
         working-directory: repo
         run: |
           set -o pipefail
           xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
-            build 2>&1 | tee /tmp/xcodebuild.log
+            build 2>&1 | tee /tmp/xcodebuild-macos.log
+      # iOS 也验证：VoxPocket 是多平台 target，TestFlight 发 iOS。CI 只验 macOS 曾让
+      # iOS 编译债长期潜伏（homeDirectoryForCurrentUser 等）直到发版才暴露。这里守住 iOS。
+      - name: Build app — iOS (no signing)
+        working-directory: repo
+        run: |
+          set -o pipefail
+          xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee /tmp/xcodebuild-ios.log
 
   # ---- Job C (REQUIRED)：lint + policy 门禁（服务端）----
   policy:
