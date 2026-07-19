@@ -105,10 +105,15 @@ jobs:
           # runner 跑在独立 launchd 会话，login keychain 默认锁定 → codesign 拿不到
           # Apple Distribution 私钥 → errSecInternalComponent。每次 build 前显式解锁。
           if [ -z "${KEYCHAIN_PASSWORD:-}" ]; then
-            echo "::error::KEYCHAIN_PASSWORD secret 未设置（gh secret set KEYCHAIN_PASSWORD）"; exit 1
+            echo "::error::KEYCHAIN_PASSWORD secret 未设置（gh secret set KEYCHAIN_PASSWORD -R LeePepe/VoxPocket）"; exit 1
           fi
           KC="$HOME/Library/Keychains/login.keychain-db"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KC"
+          # 单独判解锁结果：密码错(错误码 51)时给出明确指引，区别于"secret 没设"。
+          if ! security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KC" 2>/tmp/kc-unlock.err; then
+            echo "::error::解锁 login keychain 失败——KEYCHAIN_PASSWORD 的值不对（应为这台 runner Mac 的登录密码，注意别含尾随空格/换行）。重设：gh secret set KEYCHAIN_PASSWORD -R LeePepe/VoxPocket"
+            cat /tmp/kc-unlock.err >&2 || true
+            exit 1
+          fi
           security set-keychain-settings "$KC"
           EXISTING=$(security list-keychains -d user | sed -e 's/^[[:space:]]*"//' -e 's/"$//')
           security list-keychains -d user -s $(printf '%s\n' "$KC" $EXISTING | awk '!seen[$0]++')
