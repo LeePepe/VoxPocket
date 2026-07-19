@@ -595,8 +595,13 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             roots.append(caches.appendingPathComponent("huggingface/hub", isDirectory: true))
         }
 
+        // ~/.cache/huggingface 是 macOS/CLI 的 HuggingFace 缓存约定；iOS 沙盒无 home
+        // 目录（homeDirectoryForCurrentUser 在 iOS 不可用），且沙盒里本就不存在该路径，
+        // 故仅 macOS 追加这个候选。
+        #if os(macOS)
         let home = fileManager.homeDirectoryForCurrentUser
         roots.append(home.appendingPathComponent(".cache/huggingface/hub", isDirectory: true))
+        #endif
 
         return roots.map {
             $0.appendingPathComponent("models--argmaxinc--whisperkit-coreml", isDirectory: true)
