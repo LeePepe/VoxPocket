@@ -157,12 +157,28 @@ When creating or modifying any implementation plan, Claude MUST follow this loop
 
 This loop is Claude's responsibility. The user should never need to ask for a re-review.
 
-## Auto-Commit Workflow
+## Git Workflow (PR → main, enforced)
 
-After every logical change, Claude MUST:
-1. Build the affected package with `swift build` to verify no errors
-2. If build passes, immediately commit to `main` with a conventional commit message — no need to ask for permission
-3. Use `git add <specific files>` (never `git add -A`) and commit directly to `main`
+`main` is protected by a GitHub ruleset — **direct pushes are rejected**. All changes land via PR:
+
+1. Branch off `main` (`git checkout -b <type>/<slug>`).
+2. Make logical commits (`git add <specific files>`, never `git add -A`; conventional commit messages). Local hooks (`.local-review.yml` + layered gates) still run per-commit.
+3. Push the branch and open a PR to `main`.
+4. **CI required checks** must go green: `SPM <pkg>` (×5), `App target`, `Lint & policy`, `claude-review`.
+5. Non-draft PRs get **squash auto-merge** enabled automatically (`.github/workflows/auto-merge.yml`); GitHub merges once all required checks pass + branch is up to date (strict).
+
+Do not bypass with `--no-verify` or admin-merge; investigate red checks instead.
+
+## TestFlight Auto-Release
+
+`.github/workflows/testflight.yml` publishes `main` to TestFlight (iOS + macOS, internal group) via Fastlane on the self-hosted mac runner.
+
+- **Schedule**: every 6h (`cron "0 */6 * * *"`). Releases **only when `main` has new commits** since the last successful release (tracked by moving tag `testflight/last-released`; cumulative — nothing is lost if a run fails).
+- **Manual**: `gh workflow run testflight.yml -f force=true` to force a release ignoring the "no new commits" gate.
+- **Build number**: `latest_testflight_build_number + 1` (global max across versions/platforms; monotonic). `MARKETING_VERSION` lives in `VoxPocket/project.yml` (`settings.base`); bump it manually there. `CURRENT_PROJECT_VERSION` is a single base source, injected at archive time by fastlane `xcargs` — never hardcoded per target.
+- **Signing**: Release configs use **manual** signing + explicit `Apple Distribution` + App Store provisioning profiles (per-SDK for the multiplatform target). Debug stays Automatic for local dev.
+- **Required GitHub Secrets**: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `KEYCHAIN_PASSWORD` (`GITHUB_TOKEN` is built-in).
+- **One-time人工前置**: ASC App record (iOS + macOS platforms), the `.widget` App ID, and a TestFlight internal group named exactly `Internal` (or set `TESTFLIGHT_GROUPS`).
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
