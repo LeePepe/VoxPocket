@@ -11,7 +11,6 @@
 		08DB2234C39F8AF9CDFFC333 /* StartRecordingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B712E72C2083CF6273C87C /* StartRecordingIntent.swift */; };
 		1A76D389C98E4BDD802CD409 /* ServiceContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ECDBBC78A8F624C19D4B1F /* ServiceContainer.swift */; };
 		30DD3A9EAE5E989CCD68C633 /* VoxPocketUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CEEFA4650BE23A84A46F56 /* VoxPocketUITestsLaunchTests.swift */; };
-		4754CD05B924E4EDE528B6A3 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4CA3A932239127C1D4F7BBC4 /* VoxPocketUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBA06204946E030AFE05371 /* VoxPocketUITests.swift */; };
 		6E644F205F37B430742C1599 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73E018E9065109FF12437540 /* SwiftUI.framework */; };
 		6F6475AB782E4C903B7B99F1 /* TranscriberSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */; };
@@ -45,28 +44,7 @@
 			remoteGlobalIDString = 33B669CC114F7A017AE007FC;
 			remoteInfo = VoxPocket;
 		};
-		9EBDE172D535E7CEE1D60091 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 320FAE1BD658482CA2F68005 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = FD9E1C0C9635ECE7235611E0;
-			remoteInfo = VoxPocketWidgetExtension;
-		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		B197807BC1F4F48C50C13856 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				4754CD05B924E4EDE528B6A3 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		007D223D190CA65066429E21 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -91,7 +69,7 @@
 		C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VoxPocketWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickRecordingWindowLifecycleTests.swift; sourceTree = "<group>"; };
 		D9B4322401C88433C576C972 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		"TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_3AAB6530-558C-41B8-9496-D41E6DE6DD30" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -219,10 +197,10 @@
 			path = VoxPocketTests;
 			sourceTree = "<group>";
 		};
-		"TEMP_7F8AFE48-DCB0-4456-991D-88EE9C6C5022" /* VoxPocket */ = {
+		"TEMP_C19E116F-00D5-4973-B2BD-075B7D51930D" /* VoxPocket */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */,
+				"TEMP_3AAB6530-558C-41B8-9496-D41E6DE6DD30" /* Config.xcconfig */,
 			);
 			path = VoxPocket;
 			sourceTree = "<group>";
@@ -255,12 +233,10 @@
 				AFA8E14B2F34A0A40045A8E9 /* Sources */,
 				25C8A4CAF6A1DCBBDAEA979E /* Resources */,
 				293C58CBE90A08437938619D /* Frameworks */,
-				B197807BC1F4F48C50C13856 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				4496533F1F64C30D4BE2FD05 /* PBXTargetDependency */,
 			);
 			name = VoxPocket;
 			packageProductDependencies = (
@@ -417,12 +393,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		4496533F1F64C30D4BE2FD05 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			platformFilter = ios;
-			target = FD9E1C0C9635ECE7235611E0 /* VoxPocketWidgetExtension */;
-			targetProxy = 9EBDE172D535E7CEE1D60091 /* PBXContainerItemProxy */;
-		};
 		4ECBF9B7A30A49BB60C56829 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 33B669CC114F7A017AE007FC /* VoxPocket */;
@@ -494,7 +464,7 @@
 		};
 		489E40965BE35970213C29E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_3AAB6530-558C-41B8-9496-D41E6DE6DD30" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -736,7 +706,7 @@
 		};
 		C42F15964F9234EBB655F756 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_3AAB6530-558C-41B8-9496-D41E6DE6DD30" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

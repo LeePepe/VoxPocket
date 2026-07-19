@@ -47,8 +47,11 @@ targets:
       - package: AppleUITesting
         product: UITestingBridge
       # 内嵌 Widget 扩展（仅 iOS 平台）
-      - target: VoxPocketWidgetExtension
-        platformFilter: iOS
+      # TODO(widget-appid): widget App ID `com.leepepe.voxpocket.widget` 尚未在
+      # Developer Portal 注册，导致 TestFlight archive 拉不到其 App Store profile。
+      # 首发暂时摘掉 widget embed；注册 App ID 后取消下面注释 + Fastfile 恢复 widget profile。
+      # - target: VoxPocketWidgetExtension
+      #   platformFilter: iOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket
@@ -202,7 +205,8 @@ schemes:
     build:
       targets:
         VoxPocket: all
-        VoxPocketWidgetExtension: all
+        # TODO(widget-appid): widget App ID 未注册，首发暂不 build/archive widget。
+        # 注册后恢复：VoxPocketWidgetExtension: all
     run:
       config: Debug
       # 运行期凭据经由 xcconfig 注入：真实值在 gitignore 的 Secrets.xcconfig，

@@ -101,18 +101,12 @@ platform :ios do
     regenerate_project
     next_build = next_build_number(api_key)
 
-    # 为 app + widget 拉 App Store distribution profile（付费 team）。
-    # 需要时自动在 Developer Portal 创建。
+    # 为 app 拉 App Store distribution profile（付费 team）。需要时自动在 Portal 创建。
+    # TODO(widget-appid): widget App ID `com.leepepe.voxpocket.widget` 未注册，首发暂不带
+    # widget（project.yml 已摘掉 embed）。注册后恢复 widget_profile + export 映射。
     app_profile = get_provisioning_profile(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
-      team_id: TEAM_ID,
-      platform: "ios",
-      skip_install: false
-    )
-    widget_profile = get_provisioning_profile(
-      api_key: api_key,
-      app_identifier: WIDGET_IDENTIFIER,
       team_id: TEAM_ID,
       platform: "ios",
       skip_install: false
@@ -125,16 +119,15 @@ platform :ios do
       destination: "generic/platform=iOS",
       export_method: "app-store",
       export_team_id: TEAM_ID,
-      # 只注入 build number + team；签名走 project.yml Release config 的 Manual +
-      # 各 target 的 PROVISIONING_PROFILE_SPECIFIER（profile 已由上面拉取安装）。
+      # 只注入 build number + team；签名走 project.yml 的 Release config 的 Manual +
+      # PROVISIONING_PROFILE_SPECIFIER（profile 已由上面拉取安装）。
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID}",
       export_options: {
         manageAppVersionAndBuildNumber: false,
         signingStyle: "manual",
         teamID: TEAM_ID,
         provisioningProfiles: {
-          APP_IDENTIFIER => ENV.fetch("sigh_#{APP_IDENTIFIER}_appstore_profile-name", app_profile),
-          WIDGET_IDENTIFIER => ENV.fetch("sigh_#{WIDGET_IDENTIFIER}_appstore_profile-name", widget_profile)
+          APP_IDENTIFIER => ENV.fetch("sigh_#{APP_IDENTIFIER}_appstore_profile-name", app_profile)
         }
       },
       output_directory: ENV.fetch("RUNNER_TEMP", "/tmp"),
