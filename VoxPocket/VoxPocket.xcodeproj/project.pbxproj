@@ -91,7 +91,7 @@
 		C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VoxPocketWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickRecordingWindowLifecycleTests.swift; sourceTree = "<group>"; };
 		D9B4322401C88433C576C972 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		"TEMP_4DF4CFB1-710F-458F-BEA2-50512B11679F" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -219,10 +219,10 @@
 			path = VoxPocketTests;
 			sourceTree = "<group>";
 		};
-		"TEMP_00A16FA0-232C-402A-85E9-C1DEE92379CB" /* VoxPocket */ = {
+		"TEMP_7F8AFE48-DCB0-4456-991D-88EE9C6C5022" /* VoxPocket */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_4DF4CFB1-710F-458F-BEA2-50512B11679F" /* Config.xcconfig */,
+				"TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */,
 			);
 			path = VoxPocket;
 			sourceTree = "<group>";
@@ -325,7 +325,6 @@
 					};
 					33B669CC114F7A017AE007FC = {
 						DevelopmentTeam = 4Z8GG667QD;
-						ProvisioningStyle = Automatic;
 					};
 					6FDEA8FCEE42DCE8109F0F0A = {
 						DevelopmentTeam = 4Z8GG667QD;
@@ -333,7 +332,6 @@
 					};
 					FD9E1C0C9635ECE7235611E0 = {
 						DevelopmentTeam = 4Z8GG667QD;
-						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -442,7 +440,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -471,7 +468,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -498,12 +494,11 @@
 		};
 		489E40965BE35970213C29E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_4DF4CFB1-710F-458F-BEA2-50512B11679F" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
@@ -558,7 +553,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -618,6 +612,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 4Z8GG667QD;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -647,7 +642,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -707,6 +701,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 4Z8GG667QD;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -741,12 +736,12 @@
 		};
 		C42F15964F9234EBB655F756 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_4DF4CFB1-710F-458F-BEA2-50512B11679F" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_42125424-EC30-446D-A444-037A56353D2D" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
@@ -781,6 +776,8 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "VoxPocket App Store";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "VoxPocket Mac App Store";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -802,7 +799,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
@@ -832,7 +828,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
@@ -845,6 +842,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leepepe.voxpocket.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "VoxPocket Widget App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

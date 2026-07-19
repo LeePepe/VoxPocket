@@ -50,3 +50,14 @@ artifacts/suites/
 # Secrets.xcconfig holds real values and must never be committed.
 Secrets.xcconfig
 **/Secrets.xcconfig
+
+# Fastlane / TestFlight 发布产物与密钥（绝不提交）
+AuthKey_*.p8            # App Store Connect API key，仅本地/CI secret
+*.pkg                  # macOS 打包产物
+*.mobileprovision      # sigh 下载的 provisioning profile
+AppStore_*.mobileprovision
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+fastlane/README.md
+

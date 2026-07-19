@@ -1,0 +1,33 @@
+# gitleaks 配置 — CI required secret 扫描（policy job）
+#
+# 目的：防止真实密钥（Azure/Whisper/Kimi/Claude/Loki 等 API key、token）被硬编码
+# 提交进仓库。真实密钥走 gitignore 的 Secrets.xcconfig / 环境变量注入，绝不入库。
+#
+# 扩展 gitleaks 默认规则集，仅在下方追加项目特定 allowlist。
+# 加白名单前必须确认该匹配确为占位符 / 测试 fixture，绝不为真实密钥。
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "项目特定豁免：xcconfig 空默认值、测试 fixture、占位符"
+
+# 测试 fixture 假密钥（Fake/Mock provider 的假凭据）非真实密钥，按路径豁免。
+paths = [
+  '''.*Tests/.*\.swift$''',
+  '''.*Tests\.swift$''',
+  # Config.xcconfig 只含空默认值（WHISPER_KEY = 等），真实值在 gitignore 的 Secrets.xcconfig。
+  '''.*Config\.xcconfig$''',
+  # 本地 review 工具的 agent 配置含「什么是硬编码密钥」的示例片段（如 sk-abc123secret），
+  # 是教学示例非真实密钥。
+  '''\.claude/agents/.*''',
+  '''\.codex/agents/.*''',
+]
+
+# 占位符 / 测试模式，即使出现在非测试文件（文档、示例）也豁免。
+regexes = [
+  '''(?i)(your|example|placeholder|dummy|fake|sample|test)[_-]?(api[_-]?key|token|secret|password)''',
+  '''test-api-key-[0-9]+''',
+  '''sk-abc123secret''',
+  '''xx+''',
+]

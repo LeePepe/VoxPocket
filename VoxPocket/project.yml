@@ -13,6 +13,10 @@ settings:
     DEVELOPMENT_TEAM: 4Z8GG667QD
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: true
+    # 统一 build number 默认值，CI（fastlane xcargs CURRENT_PROJECT_VERSION=N）覆盖它。
+    # 必须只此一处——各 target 若自带硬编码值，会导致 app/extension build number 不一致，
+    # App Store 处理阶段拒收（CFBundleVersion of extension must match parent app）。
+    CURRENT_PROJECT_VERSION: "1"
 
 packages:
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
@@ -50,7 +54,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket
         PRODUCT_NAME: "$(TARGET_NAME)"
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_FILE: VoxPocket/Info.plist
         ENABLE_PREVIEWS: true
@@ -95,8 +98,15 @@ targets:
         # Debug 允许入站网络连接（本地遥测 / 调试），Release 关闭
         Debug:
           ENABLE_INCOMING_NETWORK_CONNECTIONS: true
+        # Release/CI archive 走 manual + 显式 App Store profile（fastlane 拉取安装）。
+        # 单 multiplatform target：iOS 与 macOS 各用一个 App Store profile，按 sdk 区分。
+        # Debug 继承顶层 Automatic，本地 Xcode 调试不受影响。
         Release:
           ENABLE_INCOMING_NETWORK_CONNECTIONS: false
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": VoxPocket App Store
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": VoxPocket Mac App Store
 
   # ── Widget 扩展：仅 iOS ──
   VoxPocketWidgetExtension:
@@ -116,7 +126,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.widget
         PRODUCT_NAME: "$(TARGET_NAME)"
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_FILE: ../VoxPocketWidget/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: VoxPocketWidget
@@ -135,6 +144,13 @@ targets:
           - "$(inherited)"
           - "@executable_path/Frameworks"
           - "@executable_path/../../Frameworks"
+      configs:
+        # Release/CI archive 走 manual + 显式 App Store profile（fastlane 拉取安装）。
+        # widget 仅 iOS。Debug 继承顶层 Automatic。
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: VoxPocket Widget App Store
 
   # ── 单元测试 ──
   VoxPocketTests:
@@ -149,7 +165,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.tests
         PRODUCT_NAME: "$(TARGET_NAME)"
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         STRING_CATALOG_GENERATE_SYMBOLS: false
         SWIFT_EMIT_LOC_STRINGS: false
@@ -173,7 +188,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.uitests
         PRODUCT_NAME: "$(TARGET_NAME)"
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         STRING_CATALOG_GENERATE_SYMBOLS: false
         SWIFT_EMIT_LOC_STRINGS: false

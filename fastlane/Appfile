@@ -1,0 +1,5 @@
+app_identifier("com.leepepe.voxpocket")
+team_id("4Z8GG667QD")
+
+# Auth is via App Store Connect API key (see Fastfile / testflight.yml) — no
+# apple_id / password needed, so none is set here.
