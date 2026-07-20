@@ -1,7 +1,7 @@
 name: testflight
 
 # 定时把 main 打包上传 TestFlight（内部测试），iOS + macOS 双平台。
-#   - schedule: 每 6 小时检查一次；仅当 main 自上次成功发布后有新 commit 才 build。
+#   - schedule: 每天凌晨 3 点（CST）检查一次；仅当 main 自上次成功发布后有新 commit 才 build。
 #     "上次发布点" 记录在 moving tag `testflight/last-released`（累积式：build 失败
 #     或机器关机期间不丢 commit，下次开机的 cron 会把攒的一起发）。
 #   - workflow_dispatch: 手动触发兜底，force=true 可忽略"无新提交"检查强制发。
@@ -14,7 +14,7 @@ name: testflight
 
 on:
   schedule:
-    - cron: "0 */6 * * *" # 每 6 小时（UTC）
+    - cron: "0 19 * * *" # 每天 19:00 UTC = 03:00 CST
   workflow_dispatch:
     inputs:
       force:
