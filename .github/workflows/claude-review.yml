@@ -34,11 +34,15 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     steps:
-      - name: Checkout PR head
+      # 安全:checkout **base 分支**(可信),而非 PR head。评审脚本必须来自 base,
+      # 否则同仓库分支 PR 能改 scripts/ci/claude-review.sh 在维护者机器上跑任意
+      # 代码(fork 已被上面的 if 挡住,但同仓库分支绕不过)。PR 的实际改动由脚本
+      # 内部 `git fetch` + `git diff BASE...HEAD` 当纯文本数据取,不执行 PR 代码。
+      - name: Checkout base (trusted script source)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
 
       - name: Run local claude review (gate)
         env:
