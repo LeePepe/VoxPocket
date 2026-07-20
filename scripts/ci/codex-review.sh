@@ -49,14 +49,31 @@ post_sticky() {
 }
 
 # ---- 取 diff ------------------------------------------------------------
-git fetch --no-tags --depth=100 origin "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || true
+# 工作树是 checkout base 的,PR 的 HEAD 对象只能靠这次 fetch 才存在。因此 fetch
+# 失败不能吞掉——否则 HEAD 取不到 → diff 为空 → 被误判成"无 diff pass",一次网络
+# 抖动就能让 review 门在未审 diff 的情况下放绿灯(fail-open)。这里 fail-closed:
+# fetch 失败、或 fetch 后 BASE/HEAD 对象仍缺失,一律 exit 1(宁可卡住不放行)。
+if ! git fetch --no-tags --depth=100 origin "$BASE_SHA" "$HEAD_SHA" 2>/tmp/codex-fetch.err; then
+    echo "[codex-review] ❌ git fetch 失败,无法取 PR diff"; cat /tmp/codex-fetch.err >&2 || true
+    post_sticky "$STICKY
+⚠️ 自动 review 未能取到 PR diff(git fetch 失败)。为安全起见 **暂不放行**,请重跑。"
+    exit 1
+fi
+if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || ! git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
+    echo "[codex-review] ❌ fetch 后 BASE/HEAD 对象仍缺失,无法可靠取 diff"
+    post_sticky "$STICKY
+⚠️ 自动 review 无法取到完整 PR 提交对象。为安全起见 **暂不放行**,请重跑。"
+    exit 1
+fi
 DIFF="$(git diff "$BASE_SHA...$HEAD_SHA" 2>/dev/null || git diff "$BASE_SHA..$HEAD_SHA")"
 CHANGED="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" 2>/dev/null || git diff --name-only "$BASE_SHA..$HEAD_SHA")"
 
+# 此处 DIFF 为空 = BASE/HEAD 对象都在但两者间确无差异(罕见但合法,如仅改 commit
+# message 的空 diff PR)。既然对象已确认存在,空 diff 是真·无改动,可安全 pass。
 if [ -z "$DIFF" ]; then
     post_sticky "$STICKY
 ✅ 无代码 diff,自动 review 通过。"
-    echo "[codex-review] empty diff; pass"
+    echo "[codex-review] empty diff (对象已验证存在); pass"
     exit 0
 fi
 
