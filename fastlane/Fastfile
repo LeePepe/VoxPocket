@@ -183,13 +183,16 @@ platform :mac do
       export_method: "app-store",
       export_team_id: TEAM_ID,
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID}",
-      # xcpretty 会吞掉 export/validation 阶段的真实 ITMS 错误(mac lane IPA invalid
-      # 时定位不到根因);关掉它拿原始 xcodebuild 输出。
-      disable_xcpretty: true,
       export_options: {
         manageAppVersionAndBuildNumber: false,
         signingStyle: "manual",
         teamID: TEAM_ID,
+        # macOS App Store 的 .pkg 用 installer 证书签名。不显式指定时 xcodebuild
+        # 会去 provisioning profile 里找 installer 证书、找不到就报
+        # "Provisioning profile ... doesn't include signing certificate
+        # '3rd Party Mac Developer Installer'" → export 失败(IPA invalid)。
+        # 显式指定钥匙串里的 installer 证书即可(profile 本不含 installer 证书)。
+        installerSigningCertificate: "3rd Party Mac Developer Installer: Tianpei Li (4Z8GG667QD)",
         provisioningProfiles: {
           APP_IDENTIFIER => ENV.fetch("sigh_#{APP_IDENTIFIER}_appstore_profile-name", app_profile)
         }
