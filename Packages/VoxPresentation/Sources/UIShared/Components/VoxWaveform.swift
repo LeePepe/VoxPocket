@@ -7,6 +7,7 @@ import SwiftUI
 /// - `.rest`：静止在中位高度。
 ///
 /// 全程尊重 `accessibilityReduceMotion`：关闭动画，静止在中位高度。
+@MainActor
 public struct VoxWaveform: View {
     public enum Mode: Equatable {
         case live(level: Double)
