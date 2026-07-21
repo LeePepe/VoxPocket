@@ -39,6 +39,13 @@ public final class QuickRecordingViewModel: ObservableObject {
     @Published public var liveTranscription: String = ""
     @Published public var refinedText: String = ""
     @Published public var errorMessage: String?
+    /// 归一化音频电平（0…1），驱动灵动岛波形；非录音时为 nil。
+    @Published public var audioLevel: Float = 0
+
+    /// 供波形使用的归一化电平：仅 listening 时有值，其余状态返回 nil（波形转不定态/静止）。
+    public var normalizedAudioLevel: Double? {
+        recorderStatus == .listening ? Double(max(0, min(1, audioLevel))) : nil
+    }
 
     /// 完成回调（参数为最终文本）
     public var onComplete: ((String) -> Void)?
@@ -103,6 +110,11 @@ public final class QuickRecordingViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // 音频电平 → 波形
+        recordingUseCase.audioLevelPublisher
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$audioLevel)
 
         transcriptionUseCase.liveTextPublisher
             .receive(on: DispatchQueue.main)

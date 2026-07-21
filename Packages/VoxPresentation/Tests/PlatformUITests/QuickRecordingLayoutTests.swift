@@ -1,18 +1,36 @@
 #if os(macOS)
 import XCTest
+import UIShared
 @testable import PlatformUI
 
 final class QuickRecordingLayoutTests: XCTestCase {
-    func testQuickRecordingLayoutUsesCompactPillSize() {
-        XCTAssertEqual(QuickRecordingLayout.pillWidth, 132)
-        XCTAssertEqual(QuickRecordingLayout.pillHeight, 34)
-        XCTAssertEqual(QuickRecordingLayout.panelWidth, QuickRecordingLayout.pillWidth)
-        XCTAssertEqual(QuickRecordingLayout.panelHeight, QuickRecordingLayout.pillHeight)
+    func testIslandCollapsesWhenIdle() {
+        let idle = QuickRecordingLayout.islandSize(for: .idle)
+        XCTAssertEqual(idle.width, 148)
+        XCTAssertEqual(idle.height, 36)
+        XCTAssertEqual(QuickRecordingLayout.islandCorner(for: .idle), 18)
     }
 
-    func testQuickRecordingTextOverlayUsesCompactInsets() {
-        XCTAssertEqual(QuickRecordingLayout.textHorizontalInset, 12)
-        XCTAssertEqual(QuickRecordingLayout.textLeftFadeWidth, 24)
+    func testIslandExpandsWhileActive() {
+        for status in [RecorderStatus.listening, .transcribing, .refining] {
+            let size = QuickRecordingLayout.islandSize(for: status)
+            XCTAssertEqual(size.width, 340, "\(status) width")
+            XCTAssertEqual(size.height, 68, "\(status) height")
+            XCTAssertEqual(QuickRecordingLayout.islandCorner(for: status), 28, "\(status) corner")
+        }
+    }
+
+    func testIslandNeverExceedsHostPanel() {
+        for status in RecorderStatus.allCases {
+            let size = QuickRecordingLayout.islandSize(for: status)
+            XCTAssertLessThanOrEqual(size.width, QuickRecordingLayout.panelWidth, "\(status) width fits host")
+            XCTAssertLessThanOrEqual(size.height, QuickRecordingLayout.panelHeight, "\(status) height fits host")
+        }
+    }
+
+    func testHostPanelEnvelope() {
+        XCTAssertEqual(QuickRecordingLayout.panelWidth, 380)
+        XCTAssertEqual(QuickRecordingLayout.panelHeight, 132)
     }
 
     func testQuickRecordingTopInsetMovesPanelUp() {
