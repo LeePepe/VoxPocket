@@ -183,6 +183,9 @@ platform :mac do
       export_method: "app-store",
       export_team_id: TEAM_ID,
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID}",
+      # xcpretty 会吞掉 export/validation 阶段的真实 ITMS 错误(mac lane IPA invalid
+      # 时定位不到根因);关掉它拿原始 xcodebuild 输出。
+      disable_xcpretty: true,
       export_options: {
         manageAppVersionAndBuildNumber: false,
         signingStyle: "manual",
