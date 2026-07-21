@@ -1,17 +1,18 @@
-name: claude-review
+name: codex-review
 
-# 自动 code review，跑在维护者本机的 self-hosted runner 上，用已登录订阅的
-# 本地 `claude` CLI（不需要 ANTHROPIC_API_KEY）。
+# 自动 code review(codex)——跑在维护者本机的 self-hosted runner 上,用已登录订阅的
+# 本地 `codex` CLI(不需要 API key)。
 #
-# 这是默认分支的 required status check：job 失败（发现 critical/high）→ 本 check
-# 红 → 挡住 auto-merge。
+# 与 claude-review 并列的第二道独立门(不同模型交叉验证)。任一 review 判 blocker
+# 即挡合并(OR 逻辑)。这是默认分支的 required status check:job 失败(发现
+# critical/high)→ 本 check 红 → 挡住 auto-merge。
 #
-# 安全（public repo + self-hosted 的高危组合）：
-#   - 本 workflow 在 `pull_request` 上由 **base 分支的 YAML** 评估，fork 改不到。
-#     因此把"是否执行 PR 代码"的判断放在这里的 job-level `if`（可信边界），
+# 安全(public repo + self-hosted 的高危组合):
+#   - 本 workflow 在 `pull_request` 上由 **base 分支的 YAML** 评估,fork 改不到。
+#     因此把"是否执行 PR 代码"的判断放在这里的 job-level `if`(可信边界),
 #     绝不放进被 checkout 的脚本里——脚本本身是 PR 可控内容。
-#   - fork PR（head.repo != 本仓库）→ 整个执行 job 被 `if` 跳过，PR 代码一行都不在
-#     本机跑。改由 fork-notice job 上报同名 check（否则 required check 永卡 pending）。
+#   - fork PR(head.repo != 本仓库)→ 整个执行 job 被 `if` 跳过,PR 代码一行都不在
+#     本机跑。改由 fork-notice job 上报同名 check(否则 required check 永卡 pending)。
 #   - 仓库设置应把 outside collaborators 的 workflow 设为需人工批准。
 
 on:
@@ -23,19 +24,19 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: claude-review-${{ github.event.pull_request.number }}
+  group: codex-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  # 同仓库分支 PR：在 self-hosted runner 上执行 review。
-  # 可信边界 = 这个 `if`（来自 base 分支 YAML，fork 无法篡改）。
-  claude-review:
+  # 同仓库分支 PR:在 self-hosted runner 上执行 review。
+  # 可信边界 = 这个 `if`(来自 base 分支 YAML,fork 无法篡改)。
+  codex-review:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     steps:
       # 安全:checkout **base 分支**(可信),而非 PR head。评审脚本必须来自 base,
-      # 否则同仓库分支 PR 能改 scripts/ci/claude-review.sh 在维护者机器上跑任意
+      # 否则同仓库分支 PR 能改 scripts/ci/codex-review.sh 在维护者机器上跑任意
       # 代码(fork 已被上面的 if 挡住,但同仓库分支绕不过)。PR 的实际改动由脚本
       # 内部 `git fetch` + `git diff BASE...HEAD` 当纯文本数据取,不执行 PR 代码。
       - name: Checkout base (trusted script source)
@@ -44,18 +45,18 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.base.sha }}
 
-      - name: Run local claude review (gate)
+      - name: Run local codex review (gate)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REPO: ${{ github.repository }}
-        run: scripts/ci/claude-review.sh
+        run: scripts/ci/codex-review.sh
 
-  # fork PR：不在本机执行任何 PR 代码。跑在 GitHub 托管 runner 上，只发提示 +
-  # 让同名 check 成功上报（否则 required check 永远 pending 卡住 PR）。
-  claude-review-fork:
+  # fork PR:不在本机执行任何 PR 代码。跑在 GitHub 托管 runner 上,只发提示 +
+  # 让同名 check 成功上报(否则 required check 永远 pending 卡住 PR)。
+  codex-review-fork:
     if: github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     permissions:
@@ -67,4 +68,4 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body \
-            "🔒 自动 review 已跳过 —— 来自 fork 的 PR 不在维护者机器上执行。请人工 review 后合并。" || true
+            "🔒 codex 自动 review 已跳过 —— 来自 fork 的 PR 不在维护者机器上执行。请人工 review 后合并。" || true

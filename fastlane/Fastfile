@@ -187,6 +187,12 @@ platform :mac do
         manageAppVersionAndBuildNumber: false,
         signingStyle: "manual",
         teamID: TEAM_ID,
+        # macOS App Store 的 .pkg 用 installer 证书签名。不显式指定时 xcodebuild
+        # 会去 provisioning profile 里找 installer 证书、找不到就报
+        # "Provisioning profile ... doesn't include signing certificate
+        # '3rd Party Mac Developer Installer'" → export 失败(IPA invalid)。
+        # 显式指定钥匙串里的 installer 证书即可(profile 本不含 installer 证书)。
+        installerSigningCertificate: "3rd Party Mac Developer Installer: Tianpei Li (4Z8GG667QD)",
         provisioningProfiles: {
           APP_IDENTIFIER => ENV.fetch("sigh_#{APP_IDENTIFIER}_appstore_profile-name", app_profile)
         }
