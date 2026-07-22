@@ -243,8 +243,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             transcriptionEndTime = now
             liveTranscription = rawTranscription
             logger.log(.debug, "Recording stopped", context: [
-                "transcription_length": rawTranscription.count,
-                "transcription_preview": String(rawTranscription.prefix(30))
+                "transcription_length": rawTranscription.count
             ])
             if let start = sessionStartTime {
                 let durationMs = Int(now.timeIntervalSince(start) * 1000)
@@ -316,15 +315,15 @@ public final class QuickRecordingViewModel: ObservableObject {
         settleMaxWait: TimeInterval = 0.8
     ) async -> String {
         if let finalText = await finalResultTask.value {
-            logger.debug("waitForCompletedTranscription: got finalResult '\(finalText.prefix(30))'")
+            logger.debug("waitForCompletedTranscription: got finalResult (length=\(finalText.count))")
             return finalText
         }
 
-        logger.debug("waitForCompletedTranscription: finalResultTask timed out, falling back to settle (liveTranscription='\(self.liveTranscription.prefix(30))')")
+        logger.debug("waitForCompletedTranscription: finalResultTask timed out, falling back to settle (liveTranscription length=\(self.liveTranscription.count))")
         let settled = await waitForTranscriptionToSettle(maxWait: settleMaxWait)
         if !settled.isEmpty { return settled }
         if !liveSnapshot.isEmpty {
-            logger.debug("waitForCompletedTranscription: settled empty, using liveSnapshot '\(liveSnapshot.prefix(30))'")
+            logger.debug("waitForCompletedTranscription: settled empty, using liveSnapshot (length=\(liveSnapshot.count))")
         }
         return liveSnapshot
     }
@@ -342,7 +341,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                             let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
                             if !text.isEmpty {
                                 let elapsed = Date().timeIntervalSince(startTime)
-                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s — '\(text.prefix(30))'")
+                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s (length=\(text.count))")
                                 return text
                             }
                         }
@@ -496,8 +495,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         completeCallCount += 1
         logger.log(.debug, "completeWithText called", context: [
             "call_count": completeCallCount,
-            "text_length": text.count,
-            "text_preview": String(text.prefix(20))
+            "text_length": text.count
         ])
         guard !text.isEmpty else {
             recorderStatus = .idle
