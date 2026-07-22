@@ -6,17 +6,26 @@ import UIShared
 final class QuickRecordingLayoutTests: XCTestCase {
     func testIslandCollapsesWhenIdle() {
         let idle = QuickRecordingLayout.islandSize(for: .idle)
-        XCTAssertEqual(idle.width, 148)
-        XCTAssertEqual(idle.height, 36)
-        XCTAssertEqual(QuickRecordingLayout.islandCorner(for: .idle), 18)
+        XCTAssertEqual(idle.width, 72)
+        XCTAssertEqual(idle.height, 28)
+        XCTAssertEqual(QuickRecordingLayout.islandCorner(for: .idle), 14)
     }
 
     func testIslandExpandsWhileActive() {
         for status in [RecorderStatus.listening, .transcribing, .refining] {
             let size = QuickRecordingLayout.islandSize(for: status)
-            XCTAssertEqual(size.width, 340, "\(status) width")
-            XCTAssertEqual(size.height, 68, "\(status) height")
-            XCTAssertEqual(QuickRecordingLayout.islandCorner(for: status), 28, "\(status) corner")
+            XCTAssertEqual(size.width, 120, "\(status) width")
+            XCTAssertEqual(size.height, 54, "\(status) height")
+            XCTAssertEqual(QuickRecordingLayout.islandCorner(for: status), 22, "\(status) corner")
+        }
+    }
+
+    func testIslandTerminalStatesAreCompact() {
+        for status in [RecorderStatus.done, .error] {
+            let size = QuickRecordingLayout.islandSize(for: status)
+            XCTAssertEqual(size.width, 72, "\(status) width")
+            XCTAssertEqual(size.height, 44, "\(status) height")
+            XCTAssertEqual(QuickRecordingLayout.islandCorner(for: status), 20, "\(status) corner")
         }
     }
 
