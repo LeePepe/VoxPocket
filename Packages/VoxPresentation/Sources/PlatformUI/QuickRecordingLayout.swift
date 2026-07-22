@@ -7,28 +7,30 @@ import UIShared
 /// 岛是**一个**形状，其尺寸/圆角是 `RecorderStatus` 的纯函数，随状态用弹簧形变
 /// （收起 ↔ 展开，借鉴 Dynamic Island 的语法）。宿主浮窗固定为最大包络
 /// （`panelWidth`×`panelHeight`），岛在其中居中变形，避免 NSPanel 反复重排。
+///
+/// 纯视觉状态语言（MY-1302）：展开态不再承载文字列，因此包络较旧版更紧凑。
 public enum QuickRecordingLayout {
     /// 岛的尺寸包络（随状态形变）。
     public static func islandSize(for status: RecorderStatus) -> CGSize {
         switch status {
         case .idle:
-            return CGSize(width: 148, height: 36)
+            return CGSize(width: 72, height: 28)
         case .listening, .transcribing, .refining:
-            return CGSize(width: 340, height: 68)
+            return CGSize(width: 120, height: 54)
         case .done:
-            return CGSize(width: 190, height: 48)
+            return CGSize(width: 72, height: 44)
         case .error:
-            return CGSize(width: 320, height: 60)
+            return CGSize(width: 72, height: 44)
         }
     }
 
     /// 岛的圆角（随状态形变，恒为超椭圆胶囊感）。
     public static func islandCorner(for status: RecorderStatus) -> CGFloat {
         switch status {
-        case .idle: return 18
-        case .listening, .transcribing, .refining: return 28
-        case .done: return 24
-        case .error: return 24
+        case .idle: return 14
+        case .listening, .transcribing, .refining: return 22
+        case .done: return 20
+        case .error: return 20
         }
     }
 
@@ -46,10 +48,6 @@ public enum QuickRecordingLayout {
     /// 内容左内边距。
     public static let contentLeadingInset: CGFloat = 14
     /// 内容右内边距。
-    public static let contentTrailingInset: CGFloat = 16
-    /// 波形与文字列的间距。
-    public static let waveformTextGap: CGFloat = 10
-    /// 左侧旧文字渐出区域宽度。
-    public static let textLeftFadeWidth: CGFloat = 24
+    public static let contentTrailingInset: CGFloat = 14
 }
 #endif
