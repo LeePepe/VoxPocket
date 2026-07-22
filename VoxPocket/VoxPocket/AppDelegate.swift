@@ -42,6 +42,30 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
         logger.debug("Application did finish launching")
 
+        // 单实例保护：若已有 VoxPocket 实例在跑（例如已装的 /Applications 版 +
+        // 从 Xcode DerivedData 启动的 Debug 版），激活已有实例并终止自己，
+        // 避免两个实例都注册 Fn 全局热键导致按一次弹两个 panel。
+        // 同一路径的实例由 Info.plist 的 LSMultipleInstancesProhibited 拦截；
+        // 这段是不同路径 / 不同 build 场景的兜底。
+        //
+        // 例外：在 XCTest / SwiftPM 测试宿主下运行时不做单实例检查，
+        // 否则测试宿主会被开发机上已跑着的 VoxPocket 误当作重复实例杀掉，
+        // 导致 test runner 连接失败。
+        let env = ProcessInfo.processInfo.environment
+        let isRunningTests = env["XCTestConfigurationFilePath"] != nil
+            || env["XCTestBundlePath"] != nil
+            || env["XCTestSessionIdentifier"] != nil
+        if !isRunningTests,
+           let bundleId = Bundle.main.bundleIdentifier,
+           case .another(let pid) = SingleInstanceGuard.evaluateAndActivateExisting(bundleId: bundleId) {
+            logger.log(.debug, "Another VoxPocket instance is running, activating it and quitting self", context: [
+                "existing_pid": pid,
+                "self_pid": ProcessInfo.processInfo.processIdentifier
+            ])
+            NSApp.terminate(nil)
+            return
+        }
+
         // 初始化服务
         setupServices()
 
