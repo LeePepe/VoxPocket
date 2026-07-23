@@ -71,6 +71,7 @@ let package = Package(
                 .product(name: "UseCases", package: "VoxApplication"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+                .product(name: "LokiKit", package: "LokiKit"),
             ]
         ),
         .testTarget(
