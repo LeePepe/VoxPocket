@@ -2,6 +2,7 @@
 import XCTest
 import Combine
 import Foundation
+import Synchronization
 import PlatformAdapters
 import LLMKit
 import TranscriptionKit
@@ -84,15 +85,18 @@ private struct CapturedLogEntry: Sendable {
     let context: [String: String]
 }
 
-private final class CapturingLogger: LokiKit.Logger, @unchecked Sendable {
-    var minimumLevel: LogLevel = .debug
-    private let lock = NSLock()
-    private var _entries: [CapturedLogEntry] = []
-
-    var entries: [CapturedLogEntry] {
-        lock.lock(); defer { lock.unlock() }
-        return _entries
+private final class CapturingLogger: LokiKit.Logger {
+    // 宪法约束: minimumLevel 需可读写但 Logger 是 Sendable — 用 Mutex 守护。
+    private let _minimumLevel = Mutex<LogLevel>(.debug)
+    var minimumLevel: LogLevel {
+        get { _minimumLevel.withLock { $0 } }
+        set { _minimumLevel.withLock { $0 = newValue } }
     }
+
+    // 共享可变状态用 Synchronization.Mutex, 禁止 ad-hoc NSLock (constitution line 30).
+    private let _entries = Mutex<[CapturedLogEntry]>([])
+
+    var entries: [CapturedLogEntry] { _entries.withLock { $0 } }
 
     func log(
         _ level: LogLevel,
@@ -102,9 +106,7 @@ private final class CapturingLogger: LokiKit.Logger, @unchecked Sendable {
         line: Int
     ) {
         let msg = message()
-        lock.lock()
-        _entries.append(CapturedLogEntry(level: level, message: msg, context: [:]))
-        lock.unlock()
+        _entries.withLock { $0.append(CapturedLogEntry(level: level, message: msg, context: [:])) }
     }
 
     func log(
@@ -116,19 +118,20 @@ private final class CapturingLogger: LokiKit.Logger, @unchecked Sendable {
         line: Int
     ) {
         let msg = message()
-        // Stringify context values eagerly to preserve them across the assertion boundary.
+        // Stringify context values eagerly to preserve them across the assertion boundary
+        // (also drops the non-Sendable [String: Any] before it crosses the Mutex boundary).
         var stringified: [String: String] = [:]
         for (k, v) in context {
             stringified[k] = String(describing: v)
         }
-        lock.lock()
-        _entries.append(CapturedLogEntry(level: level, message: msg, context: stringified))
-        lock.unlock()
+        _entries.withLock { $0.append(CapturedLogEntry(level: level, message: msg, context: stringified)) }
     }
 }
 
 // MARK: - Test doubles (locally scoped to avoid clashing with other test files)
 
+/// `@unchecked Sendable` justified: Combine bridging — all state is held in Combine subjects
+/// (`CurrentValueSubject`), which provide their own thread-safety.
 private final class FakeRecordingUseCaseP: RecordingUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
@@ -146,23 +149,30 @@ private final class FakeRecordingUseCaseP: RecordingUseCase, @unchecked Sendable
     func requestPermission() async -> Bool { true }
 }
 
+/// `@unchecked Sendable` justified: Combine bridging for publishers, `Mutex` for the two
+/// non-publisher mutable fields (`_currentLanguage`, `_snapshotGateActive`) per constitution
+/// line 30 (no ad-hoc locks).
 private final class FakeTranscriptionUseCaseP: TranscriptionUseCase, @unchecked Sendable {
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    private var _currentLanguage = Locale(identifier: "zh-Hans")
+    private let snapshotSubject = PassthroughSubject<String, Never>()
+
+    private let _currentLanguage = Mutex<Locale>(Locale(identifier: "zh-Hans"))
+    private let _snapshotGateActive = Mutex<Bool>(false)
 
     var liveTextPublisher: AnyPublisher<String, Never> { liveTextSubject.eraseToAnyPublisher() }
     var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> { finalResultSubject.eraseToAnyPublisher() }
-    var currentLanguage: Locale { _currentLanguage }
-    var supportedLanguages: [Locale] { [_currentLanguage] }
+    var snapshotPublisher: AnyPublisher<String, Never> { snapshotSubject.eraseToAnyPublisher() }
+    var currentLanguage: Locale { _currentLanguage.withLock { $0 } }
+    var supportedLanguages: [Locale] { [currentLanguage] }
+    var snapshotGateActive: Bool {
+        get { _snapshotGateActive.withLock { $0 } }
+        set { _snapshotGateActive.withLock { $0 = newValue } }
+    }
 
-    func setLanguage(_ locale: Locale) { _currentLanguage = locale }
+    func setLanguage(_ locale: Locale) { _currentLanguage.withLock { $0 = locale } }
     func commitCurrentTranscription() async throws {}
     func clearLiveText() { liveTextSubject.send("") }
-
-    private let snapshotSubject = PassthroughSubject<String, Never>()
-    var snapshotPublisher: AnyPublisher<String, Never> { snapshotSubject.eraseToAnyPublisher() }
-    var snapshotGateActive: Bool = false
 
     func sendLiveText(_ text: String) { liveTextSubject.send(text) }
     func sendFinalText(_ text: String) {
@@ -172,12 +182,14 @@ private final class FakeTranscriptionUseCaseP: TranscriptionUseCase, @unchecked 
                 type: .final,
                 confidence: nil,
                 timestamp: Date(),
-                locale: _currentLanguage
+                locale: currentLanguage
             )
         )
     }
 }
 
+/// `@unchecked Sendable` justified: Combine bridging — mutable state held in `CurrentValueSubject`;
+/// `streamedChunks` is an immutable `let`.
 private final class FakeRefinementUseCaseP: RefinementUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RefinementState, Never>(.idle)
     private let streamedChunks: [String]
@@ -213,10 +225,13 @@ private final class FakeRefinementUseCaseP: RefinementUseCase, @unchecked Sendab
     }
 }
 
+/// `@unchecked Sendable` justified: `Mutex` guards the single mutable field (`copiedText`);
+/// no ad-hoc locks (constitution line 30).
 private final class FakeClipboardServiceP: ClipboardService, @unchecked Sendable {
-    private(set) var copiedText: String?
+    private let _copiedText = Mutex<String?>(nil)
+    var copiedText: String? { _copiedText.withLock { $0 } }
     var hasText: Bool { false }
-    func copy(_ text: String) { copiedText = text }
+    func copy(_ text: String) { _copiedText.withLock { $0 = text } }
     func paste() -> String? { nil }
     func clear() {}
     func simulatePaste() async throws {}
