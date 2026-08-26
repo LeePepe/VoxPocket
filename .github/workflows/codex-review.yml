@@ -9,4 +9,3 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "Legacy Codex review workflow is paused."
-
