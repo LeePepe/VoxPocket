@@ -7,7 +7,8 @@ name: codex-review
 # cross-check。Codex 发现 critical/high → 本 check 红 → 挡住 auto-merge。
 #
 # 安全(public repo + self-hosted 的高危组合):
-#   - 本 workflow 使用 `pull_request_target`,由 **base 分支的 YAML** 评估,fork 改不到。
+#   - 当前仍用 `pull_request` 保持 required-check 连续性;job checkout 可信 base
+#     脚本。workflow YAML 的同仓库分支控制面迁移另行处理。
 #     因此把"是否执行 PR 代码"的判断放在这里的 job-level `if`(可信边界),
 #     绝不放进被 checkout 的脚本里——脚本本身是 PR 可控内容。
 #   - fork PR(head.repo != 本仓库)→ 整个执行 job 被 `if` 跳过,PR 代码一行都不在
@@ -15,7 +16,7 @@ name: codex-review
 #   - 仓库设置应把 outside collaborators 的 workflow 设为需人工批准。
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
 
 permissions:
