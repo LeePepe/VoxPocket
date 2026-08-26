@@ -1,8 +1,7 @@
 name: codex-review-target
 
 # Trusted replacement for codex-review. pull_request_target evaluates this workflow from
-# the default branch; the job also checks out the trusted base before reading the PR diff as data.
-# Keep non-required until this workflow has landed and reported once, then switch the ruleset.
+# the default branch; the job checks out the trusted base and reads the PR diff as data.
 
 on:
   pull_request_target:
