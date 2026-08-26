@@ -3,9 +3,8 @@ name: codex-review
 # 自动 code review(codex)——跑在维护者本机的 self-hosted runner 上,用已登录订阅的
 # 本地 `codex` CLI(不需要 API key)。
 #
-# 与 claude-review 并列的第二道独立门(不同模型交叉验证)。任一 review 判 blocker
-# 即挡合并(OR 逻辑)。这是默认分支的 required status check:job 失败(发现
-# critical/high)→ 本 check 红 → 挡住 auto-merge。
+# 这是默认分支唯一 required AI review。Claude 已暂停;Kimi 仅提供 advisory
+# cross-check。Codex 发现 critical/high → 本 check 红 → 挡住 auto-merge。
 #
 # 安全(public repo + self-hosted 的高危组合):
 #   - 本 workflow 在 `pull_request` 上由 **base 分支的 YAML** 评估,fork 改不到。
