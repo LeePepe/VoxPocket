@@ -1,0 +1,44 @@
+name: codex-review-target
+
+# Trusted replacement for codex-review. pull_request_target evaluates this workflow from
+# the default branch; the job checks out the trusted base and reads the PR diff as data.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: codex-review-target-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  codex-review-target:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 25
+    steps:
+      - name: Checkout base (trusted script source)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Run local Codex review (trusted target gate)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REPO: ${{ github.repository }}
+        run: scripts/ci/codex-review.sh
+
+  codex-review-target-fork:
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Codex review is skipped for fork pull requests."
