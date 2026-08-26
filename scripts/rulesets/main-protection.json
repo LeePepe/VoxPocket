@@ -36,10 +36,9 @@
           { "context": "SPM VoxUITesting" },
           { "context": "App target" },
           { "context": "Lint & policy" },
-          { "context": "codex-review" }
+          { "context": "codex-review-target" }
         ]
       }
     }
   ]
 }
-
