@@ -5,6 +5,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 KIMI_SH="$ROOT/scripts/ci/kimi-review.sh"
 KIMI_AGENT="$ROOT/scripts/ci/kimi-review-agent.md"
 KIMI_WORKFLOW="$ROOT/.github/workflows/kimi-review.yml"
+CODEX_TARGET_WORKFLOW="$ROOT/.github/workflows/codex-review-target.yml"
 CLAUDE_WORKFLOW="$ROOT/.github/workflows/claude-review.yml"
 
 grep -q '^tools: \[\]$' "$KIMI_AGENT"
@@ -17,6 +18,10 @@ grep -q 'Advisory only: this check and its findings are not required for merge' 
 grep -q '^  pull_request_target:$' "$KIMI_WORKFLOW"
 grep -Fq 'ref: ${{ github.event.pull_request.base.sha }}' "$KIMI_WORKFLOW"
 ! grep -Fq 'ref: ${{ github.event.pull_request.head.sha }}' "$KIMI_WORKFLOW"
+grep -q '^  pull_request_target:$' "$CODEX_TARGET_WORKFLOW"
+grep -q '^  codex-review-target:$' "$CODEX_TARGET_WORKFLOW"
+grep -Fq 'ref: ${{ github.event.pull_request.base.sha }}' "$CODEX_TARGET_WORKFLOW"
+! grep -Fq 'ref: ${{ github.event.pull_request.head.sha }}' "$CODEX_TARGET_WORKFLOW"
 grep -q '^  workflow_dispatch:$' "$CLAUDE_WORKFLOW"
 ! grep -q '^  pull_request:$' "$CLAUDE_WORKFLOW"
 

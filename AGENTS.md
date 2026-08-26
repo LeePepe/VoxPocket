@@ -96,6 +96,8 @@ swift test --package-path Packages/VoxApplication
   review;Kimi 的结果只供参考,不能满足或阻塞 required gate。
   Required-check policy 镜像在 `scripts/rulesets/main-protection.json`,线上 ruleset
   变更必须同步该文件。
+  `codex-review-target.yml` 是可信控制面的 Stage A；首次上报后须把 ruleset 切到
+  `codex-review-target` 并停用旧 `pull_request` workflow。
 - **防腐**：`scripts/gates/check_frontmatter.py` 校验每层 frontmatter 与代码一致（layer 名、`depends_on`
   双向、`roles` 角色词表与目录/前缀）。架构变了就更新 tech-context，别绕过。
 - 既有 `local-review-skill`（Codex 审查）hook 保留，与上述快门禁并行。
