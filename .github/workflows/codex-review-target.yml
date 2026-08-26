@@ -7,6 +7,7 @@ name: codex-review-target
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
+    branches: [main]
 
 permissions:
   contents: read
@@ -42,4 +43,3 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "Codex review is skipped for fork pull requests."
-
