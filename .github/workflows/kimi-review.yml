@@ -1,10 +1,11 @@
 name: kimi-review
 
 # Advisory-only Kimi review. This check is intentionally absent from the main ruleset.
-# The trusted base script embeds the PR diff as data and launches a tool-less Kimi agent.
+# pull_request_target evaluates trusted base YAML. The trusted base script embeds the
+# PR diff as data and launches a tool-less Kimi agent.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -41,4 +42,3 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "Kimi advisory review is skipped for fork pull requests."
-
