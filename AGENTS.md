@@ -85,13 +85,19 @@ swift test --package-path Packages/VoxApplication
 ## 门禁与防腐
 
 - **PR → main（服务端强制）**：`main` 由 ruleset 保护，**禁止直推**。改动一律走分支 → PR，
-  required checks 全绿（`SPM <pkg>`×5 / `App target` / `Lint & policy` / `claude-review`）后，
+  required checks 全绿（`SPM <pkg>`×5 / `App target` / `Lint & policy` / `codex-review-target`）后，
   非 draft PR 由 auto-merge 自动 squash 合并。发布走 `testflight.yml`（cron 每 6h，有新 commit 才发；
   详见 CLAUDE.md → TestFlight Auto-Release）。
+  `claude-review` 已暂停;`kimi-review` 只发 advisory comment,不参与合并门。
 - **pre-commit / pre-push**（本地，可绕过）：只跑快门禁——改到的 layer 增量 build+test、
   frontmatter 防腐校验、"改代码必带测试"。目标 < 60s。脚本在 `scripts/gates/`，经 `.local-review.yml` 接入。
 - **CI required**（服务端，不可绕过）：全量 per-package 测试 + app-target `xcodebuild` + frontmatter 校验，
-  锁定 Xcode 版本。重验证（xcodebuild/模拟器）只在这里，不进 pre-push。
+  锁定 Xcode 版本。重验证（xcodebuild/模拟器）只在这里，不进 pre-push。Codex 是 required
+  review;Kimi 的结果只供参考,不能满足或阻塞 required gate。
+  Required-check policy 镜像在 `scripts/rulesets/main-protection.json`,线上 ruleset
+  变更必须同步该文件。
+  `codex-review-target.yml` 是 required AI 控制面；旧 `pull_request` workflow 已停用。
+  线上 ruleset 通过 `scripts/rulesets/apply` 与同目录 JSON 同步。
 - **防腐**：`scripts/gates/check_frontmatter.py` 校验每层 frontmatter 与代码一致（layer 名、`depends_on`
   双向、`roles` 角色词表与目录/前缀）。架构变了就更新 tech-context，别绕过。
 - 既有 `local-review-skill`（Codex 审查）hook 保留，与上述快门禁并行。
