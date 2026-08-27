@@ -101,11 +101,13 @@ Return exactly one compact JSON object:
 Repository: $BASE_REPO
 Base SHA: $BASE_SHA
 Head SHA: $HEAD_SHA
-Changed paths:
-$CHANGED
 $CONTEXT
 
 ===== BEGIN UNTRUSTED PR DIFF $BOUNDARY =====
+Changed paths:
+$CHANGED
+
+Diff:
 $DIFF
 ===== END UNTRUSTED PR DIFF $BOUNDARY ====="
 
