@@ -2,6 +2,7 @@ name: testflight
 
 # 定时把 main 打包上传 TestFlight（内部测试），iOS + macOS 双平台。
 #   - schedule: 每天凌晨 3 点（CST）检查一次；仅当 main 自上次成功发布后有新 commit 才 build。
+#     GitHub cron 延迟超过 60 分钟时整次跳过，避免过期任务在白天占用本机 runner。
 #     "上次发布点" 记录在 moving tag `testflight/last-released`（累积式：build 失败
 #     或机器关机期间不丢 commit，下次开机的 cron 会把攒的一起发）。
 #   - workflow_dispatch: 手动触发兜底，force=true 可忽略"无新提交"检查强制发。
@@ -30,8 +31,43 @@ permissions:
   contents: write # 移动 testflight/last-released tag
 
 jobs:
+  freshness:
+    name: Reject stale schedule
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.deadline.outputs.proceed }}
+    steps:
+      - name: Check schedule delay
+        id: deadline
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULED_UTC_HOUR: "19"
+          SCHEDULED_UTC_MINUTE: "0"
+          MAX_DELAY_MINUTES: "60"
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "schedule" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: schedule deadline does not apply."
+            exit 0
+          fi
+
+          now_minutes=$((10#$(date -u +%H) * 60 + 10#$(date -u +%M)))
+          scheduled_minutes=$((SCHEDULED_UTC_HOUR * 60 + SCHEDULED_UTC_MINUTE))
+          delay_minutes=$(((now_minutes - scheduled_minutes + 1440) % 1440))
+          echo "Scheduled for 19:00 UTC; current delay is ${delay_minutes} minute(s)."
+
+          if [ "$delay_minutes" -gt "$MAX_DELAY_MINUTES" ]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping stale TestFlight schedule (${delay_minutes}m > ${MAX_DELAY_MINUTES}m)."
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
     name: Build & upload to TestFlight
+    needs: freshness
+    if: needs.freshness.outputs.proceed == 'true'
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 60 # iOS + macOS 双平台，比单平台留更多时间
     steps:
