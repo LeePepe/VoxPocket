@@ -10,14 +10,190 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class QuickRecordingViewRenderingTests: XCTestCase {
-    func testTextDoesNotAppearClippedDuringInitialExpansion() async throws {
-        let early = try await render(status: .listening, transcript: "New words visible.",
-                                     initialTranscript: "", updateWait: .milliseconds(60))
+    func testEntranceRevealsDownwardBeforeReachingFullSize() async throws {
+        for placement in [QuickRecordingPlacement.floating, Self.notchedPlacement] {
+            let early = try await render(status: .listening, transcript: "", placement: placement, initialWait: .milliseconds(60))
+            let settled = try await render(status: .listening, transcript: "", placement: placement)
+            let earlyBounds = try opaqueBounds(early)
+            let settledBounds = try opaqueBounds(settled)
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                XCTAssertEqual(earlyBounds, settledBounds, "减少动态效果时应立即显示完整岛体")
+                continue
+            }
+            XCTAssertEqual(earlyBounds.midX, settledBounds.midX, accuracy: 2)
+            XCTAssertLessThan(earlyBounds.width, settledBounds.width)
+            XCTAssertLessThan(earlyBounds.maxY, settledBounds.maxY)
+            if placement.isAttached {
+                XCTAssertGreaterThan(earlyBounds.minY, settledBounds.minY)
+            } else {
+                XCTAssertEqual(earlyBounds.minY, settledBounds.minY, accuracy: 2)
+            }
+        }
+    }
+
+    func testReduceMotionShowsCompleteIslandAndTextImmediately() async throws {
+        let bitmap = try await render(status: .listening, transcript: "Visible transcript sample.",
+                                      initialWait: .milliseconds(80), reduceMotion: true)
+        XCTAssertGreaterThan(try opaqueBounds(bitmap).height, 140)
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
-        try VNImageRequestHandler(cgImage: XCTUnwrap(early.cgImage)).perform([request])
-        let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined()
-        XCTAssertFalse(words.contains("words"))
+        try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
+        let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+        XCTAssertTrue(words.contains("Visible transcript sample"))
+    }
+
+    /// 导出真实入场帧，分别检查独立胶囊与摄像头下缘起点，不访问录音服务。
+    func testExportEntranceAnimationWhenRequested() async throws {
+        guard let directory = ProcessInfo.processInfo.environment["VOX_ISLAND_RENDER_DIR"] else { return }
+        for (name, placement) in [("floating", QuickRecordingPlacement.floating), ("notched", Self.notchedPlacement)] {
+            let host = NSHostingView(rootView: QuickRecordingIslandView(status: .listening, transcript: "", placement: placement))
+            let panel = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 480, height: 148),
+                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.contentView = host
+            panel.orderFront(nil)
+            defer { panel.orderOut(nil) }
+            let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(
+                URL(fileURLWithPath: directory).appendingPathComponent("entrance-\(name).gif") as CFURL,
+                UTType.gif.identifier as CFString, 8, nil))
+            CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+            for index in 0..<8 {
+                if index > 0 { try await Task.sleep(for: .milliseconds(60)) }
+                host.layoutSubtreeIfNeeded()
+                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                CGImageDestinationAddImage(destination, try XCTUnwrap(bitmap.cgImage),
+                    [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: index == 7 ? 1 : 0.06]] as CFDictionary)
+                let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                let url = URL(fileURLWithPath: directory).appendingPathComponent("entrance-\(name)-\(index).png")
+                try await Task.detached { try data.write(to: url) }.value
+            }
+            XCTAssertTrue(CGImageDestinationFinalize(destination))
+        }
+    }
+
+    func testPhaseSymbolDoesNotDimDuringColorTransition() async throws {
+        let bitmap = try await render(status: .refining, transcript: "Sample", initialStatus: .transcribing,
+                                      updateWait: .milliseconds(280))
+        let scale = CGFloat(bitmap.pixelsWide) / bitmap.size.width
+        var peakBlue: CGFloat = 0
+        for x in Int(24 * scale)..<Int(48 * scale) {
+            for y in Int(12 * scale)..<Int(40 * scale) {
+                let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+                peakBlue = max(peakBlue, color.blueComponent)
+            }
+        }
+        XCTAssertGreaterThan(peakBlue, 0.7, "阶段图标不应因两个遮罩交叉淡出而变暗")
+    }
+
+    func testExportPhaseStateBoardWhenRequested() async throws {
+        guard let directory = ProcessInfo.processInfo.environment["VOX_ISLAND_RENDER_DIR"] else { return }
+        var snapshots: [NSBitmapImageRep] = []
+        for status in RecorderStatus.allCases {
+            snapshots.append(try await render(status: status, transcript: status == .idle ? "" : "明天开会讨论下一步计划。",
+                                              placement: Self.notchedPlacement))
+        }
+        let canvas = NSImage(size: NSSize(width: 1040, height: 640))
+        canvas.lockFocus()
+        NSColor(QuickRecordingColors.neutrals.bg).setFill()
+        NSRect(x: 0, y: 0, width: 1040, height: 640).fill()
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14, weight: .medium),
+            .foregroundColor: NSColor(QuickRecordingColors.neutrals.text2)
+        ]
+        ("阶段色 · 与主界面同源" as NSString).draw(at: NSPoint(x: 24, y: 610), withAttributes: attributes)
+        let labels = ["待命 · 蓝灰", "录音 · 青绿", "转写 · 雾蓝", "润色 · 薰衣草紫", "完成 · 柔绿", "错误 · 珊瑚红"]
+        for (index, bitmap) in snapshots.enumerated() {
+            let x = CGFloat(24 + (index % 2) * 512)
+            let y = CGFloat(430 - (index / 2) * 188)
+            NSImage(cgImage: try XCTUnwrap(bitmap.cgImage), size: bitmap.size)
+                .draw(in: NSRect(x: x, y: y, width: 480, height: 148))
+            (labels[index] as NSString).draw(at: NSPoint(x: x, y: y + 154), withAttributes: attributes)
+        }
+        canvas.unlockFocus()
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: XCTUnwrap(canvas.tiffRepresentation)))
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("phase-board.png")
+        try await Task.detached { try png.write(to: url) }.value
+    }
+
+    func testPhaseTransitionPreservesVisibleTextAndFixedFrame() async throws {
+        let bitmap = try await render(status: .refining, transcript: "Visible transcript sample.",
+                                      initialStatus: .listening, updateWait: .milliseconds(120))
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
+        let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+        XCTAssertTrue(words.contains("Visible transcript sample"))
+        XCTAssertEqual(bitmap.size, NSSize(width: QuickRecordingLayout.panelWidth, height: QuickRecordingLayout.panelHeight))
+    }
+
+    func testColorWashIsVisibleAndStageDependent() async throws {
+        let recording = try await render(status: .listening, transcript: "Sample")
+        let refining = try await render(status: .refining, transcript: "Sample")
+        let first = try XCTUnwrap(recording.colorAt(x: recording.pixelsWide / 2, y: recording.pixelsHigh - 12)?.usingColorSpace(.sRGB))
+        let second = try XCTUnwrap(refining.colorAt(x: refining.pixelsWide / 2, y: refining.pixelsHigh - 12)?.usingColorSpace(.sRGB))
+        let distance = abs(first.redComponent - second.redComponent) + abs(first.greenComponent - second.greenComponent)
+            + abs(first.blueComponent - second.blueComponent)
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+            || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast {
+            XCTAssertLessThan(distance, 0.01, "辅助显示模式应关闭装饰柔光，使用相同实色底")
+            XCTAssertGreaterThan(first.alphaComponent, 0.95)
+        } else {
+            XCTAssertGreaterThan(distance, 0.04)
+        }
+    }
+
+    func testExportPhaseTransitionAnimationWhenRequested() async throws {
+        guard let directory = ProcessInfo.processInfo.environment["VOX_ISLAND_RENDER_DIR"] else { return }
+        let stages: [RecorderStatus] = [.listening, .transcribing, .refining, .done, .error]
+        let host = NSHostingView(rootView: QuickRecordingIslandView(status: .listening, transcript: "明天开会讨论下一步计划。",
+                                                                  audioLevel: 0.6, placement: Self.notchedPlacement))
+        let panel = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 480, height: 148),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.contentView = host
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil) }
+        try await Task.sleep(for: .milliseconds(800))
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(
+            URL(fileURLWithPath: directory).appendingPathComponent("phase-transitions.gif") as CFURL,
+            UTType.gif.identifier as CFString, stages.count * 6, nil))
+        CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+        for status in stages {
+            host.rootView = QuickRecordingIslandView(status: status, transcript: "明天开会讨论下一步计划。",
+                                                    audioLevel: 0.6, placement: Self.notchedPlacement)
+            for (index, delay) in [0, 120, 160, 200, 240, 240].enumerated() {
+                try await Task.sleep(for: .milliseconds(delay))
+                host.layoutSubtreeIfNeeded()
+                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                CGImageDestinationAddImage(destination, try XCTUnwrap(bitmap.cgImage),
+                    [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: index == 5 ? 0.6 : 0.14]] as CFDictionary)
+                if index == 2 || index == 5 {
+                    let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                    let url = URL(fileURLWithPath: directory).appendingPathComponent("transition-\(status)-\(index).png")
+                    try await Task.detached { try data.write(to: url) }.value
+                }
+            }
+        }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+    }
+
+    func testTextDoesNotAppearClippedDuringInitialExpansion() async throws {
+        let entrance = try await render(status: .listening, transcript: "New words visible.", initialWait: .milliseconds(100))
+        let expansion = try await render(status: .listening, transcript: "New words visible.",
+                                         initialTranscript: "", updateWait: .milliseconds(60))
+        for early in [entrance, expansion] {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            try VNImageRequestHandler(cgImage: XCTUnwrap(early.cgImage)).perform([request])
+            let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined()
+            XCTAssertEqual(words.contains("words"), NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                           "减少动态效果时不等待入场，正常动画时须等轮廓展开再显示文字")
+        }
     }
 
     /// 使用实际 SwiftUI 过渡帧展示动画，不访问麦克风或用户文字。
@@ -32,7 +208,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         panel.contentView = host
         panel.orderFront(nil)
         defer { panel.orderOut(nil) }
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(800))
         let url = URL(fileURLWithPath: directory).appendingPathComponent("expansion.gif")
         let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(url as CFURL, UTType.gif.identifier as CFString, 5, nil))
         CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
@@ -153,11 +329,13 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
     private func render(
         status: RecorderStatus, transcript: String, initialTranscript: String? = nil,
         placement: QuickRecordingPlacement = .floating, scrollToTopBeforeUpdate: Bool = false,
-        updateWait: Duration = .milliseconds(450)
+        initialStatus: RecorderStatus? = nil, updateWait: Duration = .milliseconds(450),
+        initialWait: Duration = .milliseconds(800), reduceMotion: Bool = false
     ) async throws -> NSBitmapImageRep {
         let size = NSSize(width: QuickRecordingLayout.panelWidth, height: QuickRecordingLayout.panelHeight)
         let host = NSHostingView(rootView: QuickRecordingIslandView(
-            status: status, transcript: initialTranscript ?? transcript, audioLevel: 0.6, placement: placement
+            status: initialStatus ?? status, transcript: initialTranscript ?? transcript, audioLevel: 0.6,
+            placement: placement, forceReducedMotion: reduceMotion
         ))
         let panel = NSPanel(contentRect: NSRect(origin: NSPoint(x: -10000, y: -10000), size: size),
                             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -166,15 +344,16 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         panel.contentView = host
         panel.orderFront(nil)
         defer { panel.orderOut(nil) }
-        try await Task.sleep(for: .milliseconds(450))
+        try await Task.sleep(for: initialWait)
         if scrollToTopBeforeUpdate {
             let scroll = try XCTUnwrap(findScrollView(in: host))
             scroll.contentView.scroll(to: .zero)
             scroll.reflectScrolledClipView(scroll.contentView)
             try await Task.sleep(for: .milliseconds(100))
         }
-        if initialTranscript != nil {
-            host.rootView = QuickRecordingIslandView(status: status, transcript: transcript, audioLevel: 0.6, placement: placement)
+        if initialTranscript != nil || initialStatus != nil {
+            host.rootView = QuickRecordingIslandView(status: status, transcript: transcript, audioLevel: 0.6,
+                                                     placement: placement, forceReducedMotion: reduceMotion)
             try await Task.sleep(for: updateWait)
         }
         host.layoutSubtreeIfNeeded()
@@ -186,6 +365,19 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
     private func findScrollView(in view: NSView) -> NSScrollView? {
         if let scroll = view as? NSScrollView { return scroll }
         return view.subviews.lazy.compactMap { self.findScrollView(in: $0) }.first
+    }
+
+    private func opaqueBounds(_ bitmap: NSBitmapImageRep) throws -> CGRect {
+        var bounds = CGRect.null
+        let scale = CGFloat(bitmap.pixelsWide) / bitmap.size.width
+        for y in 0..<bitmap.pixelsHigh {
+            for x in 0..<bitmap.pixelsWide where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.5 {
+                bounds = bounds.union(CGRect(x: CGFloat(x) / scale, y: CGFloat(y) / scale,
+                                             width: 1 / scale, height: 1 / scale))
+            }
+        }
+        XCTAssertFalse(bounds.isNull)
+        return bounds
     }
 
     private func writeLightComposite(_ bitmap: NSBitmapImageRep, to url: URL) throws {

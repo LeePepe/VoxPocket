@@ -36,6 +36,7 @@ public final class WindowManager: ObservableObject {
     private var windowControllers: [WindowType: NSWindowController] = [:]
     private var viewModels: [WindowType: Any] = [:]
     private let logger: Logger = PrintLogger(subsystem: "WindowManager")
+    private let quickRecordingPrewarmer = QuickRecordingViewPrewarmer()
     
     /// 窗口可见状态
     @Published public var windowVisibility: [WindowType: Bool] = [
@@ -58,8 +59,14 @@ public final class WindowManager: ObservableObject {
 
     // MARK: - 窗口管理
 
+    /// 启动后延迟准备纯视图，不创建录音 ViewModel 或活动会话。
+    func scheduleQuickRecordingPrewarm() {
+        quickRecordingPrewarmer.schedule()
+    }
+
     /// 显示窗口
     public func showWindow(_ type: WindowType) {
+        if type == .quickRecording { quickRecordingPrewarmer.cancelPending() }
         if let existingWindow = windows[type] {
             positionWindow(existingWindow, for: type)
             presentWindow(existingWindow, for: type)
@@ -111,6 +118,7 @@ public final class WindowManager: ObservableObject {
         let placement = QuickRecordingPlacement(
             screenFrame: screen.frame, visibleFrame: screen.visibleFrame, cameraRect: cameraRect(on: screen)
         )
+        (panel as? QuickRecordingPanel)?.placement = placement
         panel.setFrame(placement.panelFrame, display: true)
         if let viewModel = getQuickRecordingViewModel(),
            let hostingView = panel.contentView as? NSHostingView<QuickRecordingView> {
@@ -244,7 +252,7 @@ public final class WindowManager: ObservableObject {
 
         let contentView = QuickRecordingView(viewModel: viewModel)
 
-        let panel = NSPanel(
+        let panel = QuickRecordingPanel(
             contentRect: NSRect(x: 0, y: 0, width: QuickRecordingLayout.panelWidth, height: QuickRecordingLayout.panelHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,

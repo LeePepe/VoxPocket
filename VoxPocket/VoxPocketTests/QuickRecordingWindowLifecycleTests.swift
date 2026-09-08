@@ -1,7 +1,22 @@
+#if os(macOS)
 import Testing
+import AppKit
+import PlatformUI
 @testable import VoxPocket
 
+@Suite(.serialized)
 struct QuickRecordingWindowLifecycleTests {
+    @MainActor
+    @Test func prewarmingDoesNotCreateRecordingSessionOrVisiblePanel() async throws {
+        let windowManager = WindowManager.shared
+        windowManager.closeWindow(.quickRecording)
+        windowManager.scheduleQuickRecordingPrewarm()
+        try await Task.sleep(for: .milliseconds(800))
+        #expect(windowManager.getQuickRecordingViewModel() == nil)
+        #expect(windowManager.windowVisibility[.quickRecording] == false)
+        #expect(!NSApp.windows.contains { $0 is QuickRecordingPanel && $0.isVisible })
+    }
+
     @MainActor
     @Test func quickRecordingWindowIsRecreatedAfterHide() {
         let windowManager = WindowManager.shared
@@ -12,6 +27,7 @@ struct QuickRecordingWindowLifecycleTests {
         }
 
         windowManager.showWindow(.quickRecording)
+        #expect(NSApp.windows.contains { $0 is QuickRecordingPanel && $0.isVisible })
         let firstViewModel = requireNotNil(windowManager.getQuickRecordingViewModel())
 
         windowManager.hideWindow(.quickRecording)
@@ -28,3 +44,4 @@ private func requireNotNil<T>(_ value: T?, sourceLocation: SourceLocation = #_so
     #expect(unwrapped != nil, sourceLocation: sourceLocation)
     return unwrapped!
 }
+#endif

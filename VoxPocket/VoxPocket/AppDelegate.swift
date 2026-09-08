@@ -68,6 +68,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 初始化服务
         setupServices()
+        windowManager.scheduleQuickRecordingPrewarm()
 
         // 注册全局快捷键
         Task { @MainActor in

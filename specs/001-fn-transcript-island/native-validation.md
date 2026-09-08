@@ -1,38 +1,63 @@
 # 「声音落岛」原生实现验证
 
-日期：2026-09-08。视觉来源：用户批准的 [独立设计](prototype-independent/DESIGN.md)。
+同步日期：2026-09-08。本文描述当前精简版实现；[独立设计](prototype-independent/DESIGN.md)是历史初稿，后续调整见[本地试用反馈](minimal-feedback-validation.md)。
+
+## 当前参数
+
+参数以 `Packages/VoxPresentation/Sources/PlatformUI/` 下的 `QuickRecordingLayout.swift`、`QuickRecordingView.swift` 和 `QuickRecordingTranscriptView.swift` 为准。
+
+| 项目 | 当前值 |
+|---|---|
+| 展开包络 | 480×148pt |
+| 等待基准包络 | 280×52pt |
+| 刘海两翼预留 | 刘海宽度之外共144pt；等待宽度必要时增大 |
+| 窄屏适配 | 宿主宽度不超过可用屏幕宽度减32pt，岛体不超过宿主 |
+| 正文 | 20pt，附加行距8pt，统一主文字色 |
+| 阅读区 | 最大80pt；宿主高度不足时进一步收窄 |
+| 正文水平内边距 | 24pt |
+| 外轮廓圆角 | 24pt；贴顶时顶部两角为0 |
+| 展开动画 | 240ms easeInOut，无弹簧回弹 |
+| 文字进入 | 延后180ms，再用120ms淡入；减少动态效果时不等待或动画 |
+| 阶段颜色过渡 | 720ms交叉淡入淡出，仅作用于装饰色层、图标与波形，不驱动布局 |
 
 ## 已实现
 
-- SwiftUI 单一岛形；560pt 展开、430pt 等待基准宽度，遇到真实刘海时为两翼保留足够宽度。
+- SwiftUI 单一岛形，首次有文字时展开；后续换行、长文和润色更新不再改变展开尺寸。
 - `NSScreen` 的安全区与两侧辅助区域决定透明摄像头避让；外接无刘海屏幕不绘制占位。
-- blue / slate 色彩沿用 my-designer 原始颜色模板；22pt 原文、短句末尾强调、最长178pt阅读区。
-- 短文按内容收缩；长文跟随最新，手动上滚后暂停跟随，可点“回到最新”。
-- 真实录音计时与电平；真实结束／取消、错误时复制／关闭操作。
+- slate 岛体与白色正文；从主 UI 色库直接取青绿录音、蓝转写收尾、薰衣草紫润色、柔绿完成、珊瑚红错误，并保留图标形状及辅助功能状态标签；细边缘和岛内低亮度柔光同步过渡。
+- 长文跟随最新，手动上滚后暂停跟随，可点“回到最新”。正文不再使用短句末尾高亮。
+- 常态只显示正文、轻量图标与波形，不常驻计时、状态词、说明或操作栏；悬停提供取消／关闭，右键与辅助功能动作提供结束、取消、复制和关闭。
 - Fn 按下开始、释放结束、现有自动粘贴不变。原型中的手动确认插入与全局 Esc 不迁入产品。
-- 转写／润色保留原文；失败后保留文字并释放录音占用，完成态显示最终输出直至宿主正常关闭。
+- 录音与转写阶段显示原文；润色结果实际返回后立即显示修改，空结果保留原文；失败时保留原文供复制，完成态显示最终输出直至宿主正常关闭。
+- 录音中的增量润色不提前改变录音状态，避免影响 Fn 松开停止。
 - 清除了本次涉及的快捷录音 ViewModel 中既有的文字预览日志，保留长度与时长指标。
 
-## 验证结果
+## 验证记录（按阶段保留）
 
-- `swift test --package-path Packages/VoxPresentation`：60 tests，59 passed，1 existing skipped，0 failures。
-- 真实 NSHostingView 离屏渲染 + OCR：各状态文字可见性、长文跟随、手动滚动后不跳回均通过。
+以下为各阶段已执行的验证记录，本次仅同步文档，没有重新运行构建或测试。
+
+- 首版原生实现：60 tests，59 passed，1 existing skipped，0 failures；这是历史记录，不代表当前测试数量。
+- 精简版本地验证：66 tests，65 passed，1 existing skipped，0 failures；原生渲染专项9项，无失败。
+- 同步主分支隐私回归测试后：67 tests，66 passed，1 existing skipped，0 failures。
+- 真实 NSHostingView 离屏渲染 + OCR：各状态文字可见性、无常驻说明／计时、首次展开不提前显示裁切文字、长文跟随、手动滚动后不跳回均通过。
 - 像素检查：有刘海中区透明；无刘海没有虚假摄像头挖空。
 - 几何测试：内置刘海、负坐标外接屏、窄屏限宽、无效刘海区域和各状态包络通过。
-- 色彩对比度测试：原文、辅助文字、蓝色高亮与错误标签均满足目标 ≥4.5:1。
-- ViewModel：错误保留／复制、取消一次性关闭、完成文字停留和计时冻结通过。
+- 色彩测试：正文／辅助文字对比度目标≥4.5:1，状态图标目标≥3:1，各活动阶段状态色可区分。
+- ViewModel：润色中途可见、增量润色不妨碍 Fn 停止、错误保留／复制、取消一次性关闭和完成文字停留通过。
 - `python3 scripts/gates/check_frontmatter.py`：5 层一致性检查通过。
 - `git diff --check`：通过。
-- AppDelegate.swift 与 WindowManager.swift：Swift 语法解析通过。
+- 本地 macOS 签名构建与安装校验完成；[PR #27](https://github.com/LeePepe/VoxPocket/pull/27) 的 macOS/iOS App 构建、包测试和 required checks 结果可查，PR 已合并。
 - 读取本机屏幕几何：内置屏实际刘海220×38pt；两个外接屏的顶部安全区为0。
 
 ## 边界
 
 - 没有在真实麦克风、全局 Fn、跨应用粘贴或辅助技术下做完整端到端实测。
-- App target 的完整 `xcodebuild` 按仓库约定留给 required CI；本轮没有提交、推送或发布。
+- 本地启动、截图和单元测试不等于真实录音或跨应用粘贴的完整端到端验证。
 - 现有跳过项是“无 final 结果时应在3秒内回退”，既有15秒等待策略未在本次改变。
 - 截图全部使用人工构造的文案，未捕获或保存用户录音内容。
 
 ## 视觉验证范围
+
+当前精简版证据为 [minimal-preview.png](minimal-preview.png)、[minimal-refining.png](minimal-refining.png) 和 [minimal-expansion.gif](minimal-expansion.gif)。`native-*.png` 与 `prototype-independent/` 中的设计稿属于较早阶段，保留用于追溯，不作为当前尺寸或视觉样式依据。
 
 截图用于说明界面与布局，不替代服务端代码审查或实际录音验证。设计评审输出作为本地工作产物保留，不作为仓库合并凭据。
