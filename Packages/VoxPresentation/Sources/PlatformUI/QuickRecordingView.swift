@@ -227,7 +227,8 @@ struct QuickRecordingEntranceMask: Shape {
         set { progress = newValue }
     }
 
-    func path(in rect: CGRect) -> Path {
+    // Shape.path 的协议契约为非隔离；计算只依赖 Sendable 值字段，不读取界面或主 actor 状态。
+    nonisolated func path(in rect: CGRect) -> Path {
         let reveal = QuickRecordingLayout.entranceRect(in: rect, cameraSize: cameraSize, progress: progress)
         // 中途也保持柔和圆角；完全展开时与原轮廓重合，刘海两翼恢复平直上沿。
         let radius = min(24, min(reveal.width, reveal.height) / 2)
