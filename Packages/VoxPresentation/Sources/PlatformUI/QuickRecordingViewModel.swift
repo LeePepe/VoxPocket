@@ -31,6 +31,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     // MARK: - 计时
 
     private var sessionStartTime: Date?
+    private var recordingStopTime: Date?
     private var transcriptionEndTime: Date?
 
     // MARK: - Published 状态
@@ -64,7 +65,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     public var showsLiveTranscription: Bool {
-        guard !liveTranscription.isEmpty else { return false }
+        guard !liveTranscription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
 
         switch recorderStatus {
         case .listening, .transcribing, .refining:
@@ -72,6 +73,31 @@ public final class QuickRecordingViewModel: ObservableObject {
         case .idle, .done, .error:
             return false
         }
+    }
+
+    /// 处理失败仍保留识别原文；完成态显示实际交付的最终文字。
+    public var displayedTranscription: String {
+        switch recorderStatus {
+        case .idle: return ""
+        case .done: return refinedText.isEmpty ? liveTranscription : refinedText
+        default: return liveTranscription
+        }
+    }
+
+    public func elapsedRecordingTime(at date: Date) -> TimeInterval {
+        guard let sessionStartTime else { return 0 }
+        return max(0, (recordingStopTime ?? date).timeIntervalSince(sessionStartTime))
+    }
+
+    public func copyRecognizedText() {
+        guard !liveTranscription.isEmpty else { return }
+        clipboardService.copy(liveTranscription)
+    }
+
+    public func cancelFromPanel() async {
+        guard recorderStatus == .listening || recorderStatus == .error, !isStartingRecordingInternal else { return }
+        await cancelRecording()
+        onNoResult?()
     }
 
     // MARK: - Init
@@ -120,6 +146,8 @@ public final class QuickRecordingViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
                 guard let self else { return }
+                // 收尾时识别服务可能先清空临时流；已显示文字要保留到最终结果到达。
+                if self.isProcessing && text.isEmpty { return }
                 self.liveTranscription = text
             }
             .store(in: &cancellables)
@@ -170,6 +198,8 @@ public final class QuickRecordingViewModel: ObservableObject {
         rawTranscription = ""
         errorMessage = nil
         isProcessing = false
+        sessionStartTime = nil
+        recordingStopTime = nil
         transcriptionUseCase.clearLiveText()
 
         do {
@@ -210,6 +240,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
 
         isProcessing = true
+        recordingStopTime = Date()
         recorderStatus = .transcribing
 
         // 先让出一次主线程执行片段，确保 receive(on: .main) 排队的 liveText 更新
@@ -243,8 +274,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             transcriptionEndTime = now
             liveTranscription = rawTranscription
             logger.log(.debug, "Recording stopped", context: [
-                "transcription_length": rawTranscription.count,
-                "transcription_preview": String(rawTranscription.prefix(30))
+                "transcription_length": rawTranscription.count
             ])
             if let start = sessionStartTime {
                 let durationMs = Int(now.timeIntervalSince(start) * 1000)
@@ -316,15 +346,15 @@ public final class QuickRecordingViewModel: ObservableObject {
         settleMaxWait: TimeInterval = 0.8
     ) async -> String {
         if let finalText = await finalResultTask.value {
-            logger.debug("waitForCompletedTranscription: got finalResult '\(finalText.prefix(30))'")
+            logger.debug("waitForCompletedTranscription: got final result")
             return finalText
         }
 
-        logger.debug("waitForCompletedTranscription: finalResultTask timed out, falling back to settle (liveTranscription='\(self.liveTranscription.prefix(30))')")
+        logger.debug("waitForCompletedTranscription: final result timed out, falling back to settle")
         let settled = await waitForTranscriptionToSettle(maxWait: settleMaxWait)
         if !settled.isEmpty { return settled }
         if !liveSnapshot.isEmpty {
-            logger.debug("waitForCompletedTranscription: settled empty, using liveSnapshot '\(liveSnapshot.prefix(30))'")
+            logger.debug("waitForCompletedTranscription: settled empty, using live snapshot")
         }
         return liveSnapshot
     }
@@ -342,7 +372,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                             let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
                             if !text.isEmpty {
                                 let elapsed = Date().timeIntervalSince(startTime)
-                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s — '\(text.prefix(30))'")
+                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s")
                                 return text
                             }
                         }
@@ -496,8 +526,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         completeCallCount += 1
         logger.log(.debug, "completeWithText called", context: [
             "call_count": completeCallCount,
-            "text_length": text.count,
-            "text_preview": String(text.prefix(20))
+            "text_length": text.count
         ])
         guard !text.isEmpty else {
             recorderStatus = .idle
@@ -505,6 +534,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             return
         }
 
+        refinedText = text
         recorderStatus = .done
 
         clipboardService.copy(text)
@@ -523,7 +553,6 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         isProcessing = false
         onComplete?(text)
-        recorderStatus = .idle
     }
 }
 #endif

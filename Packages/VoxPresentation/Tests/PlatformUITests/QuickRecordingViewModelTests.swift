@@ -57,6 +57,23 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsLiveTranscription)
     }
 
+    func testWhitespaceDoesNotExpandTranscript() {
+        let viewModel = makeViewModel()
+        viewModel.liveTranscription = " \n\t　"
+        viewModel.recorderStatus = .listening
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+    }
+
+    func testNewRecordingClearsPreviousTranscript() async {
+        let viewModel = makeViewModel()
+        viewModel.liveTranscription = "上一轮识别内容"
+        viewModel.refinedText = "上一轮润色内容"
+        await viewModel.startRecording()
+        XCTAssertTrue(viewModel.liveTranscription.isEmpty)
+        XCTAssertTrue(viewModel.refinedText.isEmpty)
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+    }
+
     func testStopRecordingRetainsLiveTranscriptionForProcessingStates() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()
@@ -227,6 +244,63 @@ final class QuickRecordingViewModelTests: XCTestCase {
         await startTask.value
 
         XCTAssertEqual(recording.stopCallCount, 1)
+    }
+
+    func testErrorRetainsOriginalTextAndCopiesIt() {
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: FakeRecordingUseCase(),
+                                               transcriptionUseCase: FakeTranscriptionUseCase(),
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: clipboard)
+        viewModel.liveTranscription = "已识别原文"
+        viewModel.refinedText = "未完成的润色"
+        viewModel.recorderStatus = .error
+        XCTAssertEqual(viewModel.displayedTranscription, "已识别原文")
+        viewModel.copyRecognizedText()
+        XCTAssertEqual(clipboard.copiedText, "已识别原文")
+        viewModel.recorderStatus = .idle
+        XCTAssertTrue(viewModel.displayedTranscription.isEmpty)
+    }
+
+    func testCancelFromPanelStopsAndRequestsDismissalOnce() async {
+        let recording = FakeRecordingUseCase()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording,
+                                               transcriptionUseCase: FakeTranscriptionUseCase(),
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: FakeClipboardService())
+        var dismissals = 0
+        viewModel.onNoResult = { dismissals += 1 }
+        await viewModel.startRecording()
+        await viewModel.cancelFromPanel()
+        await viewModel.cancelFromPanel()
+        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(dismissals, 1)
+        XCTAssertEqual(viewModel.recorderStatus, .idle)
+    }
+
+    func testCompletionKeepsFinalTextVisibleUntilHostClosesAndFreezesDuration() async throws {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                               refinementUseCase: FakeRefinementUseCase(streamedChunks: ["已整理"]),
+                                               clipboardService: clipboard)
+        recording.onStop = {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(20))
+                transcription.sendFinalText("识别原文")
+            }
+        }
+        let completed = expectation(description: "完成回调")
+        viewModel.onComplete = { _ in completed.fulfill() }
+        await viewModel.startRecording()
+        transcription.sendLiveText("识别原文")
+        try await Task.sleep(for: .milliseconds(20))
+        await viewModel.stopRecording()
+        await fulfillment(of: [completed], timeout: 2)
+        XCTAssertEqual(viewModel.recorderStatus, .done)
+        XCTAssertEqual(viewModel.displayedTranscription, clipboard.copiedText)
+        XCTAssertEqual(viewModel.displayedTranscription, "已整理。")
+        XCTAssertEqual(viewModel.elapsedRecordingTime(at: Date()),
+                       viewModel.elapsedRecordingTime(at: Date().addingTimeInterval(60)))
     }
 
     private func makeViewModel() -> QuickRecordingViewModel {
