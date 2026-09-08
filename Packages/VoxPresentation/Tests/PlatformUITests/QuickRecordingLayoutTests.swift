@@ -4,6 +4,43 @@ import UIShared
 @testable import PlatformUI
 
 final class QuickRecordingLayoutTests: XCTestCase {
+    func testEntranceStartsAsTopCenterDotAndFinishesAtExactBounds() {
+        let bounds = CGRect(x: 17, y: 23, width: 280, height: 52)
+        let dot = QuickRecordingLayout.entranceRect(in: bounds, cameraSize: .zero, progress: 0)
+        XCTAssertEqual(dot.size, CGSize(width: 8, height: 8))
+        XCTAssertEqual(dot.midX, bounds.midX)
+        XCTAssertEqual(dot.minY, bounds.minY)
+        XCTAssertEqual(QuickRecordingLayout.entranceRect(in: bounds, cameraSize: .zero, progress: 1), bounds)
+    }
+
+    func testNotchedEntranceGrowsFromCameraBottomWithoutOvershoot() {
+        let bounds = CGRect(x: 0, y: 0, width: 336, height: 52)
+        let camera = CGSize(width: 192, height: 36)
+        var previous = QuickRecordingLayout.entranceRect(in: bounds, cameraSize: camera, progress: 0)
+        XCTAssertEqual(previous.minY, camera.height)
+        for step in 1...20 {
+            let frame = QuickRecordingLayout.entranceRect(in: bounds, cameraSize: camera, progress: CGFloat(step) / 20)
+            XCTAssertTrue(bounds.contains(frame))
+            XCTAssertEqual(frame.midX, bounds.midX)
+            XCTAssertGreaterThanOrEqual(frame.width, previous.width)
+            XCTAssertGreaterThanOrEqual(frame.maxY, previous.maxY)
+            XCTAssertLessThanOrEqual(frame.minY, previous.minY)
+            previous = frame
+        }
+        XCTAssertEqual(previous, bounds)
+    }
+
+    func testEntranceClampsInvalidProgressAndSmallHost() {
+        let bounds = CGRect(x: 0, y: 0, width: 5, height: 4)
+        let camera = CGSize(width: 192, height: 36)
+        let start = QuickRecordingLayout.entranceRect(in: bounds, cameraSize: camera, progress: 0)
+        for value: CGFloat in [-1, .nan, .infinity] {
+            XCTAssertEqual(QuickRecordingLayout.entranceRect(in: bounds, cameraSize: camera, progress: value), start)
+        }
+        XCTAssertTrue(bounds.contains(start))
+        XCTAssertEqual(QuickRecordingLayout.entranceRect(in: bounds, cameraSize: camera, progress: 2), bounds)
+    }
+
     func testStreamingTextDoesNotRepeatedlyResizeExpandedIsland() {
         let first = QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true, textHeight: 30)
         let next = QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true, textHeight: 100)

@@ -30,6 +30,8 @@ public struct QuickRecordingPlacement: Equatable, Sendable {
 }
 
 public enum QuickRecordingLayout {
+    public static let entranceDuration: Double = 0.42
+    public static let entranceDotSize: CGFloat = 8
     public static let panelWidth: CGFloat = 480
     public static let panelHeight: CGFloat = 148
     public static let topInset: CGFloat = 12
@@ -49,6 +51,18 @@ public enum QuickRecordingLayout {
     }
 
     public static func islandCorner(for status: RecorderStatus) -> CGFloat { 24 }
+
+    /// 使用揭幕矩形而非缩放内容；起点在顶部中心，刘海屏从真实摄像头下缘开始。
+    public static func entranceRect(in bounds: CGRect, cameraSize: CGSize, progress: CGFloat) -> CGRect {
+        let progress = progress.isFinite ? min(1, max(0, progress)) : 0
+        let dot = min(entranceDotSize, bounds.width, bounds.height)
+        let originY = min(max(0, cameraSize.height), max(0, bounds.height - dot))
+        let width = dot + (bounds.width - dot) * progress
+        let top = originY * (1 - progress)
+        let bottom = originY + dot + (bounds.height - originY - dot) * progress
+        return CGRect(x: bounds.midX - width / 2, y: bounds.minY + top,
+                      width: width, height: bottom - top)
+    }
 
     /// 留足两翼，即使等待态收窄也不让文字侵入硬件区域。
     public static func size(for status: RecorderStatus, showsTranscript: Bool, placement: QuickRecordingPlacement,

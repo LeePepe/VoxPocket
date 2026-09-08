@@ -32,13 +32,19 @@ struct QuickRecordingIslandView: View {
     let transcript: String
     var audioLevel: Double?
     var placement: QuickRecordingPlacement = .floating
+    /// 原生预览可主动减少动画；不能覆盖系统的减少动态效果设置。
+    var forceReducedMotion = false
     var onStop: () -> Void = {}
     var onCancel: () -> Void = {}
     var onCopy: () -> Void = {}
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var isHovering = false
     @State private var revealsTranscript = false
+    @State private var entranceProgress: CGFloat = 0
+    @State private var hasEntered = false
+
+    private var reduceMotion: Bool { systemReduceMotion || forceReducedMotion }
 
     private var showsTranscript: Bool {
         status != .idle && !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -65,15 +71,22 @@ struct QuickRecordingIslandView: View {
             }
         }
         .frame(width: size.width, height: size.height, alignment: .top)
-        .background(QuickRecordingColors.neutrals.card)
+        .background(QuickRecordingPhaseSurface(status: status, audioLevel: audioLevel))
         .clipShape(outline, style: FillStyle(eoFill: true))
-        .overlay(outline.stroke(contrast == .increased ? tint : QuickRecordingColors.neutrals.border,
-                                lineWidth: contrast == .increased ? 1.5 : 0.75))
+        .overlay(phaseRim)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: showsTranscript)
+        .clipShape(QuickRecordingEntranceMask(progress: reduceMotion ? 1 : entranceProgress,
+                                              cameraSize: placement.cameraSize))
         .frame(width: placement.panelFrame.width, height: placement.panelFrame.height, alignment: .top)
         .environment(\.colorScheme, .dark)
         .onHover { isHovering = $0 }
-        .task(id: showsTranscript) { await revealTranscript() }
+        .task(id: reduceMotion) { await revealIsland() }
+        .task(id: [showsTranscript, hasEntered, reduceMotion]) { await revealTranscript() }
+        .onDisappear {
+            entranceProgress = 0
+            hasEntered = false
+            revealsTranscript = false
+        }
         .contextMenu { actions }
         .accessibilityElement(children: .contain)
         .accessibilityActions { actions }
@@ -85,7 +98,12 @@ struct QuickRecordingIslandView: View {
             // 某些 SF Symbols 自带颜色层；用 alpha 遮罩保证图标与波形状态色一致。
             tint
                 .frame(width: 24, height: 28)
-                .mask { Image(systemName: statusSymbol).font(.system(size: 13, weight: .semibold)) }
+                .mask {
+                    Image(systemName: statusSymbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .contentTransition(.identity)
+                        .transaction { $0.animation = nil }
+                }
                 .frame(width: wingWidth, alignment: .leading)
                 .accessibilityAddTraits(.isImage)
                 .accessibilityLabel(Text(statusLabel))
@@ -112,11 +130,44 @@ struct QuickRecordingIslandView: View {
         }
         .padding(.horizontal, 24)
         .frame(height: QuickRecordingLayout.headerHeight)
+        .animation(reduceMotion ? nil : .easeInOut(duration: QuickRecordingColors.transitionDuration), value: status)
+    }
+
+    @ViewBuilder private var phaseRim: some View {
+        if contrast == .increased {
+            outline.stroke(tint, lineWidth: 1.5)
+        } else {
+            ZStack {
+                outline.stroke(LinearGradient(colors: QuickRecordingColors.rim(status),
+                                               startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.9)
+                    .id(status)
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: QuickRecordingColors.transitionDuration), value: status)
+        }
+    }
+
+    private func revealIsland() async {
+        guard !reduceMotion else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                entranceProgress = 1
+                hasEntered = true
+            }
+            return
+        }
+        guard !hasEntered else { return }
+        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: QuickRecordingLayout.entranceDuration)) {
+            entranceProgress = 1
+        }
+        do { try await Task.sleep(for: .seconds(QuickRecordingLayout.entranceDuration)) } catch { return }
+        hasEntered = true
     }
 
     private func revealTranscript() async {
         revealsTranscript = false
-        guard showsTranscript else { return }
+        guard showsTranscript && hasEntered else { return }
         guard !reduceMotion else { revealsTranscript = true; return }
         do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
         // 等轮廓基本展开后再淡入，避免文字首字在中途被缩窄的边界切掉。
@@ -161,6 +212,26 @@ struct QuickRecordingIslandView: View {
         case .transcribing, .refining: .shimmer
         default: .rest
         }
+    }
+}
+
+/// 只揭开岛体，不改变文字、波形或图标的尺寸；真实摄像头挖空仍由外轮廓负责。
+struct QuickRecordingEntranceMask: Shape {
+    var progress: CGFloat
+    var cameraSize: CGSize
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let reveal = QuickRecordingLayout.entranceRect(in: rect, cameraSize: cameraSize, progress: progress)
+        // 中途也保持柔和圆角；完全展开时与原轮廓重合，刘海两翼恢复平直上沿。
+        let radius = min(24, min(reveal.width, reveal.height) / 2)
+        let topRadius = cameraSize.height > 0 ? radius * (1 - min(1, max(0, progress))) : radius
+        return UnevenRoundedRectangle(topLeadingRadius: topRadius, bottomLeadingRadius: radius,
+                                      bottomTrailingRadius: radius, topTrailingRadius: topRadius).path(in: reveal)
     }
 }
 
