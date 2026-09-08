@@ -216,11 +216,13 @@ struct QuickRecordingIslandView: View {
 }
 
 /// 只揭开岛体，不改变文字、波形或图标的尺寸；真实摄像头挖空仍由外轮廓负责。
+@MainActor
 struct QuickRecordingEntranceMask: Shape {
     var progress: CGFloat
     var cameraSize: CGSize
 
-    var animatableData: CGFloat {
+    // SwiftUI 在非隔离上下文插值 Shape 值副本；这里只修改副本中的标量，不访问 UI 状态。
+    nonisolated var animatableData: CGFloat {
         get { progress }
         set { progress = newValue }
     }

@@ -16,6 +16,10 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
             let settled = try await render(status: .listening, transcript: "", placement: placement)
             let earlyBounds = try opaqueBounds(early)
             let settledBounds = try opaqueBounds(settled)
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                XCTAssertEqual(earlyBounds, settledBounds, "减少动态效果时应立即显示完整岛体")
+                continue
+            }
             XCTAssertEqual(earlyBounds.midX, settledBounds.midX, accuracy: 2)
             XCTAssertLessThan(earlyBounds.width, settledBounds.width)
             XCTAssertLessThan(earlyBounds.maxY, settledBounds.maxY)
@@ -132,7 +136,13 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         let second = try XCTUnwrap(refining.colorAt(x: refining.pixelsWide / 2, y: refining.pixelsHigh - 12)?.usingColorSpace(.sRGB))
         let distance = abs(first.redComponent - second.redComponent) + abs(first.greenComponent - second.greenComponent)
             + abs(first.blueComponent - second.blueComponent)
-        XCTAssertGreaterThan(distance, 0.04)
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+            || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast {
+            XCTAssertLessThan(distance, 0.01, "辅助显示模式应关闭装饰柔光，使用相同实色底")
+            XCTAssertGreaterThan(first.alphaComponent, 0.95)
+        } else {
+            XCTAssertGreaterThan(distance, 0.04)
+        }
     }
 
     func testExportPhaseTransitionAnimationWhenRequested() async throws {
@@ -181,7 +191,8 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
             request.recognitionLevel = .accurate
             try VNImageRequestHandler(cgImage: XCTUnwrap(early.cgImage)).perform([request])
             let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined()
-            XCTAssertFalse(words.contains("words"))
+            XCTAssertEqual(words.contains("words"), NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                           "减少动态效果时不等待入场，正常动画时须等轮廓展开再显示文字")
         }
     }
 

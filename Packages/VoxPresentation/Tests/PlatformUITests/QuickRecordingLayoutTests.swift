@@ -1,9 +1,23 @@
 #if os(macOS)
 import XCTest
+import SwiftUI
 import UIShared
 @testable import PlatformUI
 
 final class QuickRecordingLayoutTests: XCTestCase {
+    @MainActor
+    func testEntranceShapeInterpolatesSendableValueCopies() async {
+        let mask = QuickRecordingEntranceMask(progress: 0, cameraSize: .zero)
+        let bounds = CGRect(x: 0, y: 0, width: 280, height: 52)
+        let result = await Task.detached {
+            var copy = mask
+            copy.animatableData = 0.5
+            return copy.path(in: bounds).boundingRect
+        }.value
+        XCTAssertEqual(mask.animatableData, 0)
+        XCTAssertEqual(result, QuickRecordingLayout.entranceRect(in: bounds, cameraSize: .zero, progress: 0.5))
+    }
+
     func testEntranceStartsAsTopCenterDotAndFinishesAtExactBounds() {
         let bounds = CGRect(x: 17, y: 23, width: 280, height: 52)
         let dot = QuickRecordingLayout.entranceRect(in: bounds, cameraSize: .zero, progress: 0)
