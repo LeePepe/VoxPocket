@@ -347,15 +347,15 @@ public final class QuickRecordingViewModel: ObservableObject {
         settleMaxWait: TimeInterval = 0.8
     ) async -> String {
         if let finalText = await finalResultTask.value {
-            logger.debug("waitForCompletedTranscription: got final result")
+            logger.debug("waitForCompletedTranscription: got finalResult (length=\(finalText.count))")
             return finalText
         }
 
-        logger.debug("waitForCompletedTranscription: final result timed out, falling back to settle")
+        logger.debug("waitForCompletedTranscription: finalResultTask timed out, falling back to settle (liveTranscription length=\(self.liveTranscription.count))")
         let settled = await waitForTranscriptionToSettle(maxWait: settleMaxWait)
         if !settled.isEmpty { return settled }
         if !liveSnapshot.isEmpty {
-            logger.debug("waitForCompletedTranscription: settled empty, using live snapshot")
+            logger.debug("waitForCompletedTranscription: settled empty, using liveSnapshot (length=\(liveSnapshot.count))")
         }
         return liveSnapshot
     }
@@ -373,7 +373,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                             let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
                             if !text.isEmpty {
                                 let elapsed = Date().timeIntervalSince(startTime)
-                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s")
+                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s — length=\(text.count)")
                                 return text
                             }
                         }

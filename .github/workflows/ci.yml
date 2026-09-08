@@ -112,6 +112,8 @@ jobs:
       # 分层 frontmatter 防腐（tech-context 与代码一致）
       - name: Layer frontmatter anti-rot check
         run: python3 scripts/gates/check_frontmatter.py
+      - name: Advisory review policy contract
+        run: bash scripts/ci/kimi-review.contract.test.sh
       # 密钥扫描：拦硬编码 API key / token / password。测试假 key 在 .gitleaks.toml allowlist。
       - name: Install gitleaks
         run: brew install gitleaks

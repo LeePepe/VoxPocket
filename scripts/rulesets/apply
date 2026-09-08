@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Idempotently sync scripts/rulesets/main-protection.json to the GitHub repository.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+JSON="scripts/rulesets/main-protection.json"
+NAME="$(jq -r .name "$JSON")"
+SLUG="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+existing_id="$(gh api "repos/$SLUG/rulesets" --jq ".[] | select(.name == \"$NAME\") | .id" 2>/dev/null || true)"
+
+if [ -n "$existing_id" ]; then
+  gh api -X PUT "repos/$SLUG/rulesets/$existing_id" --input "$JSON" --jq '{id,name,enforcement,target}'
+else
+  gh api -X POST "repos/$SLUG/rulesets" --input "$JSON" --jq '{id,name,enforcement,target}'
+fi
+
