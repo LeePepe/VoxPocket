@@ -13,192 +13,145 @@ public struct QuickRecordingView: View {
     }
 
     public var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            QuickRecordingIslandView(
-                status: viewModel.recorderStatus,
-                transcript: viewModel.displayedTranscription,
-                audioLevel: viewModel.normalizedAudioLevel,
-                elapsed: viewModel.elapsedRecordingTime(at: context.date),
-                placement: placement,
-                onStop: { Task { await viewModel.stopRecording() } },
-                onCancel: { Task { await viewModel.cancelFromPanel() } },
-                onCopy: { viewModel.copyRecognizedText() }
-            )
-        }
+        QuickRecordingIslandView(
+            status: viewModel.recorderStatus,
+            transcript: viewModel.displayedTranscription,
+            audioLevel: viewModel.normalizedAudioLevel,
+            placement: placement,
+            onStop: { Task { await viewModel.stopRecording() } },
+            onCancel: { Task { await viewModel.cancelFromPanel() } },
+            onCopy: { viewModel.copyRecognizedText() }
+        )
     }
 }
 
-/// 「声音落岛」值驱动视图；真实录音、离屏渲染和预览共用同一套布局。
+/// 常态只呈现文字与状态色；操作在悬停、右键菜单和辅助功能中提供。
 @MainActor
 struct QuickRecordingIslandView: View {
     let status: RecorderStatus
     let transcript: String
     var audioLevel: Double?
-    var elapsed: TimeInterval = 0
     var placement: QuickRecordingPlacement = .floating
     var onStop: () -> Void = {}
     var onCancel: () -> Void = {}
     var onCopy: () -> Void = {}
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
-    @State private var textHeight: CGFloat = 84
+    @State private var isHovering = false
+    @State private var revealsTranscript = false
 
     private var showsTranscript: Bool {
         status != .idle && !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     private var size: CGSize {
-        QuickRecordingLayout.size(for: status, showsTranscript: showsTranscript, placement: placement, textHeight: textHeight)
+        QuickRecordingLayout.size(for: status, showsTranscript: showsTranscript, placement: placement)
     }
-    private var outline: QuickRecordingIslandOutline {
-        QuickRecordingIslandOutline(cameraSize: placement.cameraSize)
-    }
-    private var tint: Color {
-        switch status {
-        case .done: QuickRecordingColors.success
-        case .error: QuickRecordingColors.danger
-        default: QuickRecordingColors.primary.primaryText
-        }
-    }
+    private var tint: Color { QuickRecordingColors.status(status) }
+    private var outline: QuickRecordingIslandOutline { QuickRecordingIslandOutline(cameraSize: placement.cameraSize) }
+    private var canDismiss: Bool { status == .listening || status == .error }
+    private var wingWidth: CGFloat { max(0, (size.width - placement.cameraSize.width - 48) / 2) }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            content
-            if status != .idle && status != .done { footer }
+            if showsTranscript {
+                QuickRecordingTranscriptView(text: transcript)
+                    .frame(width: size.width - 2 * QuickRecordingLayout.contentInset,
+                           height: min(QuickRecordingLayout.readingHeight, max(0, size.height - QuickRecordingLayout.headerHeight - 16)))
+                    .padding(.bottom, 16)
+                    // 岛体揭开文字；文字不继承外轮廓的缩放、位移或弹簧动画。
+                    .transaction { $0.animation = nil }
+                    .opacity(revealsTranscript ? 1 : 0)
+            }
         }
         .frame(width: size.width, height: size.height, alignment: .top)
         .background(QuickRecordingColors.neutrals.card)
         .clipShape(outline, style: FillStyle(eoFill: true))
-        .overlay(outline.stroke(contrast == .increased ? QuickRecordingColors.neutrals.text2 : QuickRecordingColors.neutrals.border,
-                                lineWidth: contrast == .increased ? 1.5 : 1))
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.9), value: size)
+        .overlay(outline.stroke(contrast == .increased ? tint : QuickRecordingColors.neutrals.border,
+                                lineWidth: contrast == .increased ? 1.5 : 0.75))
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: showsTranscript)
         .frame(width: placement.panelFrame.width, height: placement.panelFrame.height, alignment: .top)
         .environment(\.colorScheme, .dark)
+        .onHover { isHovering = $0 }
+        .task(id: showsTranscript) { await revealTranscript() }
+        .contextMenu { actions }
         .accessibilityElement(children: .contain)
+        .accessibilityActions { actions }
         .accessibilityIdentifier("vox.quick.panel")
     }
 
     private var header: some View {
         HStack(spacing: 0) {
-            Label(statusLabel, systemImage: statusSymbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(status == .error ? QuickRecordingColors.neutrals.text1 : tint)
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(tint.opacity(0.13), in: Capsule())
-                .fixedSize()
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // 某些 SF Symbols 自带颜色层；用 alpha 遮罩保证图标与波形状态色一致。
+            tint
+                .frame(width: 24, height: 28)
+                .mask { Image(systemName: statusSymbol).font(.system(size: 13, weight: .semibold)) }
+                .frame(width: wingWidth, alignment: .leading)
+                .accessibilityAddTraits(.isImage)
+                .accessibilityLabel(Text(statusLabel))
                 .accessibilityIdentifier("vox.quick.status")
             Color.clear.frame(width: placement.cameraSize.width).accessibilityHidden(true)
-            HStack(spacing: 12) {
-                Text(Self.elapsedLabel(elapsed))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(QuickRecordingColors.neutrals.text2)
+            ZStack {
                 if status == .listening || status == .transcribing || status == .refining {
                     VoxWaveform(mode: waveformMode, tint: tint)
-                        .frame(width: QuickRecordingLayout.waveformWidth, height: 22)
+                        .frame(width: QuickRecordingLayout.waveformWidth, height: 20)
+                        .opacity(isHovering && canDismiss ? 0 : 1)
                         .accessibilityHidden(true)
                 }
+                if canDismiss {
+                    Button(action: onCancel) { Image(systemName: "xmark").frame(width: 32, height: 28) }
+                        .buttonStyle(.plain).foregroundStyle(QuickRecordingColors.neutrals.text2)
+                        .opacity(isHovering ? 1 : 0)
+                        .allowsHitTesting(isHovering)
+                        .accessibilityLabel(status == .error ? "关闭" : "取消录音")
+                        .accessibilityIdentifier("vox.quick.cancel")
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(width: QuickRecordingLayout.waveformWidth, height: 28)
+            .frame(width: wingWidth, alignment: .trailing)
         }
         .padding(.horizontal, 24)
-        .frame(height: max(QuickRecordingLayout.headerHeight, placement.cameraSize.height + 16))
+        .frame(height: QuickRecordingLayout.headerHeight)
     }
 
-    @ViewBuilder private var content: some View {
-        if showsTranscript {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(status == .error ? "已保留的文字" : status == .done ? "最终文字" : "实时转写")
-                    .font(.system(size: 12))
-                    .foregroundStyle(QuickRecordingColors.neutrals.text2)
-                QuickRecordingTranscriptView(text: transcript, highlightsLatest: status == .listening) { textHeight = $0 }
-                    .frame(height: min(textHeight, QuickRecordingLayout.readingHeight))
-                if status == .error {
-                    Text("本次处理未完成，识别文字仍保留在这里。")
-                        .font(.system(size: 12))
-                        .foregroundStyle(QuickRecordingColors.neutrals.text2)
-                }
-            }
-            .padding(.horizontal, QuickRecordingLayout.contentInset)
-            .padding(.top, 12).padding(.bottom, 20)
-            .frame(maxHeight: .infinity, alignment: .top)
-        } else {
-            Text(emptyMessage)
-                .font(.system(size: 18))
-                .foregroundStyle(QuickRecordingColors.neutrals.text2)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .padding(.horizontal, QuickRecordingLayout.contentInset)
-                .padding(.bottom, 16)
+    private func revealTranscript() async {
+        revealsTranscript = false
+        guard showsTranscript else { return }
+        guard !reduceMotion else { revealsTranscript = true; return }
+        do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
+        // 等轮廓基本展开后再淡入，避免文字首字在中途被缩窄的边界切掉。
+        withAnimation(.easeOut(duration: 0.12)) { revealsTranscript = true }
+    }
+
+    @ViewBuilder private var actions: some View {
+        if status == .listening {
+            Button("结束录音", action: onStop)
+            Button("取消录音", action: onCancel)
         }
-    }
-
-    private var footer: some View {
-        VStack(spacing: 12) {
-            Rectangle().fill(QuickRecordingColors.neutrals.border).frame(height: 1)
-            HStack {
-                if status == .listening {
-                    Button("取消", action: onCancel).buttonStyle(.plain)
-                        .accessibilityIdentifier("vox.quick.cancel")
-                } else {
-                    Text(status == .error ? "请重新按住 Fn 重试" : "正在处理，请稍候")
-                }
-                Spacer()
-                if status == .listening {
-                    Button(action: onStop) {
-                        HStack(spacing: 8) {
-                            Text("fn").font(.system(size: 11)).padding(4)
-                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(QuickRecordingColors.neutrals.border))
-                            Text("松开结束")
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(QuickRecordingColors.neutrals.inner, in: RoundedRectangle(cornerRadius: 10))
-                    .accessibilityLabel("结束转写，也可松开 Fn")
-                    .accessibilityIdentifier("vox.quick.stop")
-                } else if status == .error && showsTranscript {
-                    Button("复制原文", action: onCopy).buttonStyle(.plain)
-                        .foregroundStyle(QuickRecordingColors.primary.primaryText)
-                        .accessibilityIdentifier("vox.quick.copy")
-                }
-                if status == .error {
-                    Button("关闭", action: onCancel).buttonStyle(.plain)
-                        .accessibilityIdentifier("vox.quick.dismiss")
-                }
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(QuickRecordingColors.neutrals.text2)
-        }
-        .padding(.horizontal, 24).padding(.bottom, 16)
-    }
-
-    private var emptyMessage: String {
-        switch status {
-        case .idle, .listening: "说点什么，让想法留下来。"
-        case .transcribing, .refining: "正在整理刚才的语音…"
-        case .done: "文字已处理完成。"
-        case .error: "暂时无法完成录音，请重试。"
+        if status == .error {
+            if showsTranscript { Button("复制原文", action: onCopy) }
+            Button("关闭", action: onCancel)
         }
     }
 
     private var statusLabel: String {
         switch status {
         case .idle: "准备聆听"
-        case .listening: "正在聆听"
+        case .listening: "正在录音"
         case .transcribing: "正在转写"
         case .refining: "正在润色"
         case .done: "处理完成"
-        case .error: "录音出错"
+        case .error: "处理失败，可右键复制原文或关闭后重试"
         }
     }
 
     private var statusSymbol: String {
         switch status {
-        case .idle, .listening: "mic.fill"
-        case .transcribing: "text.alignleft"
+        case .idle, .listening: "circle.fill"
+        case .transcribing: "ellipsis"
         case .refining: "sparkles"
-        case .done: "checkmark.circle.fill"
-        case .error: "exclamationmark.triangle.fill"
+        case .done: "checkmark"
+        case .error: "exclamationmark"
         }
     }
 
@@ -209,22 +162,17 @@ struct QuickRecordingIslandView: View {
         default: .rest
         }
     }
-
-    static func elapsedLabel(_ elapsed: TimeInterval) -> String {
-        let seconds = elapsed.isFinite ? Int(max(0, min(elapsed, 359999))) : 0
-        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
-    }
 }
 
-/// 刘海区透明挖空；无刘海时完全不绘制摄像头占位。
+/// 真实刘海区透明挖空，不绘制硬件占位。
 struct QuickRecordingIslandOutline: Shape {
     var cameraSize: CGSize
 
     func path(in rect: CGRect) -> Path {
         let attached = cameraSize.height > 0
-        var path = UnevenRoundedRectangle(topLeadingRadius: attached ? 0 : 32,
-                                         bottomLeadingRadius: 32, bottomTrailingRadius: 32,
-                                         topTrailingRadius: attached ? 0 : 32).path(in: rect)
+        var path = UnevenRoundedRectangle(topLeadingRadius: attached ? 0 : 24,
+                                         bottomLeadingRadius: 24, bottomTrailingRadius: 24,
+                                         topTrailingRadius: attached ? 0 : 24).path(in: rect)
         if attached {
             let camera = CGRect(x: rect.midX - cameraSize.width / 2, y: rect.minY,
                                 width: cameraSize.width, height: cameraSize.height)
@@ -234,7 +182,7 @@ struct QuickRecordingIslandOutline: Shape {
     }
 }
 
-#Preview("声音落岛") {
-    QuickRecordingIslandView(status: .listening, transcript: "我想做一个更安静的语音工具，\n按下 Fn，就能把想法留下来。", audioLevel: 0.6, elapsed: 8)
+#Preview("精简语音岛") {
+    QuickRecordingIslandView(status: .refining, transcript: "明天开会讨论计划。")
 }
 #endif

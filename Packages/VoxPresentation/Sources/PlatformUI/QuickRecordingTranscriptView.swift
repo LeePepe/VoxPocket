@@ -5,8 +5,6 @@ import UIShared
 @MainActor
 struct QuickRecordingTranscriptView: View {
     let text: String
-    let highlightsLatest: Bool
-    var onTextHeightChange: (CGFloat) -> Void = { _ in }
     @State private var followsLatest = true
     @State private var hasEarlierText = false
 
@@ -43,12 +41,12 @@ struct QuickRecordingTranscriptView: View {
 
     private var transcriptContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            styledText
-                .font(.system(size: 22, weight: .regular))
-                .lineSpacing(10)
+            Text(text)
+                .foregroundStyle(QuickRecordingColors.neutrals.text1)
+                .font(.system(size: 20, weight: .regular))
+                .lineSpacing(8)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onTextHeightChange($0) }
                 .accessibilityLabel("识别文字")
                 .accessibilityValue(Text(text))
                 .accessibilityIdentifier("vox.quick.transcript")
@@ -70,26 +68,6 @@ struct QuickRecordingTranscriptView: View {
         }
     }
 
-    private var styledText: Text {
-        var result = AttributedString(text)
-        result.foregroundColor = QuickRecordingColors.neutrals.text1
-        if highlightsLatest {
-            let count = Self.latestSegment(in: text).count
-            let start = result.characters.index(result.endIndex, offsetBy: -count)
-            result[start..<result.endIndex].foregroundColor = QuickRecordingColors.primary.primaryText
-        }
-        return Text(result)
-    }
-
-    /// 用最近短句边界强调识别末尾，不在中文词语或 emoji 中间切色。
-    static func latestSegment(in text: String) -> String {
-        let separators: Set<Character> = ["，", ",", "。", ".", "！", "!", "？", "?", ";", "；", "\n"]
-        guard let lastContent = text.lastIndex(where: { !separators.contains($0) }) else { return "" }
-        let boundary = text[..<lastContent].lastIndex(where: { separators.contains($0) })
-        let start = boundary.map { text.index(after: $0) } ?? text.startIndex
-        let segment = text[start...]
-        return segment.count <= 80 ? String(segment) : ""
-    }
 }
 
 private struct TranscriptScrollMetrics: Equatable {

@@ -75,11 +75,12 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
     }
 
-    /// 处理失败仍保留识别原文；完成态显示实际交付的最终文字。
+    /// 录音时展示原文；润色中展示实际返回的更新，空结果不清空原文。
     public var displayedTranscription: String {
         switch recorderStatus {
         case .idle: return ""
-        case .done: return refinedText.isEmpty ? liveTranscription : refinedText
+        case .refining, .done:
+            return refinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? liveTranscription : refinedText
         default: return liveTranscription
         }
     }
@@ -156,7 +157,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
-                if state.isRefining {
+                if state.isRefining && self.isProcessing {
                     self.recorderStatus = .refining
                 }
             }
@@ -169,7 +170,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                     guard let self else { return }
                     // send() 从 MainActor 发出，直接更新 refinedText
                     self.refinedText = text
-                    if !text.isEmpty {
+                    if !text.isEmpty && self.isProcessing {
                         self.recorderStatus = .refining
                     }
                 }

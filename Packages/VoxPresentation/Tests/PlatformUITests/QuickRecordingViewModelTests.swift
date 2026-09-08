@@ -9,6 +9,38 @@ import UseCases
 
 @MainActor
 final class QuickRecordingViewModelTests: XCTestCase {
+    func testRefinementUpdatesAreVisibleBeforeCompletion() {
+        let viewModel = makeViewModel()
+        viewModel.liveTranscription = "我明天去开会然后说那个计划"
+        viewModel.recorderStatus = .refining
+        XCTAssertEqual(viewModel.displayedTranscription, viewModel.liveTranscription)
+        viewModel.refinedText = "明天开会讨论计划。"
+        XCTAssertEqual(viewModel.displayedTranscription, "明天开会讨论计划。")
+    }
+
+    func testStreamingRefinementDoesNotPreventFnReleaseFromStoppingRecording() async throws {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                               refinementUseCase: FakeRefinementUseCase(),
+                                               clipboardService: FakeClipboardService(), streamingCoordinator: coordinator)
+        recording.onStop = {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(20))
+                transcription.sendFinalText("识别原文")
+            }
+        }
+        await viewModel.startRecording()
+        transcription.sendLiveText("识别原文")
+        try await Task.sleep(for: .milliseconds(20))
+        coordinator.send("已润色的句子。")
+        XCTAssertEqual(viewModel.recorderStatus, .listening)
+        XCTAssertNotNil(viewModel.normalizedAudioLevel)
+        await viewModel.stopRecording()
+        XCTAssertEqual(recording.stopCallCount, 1)
+    }
+
     func testQuickRecordingDoesNotAutoStopAfterSilenceWhileStillHeld() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()
@@ -433,5 +465,15 @@ private final class FakeClipboardService: ClipboardService, @unchecked Sendable 
     func paste() -> String? { nil }
     func clear() {}
     func simulatePaste() async throws {}
+}
+
+/// 测试仅从 MainActor 发送；unchecked 仅桥接 Combine subject 的 Sendable 缺失。
+private final class FakeQuickStreamingCoordinator: StreamingInputCoordinator, @unchecked Sendable {
+    private let subject = CurrentValueSubject<String, Never>("")
+    var refinedVoiceTextPublisher: AnyPublisher<String, Never> { subject.eraseToAnyPublisher() }
+    func send(_ text: String) { subject.send(text) }
+    func startStreaming() async {}
+    func stopStreaming() async {}
+    func cancel() {}
 }
 #endif

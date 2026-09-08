@@ -5,6 +5,18 @@ import XCTest
 @testable import UIShared
 
 final class QuickRecordingColorsTests: XCTestCase {
+    func testActiveStagesHaveDistinctVisibleStatusColors() {
+        let colors = [RecorderStatus.listening, .transcribing, .refining, .done, .error].map {
+            components(QuickRecordingColors.status($0))
+        }
+        let background = components(QuickRecordingColors.neutrals.card)
+        for index in colors.indices {
+            XCTAssertGreaterThanOrEqual(contrast(colors[index], background), 3)
+            for other in colors.indices where other > index {
+                XCTAssertGreaterThan(zip(colors[index], colors[other]).map { abs($0 - $1) }.reduce(0, +), 0.15)
+            }
+        }
+    }
     func testTranscriptAndErrorLabelMeetSmallTextContrast() {
         let background = components(QuickRecordingColors.neutrals.card)
         let red = components(QuickRecordingColors.danger)

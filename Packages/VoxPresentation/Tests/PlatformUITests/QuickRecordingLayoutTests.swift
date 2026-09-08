@@ -4,18 +4,23 @@ import UIShared
 @testable import PlatformUI
 
 final class QuickRecordingLayoutTests: XCTestCase {
+    func testStreamingTextDoesNotRepeatedlyResizeExpandedIsland() {
+        let first = QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true, textHeight: 30)
+        let next = QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true, textHeight: 100)
+        XCTAssertEqual(first, next)
+    }
     func testWaitingAndExpandedProportionsMatchApprovedDesign() {
-        XCTAssertEqual(QuickRecordingLayout.islandSize(for: .listening).width, 430)
-        XCTAssertEqual(QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true).width, 560)
-        XCTAssertEqual(QuickRecordingLayout.islandCorner(for: .listening), 32)
-        XCTAssertEqual(QuickRecordingLayout.readingHeight, 178)
+        XCTAssertEqual(QuickRecordingLayout.islandSize(for: .listening).width, 280)
+        XCTAssertEqual(QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true).width, 480)
+        XCTAssertEqual(QuickRecordingLayout.islandCorner(for: .listening), 24)
+        XCTAssertEqual(QuickRecordingLayout.readingHeight, 80)
     }
 
-    func testShortTranscriptUsesLessHeightThanLongTranscript() {
+    func testShortAndLongTranscriptsShareStableReadingEnvelope() {
         let short = QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true, textHeight: 74)
         let long = QuickRecordingLayout.islandSize(for: .listening, showsTranscript: true, textHeight: 1000)
-        XCTAssertLessThan(short.height, long.height)
-        XCTAssertEqual(long.height, 178 + QuickRecordingLayout.readingHeight)
+        XCTAssertEqual(short.height, long.height)
+        XCTAssertEqual(long.height, QuickRecordingLayout.panelHeight)
     }
 
     func testNotchedPanelAttachesToActualScreenTop() {
@@ -27,7 +32,7 @@ final class QuickRecordingLayoutTests: XCTestCase {
         XCTAssertEqual(placement.cameraSize, camera.size)
         XCTAssertTrue(placement.isAttached)
         let waiting = QuickRecordingLayout.size(for: .listening, showsTranscript: false, placement: placement)
-        XCTAssertGreaterThanOrEqual(waiting.width, camera.width + 304)
+        XCTAssertGreaterThanOrEqual(waiting.width, camera.width + QuickRecordingLayout.cameraWingSpace)
     }
 
     func testExternalScreenUsesVisibleFrameAndNoFakeCamera() {
@@ -43,7 +48,7 @@ final class QuickRecordingLayoutTests: XCTestCase {
 
     func testNarrowScreenClampsPanelAndAvoidsUnusableCameraWings() {
         let screen = CGRect(x: 700, y: -900, width: 390, height: 700)
-        let camera = CGRect(x: 805, y: -230, width: 180, height: 30)
+        let camera = CGRect(x: 770, y: -230, width: 250, height: 30)
         let placement = QuickRecordingPlacement(screenFrame: screen, visibleFrame: screen, cameraRect: camera)
         XCTAssertEqual(placement.panelFrame.width, 358)
         XCTAssertFalse(placement.isAttached)
@@ -67,17 +72,11 @@ final class QuickRecordingLayoutTests: XCTestCase {
         XCTAssertFalse(placement.isAttached)
     }
 
-    @MainActor func testLatestHighlightUsesPhraseBoundaryInsteadOfSplittingWords() {
-        XCTAssertEqual(QuickRecordingTranscriptView.latestSegment(in: "旧句子。\n这是最新识别到的句子。"), "这是最新识别到的句子。")
-        XCTAssertEqual(QuickRecordingTranscriptView.latestSegment(in: "按下 Fn，就能把想法留下来。"), "就能把想法留下来。")
-        XCTAssertEqual(QuickRecordingTranscriptView.latestSegment(in: "开始，👨‍👩‍👧‍👦 一起出发！"), "👨‍👩‍👧‍👦 一起出发！")
-        XCTAssertEqual(QuickRecordingTranscriptView.latestSegment(in: ""), "")
-    }
-
-    @MainActor func testDurationFormattingHandlesInitialAndLongRecordings() {
-        XCTAssertEqual(QuickRecordingIslandView.elapsedLabel(-1), "00:00")
-        XCTAssertEqual(QuickRecordingIslandView.elapsedLabel(68), "01:08")
-        XCTAssertEqual(QuickRecordingIslandView.elapsedLabel(.nan), "00:00")
+    func testProcessingStagesDoNotResizeVisibleText() {
+        let sizes = [RecorderStatus.listening, .transcribing, .refining, .done, .error].map {
+            QuickRecordingLayout.islandSize(for: $0, showsTranscript: true)
+        }
+        XCTAssertTrue(sizes.allSatisfy { $0 == sizes.first })
     }
 }
 #endif
