@@ -9,6 +9,38 @@ import UseCases
 
 @MainActor
 final class QuickRecordingViewModelTests: XCTestCase {
+    func testRefinementUpdatesAreVisibleBeforeCompletion() {
+        let viewModel = makeViewModel()
+        viewModel.liveTranscription = "我明天去开会然后说那个计划"
+        viewModel.recorderStatus = .refining
+        XCTAssertEqual(viewModel.displayedTranscription, viewModel.liveTranscription)
+        viewModel.refinedText = "明天开会讨论计划。"
+        XCTAssertEqual(viewModel.displayedTranscription, "明天开会讨论计划。")
+    }
+
+    func testStreamingRefinementDoesNotPreventFnReleaseFromStoppingRecording() async throws {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                               refinementUseCase: FakeRefinementUseCase(),
+                                               clipboardService: FakeClipboardService(), streamingCoordinator: coordinator)
+        recording.onStop = {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(20))
+                transcription.sendFinalText("识别原文")
+            }
+        }
+        await viewModel.startRecording()
+        transcription.sendLiveText("识别原文")
+        try await Task.sleep(for: .milliseconds(20))
+        coordinator.send("已润色的句子。")
+        XCTAssertEqual(viewModel.recorderStatus, .listening)
+        XCTAssertNotNil(viewModel.normalizedAudioLevel)
+        await viewModel.stopRecording()
+        XCTAssertEqual(recording.stopCallCount, 1)
+    }
+
     func testQuickRecordingDoesNotAutoStopAfterSilenceWhileStillHeld() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()
@@ -54,6 +86,23 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsLiveTranscription)
 
         viewModel.recorderStatus = .error
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+    }
+
+    func testWhitespaceDoesNotExpandTranscript() {
+        let viewModel = makeViewModel()
+        viewModel.liveTranscription = " \n\t　"
+        viewModel.recorderStatus = .listening
+        XCTAssertFalse(viewModel.showsLiveTranscription)
+    }
+
+    func testNewRecordingClearsPreviousTranscript() async {
+        let viewModel = makeViewModel()
+        viewModel.liveTranscription = "上一轮识别内容"
+        viewModel.refinedText = "上一轮润色内容"
+        await viewModel.startRecording()
+        XCTAssertTrue(viewModel.liveTranscription.isEmpty)
+        XCTAssertTrue(viewModel.refinedText.isEmpty)
         XCTAssertFalse(viewModel.showsLiveTranscription)
     }
 
@@ -229,6 +278,63 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertEqual(recording.stopCallCount, 1)
     }
 
+    func testErrorRetainsOriginalTextAndCopiesIt() {
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: FakeRecordingUseCase(),
+                                               transcriptionUseCase: FakeTranscriptionUseCase(),
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: clipboard)
+        viewModel.liveTranscription = "已识别原文"
+        viewModel.refinedText = "未完成的润色"
+        viewModel.recorderStatus = .error
+        XCTAssertEqual(viewModel.displayedTranscription, "已识别原文")
+        viewModel.copyRecognizedText()
+        XCTAssertEqual(clipboard.copiedText, "已识别原文")
+        viewModel.recorderStatus = .idle
+        XCTAssertTrue(viewModel.displayedTranscription.isEmpty)
+    }
+
+    func testCancelFromPanelStopsAndRequestsDismissalOnce() async {
+        let recording = FakeRecordingUseCase()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording,
+                                               transcriptionUseCase: FakeTranscriptionUseCase(),
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: FakeClipboardService())
+        var dismissals = 0
+        viewModel.onNoResult = { dismissals += 1 }
+        await viewModel.startRecording()
+        await viewModel.cancelFromPanel()
+        await viewModel.cancelFromPanel()
+        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(dismissals, 1)
+        XCTAssertEqual(viewModel.recorderStatus, .idle)
+    }
+
+    func testCompletionKeepsFinalTextVisibleUntilHostClosesAndFreezesDuration() async throws {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                               refinementUseCase: FakeRefinementUseCase(streamedChunks: ["已整理"]),
+                                               clipboardService: clipboard)
+        recording.onStop = {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(20))
+                transcription.sendFinalText("识别原文")
+            }
+        }
+        let completed = expectation(description: "完成回调")
+        viewModel.onComplete = { _ in completed.fulfill() }
+        await viewModel.startRecording()
+        transcription.sendLiveText("识别原文")
+        try await Task.sleep(for: .milliseconds(20))
+        await viewModel.stopRecording()
+        await fulfillment(of: [completed], timeout: 2)
+        XCTAssertEqual(viewModel.recorderStatus, .done)
+        XCTAssertEqual(viewModel.displayedTranscription, clipboard.copiedText)
+        XCTAssertEqual(viewModel.displayedTranscription, "已整理。")
+        XCTAssertEqual(viewModel.elapsedRecordingTime(at: Date()),
+                       viewModel.elapsedRecordingTime(at: Date().addingTimeInterval(60)))
+    }
+
     private func makeViewModel() -> QuickRecordingViewModel {
         QuickRecordingViewModel(
             recordingUseCase: FakeRecordingUseCase(),
@@ -359,5 +465,15 @@ private final class FakeClipboardService: ClipboardService, @unchecked Sendable 
     func paste() -> String? { nil }
     func clear() {}
     func simulatePaste() async throws {}
+}
+
+/// 测试仅从 MainActor 发送；unchecked 仅桥接 Combine subject 的 Sendable 缺失。
+private final class FakeQuickStreamingCoordinator: StreamingInputCoordinator, @unchecked Sendable {
+    private let subject = CurrentValueSubject<String, Never>("")
+    var refinedVoiceTextPublisher: AnyPublisher<String, Never> { subject.eraseToAnyPublisher() }
+    func send(_ text: String) { subject.send(text) }
+    func startStreaming() async {}
+    func stopStreaming() async {}
+    func cancel() {}
 }
 #endif
