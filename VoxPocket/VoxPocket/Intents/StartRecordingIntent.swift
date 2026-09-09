@@ -12,6 +12,7 @@ struct StartRecordingIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        try await LLMAppConfig.loadRuntimeConfiguration()
         ServiceContainer.shared.deepLinkRouter.pendingAction = .startRecording
         return .result()
     }

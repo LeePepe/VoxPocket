@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import VoxPocket
 import TranscriptionKit
+import Preferences
 
 struct TranscriberSelectionTests {
     @MainActor @Test func defaultsSelectCloudFinalAndAzureRefinement() {
@@ -15,6 +16,22 @@ struct TranscriberSelectionTests {
         let config = try #require(LLMAppConfig.transcriptionConfig(environment: cloudEnvironment))
         #expect(config.endpoint.absoluteString == "https://example.invalid/openai/deployments/fixture-asr/audio/transcriptions?api-version=2024-02-01")
         #expect(config.apiKey == "test-key")
+    }
+
+    @MainActor @Test func privateFileFeedsExistingCloudConfigurationMapper() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("fixture.json")
+        let data = Data(#"{"azure":{"endpoint":"https://example.invalid","apiKey":"test-key","transcriptionDeployment":"private-asr","refinementDeployment":"private-llm"}}"#.utf8)
+        try data.write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        let runtime = try await DefaultPrivateModelConfigurationLoader(fileURL: url).load(environment: [:])
+        let config = try #require(LLMAppConfig.transcriptionConfig(environment: runtime.environmentValues))
+        #expect(config.endpoint.path.contains("/deployments/private-asr/"))
+        #expect(config.apiKey == "test-key")
+        #expect(LLMAppConfig.refinementAPIKey(environment: runtime.environmentValues) == "test-key")
+        #expect(runtime.environmentValues["AZURE_FOUNDRY_MODEL"] == "private-llm")
     }
 
     @MainActor @Test func missingOrUnsafeConfigurationIsRejected() {

@@ -8,6 +8,7 @@
 import SwiftUI
 import Preferences
 import UseCases
+import OSLog
 #if os(macOS)
 import PlatformAdapters
 import Carbon
@@ -18,6 +19,25 @@ import UITestingBridge
 #endif
 
 @main
+enum VoxPocketEntryPoint {
+    @MainActor
+    static func main() async {
+        do {
+            try await LLMAppConfig.loadRuntimeConfiguration()
+        } catch {
+            // 配置无效时不创建任何模型服务；诊断固定且不包含配置内容。
+            let message = (error as? PrivateModelConfigurationError)?.errorDescription ?? "无法加载本机模型配置。"
+            Logger(subsystem: "com.leepepe.voxpocket", category: "ModelConfiguration")
+                .error("\(message, privacy: .public)")
+            await Task.detached {
+                FileHandle.standardError.write(Data((message + "\n").utf8))
+            }.value
+            return
+        }
+        VoxPocketApp.main()
+    }
+}
+
 struct VoxPocketApp: App {
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate

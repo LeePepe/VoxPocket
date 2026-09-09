@@ -218,8 +218,9 @@ public final class ServiceContainer: ObservableObject {
 
     static func makeTranscriber(
         preloadOnStart: Bool = true,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String]? = nil
     ) -> any TranscriptionCoordinator {
+        let environment = environment ?? LLMAppConfig.runtimeEnvironment
         switch LLMAppConfig.defaultTranscriberProvider {
         case .localWhisperKit:
             return LoadingFallbackTranscriptionCoordinator(
@@ -249,7 +250,7 @@ public final class ServiceContainer: ObservableObject {
         }
     }
 
-    static func makeQuickTranscriber(environment: [String: String] = ProcessInfo.processInfo.environment) -> any TranscriptionCoordinator {
+    static func makeQuickTranscriber(environment: [String: String]? = nil) -> any TranscriptionCoordinator {
         makeTranscriber(preloadOnStart: true, environment: environment)
     }
 
@@ -348,7 +349,7 @@ public final class ServiceContainer: ObservableObject {
 
     private static func readAzureFoundryAPIKey() -> String? {
         // 新资源共享密钥优先；兼容旧变量，但空值不能遮蔽有效配置。
-        LLMAppConfig.refinementAPIKey(environment: ProcessInfo.processInfo.environment)
+        LLMAppConfig.refinementAPIKey(environment: LLMAppConfig.runtimeEnvironment)
     }
 
     private static func makeAzureFoundryDeployment() -> AzureFoundryDeployment? {

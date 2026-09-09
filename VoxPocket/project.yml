@@ -39,6 +39,8 @@ targets:
         excludes:
           - Info.plist
           - "*.entitlements"
+          - "*config.private*"
+          - "**/*config.private*"
     dependencies:
       - package: VoxPresentation
         product: PlatformUI
@@ -116,6 +118,8 @@ targets:
       - path: ../VoxPocketWidget
         excludes:
           - Info.plist
+          - "*config.private*"
+          - "**/*config.private*"
     dependencies:
       - package: VoxPresentation
         product: WidgetUI
