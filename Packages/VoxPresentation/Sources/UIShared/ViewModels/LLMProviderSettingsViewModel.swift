@@ -17,7 +17,7 @@ public enum LLMProviderSelection: String, CaseIterable, Codable, Sendable {
 
 @MainActor
 public final class LLMProviderSettingsViewModel: ObservableObject {
-    @Published public var selectedProvider: LLMProviderSelection = .appleIntelligence
+    @Published public var selectedProvider: LLMProviderSelection = .azureFoundry
     @Published public var skipContentAnalysis: Bool = false
 
     private let preferences: UserDefaultsPreferencesStore
@@ -29,9 +29,9 @@ public final class LLMProviderSettingsViewModel: ObservableObject {
     public func load() async {
         let stored: String = await preferences.getValue(
             for: .llmProvider,
-            default: LLMProviderSelection.appleIntelligence.rawValue
+            default: LLMProviderSelection.azureFoundry.rawValue
         )
-        selectedProvider = LLMProviderSelection(rawValue: stored) ?? .appleIntelligence
+        selectedProvider = LLMProviderSelection(rawValue: stored) ?? .azureFoundry
         skipContentAnalysis = await preferences.getValue(for: .llmSkipContentAnalysis, default: false)
     }
 

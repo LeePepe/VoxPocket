@@ -4,7 +4,7 @@ import Preferences
 
 @MainActor
 final class LLMProviderSettingsViewModelTests: XCTestCase {
-    func testLoadDefaultProviderIsAppleIntelligence() async {
+    func testLoadDefaultProviderIsAzureFoundry() async {
         let suite = "LLMProviderSettingsViewModelTests.default"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
@@ -14,7 +14,7 @@ final class LLMProviderSettingsViewModelTests: XCTestCase {
 
         await viewModel.load()
 
-        XCTAssertEqual(viewModel.selectedProvider, .appleIntelligence)
+        XCTAssertEqual(viewModel.selectedProvider, .azureFoundry)
     }
 
     func testUpdateProviderPersistsSelection() async {
@@ -29,5 +29,17 @@ final class LLMProviderSettingsViewModelTests: XCTestCase {
 
         let stored: String? = await store.getValue(for: .llmProvider)
         XCTAssertEqual(stored, LLMProviderSelection.azureFoundry.rawValue)
+    }
+
+    func testSavedAppleSelectionIsNotOverwrittenByNewDefault() async {
+        let suite = "LLMProviderSettingsViewModelTests.savedApple"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsPreferencesStore(defaults: defaults)
+        await store.setValue(LLMProviderSelection.appleIntelligence.rawValue, for: .llmProvider)
+        let viewModel = LLMProviderSettingsViewModel(preferences: store)
+        await viewModel.load()
+        XCTAssertEqual(viewModel.selectedProvider, .appleIntelligence)
     }
 }
