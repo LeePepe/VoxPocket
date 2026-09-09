@@ -1,0 +1,42 @@
+{
+  "fill": "automatic",
+  "groups": [
+    {
+      "name": "Spectral Orbit",
+      "layers": [
+        {
+          "name": "Orbit 01",
+          "glass": true,
+          "image-name-specializations": [
+            {"value": "orbit-01-light.svg"},
+            {"appearance": "dark", "value": "orbit-01-dark.svg"},
+            {"appearance": "tinted", "value": "orbit-01-mono.svg"}
+          ]
+        },
+        {
+          "name": "Orbit 02",
+          "glass": true,
+          "image-name-specializations": [
+            {"value": "orbit-02-light.svg"},
+            {"appearance": "dark", "value": "orbit-02-dark.svg"},
+            {"appearance": "tinted", "value": "orbit-02-mono.svg"}
+          ]
+        },
+        {
+          "name": "Orbit 03",
+          "glass": true,
+          "image-name-specializations": [
+            {"value": "orbit-03-light.svg"},
+            {"appearance": "dark", "value": "orbit-03-dark.svg"},
+            {"appearance": "tinted", "value": "orbit-03-mono.svg"}
+          ]
+        }
+      ],
+      "lighting": "individual",
+      "specular": true,
+      "shadow": {"kind": "neutral", "opacity": 0.22},
+      "translucency": {"enabled": false, "value": 0.5}
+    }
+  ],
+  "supported-platforms": {"squares": "shared", "circles": []}
+}
