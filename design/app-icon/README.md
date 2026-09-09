@@ -62,7 +62,7 @@ macOS 输出新的 `Assets.car`、`AppIcon.icns`，partial Info.plist 中 `CFBun
 - iOS 编译出现宿主模拟器 `CIPortraitEffectSpillCorrection` 提示，但返回成功并生成图标资源；仍需 CI 完整 App 验证。
 - 本次不做商标唯一性声明；未把 PNG 备份等同于原生分层配方。
 
-独立视觉审查 **34/35**，无原生导出资源阻塞：已查看六种外观与 16/32/64/1024px，交叉点完整，加粗与浮雕成立。TintedDark 的 16px 内部细节较弱，但外轮廓仍可辨；这不等同于已安装 App 的 Dock 或壁纸合成验收。
+TintedDark 的 16px 内部细节较弱。原生导出预览不等同于已安装 App 的 Dock 或壁纸合成验收，最终效果仍需在目标系统中检查。
 
 ## 一手设计依据
 

@@ -39,7 +39,7 @@
 - **SC-001**: 生成一致性检查和回归测试全部通过。
 - **SC-002**: macOS 26.2 与 iOS 26.2 图标资源编译通过；macOS 产出 `Assets.car`、`AppIcon.icns` 和图标 Info.plist 字段。
 - **SC-003**: 六种外观 × 五种尺寸的 30 张原生 PNG 导出且尺寸正确。
-- **SC-004**: 独立视觉审查无阻塞问题。完整 App 构建和真实 Dock/Finder/Spotlight 的最终安装验收不冒称已完成。
+- **SC-004**: 六种外观预览应无裁切、意外断线或交点破损；完整 App 构建和真实 Dock/Finder/Spotlight 的最终安装验收需另行执行。
 
 ## Scope
 
