@@ -5,6 +5,7 @@
 set -uo pipefail
 REPO="$(git rev-parse --show-toplevel)"
 cd "$REPO"
+python3 scripts/gates/check_private_config.py || exit 1
 
 base="$(git merge-base @ origin/main 2>/dev/null || echo HEAD~1)"
 changed="$(git diff --name-only "$base"..@ 2>/dev/null)"

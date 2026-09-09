@@ -51,6 +51,11 @@ artifacts/suites/
 Secrets.xcconfig
 **/Secrets.xcconfig
 
+# Runtime model credentials and editor backups: never commit or bundle.
+*config.private*
+**/*config.private*
+__pycache__/
+
 # Fastlane / TestFlight 发布产物与密钥（绝不提交）
 AuthKey_*.p8            # App Store Connect API key，仅本地/CI secret
 *.pkg                  # macOS 打包产物
@@ -60,4 +65,3 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/test_output/
 fastlane/README.md
-

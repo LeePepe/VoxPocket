@@ -58,6 +58,8 @@ swift test --package-path Packages/VoxApplication
 
 ## Engineering Rules
 
+- **模型配置**：修改 Azure 启动配置时先读 `docs/architecture/private-model-config.md`；私密配置只在沙箱运行时读取，模板才入库，交付前检查安装包不含私密文件。
+
 - 协议驱动 DI，默认实现用 `Default*` 命名。
 - 测试替身使用 `Fake*` / `Mock*` 命名。
 - 不向 `VoxDomain` 引入外部依赖。

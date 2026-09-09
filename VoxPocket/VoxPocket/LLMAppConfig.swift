@@ -1,6 +1,8 @@
 import Foundation
 import LLMKit
 import TranscriptionKit
+import Preferences
+import OSLog
 
 /// 转录器提供者选择
 enum TranscriberProvider {
@@ -17,13 +19,29 @@ enum TranscriberProvider {
 }
 
 /// App 内 LLM 固定配置（非敏感项）
+@MainActor
 enum LLMAppConfig {
+    private(set) static var runtimeEnvironment = ProcessInfo.processInfo.environment
+    private static let configurationTask = Task {
+        try await DefaultPrivateModelConfigurationLoader().load(environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// SwiftUI 及各入口创建服务之前等待同一次后台加载；不修改进程全局环境。
+    static func loadRuntimeConfiguration() async throws {
+        let configuration = try await configurationTask.value
+        runtimeEnvironment = configuration.environmentValues
+        let source = configuration.loadedPrivateFile ? "private_file" : "environment"
+        let speechReady = transcriptionConfig(environment: runtimeEnvironment) != nil
+        let textReady = refinementAPIKey(environment: runtimeEnvironment) != nil && azureEndpoint != nil
+        Logger(subsystem: "com.leepepe.voxpocket", category: "ModelConfiguration")
+            .info("source=\(source, privacy: .public) transcription_ready=\(speechReady) refinement_ready=\(textReady)")
+    }
 
     // MARK: - Transcriber
 
     /// 默认转录器提供者
     ///
-    /// Apple 实时预览 + gpt-transcribe 终稿，地址与密钥由环境注入。
+    /// Apple 实时预览 + gpt-transcribe 终稿，地址与密钥由运行时配置提供。
     /// 云端配置不完整时回退 `.appleSpeech` 并输出配置告警。
     static let defaultTranscriberProvider: TranscriberProvider = .hybridWhisper
     /// 默认 provider（当用户未在设置中显式选择时）
@@ -34,13 +52,12 @@ enum LLMAppConfig {
     /// `azureEndpoint`：从环境变量 `AZURE_FOUNDRY_ENDPOINT` 读取；
     /// 未配置时尝试 `AZURE_OPENAI_ENDPOINT`，两者都缺失则 Azure 不可用。
     /// `azureModelIdentifier`：可通过 `AZURE_FOUNDRY_MODEL` 覆盖。
-    static let azureEndpoint: URL? = secureURL(
-        ProcessInfo.processInfo.environment["AZURE_FOUNDRY_ENDPOINT"]
-            ?? ProcessInfo.processInfo.environment["AZURE_OPENAI_ENDPOINT"]
-    )
-    static let azureModelIdentifier: String = {
-        nonempty(ProcessInfo.processInfo.environment["AZURE_FOUNDRY_MODEL"]) ?? "gpt-5.6-luna"
-    }()
+    static var azureEndpoint: URL? {
+        secureURL(runtimeEnvironment["AZURE_FOUNDRY_ENDPOINT"] ?? runtimeEnvironment["AZURE_OPENAI_ENDPOINT"])
+    }
+    static var azureModelIdentifier: String {
+        nonempty(runtimeEnvironment["AZURE_FOUNDRY_MODEL"]) ?? "gpt-5.6-luna"
+    }
     static let azureAPIVersion = "2024-05-01-preview"
     static let azureAuthMode: AzureFoundryAuthMode = .apiKey
     static let azureAPIStyle: AzureFoundryAPIStyle = .openAIV1

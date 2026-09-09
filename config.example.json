@@ -1,0 +1,8 @@
+{
+  "azure": {
+    "endpoint": "https://example.invalid",
+    "apiKey": "",
+    "transcriptionDeployment": "gpt-transcribe",
+    "refinementDeployment": "gpt-5.6-luna"
+  }
+}
