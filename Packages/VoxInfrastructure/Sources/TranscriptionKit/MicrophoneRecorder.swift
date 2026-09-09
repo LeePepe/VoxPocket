@@ -144,9 +144,13 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
             for: .applicationSupportDirectory, in: .userDomainMask,
             appropriateFor: nil, create: true
         )
-        let directory = support.appendingPathComponent("VoxPocket/TemporaryAudio", isDirectory: true)
+        var directory = support.appendingPathComponent("VoxPocket/TemporaryAudio", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try directory.setResourceValues(values)
         return directory.appendingPathComponent("mic_\(UUID().uuidString).wav")
     }
 

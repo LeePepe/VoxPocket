@@ -12,6 +12,10 @@ final class WhisperEngineRequestTests: XCTestCase {
         XCTAssertEqual(first.deletingLastPathComponent(), root.appendingPathComponent("VoxPocket/TemporaryAudio", isDirectory: true))
         XCTAssertEqual(first.pathExtension, "wav")
         XCTAssertNotEqual(first, second)
+        let directory = first.deletingLastPathComponent()
+        XCTAssertEqual(try directory.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
+        let attributes = try FileManager.default.attributesOfItem(atPath: directory.path)
+        XCTAssertEqual(attributes[.posixPermissions] as? Int, 0o700)
     }
 
     final class MockURLProtocol: URLProtocol, @unchecked Sendable {
