@@ -68,7 +68,7 @@ struct QuickRecordingIslandView: View {
                     .padding(.bottom, 16)
                     // 岛体揭开文字；文字不继承外轮廓的缩放、位移或弹簧动画。
                     .transaction { $0.animation = nil }
-                    .opacity(revealsTranscript ? 1 : 0)
+                    .opacity(reduceMotion || revealsTranscript ? 1 : 0)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .top)

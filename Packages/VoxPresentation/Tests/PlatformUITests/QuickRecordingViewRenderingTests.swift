@@ -304,7 +304,8 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
 
     func testRenderedTranscriptIsVisibleOnlyInActiveStates() async throws {
         for status in RecorderStatus.allCases {
-            let bitmap = try await render(status: status, transcript: "Visible transcript sample.")
+            // 此测试验证状态可见性，动画时序由独立入场与过渡测试覆盖。
+            let bitmap = try await render(status: status, transcript: "Visible transcript sample.", reduceMotion: true)
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
@@ -405,6 +406,14 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         panel.contentView = host
         panel.orderFront(nil)
         defer { panel.orderOut(nil) }
+        host.layoutSubtreeIfNeeded()
+        panel.displayIfNeeded()
+        let mountDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while !state.isMounted && ContinuousClock.now < mountDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(state.isMounted, "先确认原生宿主已挂载，再计算截图的动画采样时间")
+        await Task.yield()
         try await Task.sleep(for: initialWait)
         if scrollToTopBeforeUpdate {
             let scroll = try XCTUnwrap(findScrollView(in: host))
@@ -465,6 +474,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
 private final class FakeIslandRenderState: ObservableObject {
     @Published var status: RecorderStatus
     @Published var transcript: String
+    @Published var isMounted = false
 
     init(status: RecorderStatus, transcript: String) {
         self.status = status
@@ -483,6 +493,7 @@ private struct IslandRenderHost: View {
         QuickRecordingIslandView(status: state.status, transcript: state.transcript, audioLevel: 0.6,
                                  placement: placement, forceReducedMotion: reduceMotion)
             .environment(\.colorScheme, colorScheme)
+            .onAppear { state.isMounted = true }
     }
 }
 #endif
