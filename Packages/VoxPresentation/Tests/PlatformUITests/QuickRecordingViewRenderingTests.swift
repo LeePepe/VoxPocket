@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Combine
 import SwiftUI
 import XCTest
 import UIShared
@@ -393,10 +394,9 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         colorScheme: ColorScheme = .light
     ) async throws -> NSBitmapImageRep {
         let size = NSSize(width: QuickRecordingLayout.panelWidth, height: QuickRecordingLayout.panelHeight)
-        let host = NSHostingView(rootView: QuickRecordingIslandView(
-            status: initialStatus ?? status, transcript: initialTranscript ?? transcript, audioLevel: 0.6,
-            placement: placement, forceReducedMotion: reduceMotion
-        ).environment(\.colorScheme, colorScheme))
+        let state = FakeIslandRenderState(status: initialStatus ?? status, transcript: initialTranscript ?? transcript)
+        let host = NSHostingView(rootView: IslandRenderHost(state: state, placement: placement,
+                                                          reduceMotion: reduceMotion, colorScheme: colorScheme))
         let panel = NSPanel(contentRect: NSRect(origin: NSPoint(x: -10000, y: -10000), size: size),
                             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false
@@ -413,9 +413,9 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(100))
         }
         if initialTranscript != nil || initialStatus != nil {
-            host.rootView = QuickRecordingIslandView(status: status, transcript: transcript, audioLevel: 0.6,
-                                                     placement: placement, forceReducedMotion: reduceMotion)
-                .environment(\.colorScheme, colorScheme)
+            // 与真实 QuickRecordingView 一样更新可观察状态，不重建宿主根视图。
+            state.status = status
+            state.transcript = transcript
             try await Task.sleep(for: updateWait)
         }
         host.layoutSubtreeIfNeeded()
@@ -459,5 +459,30 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         visibleFrame: CGRect(x: 0, y: 40, width: 1512, height: 906),
         cameraRect: CGRect(x: 660, y: 946, width: 192, height: 36)
     )
+}
+
+@MainActor
+private final class FakeIslandRenderState: ObservableObject {
+    @Published var status: RecorderStatus
+    @Published var transcript: String
+
+    init(status: RecorderStatus, transcript: String) {
+        self.status = status
+        self.transcript = transcript
+    }
+}
+
+@MainActor
+private struct IslandRenderHost: View {
+    @ObservedObject var state: FakeIslandRenderState
+    let placement: QuickRecordingPlacement
+    let reduceMotion: Bool
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        QuickRecordingIslandView(status: state.status, transcript: state.transcript, audioLevel: 0.6,
+                                 placement: placement, forceReducedMotion: reduceMotion)
+            .environment(\.colorScheme, colorScheme)
+    }
 }
 #endif
