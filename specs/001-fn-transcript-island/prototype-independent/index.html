@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VoxPocket · 声音落岛 / 独立概念预览</title>
+  <script src="color-system.js"></script>
+  <script>for (const [key,value] of Object.entries(VoxColors.buildTokens(VoxColors.SEEDS.blue,'slate',true))) document.documentElement.style.setProperty(key,value);</script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="board">
+  <header class="masthead"><div class="wordmark"><span class="brand-wave" aria-hidden="true">ııı</span> VoxPocket <span class="separator">/</span> <span class="project-label">交互概念</span></div><span class="edition">MACOS · 01</span></header>
+  <section class="desktop" aria-label="模拟 macOS 桌面">
+    <div class="menu" aria-hidden="true"><span class="menu-left">● <b>备忘录</b><span>文件</span><span>编辑</span><span>显示</span></span><span class="menu-right">周二 09:41 <span>◒</span></span></div>
+    <div class="desktop-grid" aria-hidden="true"></div>
+    <div class="desktop-mark" aria-hidden="true"><span>留在当下。</span><small>思路，不必停下来。</small></div>
+    <article class="document" aria-label="模拟文稿，不会写入其他应用">
+      <div class="document-toolbar"><div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div><span>周五的想法</span><span aria-hidden="true">⌘</span></div>
+      <div class="document-content"><div class="document-date">9 月 8 日 · 上午 9:41</div><h2>让想法先发生</h2><p>一个安静的入口，<br>留给那些还来不及打下来的句子。</p><p id="document-output" class="document-placeholder">接着写下去<span class="document-caret" aria-hidden="true"></span></p></div>
+      <div class="document-bottom">个人笔记 <span>模拟文稿</span></div>
+    </article>
+    <div class="island-anchor">
+      <section class="island" data-state="live" aria-label="VoxPocket 语音转写浮窗">
+        <div class="camera-space" aria-hidden="true"></div>
+        <header class="island-head"><span class="status" id="status"><i aria-hidden="true"></i><span id="status-label">正在聆听</span></span><div class="signal"><span class="duration" id="duration">00:08</span><div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></header>
+        <div class="island-content"><div class="text-caption" id="text-caption">实时转写</div><div class="transcript-scroll" tabindex="0" aria-label="转写内容，可滚动查看"><p class="transcript" id="transcript">我想做一个更安静的语音工具，<br>按下 Fn，<span class="latest">就能把想法留下来。</span><span class="live-caret" aria-hidden="true"></span></p></div><div class="error-help" id="error-help" hidden>这次转写没有完成，已识别的文字仍保留在这里。</div></div>
+        <footer class="island-footer"><span class="footer-tip" id="footer-tip"><kbd>esc</kbd> 取消</span><div class="actions"><button class="quiet-action" id="secondary" hidden>复制文字</button><button class="main-action" id="primary"><kbd>fn</kbd><span>结束转写</span><span aria-hidden="true">↵</span></button></div></footer>
+      </section>
+    </div>
+    <div class="desktop-note"><span class="note-dot"></span>本地交互模拟 · 无麦克风访问</div>
+  </section>
+  <section class="presentation" aria-label="设计介绍及模拟控制">
+    <div class="design-title"><span class="eyebrow">声音落岛</span><h1>说到哪里，文字就到哪里。</h1><p>贴着屏幕上沿出现，顺着你的思路展开。</p></div>
+    <div class="simulator"><div class="control-label"><span>状态预览</span><span>点击切换</span></div><div class="state-controls" role="group" aria-label="切换模拟状态"><button data-scene="waiting" aria-pressed="false">等待</button><button data-scene="live" aria-pressed="true">实时文字</button><button data-scene="processing" aria-pressed="false">处理</button><button data-scene="done" aria-pressed="false">完成</button><button data-scene="error" aria-pressed="false">错误</button></div><div class="extra-controls"><button id="fn-control" class="fn-control"><kbd>fn</kbd> 模拟按键</button><button id="long-control" aria-pressed="false">长文本</button><button id="play-control" aria-pressed="false">▷ 播放演示</button><span class="keyboard-hint">空格键也可模拟 Fn</span></div></div>
+  </section>
+  <footer class="board-footer"><span>独立设计 · HTML 示意原生 SwiftUI 方向，尚未集成应用</span><span>BLUE / SLATE <i></i> MY-DESIGNER</span></footer>
+  <div id="announcement" class="sr-only" aria-live="polite"></div>
+</main><script src="app.js"></script>
+</body></html>

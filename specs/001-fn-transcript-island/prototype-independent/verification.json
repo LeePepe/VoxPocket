@@ -1,0 +1,21 @@
+{
+  "checks": [
+    "state waiting: displayed, correct control pressed, screenshot",
+    "state live: displayed, correct control pressed, screenshot",
+    "state processing: displayed, correct control pressed, screenshot",
+    "state done: displayed, correct control pressed, screenshot",
+    "state error: displayed, correct control pressed, screenshot",
+    "Fn button → live → processing → done → explicit insert into mock document",
+    "Escape and Space keyboard controls",
+    "Long text scrolls inside 178px viewport",
+    "Complete 8.5-second simulated streaming sequence",
+    "Pause cancels scheduled state updates",
+    "1024px: no horizontal document overflow; island in viewport",
+    "768px: no horizontal document overflow; island in viewport",
+    "390px: no horizontal document overflow; island in viewport",
+    "Reduced motion disables transitions",
+    "No browser JavaScript errors"
+  ],
+  "errors": [],
+  "browser": "153.0.8010.12"
+}

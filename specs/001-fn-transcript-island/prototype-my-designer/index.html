@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VoxPocket · 贴顶语音岛 / my-designer 备选</title>
+  <link rel="stylesheet" href="palette.css">
+  <link rel="stylesheet" href="prototype.css">
+</head>
+<body>
+  <header class="page-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">◒</span> VoxPocket <span class="eyebrow">DESIGN STUDY / 02</span></div>
+    <span class="prototype-label">独立概念预览 · 不影响当前版本</span>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="kicker">MY-DESIGNER / 贴顶语音岛</p><h1>说话时，文字自然浮现。</h1></div>
+      <p class="description">从刘海下沿轻轻展开，接住每一句话。<br>更轻的状态提示，更清晰的实时文字。</p>
+    </section>
+    <section class="desktop" aria-label="模拟 macOS 桌面，非真实系统界面">
+      <div class="menubar" aria-hidden="true"><div><strong>●</strong><b>备忘录</b><span>文件</span><span>编辑</span><span>显示</span></div><div><span>◉</span><span>▰</span><span>周二 15:42</span></div></div>
+      <div class="notch" aria-hidden="true"><span></span></div>
+      <div class="island-mount">
+        <article class="island" data-state="listening" aria-label="VoxPocket 快捷录音">
+          <header class="island-header">
+            <span class="status-pill"><span class="status-dot" aria-hidden="true"></span><span id="status-label">正在聆听</span></span>
+            <div class="audio-feedback"><span id="elapsed">00:08</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+          </header>
+          <div class="transcript" id="transcript" tabindex="0" aria-label="识别原文"><span id="earlier">把刚才讨论的想法整理一下，</span><span id="latest">明天我们一起确认下一步的计划。</span><span class="cursor" aria-hidden="true"></span></div>
+          <footer class="island-footer"><span id="hint">松开 <kbd>fn</kbd> 结束</span><span id="detail">实时识别</span></footer>
+        </article>
+        <img class="baseline" src="current-swiftui.png" alt="当前 A 版：独立黑色卡片，顶部状态、下方实时文字，底部 Fn 提示。真实 SwiftUI 渲染截图。">
+      </div>
+      <div class="note-window" aria-hidden="true">
+        <aside><div class="traffic"><i></i><i></i><i></i></div><div class="sidebar-label">文件夹</div><div class="selected">▤　所有备忘录 <small>12</small></div><div class="folder">▱　工作记录</div><div class="folder">▱　随手记</div></aside>
+        <div class="note"><div class="note-toolbar"><span>▤</span><span>↗　 ⋯</span></div><div class="note-date">9月8日 · 今天</div><h2>把想法留下来</h2><p>下次讨论前，记下几个值得继续探索的方向。</p><div class="note-line">让表达更轻松，让注意力留在当下。</div><div class="insertion"></div></div>
+      </div>
+      <div class="scene-caption"><span class="caption-dot"></span><span id="scene-caption">有刘海屏幕 · 识别文字展开态</span><span class="scene-scale">岛宽 420 pt · 示意布局</span></div>
+    </section>
+    <section class="controls" aria-label="原型演示控制，不属于正式浮窗">
+      <div class="state-control"><label for="state">预览状态</label><select id="state"><option value="listening">正在聆听</option><option value="empty">等待说话</option><option value="transcribing">正在转写</option><option value="refining">正在润色</option><option value="done">处理完成</option><option value="error">录音出错</option></select></div>
+      <label class="toggle"><input id="long-text" type="checkbox">长文本</label>
+      <label class="toggle"><input id="has-notch" type="checkbox" checked>有刘海屏幕</label>
+      <button id="play" class="primary-button">播放识别过程 <span aria-hidden="true">↗</span></button>
+    </section>
+    <div class="design-notes"><p><span>01</span> 从屏幕边缘展开<br><small>有刘海连接下沿，无刘海独立悬浮</small></p><p><span>02</span> 让文字成为主角<br><small>保留识别原文，新文字出现在末尾</small></p><p><span>03</span> 只在需要时出现<br><small>等待紧凑，处理保留，完成收起</small></p></div>
+    <p class="disclaimer" id="demo-status" role="status">模拟文字与波形 · 未连接麦克风或粘贴功能</p>
+  </main>
+  <nav class="variant-switcher" aria-label="切换设计版本"><button id="prev" aria-label="上一个设计">←</button><span id="variant-label">B — my-designer 备选</span><button id="next" aria-label="下一个设计">→</button></nav>
+  <script src="prototype.js"></script>
+</body>
+</html>

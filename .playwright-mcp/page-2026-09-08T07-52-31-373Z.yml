@@ -1,0 +1,76 @@
+- main [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - generic [aria-hidden] [ref=f1e5]: ııı
+      - text: VoxPocket
+      - generic [ref=f1e6]: /
+      - generic [ref=f1e7]: 交互概念
+    - generic [ref=f1e8]: MACOS · 01
+  - region "模拟 macOS 桌面" [ref=f1e9]:
+    - generic [aria-hidden] [ref=f1e10]:
+      - generic [ref=f1e11]:
+        - text: ●
+        - generic [ref=f1e12]: 备忘录
+        - generic [ref=f1e13]: 文件
+        - generic [ref=f1e14]: 编辑
+        - generic [ref=f1e15]: 显示
+      - generic [ref=f1e16]:
+        - text: 周二 09:41
+        - generic [ref=f1e17]: ◒
+    - generic [aria-hidden] [ref=f1e19]:
+      - generic [ref=f1e20]: 留在当下。
+      - generic [ref=f1e21]: 思路，不必停下来。
+    - article "模拟文稿，不会写入其他应用" [ref=f1e22]:
+      - generic [ref=f1e23]:
+        - generic [ref=f1e28]: 周五的想法
+        - generic [aria-hidden] [ref=f1e29]: ⌘
+      - generic [ref=f1e30]:
+        - generic [ref=f1e31]: 9 月 8 日 · 上午 9:41
+        - heading "让想法先发生" [level=2] [ref=f1e32]
+        - paragraph [ref=f1e33]: 一个安静的入口，留给那些还来不及打下来的句子。
+        - paragraph [ref=f1e34]: 接着写下去
+      - generic [ref=f1e36]:
+        - text: 个人笔记
+        - generic [ref=f1e37]: 模拟文稿
+    - region "VoxPocket 语音转写浮窗" [ref=f1e39]:
+      - generic [ref=f1e40]:
+        - generic [ref=f1e41]: 正在聆听
+        - generic [ref=f1e44]: 00:08
+      - generic [ref=f1e56]:
+        - generic [ref=f1e57]: 实时转写
+        - generic "转写内容，可滚动查看" [ref=f1e58]:
+          - paragraph [ref=f1e59]: 我想做一个更安静的语音工具，按下 Fn，就能把想法留下来。
+      - generic [ref=f1e61]:
+        - generic [ref=f1e62]:
+          - generic [ref=f1e63]: esc
+          - text: 取消
+        - button "fn 结束转写" [ref=f1e65] [cursor=pointer]:
+          - generic [ref=f1e66]: fn
+          - generic [ref=f1e67]: 结束转写
+          - generic [aria-hidden] [ref=f1e68]: ↵
+    - generic [ref=f1e69]: 本地交互模拟 · 无麦克风访问
+  - region "设计介绍及模拟控制" [ref=f1e71]:
+    - generic [ref=f1e72]:
+      - text: 声音落岛
+      - heading "说到哪里，文字就到哪里。" [level=1] [ref=f1e73]
+      - paragraph [ref=f1e74]: 贴着屏幕上沿出现，顺着你的思路展开。
+    - generic [ref=f1e75]:
+      - generic [ref=f1e76]:
+        - generic [ref=f1e77]: 状态预览
+        - generic [ref=f1e78]: 点击切换
+      - group "切换模拟状态" [ref=f1e79]:
+        - button "等待" [ref=f1e80] [cursor=pointer]
+        - button "实时文字" [pressed] [ref=f1e81] [cursor=pointer]
+        - button "处理" [ref=f1e82] [cursor=pointer]
+        - button "完成" [ref=f1e83] [cursor=pointer]
+        - button "错误" [ref=f1e84] [cursor=pointer]
+      - generic [ref=f1e85]:
+        - button "fn 模拟按键" [ref=f1e86] [cursor=pointer]:
+          - generic [ref=f1e87]: fn
+          - text: 模拟按键
+        - button "长文本" [ref=f1e88] [cursor=pointer]
+        - button "▷ 播放演示" [ref=f1e89] [cursor=pointer]
+        - generic [ref=f1e90]: 空格键也可模拟 Fn
+  - generic [ref=f1e91]:
+    - generic [ref=f1e92]: 独立设计 · HTML 示意原生 SwiftUI 方向，尚未集成应用
+    - generic [ref=f1e93]: BLUE / SLATE MY-DESIGNER
