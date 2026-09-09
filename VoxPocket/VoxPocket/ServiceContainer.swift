@@ -37,7 +37,7 @@ public final class ServiceContainer: ObservableObject {
 
     // MARK: - 基础服务
 
-    /// 主转录器：默认使用 WhisperKit 本地模型，可按配置切换到其他实现
+    /// 主转录器：Apple 实时预览，配置齐全时使用 Azure 文件转写终稿。
     public let transcriber: any TranscriptionCoordinator
     public let localModelLoadingObservable: (any ModelLoadingObservable)?
     public let llmService: DefaultLLMService
@@ -216,7 +216,10 @@ public final class ServiceContainer: ObservableObject {
         configureLLMService(preferredProvider: preferred)
     }
 
-    static func makeTranscriber(preloadOnStart: Bool = true) -> any TranscriptionCoordinator {
+    static func makeTranscriber(
+        preloadOnStart: Bool = true,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> any TranscriptionCoordinator {
         switch LLMAppConfig.defaultTranscriberProvider {
         case .localWhisperKit:
             return LoadingFallbackTranscriptionCoordinator(
@@ -224,12 +227,13 @@ public final class ServiceContainer: ObservableObject {
                 fallback: AppleSpeechTranscriber()
             )
         case .hybridWhisper:
-            if let config = makeAzureWhisperConfig() {
+            if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
                 return HybridWhisperTranscriber(whisperConfig: config)
             }
+            PrintLogger(subsystem: "ServiceContainer").warning("Azure transcription configuration missing; actual_provider=appleSpeech")
             return AppleSpeechTranscriber()
         case .azureWhisper:
-            if let config = makeAzureWhisperConfig() {
+            if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
                 return AzureWhisperTranscriber(config: config)
             }
             return AppleSpeechTranscriber()
@@ -245,8 +249,8 @@ public final class ServiceContainer: ObservableObject {
         }
     }
 
-    static func makeQuickTranscriber() -> any TranscriptionCoordinator {
-        makeTranscriber(preloadOnStart: true)
+    static func makeQuickTranscriber(environment: [String: String] = ProcessInfo.processInfo.environment) -> any TranscriptionCoordinator {
+        makeTranscriber(preloadOnStart: true, environment: environment)
     }
 
     private static func makeLocalWhisperTranscriber(preloadOnStart: Bool) -> WhisperKitTranscriber {
@@ -267,27 +271,18 @@ public final class ServiceContainer: ObservableObject {
         )
     }
 
-    private static func makeAzureWhisperConfig() -> AzureWhisperConfig? {
-        let env = ProcessInfo.processInfo.environment
-        guard let apiKey = env["whisperkey"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !apiKey.isEmpty else {
-            return nil
-        }
-        // audio/transcriptions 保留原始语言（如中文）
-        // audio/translations 会强制将所有音频翻译为英文
-        let endpoint = URL(string: "https://tianp-mmd3pwyc-swedencentral.cognitiveservices.azure.com/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01")!
-        return AzureWhisperConfig(endpoint: endpoint, apiKey: apiKey)
-    }
-
     private static func makeAzureFoundryConfig() -> LLMProviderConfig? {
         guard let deployment = makeAzureFoundryDeployment() else {
-            return nil
+            // Azure 缺配置时明确失败，不静默调用 Apple 精炼。
+            return LLMProviderConfig(providerType: .azureFoundry, modelIdentifier: LLMAppConfig.azureModelIdentifier)
         }
         return deployment.providerConfig
     }
 
     /// 若 transcriber 遵循 MultiRecognizerTranscriber，注入 LLM 合并器
     private func injectMergerIfNeeded(into coordinator: any TranscriptionCoordinator) {
+        // 云端终稿已有标点，不为每次转写再强制追加 LLM 合并。
+        guard !(coordinator is HybridWhisperTranscriber) else { return }
         guard var multiRecognizer = coordinator as? any MultiRecognizerTranscriber else { return }
         multiRecognizer.merger = LLMTranscriptionMerger(llmService: llmService)
     }
@@ -315,6 +310,8 @@ public final class ServiceContainer: ObservableObject {
                 options["azure.max_tokens"] = String(deployment.maxTokens)
                 options["azure.top_p"] = String(deployment.topP)
                 options["azure.presence_penalty"] = String(deployment.presencePenalty)
+                options["azure.api_style"] = deployment.apiStyle.rawValue
+                options["azure.reasoning_effort"] = deployment.reasoningEffort
             } else {
                 modelIdentifier = LLMAppConfig.azureModelIdentifier
                 apiKey = nil
@@ -360,18 +357,21 @@ public final class ServiceContainer: ObservableObject {
     }
 
     private static func makeAzureFoundryDeployment() -> AzureFoundryDeployment? {
-        guard let apiKey = readAzureFoundryAPIKey(), !apiKey.isEmpty else {
+        guard let apiKey = readAzureFoundryAPIKey(), !apiKey.isEmpty,
+              let endpoint = LLMAppConfig.azureEndpoint else {
             return nil
         }
 
         // Foundry 配置入口：在这里设置模型、URL、鉴权模式和 API Key
         return AzureFoundryDeployment(
             name: "default",
-            endpoint: LLMAppConfig.azureEndpoint,
+            endpoint: endpoint,
             model: LLMAppConfig.azureModelIdentifier,
             apiKey: apiKey,
             apiVersion: LLMAppConfig.azureAPIVersion,
-            authMode: LLMAppConfig.azureAuthMode
+            authMode: LLMAppConfig.azureAuthMode,
+            apiStyle: LLMAppConfig.azureAPIStyle,
+            reasoningEffort: "none"
         )
     }
 

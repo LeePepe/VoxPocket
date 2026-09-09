@@ -1,43 +1,45 @@
+import Foundation
 import Testing
 @testable import VoxPocket
 import TranscriptionKit
 
 struct TranscriberSelectionTests {
-    @MainActor @Test func defaultProviderSelectsLocalWhisperKit() {
-        #expect(LLMAppConfig.defaultTranscriberProvider == .localWhisperKit)
+    @MainActor @Test func defaultsSelectCloudFinalAndAzureRefinement() {
+        #expect(LLMAppConfig.defaultTranscriberProvider == .hybridWhisper)
+        #expect(LLMAppConfig.defaultProvider == .azureFoundry)
+        #expect(LLMAppConfig.azureAPIStyle == .openAIV1)
+        #expect(LLMAppConfig.azureAuthMode == .apiKey)
     }
 
-    @MainActor @Test func quickTranscriberUsesDistinctCoordinatorInstance() {
-        let main = ServiceContainer.makeTranscriber(preloadOnStart: true)
-        let quick = ServiceContainer.makeQuickTranscriber()
+    @MainActor @Test func cloudConfigurationUsesDeploymentAndSharedKey() throws {
+        let config = try #require(LLMAppConfig.transcriptionConfig(environment: cloudEnvironment))
+        #expect(config.endpoint.absoluteString == "https://example.invalid/openai/deployments/fixture-asr/audio/transcriptions?api-version=2024-02-01")
+        #expect(config.apiKey == "test-key")
+    }
 
-        #expect(main is LoadingFallbackTranscriptionCoordinator)
-        #expect(quick is LoadingFallbackTranscriptionCoordinator)
+    @MainActor @Test func missingOrUnsafeConfigurationIsRejected() {
+        #expect(LLMAppConfig.transcriptionConfig(environment: [:]) == nil)
+        for endpoint in ["http://example.invalid", "https://user:password@example.invalid", "not-a-url"] {
+            var environment = cloudEnvironment
+            environment["AZURE_OPENAI_ENDPOINT"] = endpoint
+            #expect(LLMAppConfig.transcriptionConfig(environment: environment) == nil)
+        }
+    }
+
+    @MainActor @Test func mainAndQuickUseSeparateCloudCoordinatorsWithoutMerger() {
+        let main = ServiceContainer.makeTranscriber(environment: cloudEnvironment)
+        let quick = ServiceContainer.makeQuickTranscriber(environment: cloudEnvironment)
+        #expect(main is HybridWhisperTranscriber)
+        #expect(quick is HybridWhisperTranscriber)
         #expect((main as AnyObject) !== (quick as AnyObject))
+        #expect((quick as? HybridWhisperTranscriber)?.merger == nil)
     }
 
-    @MainActor @Test func quickTranscriberPreloadsLocalWhisperWhenAppStarts() throws {
-        let quick = ServiceContainer.makeQuickTranscriber()
-        let coordinator = try #require(quick as? LoadingFallbackTranscriptionCoordinator)
-        let config = try #require(localWhisperConfig(from: coordinator))
-
-        #expect(config.preloadOnStart)
+    @MainActor @Test func missingCloudConfigurationKeepsRecordingAvailableLocally() {
+        #expect(ServiceContainer.makeTranscriber(environment: [:]) is AppleSpeechTranscriber)
     }
 
-    @MainActor @Test func defaultConfigurationExposesLocalModelLoadingStatus() {
-        #expect(ServiceContainer.shared.localModelLoadingObservable != nil)
+    private var cloudEnvironment: [String: String] {
+        ["AZURE_OPENAI_ENDPOINT": "https://example.invalid", "AZURE_TRANSCRIPTION_DEPLOYMENT": "fixture-asr", "AZURE_API_KEY": "test-key"]
     }
-}
-
-private func localWhisperConfig(
-    from transcriber: LoadingFallbackTranscriptionCoordinator
-) -> LocalWhisperKitConfig? {
-    guard let primary = Mirror(reflecting: transcriber).children
-        .first(where: { $0.label == "primary" })?.value as? WhisperKitTranscriber else {
-        return nil
-    }
-
-    return Mirror(reflecting: primary).children
-        .first(where: { $0.label == "config" })?
-        .value as? LocalWhisperKitConfig
 }
