@@ -73,7 +73,6 @@ public struct WhisperEngine: Sendable {
         body.append("--\(boundary)--\r\n".utf8Data)
 
         var request = URLRequest(url: config.endpoint)
-        request.timeoutInterval = 30
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue(config.apiKey, forHTTPHeaderField: "api-key")

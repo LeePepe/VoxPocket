@@ -24,6 +24,7 @@ final class WhisperEngineRequestTests: XCTestCase {
         override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
         override func startLoading() {
             XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertGreaterThanOrEqual(request.timeoutInterval, 60, "模型迁移不得缩短既有批量上传等待时间")
             XCTAssertEqual(request.value(forHTTPHeaderField: "api-key"), "test-key")
             XCTAssertTrue(request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data") == true)
             let code = Self.status.withLock { $0 }

@@ -177,6 +177,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
             MockURLProtocol.requestHandler = { request in
                 XCTAssertEqual(request.url?.absoluteString, "https://example.invalid/openai/v1/chat/completions")
                 XCTAssertEqual(request.value(forHTTPHeaderField: "api-key"), "test-key")
+                XCTAssertGreaterThanOrEqual(request.timeoutInterval, 60)
                 let data = try XCTUnwrap(Self.extractBody(from: request))
                 let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
                 XCTAssertEqual(body["model"] as? String, "custom-deployment")

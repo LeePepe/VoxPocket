@@ -239,7 +239,6 @@ public actor AzureFoundryProvider: LLMProvider {
 
         let endpoint = buildCompletionsURL(from: baseURL)
         var request = URLRequest(url: endpoint)
-        request.timeoutInterval = 30
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let authMode = Self.resolveAuthMode(endpoint: endpoint, options: config.options)
