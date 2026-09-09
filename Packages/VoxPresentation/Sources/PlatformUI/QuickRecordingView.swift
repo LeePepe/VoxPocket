@@ -39,6 +39,7 @@ struct QuickRecordingIslandView: View {
     var onCopy: () -> Void = {}
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
     @State private var revealsTranscript = false
     @State private var entranceProgress: CGFloat = 0
@@ -52,7 +53,7 @@ struct QuickRecordingIslandView: View {
     private var size: CGSize {
         QuickRecordingLayout.size(for: status, showsTranscript: showsTranscript, placement: placement)
     }
-    private var tint: Color { QuickRecordingColors.status(status) }
+    private var tint: Color { QuickRecordingColors.status(status, colorScheme: colorScheme) }
     private var outline: QuickRecordingIslandOutline { QuickRecordingIslandOutline(cameraSize: placement.cameraSize) }
     private var canDismiss: Bool { status == .listening || status == .error }
     private var wingWidth: CGFloat { max(0, (size.width - placement.cameraSize.width - 48) / 2) }
@@ -67,7 +68,7 @@ struct QuickRecordingIslandView: View {
                     .padding(.bottom, 16)
                     // 岛体揭开文字；文字不继承外轮廓的缩放、位移或弹簧动画。
                     .transaction { $0.animation = nil }
-                    .opacity(revealsTranscript ? 1 : 0)
+                    .opacity(reduceMotion || revealsTranscript ? 1 : 0)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .top)
@@ -78,7 +79,6 @@ struct QuickRecordingIslandView: View {
         .clipShape(QuickRecordingEntranceMask(progress: reduceMotion ? 1 : entranceProgress,
                                               cameraSize: placement.cameraSize))
         .frame(width: placement.panelFrame.width, height: placement.panelFrame.height, alignment: .top)
-        .environment(\.colorScheme, .dark)
         .onHover { isHovering = $0 }
         .task(id: reduceMotion) { await revealIsland() }
         .task(id: [showsTranscript, hasEntered, reduceMotion]) { await revealTranscript() }
@@ -118,7 +118,7 @@ struct QuickRecordingIslandView: View {
                 }
                 if canDismiss {
                     Button(action: onCancel) { Image(systemName: "xmark").frame(width: 32, height: 28) }
-                        .buttonStyle(.plain).foregroundStyle(QuickRecordingColors.neutrals.text2)
+                        .buttonStyle(.plain).foregroundStyle(QuickRecordingColors.neutrals(for: colorScheme).text1)
                         .opacity(isHovering ? 1 : 0)
                         .allowsHitTesting(isHovering)
                         .accessibilityLabel(status == .error ? "关闭" : "取消录音")
@@ -138,7 +138,7 @@ struct QuickRecordingIslandView: View {
             outline.stroke(tint, lineWidth: 1.5)
         } else {
             ZStack {
-                outline.stroke(LinearGradient(colors: QuickRecordingColors.rim(status),
+                outline.stroke(LinearGradient(colors: QuickRecordingColors.rim(status, colorScheme: colorScheme),
                                                startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.9)
                     .id(status)
                     .transition(reduceMotion ? .identity : .opacity)

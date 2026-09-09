@@ -2,65 +2,60 @@ import SwiftUI
 
 /// 玻璃质感氛围背景。
 ///
-/// 近白底 + 一组模糊彩色光团（宝石柔调、和谐多彩）+ 磨砂材质层，透过磨砂洗出高级感。
+/// 自适应明暗底材与柔和渐变光团，主窗口和浮窗复用同一画法。
 /// 阶段由色心区分（见 `AtmosphereGlass`），阶段间色彩交叉淡出而非硬切。
 /// listening 时光团随真实音频电平（弹簧驱动，velocity-aware）轻呼吸。
 /// 全程尊重 `accessibilityReduceMotion`：关闭时间轴、呼吸与转场，仅留静态渐变。
 public struct BackgroundAtmosphere: View {
     let status: RecorderStatus
     let audioLevel: Double?
-    @State private var stateStart = Date()
+    private let tracksAudioContinuously: Bool
     // 音频电平的弹簧积分状态（位置 + 速度），由渲染帧驱动 → velocity-aware 且 display-synced
     @State private var springLevel: Double = 0
     @State private var springVelocity: Double = 0
     @State private var lastFrame: Date?
-    @State private var previousStatus: RecorderStatus?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.colorScheme) private var colorScheme
 
-    /// 阶段交叉淡出时长：色彩缓缓 morph 而非硬切。
-    private static let crossfadeDuration: TimeInterval = 0.9
-
-    public init(status: RecorderStatus = .idle, audioLevel: Double? = nil) {
+    public init(status: RecorderStatus = .idle, audioLevel: Double? = nil, tracksAudioContinuously: Bool = true) {
         self.status = status
         self.audioLevel = audioLevel
+        self.tracksAudioContinuously = tracksAudioContinuously
     }
 
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
-            let elapsed = reduceMotion ? 0 : context.date.timeIntervalSince(stateStart)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0,
+                                paused: reduceMotion || !tracksAudioContinuously || status != .listening)) { context in
             // listening 时音频弹簧驱动的轻微呼吸强度（0…~1.2）；reduceMotion / 非录音时为 0
-            let breath = (reduceMotion || status != .listening) ? 0 : springLevel
+            let level = tracksAudioContinuously ? springLevel : (audioLevel ?? 0)
+            let breath = (reduceMotion || status != .listening || !level.isFinite) ? 0 : clamp(level, min: 0, max: 1)
 
             ZStack {
-                AtmosphereGlass.baseColor
+                AtmosphereGlass.baseColor(for: colorScheme)
 
-                // 上一阶段光团在过渡窗口内交叉淡出，色彩流转而非硬切
-                if !reduceMotion,
-                   let previous = previousStatus,
-                   let progress = crossfadeProgress(elapsed: elapsed),
-                   progress < 1 {
-                    GlassPlate(blobs: AtmosphereGlass.blobs(for: previous), breath: 0)
-                        .opacity(1 - progress)
+                if AtmosphereGlass.allowsAtmosphere(reduceTransparency: reduceTransparency,
+                                                   increasedContrast: contrast == .increased) {
+                    // 材质位于染色层之下，避免在浮窗蒙版内遮住阶段色。
+                    Rectangle().fill(.ultraThinMaterial)
+                    GlassPlate(blobs: AtmosphereGlass.blobs(for: status), breath: breath,
+                               opacity: AtmosphereGlass.washOpacity(for: colorScheme, energy: breath))
+                        .id(status)
+                        .transition(reduceMotion ? .identity : .opacity)
                 }
-
-                GlassPlate(blobs: AtmosphereGlass.blobs(for: status), breath: breath)
-                    .opacity(incomingOpacity(elapsed: elapsed))
-
-                // 磨砂玻璃层：把彩色光团柔化融合、洗出高级质感
-                Rectangle().fill(.ultraThinMaterial)
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: AtmosphereGlass.transitionDuration), value: status)
             .ignoresSafeArea()
             .onChange(of: context.date) { _, now in
-                stepAudioSpring(now: now)
+                if tracksAudioContinuously { stepAudioSpring(now: now) }
             }
         }
-        .onChange(of: status) { oldValue, _ in
-            // 记录上一阶段用于交叉淡出；重置 stateStart 使转场从 0 起算
-            previousStatus = oldValue
-            stateStart = Date()
+        .onChange(of: status) { _, _ in
             if status != .listening {
                 springLevel = 0
                 springVelocity = 0
+                lastFrame = nil
             }
         }
     }
@@ -84,20 +79,6 @@ public struct BackgroundAtmosphere: View {
         springVelocity = stepped.velocity
     }
 
-    // MARK: - 转场节奏
-
-    /// 交叉淡出进度（0→1，smoothstep）。首次出现（无上一阶段）返回 nil，不做淡出。
-    private func crossfadeProgress(elapsed: TimeInterval) -> Double? {
-        guard previousStatus != nil else { return nil }
-        return AtmosphereTransition.crossfade(elapsed: elapsed, duration: Self.crossfadeDuration)
-    }
-
-    /// 入场画面的不透明度：随交叉淡出淡入；首次出现或 reduceMotion 时直接满值。
-    private func incomingOpacity(elapsed: TimeInterval) -> Double {
-        guard !reduceMotion, previousStatus != nil else { return 1 }
-        return AtmosphereTransition.crossfade(elapsed: elapsed, duration: Self.crossfadeDuration)
-    }
-
     private func clamp(_ value: Double, min: Double, max: Double) -> Double {
         Swift.max(min, Swift.min(max, value))
     }
@@ -105,31 +86,32 @@ public struct BackgroundAtmosphere: View {
 
 // MARK: - GlassPlate
 
-/// 一层玻璃画面：近白底之上的一组模糊彩色光团。
+/// 一组平滑渐变光团，不依赖会在复杂窗口蒙版中丢失的离屏模糊层。
 /// `breath`（0…~1.2）在 listening 时轻微放大/提亮光团，制造随声呼吸感（不驱动布局）。
 private struct GlassPlate: View {
     let blobs: [AtmosphereBlob]
     let breath: Double
+    let opacity: Double
 
     var body: some View {
         GeometryReader { proxy in
-            let minDim = min(proxy.size.width, proxy.size.height)
+            // 统一坐标画布映射到窗口，窄胶囊也保留与主窗口相同的光团分布。
+            let canvas: CGFloat = 400
             // 呼吸：把光团整体放大一点点 + 略提不透明度，克制（scale ≤ 4%）
             let breathScale = 1 + CGFloat(breath) * 0.035
-            let breathOpacity = 0.72 + breath * 0.14
 
             ZStack {
                 ForEach(Array(blobs.enumerated()), id: \.offset) { _, blob in
-                    Circle()
-                        .fill(blob.color)
-                        .frame(width: minDim * blob.scale * breathScale,
-                               height: minDim * blob.scale * breathScale)
-                        .position(x: proxy.size.width * blob.x,
-                                  y: proxy.size.height * blob.y)
-                        .blur(radius: minDim * 0.22)
+                    RadialGradient(stops: [.init(color: blob.color, location: 0),
+                                           .init(color: blob.color.opacity(0.55), location: 0.45),
+                                           .init(color: .clear, location: 1)],
+                                   center: UnitPoint(x: blob.x, y: blob.y), startRadius: 0,
+                                   endRadius: canvas * blob.scale * breathScale * 0.8)
                 }
             }
-            .opacity(min(0.9, breathOpacity))
+            .frame(width: canvas, height: canvas)
+            .scaleEffect(x: proxy.size.width / canvas, y: proxy.size.height / canvas, anchor: .topLeading)
+            .opacity(opacity)
         }
         .ignoresSafeArea()
     }

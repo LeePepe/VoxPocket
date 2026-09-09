@@ -6,7 +6,7 @@ import SwiftUI
 /// 六阶段共享同一「宝石柔调」和谐配方，仅主色心不同以区分阶段（多彩但不打架）。
 /// 布局固定（5 个光团位置不变），阶段间只有颜色 morph，形状一致。
 
-/// 单个光团：颜色 + 归一化位置 + 相对尺寸（相对画面最短边）。
+/// 单个光团：颜色 + 归一化位置 + 相对尺寸（相对统一坐标画布）。
 struct AtmosphereBlob: Equatable {
     let color: Color
     let x: CGFloat
@@ -17,6 +17,20 @@ struct AtmosphereBlob: Equatable {
 enum AtmosphereGlass {
     /// 近白玻璃底色。
     static let baseColor = Color(red: 0.97, green: 0.98, blue: 0.99)
+    static let transitionDuration: TimeInterval = 0.9
+
+    static func baseColor(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? Theme.dark.palette.backgroundBase : baseColor
+    }
+
+    static func washOpacity(for scheme: ColorScheme, energy: Double) -> Double {
+        let bounded = energy.isFinite ? min(1, max(0, energy)) : 0
+        return scheme == .dark ? 0.24 + bounded * 0.04 : 0.72 + bounded * 0.14
+    }
+
+    static func allowsAtmosphere(reduceTransparency: Bool, increasedContrast: Bool) -> Bool {
+        !reduceTransparency && !increasedContrast
+    }
 
     /// 固定的 5 个光团位置（四角 + 中心），阶段间不变 → 只 morph 颜色。
     private static let positions: [(x: CGFloat, y: CGFloat, s: CGFloat)] = [
