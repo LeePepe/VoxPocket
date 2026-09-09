@@ -26,6 +26,17 @@ struct TranscriberSelectionTests {
         }
     }
 
+    @MainActor @Test func sharedKeyWinsAndEmptyValuesDoNotMaskLegacyKeys() {
+        var environment = cloudEnvironment
+        environment["kimikey"] = "old-text-key"
+        environment["whisperkey"] = "old-audio-key"
+        #expect(LLMAppConfig.refinementAPIKey(environment: environment) == "test-key")
+        #expect(LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey == "test-key")
+        environment["AZURE_API_KEY"] = "  "
+        #expect(LLMAppConfig.refinementAPIKey(environment: environment) == "old-text-key")
+        #expect(LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey == "old-audio-key")
+    }
+
     @MainActor @Test func mainAndQuickUseSeparateCloudCoordinatorsWithoutMerger() {
         let main = ServiceContainer.makeTranscriber(environment: cloudEnvironment)
         let quick = ServiceContainer.makeQuickTranscriber(environment: cloudEnvironment)

@@ -347,13 +347,8 @@ public final class ServiceContainer: ObservableObject {
     }
 
     private static func readAzureFoundryAPIKey() -> String? {
-        // API Key 注入入口：
-        // 1) 推荐：环境变量 `kimikey`
-        // 2) 兼容：环境变量 `AZURE_API_KEY`、`VOX_AZURE_FOUNDRY_API_KEY`（历史命名）
-        let env = ProcessInfo.processInfo.environment
-        return env["kimikey"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? env["AZURE_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? env["VOX_AZURE_FOUNDRY_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 新资源共享密钥优先；兼容旧变量，但空值不能遮蔽有效配置。
+        LLMAppConfig.refinementAPIKey(environment: ProcessInfo.processInfo.environment)
     }
 
     private static func makeAzureFoundryDeployment() -> AzureFoundryDeployment? {

@@ -46,7 +46,7 @@ enum LLMAppConfig {
     static let azureAPIStyle: AzureFoundryAPIStyle = .openAIV1
 
     static func transcriptionConfig(environment: [String: String]) -> AzureWhisperConfig? {
-        guard let key = nonempty(environment["whisperkey"]) ?? nonempty(environment["AZURE_API_KEY"]) else { return nil }
+        guard let key = nonempty(environment["AZURE_API_KEY"]) ?? nonempty(environment["whisperkey"]) else { return nil }
         if let explicit = environment["AZURE_TRANSCRIPTION_ENDPOINT"] {
             guard let endpoint = secureURL(explicit) else { return nil }
             return AzureWhisperConfig(endpoint: endpoint, apiKey: key)
@@ -65,6 +65,11 @@ enum LLMAppConfig {
     private static func nonempty(_ value: String?) -> String? {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
         return value
+    }
+
+    static func refinementAPIKey(environment: [String: String]) -> String? {
+        ["AZURE_API_KEY", "kimikey", "VOX_AZURE_FOUNDRY_API_KEY"]
+            .compactMap { nonempty(environment[$0]) }.first
     }
 
     private static func secureURL(_ raw: String?) -> URL? {
