@@ -6,7 +6,9 @@ enum DefaultAppleSpeechRequestFactory {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         // 系统默认关闭自动标点，所有识别路径都需要显式开启。
-        request.addsPunctuation = true
+        if #available(iOS 16, macOS 13, *) {
+            request.addsPunctuation = true
+        }
         request.requiresOnDeviceRecognition = false
         return request
     }
