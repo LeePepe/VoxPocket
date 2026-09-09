@@ -22,7 +22,10 @@ final class QuickRecordingColorsTests: XCTestCase {
         for status in RecorderStatus.allCases {
             let mainColors = AtmosphereGlass.colors(for: status)
             XCTAssertEqual(QuickRecordingColors.atmosphere(status), [mainColors[0], mainColors[4], mainColors[1]])
-            if status != .idle { XCTAssertEqual(QuickRecordingColors.status(status), mainColors[0]) }
+            if status != .idle {
+                XCTAssertEqual(QuickRecordingColors.status(status, colorScheme: .dark), mainColors[0])
+                XCTAssertEqual(hsbHue(QuickRecordingColors.status(status, colorScheme: .light)), hsbHue(mainColors[0]), accuracy: 0.002)
+            }
         }
     }
 
@@ -49,29 +52,35 @@ final class QuickRecordingColorsTests: XCTestCase {
         XCTAssertFalse(QuickRecordingColors.allowsAtmosphere(reduceTransparency: false, increasedContrast: true))
     }
 
-    func testWhiteTranscriptRemainsReadableAtMaximumWashIntensity() {
-        let background = components(QuickRecordingColors.neutrals.card)
-        let foreground = components(QuickRecordingColors.neutrals.text1)
-        for status in RecorderStatus.allCases {
-            let colors = QuickRecordingColors.atmosphere(status).map(components)
-            let leading = QuickRecordingColors.leadingWashOpacity
-            let trailing = QuickRecordingColors.trailingWashOpacity
-            let ribbon = QuickRecordingColors.baseRibbonOpacity + QuickRecordingColors.audioRibbonBoost
-            let first = zip(colors[0], background).map { $0 * leading + $1 * (1 - leading) }
-            let second = zip(colors[2], first).map { $0 * trailing + $1 * (1 - trailing) }
-            for color in colors {
-                let composed = zip(color, second).map { $0 * ribbon + $1 * (1 - ribbon) }
-                XCTAssertGreaterThanOrEqual(contrast(foreground, composed), 4.5)
+    func testTranscriptAndStatusContrastAtMaximumSharedWashInBothAppearances() {
+        for scheme in [ColorScheme.light, .dark] {
+            let background = components(QuickRecordingColors.background(for: scheme))
+            let foreground = components(QuickRecordingColors.neutrals(for: scheme).text1)
+            let opacity = AtmosphereGlass.washOpacity(for: scheme, energy: 1)
+            for status in RecorderStatus.allCases {
+                for color in AtmosphereGlass.colors(for: status).map(components) {
+                    let composed = zip(color, background).map { $0 * opacity + $1 * (1 - opacity) }
+                    XCTAssertGreaterThanOrEqual(contrast(foreground, composed), 4.5, "\(scheme), \(status)")
+                    XCTAssertGreaterThanOrEqual(contrast(components(QuickRecordingColors.status(status, colorScheme: scheme)), composed), 3)
+                }
             }
         }
     }
+
+    func testMainAndIslandUseIdenticalSurfaceTokensAndTransition() {
+        for scheme in [ColorScheme.light, .dark] {
+            XCTAssertEqual(QuickRecordingColors.background(for: scheme), AtmosphereGlass.baseColor(for: scheme))
+        }
+        XCTAssertEqual(QuickRecordingColors.transitionDuration, AtmosphereGlass.transitionDuration)
+        XCTAssertEqual(AtmosphereGlass.washOpacity(for: .light, energy: .nan), 0.72)
+        XCTAssertEqual(AtmosphereGlass.washOpacity(for: .dark, energy: 10), 0.28, accuracy: 0.001)
+    }
     func testTranscriptAndErrorLabelMeetSmallTextContrast() {
-        let background = components(QuickRecordingColors.neutrals.card)
-        let red = components(QuickRecordingColors.danger)
-        let errorBackground = zip(red, background).map { $0 * 0.13 + $1 * 0.87 }
-        XCTAssertGreaterThanOrEqual(contrast(components(QuickRecordingColors.neutrals.text1), errorBackground), 4.5)
-        XCTAssertGreaterThanOrEqual(contrast(components(QuickRecordingColors.neutrals.text2), background), 4.5)
-        XCTAssertGreaterThanOrEqual(contrast(components(QuickRecordingColors.primary.primaryText), background), 4.5)
+        for scheme in [ColorScheme.light, .dark] {
+            let background = components(QuickRecordingColors.background(for: scheme))
+            XCTAssertGreaterThanOrEqual(contrast(components(QuickRecordingColors.neutrals(for: scheme).text1), background), 4.5)
+            XCTAssertGreaterThanOrEqual(contrast(components(QuickRecordingColors.primary(for: scheme).primaryText), background), 4.5)
+        }
     }
 
     private func components(_ color: Color) -> [Double] {

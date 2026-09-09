@@ -51,7 +51,7 @@ public struct PrimaryPalette: Sendable {
     public let primaryText, onPrimary, onPrimarySubtle, ring: Color
 }
 
-private func hsbComponents(_ c: Color) -> (h: Double, s: Double, b: Double) {
+func hsbComponents(_ c: Color) -> (h: Double, s: Double, b: Double) {
     #if canImport(AppKit)
     let ns = NSColor(c).usingColorSpace(.deviceRGB) ?? .black
     var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

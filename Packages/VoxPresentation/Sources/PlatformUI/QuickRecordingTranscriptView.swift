@@ -7,6 +7,7 @@ struct QuickRecordingTranscriptView: View {
     let text: String
     @State private var followsLatest = true
     @State private var hasEarlierText = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -31,7 +32,7 @@ struct QuickRecordingTranscriptView: View {
             }
             .overlay(alignment: .top) {
                 if hasEarlierText {
-                    LinearGradient(colors: [QuickRecordingColors.neutrals.card, .clear], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [QuickRecordingColors.background(for: colorScheme), .clear], startPoint: .top, endPoint: .bottom)
                         .frame(height: 12).allowsHitTesting(false).accessibilityHidden(true)
                 }
             }
@@ -42,7 +43,7 @@ struct QuickRecordingTranscriptView: View {
     private var transcriptContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(text)
-                .foregroundStyle(QuickRecordingColors.neutrals.text1)
+                .foregroundStyle(QuickRecordingColors.neutrals(for: colorScheme).text1)
                 .font(.system(size: 20, weight: .regular))
                 .lineSpacing(8)
                 .fixedSize(horizontal: false, vertical: true)
@@ -61,9 +62,9 @@ struct QuickRecordingTranscriptView: View {
                 proxy.scrollTo("transcript-end", anchor: .bottom)
             }
             .font(.system(size: 12)).buttonStyle(.plain)
-            .foregroundStyle(QuickRecordingColors.primary.primaryText)
+            .foregroundStyle(QuickRecordingColors.primary(for: colorScheme).primaryText)
             .padding(8)
-            .background(QuickRecordingColors.primary.primarySubtle, in: Capsule())
+            .background(QuickRecordingColors.primary(for: colorScheme).primarySubtle, in: Capsule())
             .accessibilityIdentifier("vox.quick.followLatest")
         }
     }

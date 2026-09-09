@@ -33,7 +33,7 @@ owns: [UIShared, PlatformUI, WidgetUI]
 - **@MainActor**:全部 ViewModel 与 UI。
 - **隐私**:UI 层持有用户文本用于展示;绝不落日志/遥测。
 - **状态**:`ViewState` 协议定义 view-model 契约;`@Published` 更新走不可变值。
-- **阶段配色**:`DesignSystem/AtmosphereGlass.swift` 是主 UI 和快捷浮窗共用的纯颜色／位置模型；`QuickRecordingColors` 取色，`QuickRecordingPhaseSurface` 在 UI 层绘制柔光。主 UI 与浮窗不各自维护一套阶段 RGB。
+- **阶段配色**:`DesignSystem/AtmosphereGlass.swift` 是主 UI 和快捷浮窗共用的纯颜色／位置／明暗参数模型；两处均由 `BackgroundAtmosphere` 绘制底色、光团与材质，`QuickRecordingPhaseSurface` 仅作浮窗适配。`QuickRecordingColors` 按系统外观派生可读前景，不强制深色；阶段色、底材和转场参数只维护一份。浮窗电平使用事件更新，不增加连续刷新时间轴。
 
 ## 层内轴
 `Types(ViewStates/Models/DesignSystem)` ← `Runtime(ViewModels/Snackbar)` ← `UI(Views/Components)`。
