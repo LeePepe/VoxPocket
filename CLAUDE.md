@@ -110,6 +110,8 @@ For hybrid providers, `LLMTranscriptionMerger` uses an LLM call to reconcile the
 
 ## Environment Variables
 
+Azure model credentials also support a user-approved runtime-only `config.private.json` in the app sandbox. Read `docs/architecture/private-model-config.md` before changing this path; only the empty template belongs in Git, and private files must stay out of app bundles.
+
 | Variable | Purpose |
 |---|---|
 | `whisperkey` | Azure Whisper API key |

@@ -43,9 +43,15 @@ Recorded audio, live/final transcripts, and refined user text are sensitive user
   (`~/Library/Application Support/VoxPocket/`).
 
 ### V. Secrets & External-Vendor Hygiene (NON-NEGOTIABLE)
-- No hardcoded secrets, API keys, or tokens in source. All keys come from environment variables
+- No hardcoded secrets, API keys, or tokens in source. Keys normally come from environment variables
   (`whisperkey`, `kimikey`/`AZURE_API_KEY`, `LOKI_TOKEN`, `CLAUDE_API_KEY`/`ANTHROPIC_API_KEY`).
   Validate required keys are present at startup; fail fast with a clear message.
+- Azure model credentials may alternatively come from the user-approved runtime file
+  `Application Support/VoxPocket/config.private.json` inside the app sandbox (approved 2026-09-09).
+  Require an owner-only regular file (0600), exclude it from backups, Git and application bundles,
+  and never log its contents or decoder errors. Commit only a credential-free template.
+  This enables ordinary app launches without a credential-injecting launcher; existing environment
+  variables remain supported. Other credentials retain their existing environment-only contract.
 - No Microsoft-specific identifiers in committed code: no Azure resource IDs, tenant IDs,
   Microsoft account references, Windows registry paths, OneDrive/SharePoint/Teams fields,
   or Microsoft copyright notices. Endpoints must come from config/env, not literals.
@@ -83,4 +89,4 @@ change — the projection must stay in sync. Amendments are deliberate: state th
 and the migration impact. Complexity that appears to require crossing a red line must be
 redesigned, not excepted.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-07-15
+**Version**: 1.1.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-09-09
