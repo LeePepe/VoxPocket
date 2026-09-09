@@ -1,7 +1,7 @@
 import Foundation
 import LokiKit
 
-/// Azure OpenAI Whisper 转录器配置
+/// Azure 文件转写配置（兼容 Whisper 与 gpt-transcribe）
 public struct AzureWhisperConfig: Sendable {
     /// Whisper API 端点（含 api-version 查询参数）
     ///
@@ -54,6 +54,12 @@ public struct WhisperEngine: Sendable {
     ///   - language: 音频语言（仅用于日志）
     /// - Returns: 转录文本
     public func transcribe(fileURL: URL, language: Locale) async throws -> String {
+        guard config.endpoint.scheme == "https", config.endpoint.host != nil,
+              config.endpoint.user == nil, config.endpoint.password == nil,
+              !config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw NSError(domain: "WhisperEngine", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "云端转写配置缺失或无效"])
+        }
         let audioData = try Data(contentsOf: fileURL)
         logger.debug("Transcribing \(audioData.count) bytes, lang: \(language.identifier)")
 
@@ -63,15 +69,17 @@ public struct WhisperEngine: Sendable {
             name: "file", filename: "audio.wav",
             contentType: "audio/wav", data: audioData, boundary: boundary
         )
-        body.appendTextField(name: "response_format", value: "json", boundary: boundary)
+        // 使用默认 JSON 响应，保持与新旧模型的最小请求契约一致。
         body.append("--\(boundary)--\r\n".utf8Data)
 
         var request = URLRequest(url: config.endpoint)
+        request.timeoutInterval = 30
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue(config.apiKey, forHTTPHeaderField: "api-key")
         request.httpBody = body
 
+        let started = Date()
         let (data, response) = try await session.data(for: request)
 
         guard let http = response as? HTTPURLResponse else {
@@ -79,15 +87,17 @@ public struct WhisperEngine: Sendable {
                           userInfo: [NSLocalizedDescriptionKey: "无效的 HTTP 响应"])
         }
         guard (200..<300).contains(http.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            logger.error("HTTP \(http.statusCode): \(body)")
+            logger.error("Cloud transcription failed: HTTP \(http.statusCode)")
             throw NSError(domain: "WhisperEngine", code: http.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "Whisper API 错误 \(http.statusCode): \(body)"])
+                          userInfo: [NSLocalizedDescriptionKey: "云端转写 API 错误 \(http.statusCode)"])
         }
 
         struct WhisperResponse: Decodable { let text: String }
         let result = try JSONDecoder().decode(WhisperResponse.self, from: data)
-        logger.info("Done: \(result.text.count) chars")
+        logger.log(.info, "Cloud transcription succeeded", context: [
+            "text_length": result.text.count,
+            "duration_ms": Int(Date().timeIntervalSince(started) * 1000)
+        ])
         return result.text
     }
 }

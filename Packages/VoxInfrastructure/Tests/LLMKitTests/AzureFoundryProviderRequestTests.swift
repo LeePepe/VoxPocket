@@ -172,6 +172,51 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         XCTAssertEqual(providerConfig.options["azure.auth_mode"], "bearer")
     }
 
+    func testLunaUsesV1WithoutLegacySamplingFields() async throws {
+        for suffix in ["", "/openai/v1/", "/openai/v1/chat/completions"] {
+            MockURLProtocol.requestHandler = { request in
+                XCTAssertEqual(request.url?.absoluteString, "https://example.invalid/openai/v1/chat/completions")
+                XCTAssertEqual(request.value(forHTTPHeaderField: "api-key"), "test-key")
+                let data = try XCTUnwrap(Self.extractBody(from: request))
+                let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                XCTAssertEqual(body["model"] as? String, "custom-deployment")
+                XCTAssertEqual(body["reasoning_effort"] as? String, "none")
+                XCTAssertEqual(body["max_completion_tokens"] as? Int, 512)
+                for key in ["max_tokens", "temperature", "top_p", "presence_penalty"] {
+                    XCTAssertNil(body[key])
+                }
+                return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                        Data(#"{"choices":[{"finish_reason":"stop","message":{"content":"几点开始？"}}]}"#.utf8))
+            }
+            let deployment = AzureFoundryDeployment(
+                name: "test", endpoint: URL(string: "https://example.invalid" + suffix)!,
+                model: "custom-deployment", apiKey: "test-key", authMode: .apiKey,
+                maxTokens: 512, apiStyle: .openAIV1, reasoningEffort: "none"
+            )
+            let output = try await AzureFoundryProvider(deployment: deployment, session: makeSession()).complete(prompt: "几点开始")
+            XCTAssertEqual(output, "几点开始？")
+        }
+    }
+
+    func testErrorsDoNotExposeServerBodyAndTruncatedOutputIsRejected() async throws {
+        for status in [400, 200] {
+            MockURLProtocol.requestHandler = { request in
+                let body = status == 400 ? #"{"error":{"message":"PRIVATE_INPUT"}}"#
+                    : #"{"choices":[{"finish_reason":"length","message":{"content":"PRIVATE_INPUT"}}]}"#
+                return (HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
+            }
+            let provider = AzureFoundryProvider(config: .init(
+                providerType: .azureFoundry, apiKey: "test-key", baseURL: URL(string: "https://example.invalid")!, modelIdentifier: "test"
+            ), session: makeSession())
+            do {
+                _ = try await provider.complete(prompt: "fixture")
+                XCTFail("Expected failure")
+            } catch {
+                XCTAssertFalse(String(describing: error).contains("PRIVATE_INPUT"))
+            }
+        }
+    }
+
     private func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
