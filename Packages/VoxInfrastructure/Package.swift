@@ -90,5 +90,9 @@ let package = Package(
             name: "PersistenceTests",
             dependencies: ["Persistence"]
         ),
+        .testTarget(
+            name: "PreferencesTests",
+            dependencies: ["Preferences"]
+        ),
     ]
 )
