@@ -5,6 +5,14 @@ import TranscriptionKit
 import Preferences
 
 struct TranscriberSelectionTests {
+    @MainActor @Test func concurrentEntryPointsAwaitTheSameConfiguration() async throws {
+        async let appEntry: Void = LLMAppConfig.loadRuntimeConfiguration()
+        async let intentEntry: Void = LLMAppConfig.loadRuntimeConfiguration()
+        _ = try await (appEntry, intentEntry)
+        #expect(LLMAppConfig.azureAPIStyle == .openAIV1)
+        #expect(LLMAppConfig.defaultProvider == .azureFoundry)
+    }
+
     @MainActor @Test func defaultsSelectCloudFinalAndAzureRefinement() {
         #expect(LLMAppConfig.defaultTranscriberProvider == .hybridWhisper)
         #expect(LLMAppConfig.defaultProvider == .azureFoundry)

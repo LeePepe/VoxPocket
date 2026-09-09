@@ -19,6 +19,7 @@ enum TranscriberProvider {
 }
 
 /// App 内 LLM 固定配置（非敏感项）
+@MainActor
 enum LLMAppConfig {
     private(set) static var runtimeEnvironment = ProcessInfo.processInfo.environment
     private static let configurationTask = Task {
