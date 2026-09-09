@@ -152,11 +152,7 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
         recognitionTask?.finish()
         recognitionTask = nil
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        if #available(iOS 16, macOS 13, *) {
-            request.requiresOnDeviceRecognition = false
-        }
+        let request = DefaultAppleSpeechRequestFactory.makeRequest()
         recognitionRequest = request
 
         // buffer 同步喂给 Apple Speech，同时写入 WAV 文件（由 MicrophoneRecorder 负责）
