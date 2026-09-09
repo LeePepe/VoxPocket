@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last-Reviewed: 2026-07-15
+Last-Reviewed: 2026-09-09
 
 ## Project Snapshot
 
@@ -33,6 +33,27 @@ swift build --package-path Packages/VoxDomain
 swift test --package-path Packages/VoxPresentation
 swift test --package-path Packages/VoxApplication
 ```
+
+## 主工作目录本地 Build
+
+- **触发**：在主工作目录（非 linked worktree）完成一轮文件修改后，交付前直接生成新的
+  macOS Debug build，无需再次询问；纯检查、未改文件的任务不触发。这里的“主工作目录”
+  与当前是否处于 `main` 分支无关：用 `git rev-parse --absolute-git-dir` 与
+  `git rev-parse --path-format=absolute --git-common-dir` 的路径相同来判定。
+- **执行**：先跑受影响 layer 的测试，再运行下列本地归档；若任务包含 PR 合并，待同步最新
+  `main` 后再生成最终 build。linked worktree 只跑其 layer 验证，用户明确要求时才构建 App。
+
+  ```bash
+  VOX_BUILD_STAMP="$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)"
+  xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket \
+    -configuration Debug -destination 'generic/platform=macOS' \
+    -archivePath "build/local/VoxPocket-${VOX_BUILD_STAMP}.xcarchive" archive
+  ```
+
+- **完成条件**：归档成功且 `.xcarchive/Products/Applications/VoxPocket.app` 存在；交付时报告
+  产物路径、源码 commit 和是否含未提交改动。失败则报告阻塞，不把旧产物当作新 build。
+- **边界**：这是本地交付产物，不是新增的 pre-commit/pre-push 门禁，也不替代 CI required。
+  保留已有 build；安装替换与 TestFlight 发布仍需用户明确要求。
 
 ## Engineering Rules
 
