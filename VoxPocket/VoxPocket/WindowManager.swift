@@ -36,6 +36,7 @@ public final class WindowManager: ObservableObject {
     private var windowControllers: [WindowType: NSWindowController] = [:]
     private var viewModels: [WindowType: Any] = [:]
     private let logger: Logger = PrintLogger(subsystem: "WindowManager")
+    private let quickRecordingPrewarmer = QuickRecordingViewPrewarmer()
     
     /// 窗口可见状态
     @Published public var windowVisibility: [WindowType: Bool] = [
@@ -45,12 +46,27 @@ public final class WindowManager: ObservableObject {
 
     // MARK: - 初始化
 
-    private init() {}
+    private init() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let panel = self.windows[.quickRecording] else { return }
+                self.positionQuickRecordingWindow(panel)
+            }
+        }
+    }
 
     // MARK: - 窗口管理
 
+    /// 启动后延迟准备纯视图，不创建录音 ViewModel 或活动会话。
+    func scheduleQuickRecordingPrewarm() {
+        quickRecordingPrewarmer.schedule()
+    }
+
     /// 显示窗口
     public func showWindow(_ type: WindowType) {
+        if type == .quickRecording { quickRecordingPrewarmer.cancelPending() }
         if let existingWindow = windows[type] {
             positionWindow(existingWindow, for: type)
             presentWindow(existingWindow, for: type)
@@ -99,10 +115,25 @@ public final class WindowManager: ObservableObject {
             return
         }
 
-        let visibleFrame = screen.visibleFrame
-        let x = visibleFrame.midX - panel.frame.width / 2
-        let y = max(visibleFrame.minY, visibleFrame.maxY - QuickRecordingLayout.topInset - panel.frame.height)
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
+        let placement = QuickRecordingPlacement(
+            screenFrame: screen.frame, visibleFrame: screen.visibleFrame, cameraRect: cameraRect(on: screen)
+        )
+        (panel as? QuickRecordingPanel)?.placement = placement
+        panel.setFrame(placement.panelFrame, display: true)
+        if let viewModel = getQuickRecordingViewModel(),
+           let hostingView = panel.contentView as? NSHostingView<QuickRecordingView> {
+            hostingView.rootView = QuickRecordingView(viewModel: viewModel, placement: placement)
+        }
+    }
+
+    /// NSScreen 的两翼区域给出摄像头真实横向范围，禁止用网页占位尺寸推断硬件。
+    private func cameraRect(on screen: NSScreen) -> CGRect? {
+        guard screen.safeAreaInsets.top > 0,
+              let left = screen.auxiliaryTopLeftArea,
+              let right = screen.auxiliaryTopRightArea,
+              right.minX > left.maxX else { return nil }
+        return CGRect(x: left.maxX, y: screen.frame.maxY - screen.safeAreaInsets.top,
+                      width: right.minX - left.maxX, height: screen.safeAreaInsets.top)
     }
 
     /// 面板唤起时自动开始录音
@@ -221,7 +252,7 @@ public final class WindowManager: ObservableObject {
 
         let contentView = QuickRecordingView(viewModel: viewModel)
 
-        let panel = NSPanel(
+        let panel = QuickRecordingPanel(
             contentRect: NSRect(x: 0, y: 0, width: QuickRecordingLayout.panelWidth, height: QuickRecordingLayout.panelHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -236,7 +267,7 @@ public final class WindowManager: ObservableObject {
         panel.backgroundColor = .clear
         panel.hasShadow = false
 
-        // 设置 SwiftUI 内容（Capsule clipShape 已在 SwiftUI 层处理圆角）
+        // 圆角和真实摄像头透明避让由 SwiftUI 根据屏幕布局处理。
         let hostingView = NSHostingView(rootView: contentView)
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = .clear

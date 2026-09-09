@@ -31,6 +31,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     // MARK: - 计时
 
     private var sessionStartTime: Date?
+    private var recordingStopTime: Date?
     private var transcriptionEndTime: Date?
 
     // MARK: - Published 状态
@@ -64,7 +65,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     public var showsLiveTranscription: Bool {
-        guard !liveTranscription.isEmpty else { return false }
+        guard !liveTranscription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
 
         switch recorderStatus {
         case .listening, .transcribing, .refining:
@@ -72,6 +73,32 @@ public final class QuickRecordingViewModel: ObservableObject {
         case .idle, .done, .error:
             return false
         }
+    }
+
+    /// 录音时展示原文；润色中展示实际返回的更新，空结果不清空原文。
+    public var displayedTranscription: String {
+        switch recorderStatus {
+        case .idle: return ""
+        case .refining, .done:
+            return refinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? liveTranscription : refinedText
+        default: return liveTranscription
+        }
+    }
+
+    public func elapsedRecordingTime(at date: Date) -> TimeInterval {
+        guard let sessionStartTime else { return 0 }
+        return max(0, (recordingStopTime ?? date).timeIntervalSince(sessionStartTime))
+    }
+
+    public func copyRecognizedText() {
+        guard !liveTranscription.isEmpty else { return }
+        clipboardService.copy(liveTranscription)
+    }
+
+    public func cancelFromPanel() async {
+        guard recorderStatus == .listening || recorderStatus == .error, !isStartingRecordingInternal else { return }
+        await cancelRecording()
+        onNoResult?()
     }
 
     // MARK: - Init
@@ -120,6 +147,8 @@ public final class QuickRecordingViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
                 guard let self else { return }
+                // 收尾时识别服务可能先清空临时流；已显示文字要保留到最终结果到达。
+                if self.isProcessing && text.isEmpty { return }
                 self.liveTranscription = text
             }
             .store(in: &cancellables)
@@ -128,7 +157,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
-                if state.isRefining {
+                if state.isRefining && self.isProcessing {
                     self.recorderStatus = .refining
                 }
             }
@@ -141,7 +170,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                     guard let self else { return }
                     // send() 从 MainActor 发出，直接更新 refinedText
                     self.refinedText = text
-                    if !text.isEmpty {
+                    if !text.isEmpty && self.isProcessing {
                         self.recorderStatus = .refining
                     }
                 }
@@ -170,6 +199,8 @@ public final class QuickRecordingViewModel: ObservableObject {
         rawTranscription = ""
         errorMessage = nil
         isProcessing = false
+        sessionStartTime = nil
+        recordingStopTime = nil
         transcriptionUseCase.clearLiveText()
 
         do {
@@ -210,6 +241,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
 
         isProcessing = true
+        recordingStopTime = Date()
         recorderStatus = .transcribing
 
         // 先让出一次主线程执行片段，确保 receive(on: .main) 排队的 liveText 更新
@@ -503,6 +535,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             return
         }
 
+        refinedText = text
         recorderStatus = .done
 
         clipboardService.copy(text)
@@ -521,7 +554,6 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         isProcessing = false
         onComplete?(text)
-        recorderStatus = .idle
     }
 }
 #endif

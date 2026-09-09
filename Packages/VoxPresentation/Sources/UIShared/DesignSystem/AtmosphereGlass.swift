@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 玻璃质感背景的配色模型：近白底 + 一组模糊彩色光团（blob），透过磨砂柔化成高级渐变。
+/// 主 UI 与快捷录音共享的纯配色模型，归属 DesignSystem；视图只消费颜色与位置。
 ///
 /// 取代旧的「糖果色 baseGradient + 多层 directionalGradient + neumorphic 阴影」方案。
 /// 六阶段共享同一「宝石柔调」和谐配方，仅主色心不同以区分阶段（多彩但不打架）。
