@@ -280,7 +280,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
     func testCompactStatesDoNotRenderStatusCopyOrTimer() async throws {
         for status in RecorderStatus.allCases {
             let bitmap = try await render(status: status, transcript: "")
-            let words = try recognizedLines(bitmap, languages: ["en-US", "zh-Hans"]).joined()
+            let words = try recognizedLines(bitmap, languages: ["en-US", "zh-Hans"], transcriptOnly: false).joined()
             for unwanted in ["正在", "准备", "实时", "松开", "取消", "00:"] {
                 XCTAssertFalse(words.contains(unwanted), "\(status) contains unnecessary visible copy")
             }
@@ -411,16 +411,29 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
     }
 
     func testTextRecognitionWorksWithNonRetinaCapture() async throws {
-        let bitmap = try await render(status: .listening, transcript: "Visible transcript sample.", reduceMotion: true)
-        let image = try resample(XCTUnwrap(bitmap.cgImage), width: Int(QuickRecordingLayout.panelWidth))
-        let oneX = NSBitmapImageRep(cgImage: image)
-        XCTAssertTrue(try recognizedLines(oneX).joined(separator: " ").contains("Visible transcript sample"))
+        for status in [RecorderStatus.listening, .transcribing, .refining, .done, .error] {
+            let bitmap = try await render(status: status, transcript: "Visible transcript sample.", reduceMotion: true)
+            let image = try resample(XCTUnwrap(bitmap.cgImage), width: Int(QuickRecordingLayout.panelWidth))
+            let oneX = NSBitmapImageRep(cgImage: image)
+            XCTAssertTrue(try recognizedLines(oneX).joined(separator: " ").contains("Visible transcript sample"), "\(status)")
+        }
     }
 
-    /// OCR 固定语言、sRGB 像素格式与至少 2x 输入；几何与透明区测试仍使用原始截图。
-    private func recognizedLines(_ bitmap: NSBitmapImageRep, languages: [String] = ["en-US"]) throws -> [String] {
-        let source = try XCTUnwrap(bitmap.cgImage)
-        let image = try resample(source, width: max(source.width, Int(QuickRecordingLayout.panelWidth * 2)))
+    /// 文字断言只读真实正文区域，避免波形与图标参与 OCR 的文档布局判断。
+    /// 固定语言、sRGB 像素格式与至少 2x 输入；几何与透明区测试仍使用原始截图。
+    private func recognizedLines(_ bitmap: NSBitmapImageRep, languages: [String] = ["en-US"],
+                                 transcriptOnly: Bool = true) throws -> [String] {
+        var source = try XCTUnwrap(bitmap.cgImage)
+        var pointWidth = QuickRecordingLayout.panelWidth
+        if transcriptOnly {
+            let scale = CGFloat(source.width) / QuickRecordingLayout.panelWidth
+            pointWidth -= QuickRecordingLayout.contentInset * 2
+            let rectangle = CGRect(x: QuickRecordingLayout.contentInset * scale,
+                                   y: QuickRecordingLayout.headerHeight * scale,
+                                   width: pointWidth * scale, height: QuickRecordingLayout.readingHeight * scale)
+            source = try XCTUnwrap(source.cropping(to: rectangle))
+        }
+        let image = try resample(source, width: max(source.width, Int(pointWidth * 2)))
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.recognitionLanguages = languages
