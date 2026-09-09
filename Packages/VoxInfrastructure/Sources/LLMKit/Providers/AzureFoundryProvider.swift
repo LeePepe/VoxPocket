@@ -8,6 +8,12 @@ public enum AzureFoundryAuthMode: String, Sendable {
     case apiKey = "api-key"
 }
 
+/// 请求契约由配置显式选择，不根据部署别名推测模型能力。
+public enum AzureFoundryAPIStyle: String, Sendable {
+    case foundry
+    case openAIV1
+}
+
 /// Azure Foundry 部署配置（可直接配置模型、URL、API Key）
 public struct AzureFoundryDeployment: Sendable, Equatable {
     public let name: String
@@ -19,6 +25,8 @@ public struct AzureFoundryDeployment: Sendable, Equatable {
     public let maxTokens: Int
     public let topP: Double
     public let presencePenalty: Double
+    public let apiStyle: AzureFoundryAPIStyle
+    public let reasoningEffort: String?
 
     public init(
         name: String,
@@ -29,7 +37,9 @@ public struct AzureFoundryDeployment: Sendable, Equatable {
         authMode: AzureFoundryAuthMode = .bearer,
         maxTokens: Int = 2048,
         topP: Double = 0.1,
-        presencePenalty: Double = 0
+        presencePenalty: Double = 0,
+        apiStyle: AzureFoundryAPIStyle = .foundry,
+        reasoningEffort: String? = nil
     ) {
         self.name = name
         self.endpoint = endpoint
@@ -40,6 +50,8 @@ public struct AzureFoundryDeployment: Sendable, Equatable {
         self.maxTokens = maxTokens
         self.topP = topP
         self.presencePenalty = presencePenalty
+        self.apiStyle = apiStyle
+        self.reasoningEffort = reasoningEffort
     }
 
     public var providerConfig: LLMProviderConfig {
@@ -53,8 +65,10 @@ public struct AzureFoundryDeployment: Sendable, Equatable {
                 "azure.auth_mode": authMode.rawValue,
                 "azure.max_tokens": String(maxTokens),
                 "azure.top_p": String(topP),
-                "azure.presence_penalty": String(presencePenalty)
+                "azure.presence_penalty": String(presencePenalty),
+                "azure.api_style": apiStyle.rawValue
             ]
+            .merging(reasoningEffort.map { ["azure.reasoning_effort": $0] } ?? [:]) { _, new in new }
         )
     }
 }
@@ -89,7 +103,9 @@ public actor AzureFoundryProvider: LLMProvider {
     }
 
     public nonisolated var isAvailable: Bool {
-        config.baseURL != nil && !(config.apiKey?.isEmpty ?? true)
+        guard let url = config.baseURL else { return false }
+        return url.scheme == "https" && url.host != nil && url.user == nil && url.password == nil
+            && !(config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 
     public func validate() async throws {
@@ -182,10 +198,12 @@ public actor AzureFoundryProvider: LLMProvider {
 
         let model: String
         let messages: [Message]
-        let max_tokens: Int
-        let temperature: Double
-        let top_p: Double
-        let presence_penalty: Double
+        let max_tokens: Int?
+        let max_completion_tokens: Int?
+        let reasoning_effort: String?
+        let temperature: Double?
+        let top_p: Double?
+        let presence_penalty: Double?
     }
 
     private struct ChatCompletionResponse: Decodable {
@@ -201,6 +219,7 @@ public actor AzureFoundryProvider: LLMProvider {
             }
 
             let message: Message
+            let finish_reason: String?
         }
 
         let choices: [Choice]
@@ -230,27 +249,30 @@ public actor AzureFoundryProvider: LLMProvider {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
+        let usesV1 = config.options["azure.api_style"] == AzureFoundryAPIStyle.openAIV1.rawValue
         let payload = ChatCompletionRequest(
             model: config.modelIdentifier,
             messages: [
                 .init(role: "system", content: instruction),
                 .init(role: "user", content: userPrompt)
             ],
-            max_tokens: Self.maxTokens(from: config.options),
-            temperature: temperature,
-            top_p: Self.topP(from: config.options),
-            presence_penalty: Self.presencePenalty(from: config.options)
+            max_tokens: usesV1 ? nil : Self.maxTokens(from: config.options),
+            max_completion_tokens: usesV1 ? Self.maxTokens(from: config.options) : nil,
+            reasoning_effort: usesV1 ? config.options["azure.reasoning_effort"] : nil,
+            temperature: usesV1 ? nil : temperature,
+            top_p: usesV1 ? nil : Self.topP(from: config.options),
+            presence_penalty: usesV1 ? nil : Self.presencePenalty(from: config.options)
         )
 
         request.httpBody = try JSONEncoder().encode(payload)
 
         logger.log(.debug, "调用 Azure Foundry", context: [
-            "endpoint": endpoint.absoluteString,
             "model": config.modelIdentifier,
             "prompt_length": userPrompt.count,
             "auth_header": authMode == .apiKey ? "api-key" : "Authorization: Bearer"
         ], file: #file, function: #function, line: #line)
 
+        let started = Date()
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw VoxError.llmRequestFailed(reason: "invalid_http_response")
@@ -264,14 +286,21 @@ public actor AzureFoundryProvider: LLMProvider {
                 throw VoxError.llmQuotaExceeded
             }
 
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw VoxError.llmRequestFailed(reason: "status_\(http.statusCode): \(body)")
+            // 错误正文可能回显用户输入，不传到日志或上层错误。
+            throw VoxError.llmRequestFailed(reason: "status_\(http.statusCode)")
         }
 
         let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
         guard let choice = decoded.choices.first else {
             throw VoxError.llmResponseInvalid
         }
+        guard choice.finish_reason == nil || choice.finish_reason == "stop" else {
+            throw VoxError.llmResponseInvalid
+        }
+        logger.log(.info, "Azure completion succeeded", context: [
+            "model": config.modelIdentifier,
+            "duration_ms": Int(Date().timeIntervalSince(started) * 1000)
+        ])
 
         if let content = choice.message.content, !content.isEmpty {
             return content
@@ -288,6 +317,15 @@ public actor AzureFoundryProvider: LLMProvider {
     }
 
     private func buildCompletionsURL(from baseURL: URL) -> URL {
+        if config.options["azure.api_style"] == AzureFoundryAPIStyle.openAIV1.rawValue {
+            var url = baseURL
+            let path = baseURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if !path.hasSuffix("openai/v1/chat/completions") {
+                if !path.hasSuffix("openai/v1") { url.appendPathComponent("openai/v1") }
+                url.appendPathComponent("chat/completions")
+            }
+            return url
+        }
         // Azure AI Foundry project endpoint:
         // https://<resource>.services.ai.azure.com/api/projects/<project>/models/chat/completions?api-version=2024-05-01-preview
         let apiVersion = config.options["azure.api_version"] ?? "2024-05-01-preview"

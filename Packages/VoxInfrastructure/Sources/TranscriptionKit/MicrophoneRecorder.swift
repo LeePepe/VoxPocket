@@ -74,8 +74,8 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
         }
         #endif
 
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("mic_\(UUID().uuidString).wav")
+        // 用户音频只在应用数据目录暂存；目录创建不占用主线程。
+        let tempURL = try await Task.detached { try Self.makeRecordingFileURL() }.value
         tempFileURL = tempURL
 
         // Tap callback must be defined OUTSIDE MainActor.run so it does not inherit
@@ -138,6 +138,21 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
     }
 
     // MARK: - Internal
+
+    static func makeRecordingFileURL(applicationSupport: URL? = nil) throws -> URL {
+        let support = try applicationSupport ?? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        )
+        var directory = support.appendingPathComponent("VoxPocket/TemporaryAudio", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                               attributes: [.posixPermissions: 0o700])
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try directory.setResourceValues(values)
+        return directory.appendingPathComponent("mic_\(UUID().uuidString).wav")
+    }
 
     private func rmsLevel(buffer: AVAudioPCMBuffer) -> Float {
         guard let channelData = buffer.floatChannelData else { return 0 }
