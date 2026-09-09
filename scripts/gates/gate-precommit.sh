@@ -5,6 +5,7 @@
 set -uo pipefail
 REPO="$(git rev-parse --show-toplevel)"
 cd "$REPO"
+python3 scripts/gates/check_private_config.py || exit 1
 
 staged="$(git diff --cached --name-only --diff-filter=ACMR)"
 [ -z "$staged" ] && exit 0
