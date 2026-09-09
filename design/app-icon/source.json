@@ -1,0 +1,16 @@
+{
+  "geometry": {
+    "canvas": 256,
+    "center": 128,
+    "rx": 56,
+    "ry": 99.12,
+    "stroke": 7,
+    "angles": [-60, 0, 60],
+    "samples": 64
+  },
+  "palettes": {
+    "light": ["#008B84", "#087FCA", "#7054D8", "#BE469E", "#CB6554"],
+    "dark": ["#49EDDB", "#4AB8FF", "#927AFF", "#ED79D5", "#FFA08D"],
+    "mono": ["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"]
+  }
+}

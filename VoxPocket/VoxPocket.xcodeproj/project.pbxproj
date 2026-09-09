@@ -19,6 +19,7 @@
 		8BAF52832DE538C9ECFBF660 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6E1123F8B038F5E5132BADB9 /* Assets.xcassets */; };
 		8E089D9B9CE0539C13928EA8 /* VoxPocketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E33A98E778BE211E1AC3970 /* VoxPocketTests.swift */; };
 		9340FF368FAC64D4889B5075 /* SingleInstanceGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2751A05FA4192D63C77510F9 /* SingleInstanceGuard.swift */; };
+		9A27AC8EFBB068B41F872C02 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2124C2857625DF81C964DB17 /* AppIcon.icon */; platformFilters = (ios, macos, ); };
 		9C5C0A1AE4C4FD9952E83FF1 /* UITestingBridge in Frameworks */ = {isa = PBXBuildFile; productRef = BD8AD9C9D354B8A78973E655 /* UITestingBridge */; };
 		A8A08A4F4C292489D4B0719F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B4322401C88433C576C972 /* AppDelegate.swift */; };
 		A8E0D7098CE2D4706AEBA0DE /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189133DA376CDFC9A1BB61F5 /* WindowManager.swift */; };
@@ -77,6 +78,7 @@
 		0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriberSelectionTests.swift; sourceTree = "<group>"; };
 		189133DA376CDFC9A1BB61F5 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
 		1E33A98E778BE211E1AC3970 /* VoxPocketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketTests.swift; sourceTree = "<group>"; };
+		2124C2857625DF81C964DB17 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		2751A05FA4192D63C77510F9 /* SingleInstanceGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstanceGuard.swift; sourceTree = "<group>"; };
 		35CEEFA4650BE23A84A46F56 /* VoxPocketUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		3CBA06204946E030AFE05371 /* VoxPocketUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketUITests.swift; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				D9B4322401C88433C576C972 /* AppDelegate.swift */,
+				2124C2857625DF81C964DB17 /* AppIcon.icon */,
 				6E1123F8B038F5E5132BADB9 /* Assets.xcassets */,
 				007D223D190CA65066429E21 /* ContentView.swift */,
 				0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */,
@@ -372,6 +375,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9A27AC8EFBB068B41F872C02 /* AppIcon.icon in Resources */,
 				8BAF52832DE538C9ECFBF660 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

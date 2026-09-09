@@ -41,6 +41,12 @@ targets:
           - "*.entitlements"
           - "*config.private*"
           - "**/*config.private*"
+          - AppIcon.icon
+      # Icon Composer 用于 iOS/macOS 26；visionOS 保留原图集路径。
+      - path: VoxPocket/AppIcon.icon
+        type: file
+        buildPhase: resources
+        destinationFilters: [iOS, macOS]
     dependencies:
       - package: VoxPresentation
         product: PlatformUI
