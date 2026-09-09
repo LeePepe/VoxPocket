@@ -19,10 +19,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         XCTAssertGreaterThan(a.redComponent + a.greenComponent + a.blueComponent,
                              b.redComponent + b.greenComponent + b.blueComponent + 0.8)
         for bitmap in [light, dark] {
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-            let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+            let words = try recognizedLines(bitmap).joined(separator: " ")
             XCTAssertTrue(words.contains("Readable sample"))
         }
     }
@@ -84,11 +81,8 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         let bitmap = try await render(status: .listening, transcript: "Visible transcript sample.",
                                       initialWait: .milliseconds(80), reduceMotion: true)
         XCTAssertGreaterThan(try opaqueBounds(bitmap).height, 140)
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-        let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
-        XCTAssertTrue(words.contains("Visible transcript sample"))
+        let words = try recognizedLines(bitmap).joined(separator: " ")
+        XCTAssertTrue(words.contains("Visible transcript sample"), "Synthetic OCR \(bitmap.pixelsWide)x\(bitmap.pixelsHigh): \(words)")
     }
 
     /// 导出真实入场帧，分别检查独立胶囊与摄像头下缘起点，不访问录音服务。
@@ -176,10 +170,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
             let url = URL(fileURLWithPath: directory).appendingPathComponent("text-during-transition.png")
             try await Task.detached { try png.write(to: url) }.value
         }
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-        let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+        let words = try recognizedLines(bitmap).joined(separator: " ")
         XCTAssertTrue(words.contains("Visible transcript sample"), "Synthetic OCR: \(words)")
         XCTAssertEqual(bitmap.size, NSSize(width: QuickRecordingLayout.panelWidth, height: QuickRecordingLayout.panelHeight))
     }
@@ -247,10 +238,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         let expansion = try await render(status: .listening, transcript: "New words visible.",
                                          initialTranscript: "", updateWait: .milliseconds(60))
         for early in [entrance, expansion] {
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            try VNImageRequestHandler(cgImage: XCTUnwrap(early.cgImage)).perform([request])
-            let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined()
+            let words = try recognizedLines(early).joined()
             XCTAssertEqual(words.contains("words"), NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                            "减少动态效果时不等待入场，正常动画时须等轮廓展开再显示文字")
         }
@@ -292,10 +280,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
     func testCompactStatesDoNotRenderStatusCopyOrTimer() async throws {
         for status in RecorderStatus.allCases {
             let bitmap = try await render(status: status, transcript: "")
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-            let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined()
+            let words = try recognizedLines(bitmap, languages: ["en-US", "zh-Hans"]).joined()
             for unwanted in ["正在", "准备", "实时", "松开", "取消", "00:"] {
                 XCTAssertFalse(words.contains(unwanted), "\(status) contains unnecessary visible copy")
             }
@@ -306,11 +291,9 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         for status in RecorderStatus.allCases {
             // 此测试验证状态可见性，动画时序由独立入场与过渡测试覆盖。
             let bitmap = try await render(status: status, transcript: "Visible transcript sample.", reduceMotion: true)
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-            let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
-            XCTAssertEqual(words.contains("Visible transcript sample"), status != .idle, "\(status) synthetic OCR: \(words)")
+            let words = try recognizedLines(bitmap).joined(separator: " ")
+            XCTAssertEqual(words.contains("Visible transcript sample"), status != .idle,
+                           "\(status) synthetic OCR \(bitmap.pixelsWide)x\(bitmap.pixelsHigh): \(words)")
         }
     }
 
@@ -331,10 +314,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
     func testLongTranscriptScrollsToLatestTextAfterUpdate() async throws {
         let transcript = String(repeating: "Earlier recognized text.\n", count: 40) + "Latest sentence visible."
         let bitmap = try await render(status: .listening, transcript: transcript, initialTranscript: "First sentence.")
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-        let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+        let words = try recognizedLines(bitmap).joined(separator: " ")
         XCTAssertTrue(words.contains("Latest sentence visible"))
         XCTAssertFalse(words.contains("First sentence"))
     }
@@ -343,10 +323,7 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         let original = "Oldest sentence visible.\n" + String(repeating: "Earlier recognized text.\n", count: 40)
         let bitmap = try await render(status: .listening, transcript: original + "Newest addition.",
                                       initialTranscript: original, scrollToTopBeforeUpdate: true)
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-        let words = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+        let words = try recognizedLines(bitmap).joined(separator: " ")
         XCTAssertTrue(words.contains("Oldest sentence visible"))
         XCTAssertFalse(words.contains("Newest addition"))
     }
@@ -431,6 +408,35 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
         return bitmap
+    }
+
+    func testTextRecognitionWorksWithNonRetinaCapture() async throws {
+        let bitmap = try await render(status: .listening, transcript: "Visible transcript sample.", reduceMotion: true)
+        let image = try resample(XCTUnwrap(bitmap.cgImage), width: Int(QuickRecordingLayout.panelWidth))
+        let oneX = NSBitmapImageRep(cgImage: image)
+        XCTAssertTrue(try recognizedLines(oneX).joined(separator: " ").contains("Visible transcript sample"))
+    }
+
+    /// OCR 固定语言、sRGB 像素格式与至少 2x 输入；几何与透明区测试仍使用原始截图。
+    private func recognizedLines(_ bitmap: NSBitmapImageRep, languages: [String] = ["en-US"]) throws -> [String] {
+        let source = try XCTUnwrap(bitmap.cgImage)
+        let image = try resample(source, width: max(source.width, Int(QuickRecordingLayout.panelWidth * 2)))
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = languages
+        request.usesLanguageCorrection = false
+        try VNImageRequestHandler(cgImage: image).perform([request])
+        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+    }
+
+    private func resample(_ image: CGImage, width: Int) throws -> CGImage {
+        let height = max(1, Int(Double(image.height) * Double(width) / Double(image.width)))
+        let context = try XCTUnwrap(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                              bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return try XCTUnwrap(context.makeImage())
     }
 
     private func findScrollView(in view: NSView) -> NSScrollView? {
