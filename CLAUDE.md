@@ -183,6 +183,5 @@ Do not bypass with `--no-verify` or admin-merge; investigate red checks instead.
 - **One-time人工前置**: ASC App record (iOS + macOS platforms), the `.widget` App ID, and a TestFlight internal group named exactly `Internal` (or set `TESTFLIGHT_GROUPS`).
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Current planning context: `specs/005-my-1540-recovery/plan.md`.
 <!-- SPECKIT END -->
