@@ -175,6 +175,7 @@ Multica control-plane objects:
 - Capture checksums and timestamped backups before any host edit.
 - Prove failure within 120 seconds with an isolated per-process or test-adapter disconnect; never change the machine's global connection.
 - Restore connectivity and prove the same interface recovers.
+- Capture separate evidence for completed real `codex exec`, `sandbox_mode=read-only`, `approval_policy=never`, equality of expected/reviewed PR head SHAs, and preservation of the `codex-review-target` context.
 - For tracked changes, run the focused review preflight test plus repository policy checks and ship the repair through a separately reviewed PR to `main`.
 
 ### US2 — existing-autopilot bootstrap
@@ -182,7 +183,7 @@ Multica control-plane objects:
 - Confirm the existing observer remains on NAS runtime `a06e54f0-65cf-46ea-96de-97da512438cf` and its existing schedule is disabled.
 - Record its two failed run IDs and the sanitized unsupported-default-model error.
 - Inspect the NAS runtime's supported catalog without trial-and-error mutations; select one valid model/effort/service-tier tuple.
-- Update only observer agent `efc285c0-5c91-4055-80ba-e64b9d6419f9`, run exactly one authorized probe, and verify its output respects the observe/dispatch/bounded-rerun/report boundary.
+- Record redacted prior/selected configuration digests, obtain exact independent review, rehearse restore/reapply while the trigger is disabled, update only observer agent `efc285c0-5c91-4055-80ba-e64b9d6419f9`, run exactly one authorized probe, and verify its output respects the observe/dispatch/bounded-rerun/report boundary.
 - Enable only trigger `52310b59-fd61-4cf7-ae14-523ae55d2a26` on `*/10 * * * *` after the probe succeeds.
 
 ### US3 — external PR adoption and shipping
@@ -202,7 +203,7 @@ Multica control-plane objects:
 - Validate manifest/root/file containment with symlink rejection and owner-only permissions; unit-test serial run planning, timing boundaries, normalization/scoring, output redaction, and unavailable/no-fallback classification.
 - Run `swift build --package-path Packages/VoxInfrastructure` and `swift test --package-path Packages/VoxInfrastructure`; no `xcodebuild` is allowed for this Packages-only diff.
 - Ship the harness in its own independently reviewed PR and capture its merge SHA.
-- On the current Mac only, validate the owner-only manifest and execute identical decoded audio serially: one cold and five warm runs for each supported group and applicable batch/16.213-second real-time-paced mode.
+- On the current Mac only, record daemon/runtime identity plus zero NAS fixture reads/copies, validate the owner-only manifest, and execute identical decoded audio serially using the cold/warm process, engine, model-memory, disk-cache, and order semantics in `data-model.md`.
 - Verify the Azure deployment from loaded private configuration without exposing it; if underlying deployed model/version is unobservable, say so instead of inferring from an alias. Cloud hybrid has merger `N/A` where production intentionally skips it; local hybrid reports merger/refinement separately.
 - Keep full reference/recognized text and private filenames in `results/<UTC>-<git-sha>/private-report.json` under the protected benchmark directory. Publish only individual numeric runs, median/min/max, approved labels, unavailable/unknown classifications, `test` preservation, and the case-specific recommendation.
 
@@ -214,13 +215,13 @@ Multica control-plane objects:
 - Run the repository-defined macOS Debug archive command with a new timestamped archive path; retain existing archives.
 - Verify the archive contains `Products/Applications/VoxPocket.app` and the private-configuration bundle guard passes.
 - Verify with the owner that the old app is not recording and has no unsaved text; record consent state without content.
-- Back up `/Applications/VoxPocket.app`, gracefully quit it, replace it, reopen once, and verify one running instance.
+- Record the old app's bundle/version/build/code-directory identity; back it up, rehearse a timestamped identity-matching restore while retaining the backup, gracefully quit it, replace it, reopen once, and verify one running instance.
 - On failure, move only the failed replacement aside, restore the exact backup, and reopen only if it was running before.
 
 ### US6 — installed-app acceptance and closeout
 
 - Check the Loki/Grafana stack on loopback, launch the installed app, and perform one harmless window show/hide operation.
-- Query `{app="VoxPocket",stream="log"}` for an exact five-minute window and record the query, UTC bounds, result count, and representative fixed messages.
+- Query `{app="VoxPocket",stream="log"}` for an exact five-minute window and record independent counts/timestamps/evidence references for the startup marker and the allowlisted marker matching the window action.
 - Verify Grafana dashboard readiness at `/d/voxpocket-logs`.
 - Inspect all returned message/context values for forbidden transcript, prompt, refined text, credential, and arbitrary error-body content. A redaction placeholder is acceptable; dynamic content is not.
 - Do not use microphone/voice and do not substitute a library smoke test for real-app evidence.

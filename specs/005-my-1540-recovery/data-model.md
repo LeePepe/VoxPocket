@@ -41,6 +41,10 @@ This feature introduces no application persistence schema. The model below defin
 | `rollback_steps` | ordered list | Restores exact prior state |
 | `review_verdict` | enum | `pending`, `pass`, `changes_requested` |
 | `reviewed_revision` | string | Must equal `after_digest_or_commit` on PASS |
+| `actual_codex_execution` | tuple | Completed `codex exec` evidence reference, not a synthetic check |
+| `sandbox_invariant` | tuple | Observed `read-only` mode and `approval_policy=never` evidence |
+| `exact_head_invariant` | tuple | Expected and reviewed PR head SHAs are equal |
+| `required_check_invariant` | tuple | Observed check name is exactly `codex-review-target` and preserved |
 
 ### RecoveryProof
 
@@ -77,10 +81,12 @@ This feature introduces no application persistence schema. The model below defin
 | `archive_app_path` | absolute path | Exists under `Products/Applications/VoxPocket.app` |
 | `installed_app_path` | absolute path | `/Applications/VoxPocket.app` |
 | `backup_app_path` | absolute path | Timestamped, exists until acceptance/handoff |
+| `backup_identity` | tuple | Backup path, bundle identifier, version, build, and code-directory hash match the pre-install app |
 | `preflight_idle` | boolean | True only after not-recording/no-unsaved-text confirmation |
 | `running_instances` | integer | Exactly `1` after launch |
 | `private_config_preserved` | boolean | Required; content not inspected or copied into evidence |
 | `rollback_status` | enum | `available`, `executed`, `not_available` (`not_available` blocks) |
+| `rollback_rehearsal` | tuple | Method, timestamp, result, and restored identity; result must be `pass` while backup remains retained |
 
 ### TelemetryAcceptance
 
@@ -92,6 +98,10 @@ This feature introduces no application persistence schema. The model below defin
 | `end_utc` | UTC timestamp | No more than five minutes after start for primary proof |
 | `record_count` | integer | At least 2 total records, including startup and window-operation evidence |
 | `startup_marker_count` | integer | At least 1 |
+| `startup_marker_timestamp` | UTC timestamp | Inside the recorded query window |
+| `window_marker` | enum | One allowlisted show/hide/close message tied to the performed action |
+| `window_marker_count` | integer | At least 1, counted independently from startup |
+| `window_marker_timestamp` | UTC timestamp | Inside the query window and after the recorded action |
 | `dashboard_url` | URL | Local `/d/voxpocket-logs` dashboard |
 | `dashboard_ready` | boolean | Must be true |
 | `forbidden_content_count` | integer | Must be `0` |
@@ -117,6 +127,10 @@ This feature introduces no application persistence schema. The model below defin
 | `runtime_id` | UUID | Existing NAS runtime `a06e54f0-65cf-46ea-96de-97da512438cf` |
 | `trigger_id` | UUID | Existing `52310b59-fd61-4cf7-ae14-523ae55d2a26` |
 | `catalog_selection` | tuple | Model, effort, and tier proven supported by that runtime |
+| `prior_configuration_identity` | tuple | Redacted prior model/effort/tier plus normalized digest |
+| `selected_configuration_identity` | tuple | Redacted selected model/effort/tier plus normalized digest |
+| `independent_review` | tuple | Evidence reference, PASS verdict, and matching selected-config digest |
+| `rollback_rehearsal` | tuple | Restore/reapply method, timestamp, and passing result while trigger is disabled |
 | `probe_run_id` | UUID | Exactly one owner-authorized successful probe |
 | `schedule_enabled` | boolean | True only after probe succeeds; false after delivery completes |
 
@@ -139,9 +153,22 @@ This feature introduces no application persistence schema. The model below defin
 |---|---|---|
 | `group` | enum | Apple, Azure, WhisperKit base, WhisperKit large-v3-turbo, Apple+Azure, Apple+local |
 | `verified_model_or_deployment` | string | Factual existing identity; no alias assumption or secret |
+| `execution_host` | tuple | Current-Mac daemon/runtime identity and observation time |
+| `nas_fixture_read_count` | integer | Must be `0` |
+| `nas_fixture_copy_count` | integer | Must be `0` |
 | `pacing` | enum | `batch`, `realtime_16_213s` |
+| `requested_mode` | enum | `automatic`, `on_device_required`, `not_applicable` |
+| `supports_on_device_recognition` | boolean/null | Capability only; null for non-Apple groups |
+| `actual_route` | enum | `on_device`, `server`, `unknown`, `not_applicable`; availability is recorded separately |
 | `temperature` | enum | `cold`, `warm` |
 | `ordinal` | integer | One cold; warm ordinals 1 through 5 |
+| `execution_order` | integer | Strict global serial position |
+| `process_generation` | string | Fresh process identity for one group/mode |
+| `adapter_instance` | enum | `new`, `reused` |
+| `engine_instance` | enum | `new`, `reused`, `not_applicable` |
+| `model_prepared_before_run` | boolean/null | False for cold, true for warm when a model exists, null otherwise |
+| `disk_cache_state` | enum | `present`, `absent`, `not_applicable`; global cache is never cleared |
+| `cache_reset_performed` | boolean | Must be false |
 | `timings_ms` | map | Download, conversion, model load, request, first partial, stable final after input, total |
 | `realtime_factor` | number | Recognition total divided by 16.213 seconds |
 | `accuracy` | map | CER, mixed token error rate, punctuation error rate, English `test` preserved |
@@ -158,6 +185,16 @@ This feature introduces no application persistence schema. The model below defin
 | `aggregate` | map | Median and range only; no p95 |
 | `recommendation` | string | Case-specific and non-binding |
 | `default_changed` | boolean | Must be false |
+
+## Cold/Warm Benchmark Semantics
+
+- A **group/mode** is one provider or hybrid pipeline plus one input pacing mode. Group/mode order is fixed by the validated manifest and recorded in the sanitized summary.
+- Before measured runs, audio is decoded exactly once to the canonical mono PCM/WAV input. Conversion time is recorded as preparation and excluded from recognition timings.
+- Downloads/cache resolution are preparation. Their duration and the pre-run disk-cache state are recorded, but shared/global caches are never deleted or rewritten to manufacture a cold run.
+- A **cold run** is the first measured run for a group/mode in a fresh harness process with new adapter/session/engine instances and no model prepared in that process's memory. Model-load time is recorded separately from recognition-request time.
+- The five **warm runs** execute serially in the same process and reuse the cold run's adapter/session/engine and prepared in-memory model. No reinitialization or cache reset occurs between warm runs.
+- The harness terminates after one group/mode, then starts a fresh process for the next group/mode. Every run records process generation, adapter/engine reuse, preparation state, disk-cache state, and global execution order.
+- Cloud adapters follow the same process/session rules, but in-process model preparation is `not_applicable`; cloud duration includes network. Batch-only adapters record partial/final-after-input metrics as `null`, not zero.
 
 ## Relationships
 

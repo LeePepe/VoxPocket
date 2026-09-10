@@ -65,6 +65,23 @@ isolated_failure:
 recovery:
   action: <exact action>
   same_interface_succeeded: true|false
+review_gate_invariants:
+  required_check_name:
+    observed: codex-review-target
+    evidence_ref: <ruleset/workflow evidence>
+    preserved: true
+  actual_codex_execution:
+    observed_command: codex exec
+    completed: true
+    evidence_ref: <redacted run/job output proving the command executed and returned a verdict>
+  sandbox:
+    observed_mode: read-only
+    approval_policy: never
+    evidence_ref: <redacted command/config/run reference>
+  exact_head_validation:
+    expected_pr_head_sha: <40-char SHA captured immediately before review>
+    reviewed_head_sha: <40-char SHA from the review invocation/result>
+    matches: true
 independent_review:
   reviewer: <AI Reviewer evidence>
   verdict: PASS|PASS_WITH_FOLLOW_UP
@@ -83,10 +100,25 @@ trigger_id: 52310b59-fd61-4cf7-ae14-523ae55d2a26
 previous_failures:
   - <run id and sanitized unsupported-model classification>
 runtime_catalog_observed_at_utc: <timestamp>
+prior_configuration:
+  model: <redacted identifier or inherited>
+  effort: <redacted identifier or inherited>
+  service_tier: <redacted identifier or inherited>
+  identity_digest: <digest of normalized non-secret tuple>
 selected_model: <catalog-valid identifier>
 selected_effort: <catalog-valid value or inherited>
 selected_service_tier: <catalog-valid value or inherited>
+selected_configuration_identity_digest: <digest of normalized non-secret tuple>
 shared_agents_changed: false
+independent_review:
+  evidence_ref: <comment or review URL/id>
+  verdict: PASS|PASS_WITH_FOLLOW_UP
+  reviewed_configuration_identity_digest: <must equal selected_configuration_identity_digest>
+rollback:
+  steps: [<restore prior model/effort/service-tier only on the existing observer>]
+  rehearsal_method: <reversible restore then reapply, while trigger remains disabled>
+  rehearsed_at_utc: <timestamp>
+  result: pass
 probe_run_id: <id>
 probe_status: succeeded
 probe_scope_verified: observe_dispatch_bounded_rerun_report_only
@@ -148,18 +180,48 @@ benchmark_pr: <separate reviewed PR URL>
 benchmark_head_sha: <exact reviewed SHA>
 benchmark_merge_sha: <merged SHA>
 manifest_path_class: protected_app_sandbox # never basename/private child paths
+execution_host:
+  daemon_id: 019fd055-0738-723e-a556-762fc863b720
+  runtime_id: 05eda9df-e582-43e1-b8e0-3c16f847522d
+  observed_at_utc: <timestamp>
+  evidence_ref: <sanitized current-Mac runtime/executor evidence>
+nas_isolation:
+  observer_agent_id: efc285c0-5c91-4055-80ba-e64b9d6419f9
+  runtime_id: a06e54f0-65cf-46ea-96de-97da512438cf
+  fixture_read_count: 0
+  fixture_copy_count: 0
+  evidence_ref: <audit/task evidence proving no NAS access or copy>
 fixture_duration_seconds: 16.213
 input_identity: <non-reversible digest>
-execution: { serial: true, cold_runs: 1, warm_runs: 5 }
+execution:
+  serial: true
+  cold_runs: 1
+  warm_runs: 5
+  group_mode_order: [<recorded ordered labels>]
+  process_policy: one_fresh_process_per_group_and_mode
+  disk_cache_reset: false
+  canonical_audio_prepared_before_measured_runs: true
 groups:
   - label: <approved provider or hybrid label>
     verified_model_or_deployment: <non-secret factual label>
     availability: available|unavailable|unknown
+    requested_mode: automatic|on_device_required|not_applicable
+    supports_on_device_recognition: true|false|null
+    actual_route: on_device|server|unknown|not_applicable
     pacing: batch|realtime_16_213s
+    pre_run_disk_cache_state: present|absent|not_applicable
+    preparation:
+      download_ms: <number|null>
+      conversion_ms: <number|null>
     runs:
       - ordinal: cold|warm-1|warm-2|warm-3|warm-4|warm-5
-        download_ms: <number|null>
-        conversion_ms: <number|null>
+        execution_order: <integer>
+        process_generation: <fresh-process identifier>
+        adapter_instance: new|reused
+        engine_instance: new|reused|not_applicable
+        model_prepared_before_run: true|false|not_applicable
+        disk_cache_state: present|absent|not_applicable
+        cache_reset_performed: false
         model_load_ms: <number|null>
         request_ms: <number|null>
         first_partial_ms: <number|null>
@@ -180,7 +242,9 @@ recommendation: <case-specific statement or no recommendation>
 default_model_changed: false
 ```
 
-Do not publish recognized/reference text, private filenames, secrets, arbitrary error bodies, or p95 claims.
+`availability` and Apple route observability are independent: an Apple run may be `available` while `actual_route` is `unknown`. Cold/warm execution MUST follow `data-model.md#coldwarm-benchmark-semantics`; a run missing any process/engine/cache/order field is invalid.
+
+Do not publish recognized/reference text, private filenames, secrets, arbitrary error bodies, or p95 claims. The executor must verify the current-Mac identity at run time and attach a sanitized audit reference showing zero NAS fixture reads/copies.
 
 ## 7. Root-Coordinator Validation and Install Handoff
 
@@ -222,12 +286,34 @@ post_install_acceptance:
   start_utc: <timestamp>
   end_utc: <timestamp>
   record_count: <integer >= 2>
+  startup_event:
+    marker: Local log collection started
+    count: <integer >= 1>
+    first_timestamp_utc: <timestamp within start_utc/end_utc>
+    evidence_ref: <bounded Loki result>
+  window_event:
+    action: show|hide|close
+    allowlisted_marker: <Showing existing window|Created and showing window|Hiding window|Closed window>
+    count: <integer >= 1>
+    first_timestamp_utc: <timestamp within start_utc/end_utc and after action>
+    evidence_ref: <bounded Loki result>
   grafana_url: http://localhost:3010/d/voxpocket-logs
   grafana_ready: true
   forbidden_content_count: 0
 rollback:
   backup_retained: true
   status: available|executed
+  verified_backup_identity:
+    path: <must equal pre_install.backup_path>
+    bundle_identifier: com.leepepe.voxpocket
+    version: <version>
+    build: <build>
+    code_directory_hash: <codesign CDHash or equivalent immutable identity>
+  rehearsal:
+    method: temporary_restore_validation|controlled_full_swap
+    performed_at_utc: <timestamp>
+    restored_identity_matches_backup: true
+    result: pass
 supervisor_schedule_disabled_after_acceptance: true
 ```
 

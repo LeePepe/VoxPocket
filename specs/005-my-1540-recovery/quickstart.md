@@ -33,6 +33,8 @@ Use the service-context procedure selected by the diagnosis task. Record only st
 
 Inject failure only into a disposable review process/test adapter. Require explicit fail-closed output within 120 seconds, then restore and run the same interface successfully. Verify backup checksums before and after rollback rehearsal.
 
+The recovery record is incomplete unless it separately cites evidence that the real `codex exec` returned a verdict, `sandbox_mode=read-only`, `approval_policy=never`, the expected and reviewed PR head SHAs are equal, and the required context is still named `codex-review-target`.
+
 For any tracked repair:
 
 ```bash
@@ -46,9 +48,10 @@ The focused test command applies only if diagnosis selects a repository repair a
 
 ## 3. Bootstrap the existing supervisor
 
-Inspect the NAS runtime's supported model/effort/service-tier catalog using its authoritative runtime surface. Choose a supported tuple; do not infer it from old usage records or trial-and-error writes. Update only observer `efc285c0-5c91-4055-80ba-e64b9d6419f9`, run one explicit authorized probe, then verify:
+Inspect the NAS runtime's supported model/effort/service-tier catalog using its authoritative runtime surface. Choose a supported tuple; do not infer it from old usage records or trial-and-error writes. Record a normalized non-secret digest for the prior and selected tuples. Update only observer `efc285c0-5c91-4055-80ba-e64b9d6419f9`; with the trigger still disabled, rehearse restoring the prior tuple and reapplying the reviewed tuple. Then run one explicit authorized probe and verify:
 
 - probe status is `succeeded`;
+- independent-review evidence names the exact selected-configuration digest and the rollback rehearsal passed;
 - output has one bounded observation/action and no implementation/config mutation;
 - the existing `*/10` trigger is enabled;
 - no additional autopilot/trigger was created.
@@ -88,7 +91,7 @@ swift test --package-path Packages/VoxInfrastructure \
   --filter ApprovedOwnerBenchmarkTests/testOwnerFixture
 ```
 
-Expected: full text remains under the manifest root in `results/<UTC>-<git-sha>/private-report.json`; `summary.json` and stdout contain sanitized numeric/label data only. Validate one cold plus five warm serial runs per supported provider/pipeline and pacing mode, median/min/max only, separate stage timings for hybrids, and explicit unavailable/unknown rows rather than fallback relabeling.
+Expected: full text remains under the manifest root in `results/<UTC>-<git-sha>/private-report.json`; `summary.json` and stdout contain sanitized numeric/label data only. Record current-Mac daemon/runtime evidence and zero NAS fixture reads/copies. For each group/mode, prepare/download/convert before measurement, start one fresh process with new adapter/session/engine and no in-memory model for the cold run, then reuse that same process/adapter/engine for five serial warm runs. Record disk-cache state without clearing shared caches and record global execution order. Apple records `requested_mode`, `supports_on_device_recognition`, and `actual_route` separately from availability. Validate median/min/max only, separate hybrid stage timings, and explicit unavailable/unknown rows rather than fallback relabeling.
 
 ## 6. Root-coordinator candidate validation and archive
 
@@ -118,9 +121,9 @@ Stop the candidate after proof. If it fails, reopen the unchanged installed app 
 
 ## 7. Back up, install, and accept
 
-After candidate validation, create a timestamped backup of `/Applications/VoxPocket.app` without deleting it. Replace it with the validated archive app, launch exactly one instance, and verify sandbox data, preferences, and private model configuration remain available without printing their contents.
+After candidate validation, record the old app's bundle ID/version/build/code-directory hash and create a timestamped backup of `/Applications/VoxPocket.app` without deleting it. Rehearse restoration by either copying the backup to a temporary same-filesystem validation path or performing a controlled full swap while retaining both bundles; record method, UTC timestamp, identity comparison, and `result=pass`. Replace the app with the validated archive app, launch exactly one instance, and verify sandbox data, preferences, and private model configuration remain available without printing their contents.
 
-Perform startup plus one harmless window show/hide action. Query the five-minute acceptance window for `{app="VoxPocket",stream="log"}`, require startup and window records, and check `http://localhost:3010/d/voxpocket-logs`. Inspect all returned message/context fields for forbidden content categories.
+Perform startup plus one harmless window show/hide action. Within the same five-minute `{app="VoxPocket",stream="log"}` window, query and record the count/timestamp/evidence reference for `Local log collection started`, then independently query the allowlisted marker matching the performed window action. Require each marker count to be at least one, check `http://localhost:3010/d/voxpocket-logs`, and inspect all returned message/context fields for forbidden content categories.
 
 On any failure, stop the new app, move it aside, restore the exact backup, and relaunch the backup only if it was previously running. Retain all archives and the backup.
 
