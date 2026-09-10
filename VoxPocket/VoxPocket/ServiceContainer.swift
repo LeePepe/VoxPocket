@@ -89,6 +89,7 @@ public final class ServiceContainer: ObservableObject {
     // MARK: - 初始化
 
     private init() {
+        VoxPocketLogging.start()
         logger = PrintLogger(subsystem: "ServiceContainer")
         telemetryService = Self.makeTelemetryService()
         let azureConfig = Self.makeAzureFoundryConfig()
