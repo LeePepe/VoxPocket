@@ -127,6 +127,7 @@ Packages/VoxInfrastructure/Package.swift         # dedicated test-target wiring
 /Users/tianpli/Library/LaunchAgents/
   actions.runner.LeePepe-VoxPocket.macmini-local.plist
 /Users/tianpli/.codex-review/                    # isolated review home; redact secrets/config contents
+<benchmark-delivery-root>/LokiKit/               # task-local sibling pinned to published SHA; no source edits
 /Users/tianpli/Library/Containers/com.leepepe.voxpocket/Data/Library/Application Support/VoxPocket/benchmarks/owner-20260910/
                                                  # owner fixture and all full-text benchmark outputs
 /Applications/VoxPocket.app                     # installed app; root coordinator only
@@ -141,7 +142,7 @@ Multica control-plane objects:
 - observer/autopilot/runtime/trigger: efc285c0-5c91-4055-80ba-e64b9d6419f9 / d67e7307-d0ef-40c4-a597-fd48d73cda48 / a06e54f0-65cf-46ea-96de-97da512438cf / 52310b59-fd61-4cf7-ae14-523ae55d2a26
 ```
 
-**Structure Decision**: Planning artifacts live in `specs/005-my-1540-recovery/`. Operational recovery owns top-level RepoInfra only; no `RepoInfra/` product directory or package is invented. A diagnosis spike chooses between the named host paths and tracked review files. The benchmark is a dedicated existing-layer test target that composes production request/engine/merger/refinement adapters through `@testable` access; it does not refactor the four microphone-bound coordinators. App-shell files from PR #35, all other `Packages/**`, LokiKit source, global network settings, unrelated runners, shared agents, private fixture data, and the user's primary checkout are excluded from repair/harness implementation.
+**Structure Decision**: Planning artifacts live in `specs/005-my-1540-recovery/`. Operational recovery owns top-level RepoInfra only; no `RepoInfra/` product directory or package is invented. A diagnosis spike chooses between the named host paths and tracked review files. The benchmark is a dedicated existing-layer test target that composes production request/engine/merger/refinement adapters through `@testable` access; it does not refactor the four microphone-bound coordinators. Before benchmark implementation, Team Lead provisions the task-local sibling `LokiKit` checkout from `https://github.com/LeePepe/LokiKit` at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` and proves its resolved path, remote, SHA, and clean state. App-shell files from PR #35, all other `Packages/**`, LokiKit source edits, global network settings, unrelated runners, shared agents, private fixture data, and the user's primary checkout are excluded from repair/harness implementation.
 
 ## Delivery Slices
 
@@ -196,6 +197,7 @@ Multica control-plane objects:
 
 ### US4 — production-adapter benchmark harness and run
 
+- Team Lead provisions and verifies the task-local `../../../LokiKit` sibling at published SHA `eff9c1712cd648ed0717e41183ad8bd7bf39cbea`; benchmark implementation cannot start until path resolution, remote URL, exact SHA, and clean state pass.
 - Add a dedicated `PrivateTranscriptionBenchmarkTests` test target. Compose the production Apple request factory, Azure `WhisperEngine`, internal local Whisper engine, `mergedTranscription`, and production LLM/refinement adapters; do not refactor the four microphone-bound coordinators.
 - Decode once to canonical mono PCM/WAV inside the protected directory. Feed the exact canonical file to Azure/local batch adapters and identical buffers serially at 1x to Apple and applicable hybrid paths.
 - If needed, factor only common Apple request policy into a URL-request variant and expose only the minimal internal/testable WhisperKit engine preparation/file-or-buffer seam. Record Apple's requested mode as `automatic`, `supportsOnDeviceRecognition` as capability, and `actual_route=unknown` unless the framework proves routing.

@@ -43,7 +43,7 @@ This feature introduces no application persistence schema. The model below defin
 | `reviewed_revision` | string | Must equal `after_digest_or_commit` on PASS |
 | `actual_codex_execution` | tuple | Completed `codex exec` evidence reference, not a synthetic check |
 | `sandbox_invariant` | tuple | Observed `read-only` mode and `approval_policy=never` evidence |
-| `exact_head_invariant` | tuple | Expected and reviewed PR head SHAs are equal |
+| `exact_head_invariant` | tuple | Expected and reviewed PR head SHAs are equal; includes separate live-head-capture and review-invocation/result evidence references |
 | `required_check_invariant` | tuple | Observed check name is exactly `codex-review-target` and preserved |
 
 ### RecoveryProof
@@ -147,6 +147,19 @@ This feature introduces no application persistence schema. The model below defin
 | `scope` | string | Existing PR #35 logging candidate; no reimplementation |
 | `evidence` | list | Existing checks/tests and remaining gate |
 
+### BenchmarkDependencyCheckout
+
+| Field | Type | Validation |
+|---|---|---|
+| `voxpocket_work_dir` | absolute path | Team Lead-provisioned isolated benchmark checkout |
+| `lokikit_path` | absolute path | Exactly the path resolved by `Packages/VoxInfrastructure/../../../LokiKit` in that checkout |
+| `repository` | URL | Exactly `https://github.com/LeePepe/LokiKit` |
+| `expected_sha` | SHA | `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` |
+| `actual_sha` | SHA | Must equal `expected_sha` |
+| `worktree_state` | enum | `clean` required before T010, T012, and T013 |
+| `source_edits` | boolean | Must be false throughout benchmark work |
+| `evidence_ref` | string | Immutable command-output or handoff reference |
+
 ### BenchmarkRun
 
 | Field | Type | Validation |
@@ -207,6 +220,7 @@ DiagnosisEvidence 1──1 RepairCandidate
 RepairCandidate   1──1 RecoveryProof
 RecoveryProof     1──1 ShippingRecord
 ShippingRecord    1──1 BenchmarkReport
+BenchmarkDependencyCheckout 1──N BenchmarkRun
 BenchmarkReport   1──N BenchmarkRun
 BenchmarkReport   1──1 InstallRecord
 InstallRecord     1──1 TelemetryAcceptance

@@ -101,19 +101,21 @@
 
 **Independent Test**: A Packages-only reviewed PR adds the harness; the current-Mac live run produces exactly one cold and five warm serial measurements per supported group/mode, a protected full report, and a sanitized numeric summary with no private-field leakage.
 
-- [ ] T009 [US4] Register the dedicated `PrivateTranscriptionBenchmarkTests` target in `Packages/VoxInfrastructure/Package.swift`; add minimal testability seams in `Packages/VoxInfrastructure/Sources/TranscriptionKit/DefaultAppleSpeechRequestFactory.swift` and `Packages/VoxInfrastructure/Sources/TranscriptionKit/WhisperKitTranscriber.swift`; and prove them in `Packages/VoxInfrastructure/Tests/PrivateTranscriptionBenchmarkTests/ProductionAdapterSeamTests.swift` with `SilentBenchmarkLogger.swift`.
-- [ ] T010 [US4] Implement `Packages/VoxInfrastructure/Tests/PrivateTranscriptionBenchmarkTests/ApprovedOwnerBenchmarkTests.swift`, `BenchmarkAudioFixture.swift`, `ProductionRecognitionAdapters.swift`, `BenchmarkMetricsAndScoring.swift`, and `PrivateBenchmarkReportWriter.swift` for protected input/output, production adapters, serial cold/warm plans, timing/scoring, hybrid stages, no-op telemetry, and sanitized failures.
-- [ ] T011 [US4] Verify the Packages-only benchmark diff with `swift build --package-path Packages/VoxInfrastructure` and `swift test --package-path Packages/VoxInfrastructure`, obtain exact-revision independent PASS, and merge the separate benchmark PR through all normal gates.
-- [ ] T012 [US4] Under root-coordinator coordination, run `ApprovedOwnerBenchmarkTests/testOwnerFixture` on current-Mac daemon `019fd055-0738-723e-a556-762fc863b720` using only `/Users/tianpli/Library/Containers/com.leepepe.voxpocket/Data/Library/Application Support/VoxPocket/benchmarks/owner-20260910/manifest.json`, retaining full results under its protected `results/<UTC>-<git-sha>/` and publishing the §6 summary with current-Mac/NAS-isolation proof, Apple route fields, and reproducible cold/warm state.
+- [ ] T009 [US4] Provision the task-local sibling dependency with `multica repo checkout https://github.com/LeePepe/LokiKit --ref eff9c1712cd648ed0717e41183ad8bd7bf39cbea` so `<benchmark_delivery_work_dir>/Packages/VoxInfrastructure/../../../LokiKit` resolves to `<task-root>/LokiKit`, then record its absolute path, origin URL, exact HEAD, and clean status without editing LokiKit.
+- [ ] T010 [US4] Register the dedicated `PrivateTranscriptionBenchmarkTests` target in `Packages/VoxInfrastructure/Package.swift`; add minimal testability seams in `Packages/VoxInfrastructure/Sources/TranscriptionKit/DefaultAppleSpeechRequestFactory.swift` and `Packages/VoxInfrastructure/Sources/TranscriptionKit/WhisperKitTranscriber.swift`; and prove them in `Packages/VoxInfrastructure/Tests/PrivateTranscriptionBenchmarkTests/ProductionAdapterSeamTests.swift` with `SilentBenchmarkLogger.swift`.
+- [ ] T011 [US4] Implement `Packages/VoxInfrastructure/Tests/PrivateTranscriptionBenchmarkTests/ApprovedOwnerBenchmarkTests.swift`, `BenchmarkAudioFixture.swift`, `ProductionRecognitionAdapters.swift`, `BenchmarkMetricsAndScoring.swift`, and `PrivateBenchmarkReportWriter.swift` for protected input/output, production adapters, serial cold/warm plans, timing/scoring, hybrid stages, no-op telemetry, and sanitized failures.
+- [ ] T012 [US4] Verify the Packages-only benchmark diff with `swift build --package-path Packages/VoxInfrastructure` and `swift test --package-path Packages/VoxInfrastructure`, obtain exact-revision independent PASS, and merge the separate benchmark PR through all normal gates.
+- [ ] T013 [US4] Under root-coordinator coordination, run `ApprovedOwnerBenchmarkTests/testOwnerFixture` on current-Mac daemon `019fd055-0738-723e-a556-762fc863b720` using only `/Users/tianpli/Library/Containers/com.leepepe.voxpocket/Data/Library/Application Support/VoxPocket/benchmarks/owner-20260910/manifest.json`, retaining full results under its protected `results/<UTC>-<git-sha>/` and publishing the §6 summary with current-Mac/NAS-isolation proof, Apple route fields, and reproducible cold/warm state.
 
 ### US4 task metadata
 
 | ID | Owning layer | In scope | Explicit exclusions | Interface/contract | Task-local acceptance | Exact verification | Depends on |
 |---|---|---|---|---|---|---|---|
-| T009 | VoxInfrastructure / TranscriptionKit Service | `Package.swift`, two named source files, `ProductionAdapterSeamTests.swift`, `SilentBenchmarkLogger.swift` | No coordinator-wide refactor; no app/UI/default model; no other package; no LokiKit | Internal/testable production adapter seam | Apple request policy is shared; actual Apple route stays `unknown` unless proved; identical file/buffer input is possible; WhisperKit benchmark logs are off | `swift test --package-path Packages/VoxInfrastructure --filter PrivateTranscriptionBenchmarkTests` | T008 |
-| T010 | VoxInfrastructure / TranscriptionKit test harness | Five named harness files in the dedicated test target | No fixture/text in Git/stdout/Loki; no speaker replay; no new backend/credential/endpoint; no fallback relabeling | `BenchmarkRun` and `BenchmarkReport` | Manifest/path/symlink/mode validation; one cold + five warm serial plan; complete metrics; scoring-only reference; silent logs; private report + sanitized summary | Focused synthetic fixtures only; scan captured stdout/summary for forbidden fields; assert stable error codes rather than strings | T009 |
-| T011 | VoxInfrastructure integration/review | Exact benchmark commit/PR and package verification | No `xcodebuild` for Packages-only diff; no self-review; no bypass; no shared cache deletion | Exact-revision benchmark handoff | Build and full package tests pass; independent PASS matches pushed PR head; normal checks merge the separate PR | `git diff --name-only origin/main...HEAD` all under `Packages/`; `swift build ...`; `swift test ...`; compare local SHA, remote branch SHA, PR `headRefOid`; verify MERGED | T010 |
-| T012 | VoxInfrastructure / private live test | Exact manifest root/results on current Mac; existing Azure service; existing base/turbo disk caches; recorded process/engine/order state | NAS access/copy; Git/issue attachments; global cache reset; reference as model input; p95; default change | §6 `Benchmark Handoff`; `data-model.md#coldwarm-benchmark-semantics` | Current-Mac daemon/runtime proven and NAS read/copy counts are zero; each group/mode has a fresh-process cold run then five same-process warm runs; Apple availability and actual route are separate; full timing/scoring/privacy fields complete | Opt-in filtered test command; verify process generations/order/cache fields, route fields, report permissions/containment, numeric schema count, sanitized audit reference, and independent summary review | T011 |
+| T009 | RepoInfra / dependency workspace | Task-local sibling `<task-root>/LokiKit` resolved by VoxInfrastructure's `../../../LokiKit` dependency | No LokiKit source edits, branch changes, commits, cleanup, pushes, global cache changes, or primary checkout | `BenchmarkDependencyCheckout` | Absolute resolved path, authoritative origin URL, exact published SHA, and clean status are recorded; `source_edits=false` | `git -C <task-root>/LokiKit remote get-url origin`; `git -C <task-root>/LokiKit rev-parse HEAD`; `git -C <task-root>/LokiKit status --porcelain`; resolve `Packages/VoxInfrastructure/../../../LokiKit` | T008; blocks T010 and T012 |
+| T010 | VoxInfrastructure / TranscriptionKit Service | `Package.swift`, two named source files, `ProductionAdapterSeamTests.swift`, `SilentBenchmarkLogger.swift` | No coordinator-wide refactor; no app/UI/default model; no other package; no LokiKit source edits | Internal/testable production adapter seam | Apple request policy is shared; actual Apple route stays `unknown` unless proved; identical file/buffer input is possible; WhisperKit benchmark logs are off | `swift test --package-path Packages/VoxInfrastructure --filter PrivateTranscriptionBenchmarkTests` | T009 |
+| T011 | VoxInfrastructure / TranscriptionKit test harness | Five named harness files in the dedicated test target | No fixture/text in Git/stdout/Loki; no speaker replay; no new backend/credential/endpoint; no fallback relabeling | `BenchmarkRun` and `BenchmarkReport` | Manifest/path/symlink/mode validation; one cold + five warm serial plan; complete metrics; scoring-only reference; silent logs; private report + sanitized summary | Focused synthetic fixtures only; scan captured stdout/summary for forbidden fields; assert stable error codes rather than strings | T010 |
+| T012 | VoxInfrastructure integration/review | Exact benchmark commit/PR, package verification, and T009 dependency evidence | No `xcodebuild` for Packages-only diff; no self-review; no bypass; no shared cache deletion | Exact-revision benchmark handoff | Pinned LokiKit path/remote/SHA/clean state remains true; build and full package tests pass; independent PASS matches pushed PR head; normal checks merge the separate PR | Re-run T009 evidence; `git diff --name-only origin/main...HEAD` all under `Packages/`; `swift build ...`; `swift test ...`; compare local SHA, remote branch SHA, PR `headRefOid`; verify MERGED | T011 |
+| T013 | VoxInfrastructure / private live test | Exact manifest root/results on current Mac; existing Azure service; base/turbo caches; recorded process/engine/order state | NAS access/copy; Git/issue attachments; global cache reset; reference as model input; p95; default change | §6 `Benchmark Handoff`; `data-model.md#coldwarm-benchmark-semantics` | Current-Mac daemon/runtime proven and NAS read/copy counts are zero; each group/mode has a fresh-process cold run then five same-process warm runs; Apple availability and actual route are separate; full timing/scoring/privacy fields complete | Opt-in filtered test command; verify process generations/order/cache fields, route fields, report permissions/containment, numeric schema count, sanitized audit reference, and independent summary review | T012 |
 
 **Checkpoint**: Benchmark harness and PR #35 are merged; private benchmark evidence is complete and case-bounded.
 
@@ -125,15 +127,15 @@
 
 **Independent Test**: Candidate safe-marker logging passes while `/Applications/VoxPocket.app` remains recoverable; final source/dependency SHAs are recorded; a new validated archive is installed after a user-state preflight; exactly one instance runs.
 
-- [ ] T013 [US5] In `/Users/tianpli/Development/VoxPocket`, preserve unrelated untracked paths, synchronize final remote `main`, record PR #35/benchmark/LokiKit SHAs and dirty state, build a new `build/local/VoxPocket-<UTC>-<sha>.xcarchive`, run the private-config bundle guard, and validate the archive app's safe startup log before changing `/Applications/VoxPocket.app`.
-- [ ] T014 [US5] After confirming no active recording or unsaved text, capture the installed app's bundle/version/build/code-directory identity, create a timestamped backup of `/Applications/VoxPocket.app`, rehearse and timestamp a same-filesystem restore with matching identity while retaining the backup, gracefully quit, install the validated archive app, reopen exactly one instance, and verify sandbox/preferences/private config preservation.
+- [ ] T014 [US5] In `/Users/tianpli/Development/VoxPocket`, preserve unrelated untracked paths, synchronize final remote `main`, record PR #35/benchmark/LokiKit SHAs and dirty state, build a new `build/local/VoxPocket-<UTC>-<sha>.xcarchive`, run the private-config bundle guard, and validate the archive app's safe startup log before changing `/Applications/VoxPocket.app`.
+- [ ] T015 [US5] After confirming no active recording or unsaved text, capture the installed app's bundle/version/build/code-directory identity, create a timestamped backup of `/Applications/VoxPocket.app`, rehearse and timestamp a same-filesystem restore with matching identity while retaining the backup, gracefully quit, install the validated archive app, reopen exactly one instance, and verify sandbox/preferences/private config preservation.
 
 ### US5 task metadata
 
 | ID | Owning layer | In scope | Explicit exclusions | Interface/contract | Task-local acceptance | Exact verification | Depends on |
 |---|---|---|---|---|---|---|---|
-| T013 | Root-coordinator local delivery | Primary checkout, published LokiKit sibling, new archive, archive app candidate, local Loki safe marker | No cleanup of `.playwright-mcp/`, `docs/research/`, `output/`; no old archive reuse; no install yet; no TestFlight | §7 `source`, `candidate_validation`, `archive` | Local/remote main exact; both merge SHAs present; new archive exists; bundle guard passes; candidate alone emits safe marker while installed app remains backed by its unchanged path | Git SHA/status; repository archive command; archive app existence; private-config guard; bounded Loki marker query | T008, T011, T012 |
-| T014 | Root-coordinator local delivery | Installed app, timestamped backup, graceful process lifecycle, existing sandbox/preferences/config | No action while recording/unsaved text; no data/config deletion; no second instance; no backup deletion | §7 `pre_install`, `install`, `rollback` | Preflight confirmed; backup identity matches the old app; restore rehearsal method/timestamp/result are recorded and pass; installed bits come from T013 archive; exactly one instance; user state preserved | Bundle ID/version/build/code-directory hash before/backup/restore; process count; app launch; same-filesystem temporary restore or controlled full-swap rehearsal; backup retained | T013 |
+| T014 | Root-coordinator local delivery | Primary checkout, published LokiKit sibling, new archive, archive app candidate, local Loki safe marker | No cleanup of `.playwright-mcp/`, `docs/research/`, `output/`; no old archive reuse; no install yet; no TestFlight | §7 `source`, `candidate_validation`, `archive` | Local/remote main exact; both merge SHAs present; new archive exists; bundle guard passes; candidate alone emits safe marker while installed app remains backed by its unchanged path | Git SHA/status; repository archive command; archive app existence; private-config guard; bounded Loki marker query | T008, T012, T013 |
+| T015 | Root-coordinator local delivery | Installed app, timestamped backup, graceful process lifecycle, existing sandbox/preferences/config | No action while recording/unsaved text; no data/config deletion; no second instance; no backup deletion | §7 `pre_install`, `install`, `rollback` | Preflight confirmed; backup identity matches the old app; restore rehearsal method/timestamp/result are recorded and pass; installed bits come from T014 archive; exactly one instance; user state preserved | Bundle ID/version/build/code-directory hash before/backup/restore; process count; app launch; same-filesystem temporary restore or controlled full-swap rehearsal; backup retained | T014 |
 
 **Checkpoint**: Final merged-main app is installed safely and reversible.
 
@@ -145,15 +147,15 @@
 
 **Independent Test**: Installed app startup plus harmless window action yields expected log records in a five-minute window, Grafana is ready, forbidden content count is zero, and the existing observer schedule is disabled only after Team Lead validates all evidence.
 
-- [ ] T015 [US6] Exercise startup plus one harmless window operation in `/Applications/VoxPocket.app`, query separate allowlisted startup and window markers within the same `{app="VoxPocket",stream="log"}` acceptance window, inspect all returned records for forbidden content categories, verify Grafana `/d/voxpocket-logs`, and complete §7 `post_install_acceptance` without recording voice.
-- [ ] T016 [US6] Deliver the complete `specs/005-my-1540-recovery/contracts/recovery-evidence.md` record to Team Lead, then after acceptance disable trigger `52310b59-fd61-4cf7-ae14-523ae55d2a26` and record `disable_after_delivery: complete` without deleting the autopilot.
+- [ ] T016 [US6] Exercise startup plus one harmless window operation in `/Applications/VoxPocket.app`, query separate allowlisted startup and window markers within the same `{app="VoxPocket",stream="log"}` acceptance window, inspect all returned records for forbidden content categories, verify Grafana `/d/voxpocket-logs`, and complete §7 `post_install_acceptance` without recording voice.
+- [ ] T017 [US6] Deliver the complete `specs/005-my-1540-recovery/contracts/recovery-evidence.md` record to Team Lead, then after acceptance disable trigger `52310b59-fd61-4cf7-ae14-523ae55d2a26` and record `disable_after_delivery: complete` without deleting the autopilot.
 
 ### US6 task metadata
 
 | ID | Owning layer | In scope | Explicit exclusions | Interface/contract | Task-local acceptance | Exact verification | Depends on |
 |---|---|---|---|---|---|---|---|
-| T015 | Root-coordinator acceptance | Installed app, loopback Loki/Grafana, startup/window action, five-minute records | No microphone/voice; no smoke-harness substitution; no private text in evidence | `TelemetryAcceptance` | Startup marker count ≥1 and window-action marker count ≥1 are independently recorded inside the same query window; dashboard ready; forbidden-content count zero | Separate marker queries/counts/timestamps and evidence refs; exact UTC bounds; Grafana health/dashboard response; process/app identity | T014 |
-| T016 | RepoInfra / delivery closeout | Complete sanitized handoff and existing schedule state | No `done` before Team Lead acceptance; no autopilot deletion; no new trigger | Full recovery evidence contract | Every mandatory field is present and exact; Team Lead accepts delivery; existing schedule disabled | Re-read issue evidence; `multica autopilot get d67e7307-d0ef-40c4-a597-fd48d73cda48 --output json`; trigger ID disabled | T015 |
+| T016 | Root-coordinator acceptance | Installed app, loopback Loki/Grafana, startup/window action, five-minute records | No microphone/voice; no smoke-harness substitution; no private text in evidence | `TelemetryAcceptance` | Startup marker count ≥1 and window-action marker count ≥1 are independently recorded inside the same query window; dashboard ready; forbidden-content count zero | Separate marker queries/counts/timestamps and evidence refs; exact UTC bounds; Grafana health/dashboard response; process/app identity | T015 |
+| T017 | RepoInfra / delivery closeout | Complete sanitized handoff and existing schedule state | No `done` before Team Lead acceptance; no autopilot deletion; no new trigger | Full recovery evidence contract | Every mandatory field is present and exact; Team Lead accepts delivery; existing schedule disabled | Re-read issue evidence; `multica autopilot get d67e7307-d0ef-40c4-a597-fd48d73cda48 --output json`; trigger ID disabled | T016 |
 
 ---
 
@@ -161,15 +163,13 @@
 
 ```text
 T001
- ├─> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
- │                                                  |
- │                                                  v
- └──────────────────────────────────────────────> T009 -> T010 -> T011 -> T012
-                                                               |              |
-                                                               +--------------+
-                                                                      |
-                                                                      v
-                                                                    T013 -> T014 -> T015 -> T016
+ └─> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
+                                                       |
+                                                       v
+                       T009 -> T010 -> T011 -> T012 -> T013
+                                                       |
+                                                       v
+                              T014 -> T015 -> T016 -> T017
 ```
 
 The authoritative edge list is:
@@ -177,8 +177,8 @@ The authoritative edge list is:
 - T001 → T002, T007
 - T002 → T003 → T004 → T005 → T006
 - T004 + T006 + T001 → T007 → T008
-- T008 → T009 → T010 → T011 → T012
-- T008 + T011 + T012 → T013 → T014 → T015 → T016
+- T008 → T009 → T010 → T011 → T012 → T013
+- T008 + T012 + T013 → T014 → T015 → T016 → T017
 
 There are no parallel markers because the owner requested ordered delivery and shared current-Mac/root-coordinator surfaces must not overlap.
 
@@ -190,9 +190,9 @@ There are no parallel markers because the owner requested ordered delivery and s
 | FR-021, SC-008 | Foundation / T001 |
 | FR-022, SC-009 | US2 / T005–T006 |
 | FR-008–FR-011, FR-023, SC-003 | US3 / T007–T008 |
-| FR-024–FR-032, SC-010–SC-011 | US4 / T009–T012 |
-| FR-012–FR-016, SC-004, SC-007 | US5 / T013–T014 |
-| FR-017–FR-020, SC-005–SC-007 | US6 / T015–T016 |
+| FR-024–FR-032, SC-010–SC-011 | US4 / T009–T013 |
+| FR-012–FR-016, SC-004, SC-007 | US5 / T014–T015 |
+| FR-017–FR-020, SC-005–SC-007 | US6 / T016–T017 |
 
 ## Implementation Strategy
 

@@ -80,7 +80,9 @@ review_gate_invariants:
     evidence_ref: <redacted command/config/run reference>
   exact_head_validation:
     expected_pr_head_sha: <40-char SHA captured immediately before review>
+    expected_head_capture_evidence_ref: <live PR metadata URL/id and observation timestamp>
     reviewed_head_sha: <40-char SHA from the review invocation/result>
+    review_invocation_result_evidence_ref: <run/job/verdict URL or immutable evidence id>
     matches: true
 independent_review:
   reviewer: <AI Reviewer evidence>
@@ -179,6 +181,15 @@ It may contain reference/recognized text but must remain owner-only (directory m
 benchmark_pr: <separate reviewed PR URL>
 benchmark_head_sha: <exact reviewed SHA>
 benchmark_merge_sha: <merged SHA>
+workspace_dependency:
+  voxpocket_work_dir: <Team Lead-provisioned isolated benchmark checkout>
+  lokikit_path: <absolute sibling path resolved by Packages/VoxInfrastructure/../../../LokiKit>
+  repository: https://github.com/LeePepe/LokiKit
+  expected_sha: eff9c1712cd648ed0717e41183ad8bd7bf39cbea
+  actual_sha: eff9c1712cd648ed0717e41183ad8bd7bf39cbea
+  worktree_clean: true
+  source_edits: false
+  evidence_ref: <path/remote/SHA/status proof>
 manifest_path_class: protected_app_sandbox # never basename/private child paths
 execution_host:
   daemon_id: 019fd055-0738-723e-a556-762fc863b720

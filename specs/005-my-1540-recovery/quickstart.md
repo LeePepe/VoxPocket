@@ -72,6 +72,17 @@ Expected: all eight required contexts, including a real `codex-review-target`, p
 
 ## 5. Validate and ship the benchmark harness
 
+Before implementation, Team Lead provisions the dependency in the same task root as the isolated VoxPocket checkout so `Packages/VoxInfrastructure/../../../LokiKit` resolves to that sibling:
+
+```bash
+multica repo checkout https://github.com/LeePepe/LokiKit --ref eff9c1712cd648ed0717e41183ad8bd7bf39cbea
+git -C <task-root>/LokiKit remote get-url origin
+git -C <task-root>/LokiKit rev-parse HEAD
+git -C <task-root>/LokiKit status --porcelain
+```
+
+Expected: the resolved sibling path exists, origin is `https://github.com/LeePepe/LokiKit`, HEAD is exactly `eff9c1712cd648ed0717e41183ad8bd7bf39cbea`, and status is empty. This is dependency provisioning only; do not edit, commit, clean, or push LokiKit.
+
 In the isolated benchmark branch, verify a Packages-only diff before testing:
 
 ```bash
