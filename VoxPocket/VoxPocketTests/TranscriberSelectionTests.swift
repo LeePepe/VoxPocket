@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import VoxPocket
 import TranscriptionKit
+import LLMKit
 import Preferences
 
 struct TranscriberSelectionTests {

@@ -8,7 +8,6 @@
 import SwiftUI
 import Preferences
 import UseCases
-import OSLog
 #if os(macOS)
 import PlatformAdapters
 import Carbon
@@ -21,19 +20,8 @@ import UITestingBridge
 @main
 enum VoxPocketEntryPoint {
     @MainActor
-    static func main() async {
-        do {
-            try await LLMAppConfig.loadRuntimeConfiguration()
-        } catch {
-            // 配置无效时不创建任何模型服务；诊断固定且不包含配置内容。
-            let message = (error as? PrivateModelConfigurationError)?.errorDescription ?? "无法加载本机模型配置。"
-            Logger(subsystem: "com.leepepe.voxpocket", category: "ModelConfiguration")
-                .error("\(message, privacy: .public)")
-            await Task.detached {
-                FileHandle.standardError.write(Data((message + "\n").utf8))
-            }.value
-            return
-        }
+    static func main() {
+        // App.main() 必须从同步入口启动；从挂起后的主队列任务调用会饿死后续任务。
         VoxPocketApp.main()
     }
 }
@@ -53,20 +41,23 @@ struct VoxPocketApp: App {
         #if os(macOS)
         // macOS: 主窗口 + 设置窗口
         WindowGroup("VoxPocket") {
-            ContentView()
+            AppStartupView { ContentView() }
         }
         // 不使用 .modelContainer() — repository 直接持有 container 引用
 
         // 设置窗口（可选）
         Settings {
-            SettingsView()
+            AppStartupView { SettingsView() }
         }
         #else
         // iOS: 标准窗口组
         WindowGroup {
-            ContentView()
+            AppStartupView { ContentView() }
                 .onOpenURL { url in
-                    ServiceContainer.shared.deepLinkRouter.handle(url)
+                    Task { @MainActor in
+                        guard await AppStartup.shared.prepare() else { return }
+                        ServiceContainer.shared.deepLinkRouter.handle(url)
+                    }
                 }
         }
         // 不使用 .modelContainer() — repository 直接持有 container 引用
