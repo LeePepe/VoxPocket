@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last-Reviewed: 2026-09-09
+Last-Reviewed: 2026-09-10
 
 ## Project Snapshot
 
@@ -58,7 +58,7 @@ swift test --package-path Packages/VoxApplication
 
 ## Engineering Rules
 
-- **模型配置**：修改 Azure 启动配置时先读 `docs/architecture/private-model-config.md`；私密配置只在沙箱运行时读取，模板才入库，交付前检查安装包不含私密文件。
+- **模型配置 / 启动入口**：修改时先读 `docs/architecture/private-model-config.md`（含启动交互回归命令）；私密配置只在沙箱运行时读取，模板才入库，交付前检查安装包不含私密文件。
 
 - 协议驱动 DI，默认实现用 `Default*` 命名。
 - 测试替身使用 `Fake*` / `Mock*` 命名。
@@ -125,3 +125,7 @@ swift test --package-path Packages/VoxApplication
 - **防腐**：`scripts/gates/check_frontmatter.py` 校验每层 frontmatter 与代码一致（layer 名、`depends_on`
   双向、`roles` 角色词表与目录/前缀）。架构变了就更新 tech-context，别绕过。
 - 既有 `local-review-skill`（Codex 审查）hook 保留，与上述快门禁并行。
+
+## 主工作目录修改记录
+
+- 2026-09-10：修复配置预加载导致的主队列饥饿；入口同步启动，服务等待异步配置。补充生产入口交互回归和启动状态测试；本地归档与安装按本文件的 Build 规则执行。

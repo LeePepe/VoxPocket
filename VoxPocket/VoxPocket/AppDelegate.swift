@@ -32,6 +32,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyService: MacOSGlobalHotkeyService!
     private let preferences = UserDefaultsPreferencesStore.shared
     private let logger: Logger = PrintLogger(subsystem: "AppDelegate")
+    private var startupTask: Task<Void, Never>?
 
     // DEBUG: 追踪 start/stop 调用次数
     private var quickRecordStartCount = 0
@@ -66,24 +67,24 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // 初始化服务
-        setupServices()
-        windowManager.scheduleQuickRecordingPrewarm()
-
-        // 注册全局快捷键
-        Task { @MainActor in
+        // 启动系统事件循环后再等待配置；服务和快捷键都不能抢在配置之前初始化。
+        startupTask = Task { @MainActor [weak self] in
+            guard await AppStartup.shared.prepare(), !Task.isCancelled, let self else { return }
+            setupServices()
+            windowManager.scheduleQuickRecordingPrewarm()
+            observePreferenceChanges()
             await registerHotkeys()
+            logger.debug("Initialization complete")
         }
-        observePreferenceChanges()
 
         // 隐藏 Dock 图标（可选）
         // NSApp.setActivationPolicy(.accessory)
 
-        logger.debug("Initialization complete")
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
         logger.debug("Application will terminate")
+        startupTask?.cancel()
 
         // 注销所有快捷键
         hotkeyService?.unregisterAll()
