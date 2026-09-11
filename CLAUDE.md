@@ -10,10 +10,10 @@ VoxPocket is a macOS/iOS voice recording and transcription app built with SwiftU
 
 ## Build & Test Commands
 
-```bash
-# Build the full Xcode project (macOS)
-xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket build
+App build delivery and installation follow `AGENTS.md` → **App Build 与交付（TestFlight 唯一渠道）**.
+Read that section before building, archiving, installing, or releasing an App.
 
+```bash
 # Build individual packages
 swift build --package-path Packages/VoxDomain
 swift build --package-path Packages/VoxInfrastructure
