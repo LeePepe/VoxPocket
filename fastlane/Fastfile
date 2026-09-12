@@ -175,11 +175,13 @@ platform :mac do
       skip_install: false
     )
 
-    build_app(
+    pkg_path = build_app(
       project: XCODEPROJ,
       scheme: SCHEME,
       configuration: "Release",
       destination: "generic/platform=macOS",
+      # gym 对多平台 target 按 sdk 选择 PKG/IPA；destination 本身不足以选中 PKG。
+      sdk: "macosx",
       export_method: "app-store",
       export_team_id: TEAM_ID,
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID}",
@@ -201,9 +203,15 @@ platform :mac do
       clean: true
     )
 
+    unless pkg_path && File.extname(pkg_path) == ".pkg" && File.file?(pkg_path)
+      UI.user_error!("macOS export did not produce the expected .pkg; refusing TestFlight upload")
+    end
+
     upload_to_testflight(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
+      app_platform: "osx",
+      pkg: pkg_path,
       skip_waiting_for_build_processing: false,
       skip_submission: true,
       distribute_external: false

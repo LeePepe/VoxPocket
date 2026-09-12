@@ -22,6 +22,14 @@ on:
         description: '忽略"无新提交"检查，强制发一次'
         type: boolean
         default: false
+      platform:
+        description: '发布平台；单平台补发不更新双平台发布标记'
+        type: choice
+        options:
+          - all
+          - ios
+          - macos
+        default: all
 
 concurrency:
   group: testflight
@@ -121,6 +129,13 @@ jobs:
           brew list fastlane >/dev/null 2>&1 || brew install fastlane
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
 
+      - name: Test release packaging without building an App
+        if: steps.gate.outputs.release == 'true'
+        working-directory: repo
+        run: |
+          GEM_PATH="$(brew --prefix fastlane)/libexec" \
+            "$(brew --prefix ruby)/bin/ruby" scripts/tests/test_testflight_packaging.rb
+
       - name: Verify API key secret present
         if: steps.gate.outputs.release == 'true'
         env:
@@ -157,7 +172,7 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KC" >/dev/null 2>&1 || true
 
       - name: fastlane iOS beta
-        if: steps.gate.outputs.release == 'true'
+        if: steps.gate.outputs.release == 'true' && inputs.platform != 'macos'
         working-directory: repo
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -169,7 +184,7 @@ jobs:
         run: fastlane ios beta
 
       - name: fastlane macOS beta
-        if: steps.gate.outputs.release == 'true'
+        if: steps.gate.outputs.release == 'true' && inputs.platform != 'ios'
         working-directory: repo
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -181,7 +196,7 @@ jobs:
         run: fastlane mac beta
 
       - name: Move last-released tag
-        if: steps.gate.outputs.release == 'true'
+        if: steps.gate.outputs.release == 'true' && (inputs.platform == '' || inputs.platform == 'all')
         working-directory: repo
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
