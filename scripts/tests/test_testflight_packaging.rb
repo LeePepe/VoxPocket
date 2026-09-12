@@ -5,6 +5,7 @@ require "minitest/autorun"
 require "tmpdir"
 require "gym"
 require "yaml"
+require "rexml/document"
 
 ROOT = File.expand_path("../..", __dir__)
 UI = FastlaneCore::UI
@@ -162,5 +163,24 @@ class TestFlightPackagingTests < Minitest::Test
                  conditions.fetch("fastlane macOS beta")
     assert_equal "steps.gate.outputs.release == 'true' && (inputs.platform == '' || inputs.platform == 'all')",
                  conditions.fetch("Move last-released tag")
+  end
+
+  def test_shared_scheme_does_not_force_ios_widget_into_macos_archive
+    scheme = REXML::Document.new(File.read(File.join(
+      ROOT, "VoxPocket/VoxPocket.xcodeproj/xcshareddata/xcschemes/VoxPocket.xcscheme"
+    )))
+    entries = REXML::XPath.match(scheme, "//BuildActionEntry[@buildForArchiving='YES']/BuildableReference")
+    assert_equal ["VoxPocket"], entries.map { |entry| entry.attributes["BlueprintName"] }
+    assert_equal "YES", REXML::XPath.first(scheme, "//BuildAction").attributes["buildImplicitDependencies"]
+  end
+
+  def test_widget_is_still_an_ios_only_app_dependency
+    spec = YAML.load_file(File.join(ROOT, "VoxPocket/project.yml"))
+    dependency = spec.fetch("targets").fetch("VoxPocket").fetch("dependencies")
+                     .find { |item| item["target"] == "VoxPocketWidgetExtension" }
+    refute_nil dependency
+    assert_equal "iOS", dependency.fetch("platformFilter")
+    assert_equal "iOS", spec.fetch("targets").fetch("VoxPocketWidgetExtension").fetch("platform")
+    assert_equal ["VoxPocket"], spec.fetch("schemes").fetch("VoxPocket").fetch("build").fetch("targets").keys
   end
 end
