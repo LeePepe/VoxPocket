@@ -1,6 +1,6 @@
 # Harness Metrics Baseline
 
-Last-Reviewed: 2026-04-16
+Last-Reviewed: 2026-09-12
 Owner: VoxPocket Engineering
 Cadence: Weekly snapshot (every Tuesday)
 
@@ -12,8 +12,8 @@ Phase 0 只定义“可度量合同”，不追求一次性把所有指标数据
 
 ### 1. PR cycle time
 - Name: `prCycleHours`
-- Definition: `merged_at - opened_at` (hours)
-- Source: GitHub Pull Requests API (`opened_at`, `merged_at`)
+- Definition: `merged_at - created_at` (hours)
+- Source: GitHub Pull Requests API (`created_at`, `merged_at`)
 - Target bands:
   - Good: `<= 24h`
   - Warning: `> 24h && <= 72h`
@@ -40,7 +40,7 @@ Phase 0 只定义“可度量合同”，不追求一次性把所有指标数据
 ### 4. Architecture violation count
 - Name: `archViolationCount`
 - Definition: 每次检查中结构性依赖违规数量
-- Source: Phase 2 结构 lint 结果文件（预留，当前可为空）
+- Source: collector 的结构 lint 结果集成仍未实现，当前返回 `null`；已有 frontmatter 防腐校验通过不等于采集了完整架构违规数量。
 - Target bands:
   - Good: `0`
   - Warning: `1-3`
@@ -51,7 +51,7 @@ Phase 0 只定义“可度量合同”，不追求一次性把所有指标数据
 每次快照使用 `docs/harness/templates/metric-snapshot-template.json` 的字段结构，写入：
 - `artifacts/harness/metrics/YYYY-MM-DD.snapshot.json`
 
-## First Snapshot
+## First Snapshot (historical)
 
 - Snapshot path: `artifacts/harness/metrics/2026-03-31.snapshot.json`
 - Generated at: `2026-03-31`
@@ -59,3 +59,7 @@ Phase 0 只定义“可度量合同”，不追求一次性把所有指标数据
   - `prCycleHours`: local scaffold 中暂未集成 GitHub API
   - `docFreshness`: 以本地 freshness lint 结果为准；未执行时返回 `null`
   - `archViolationCount`: 结构 lint 尚未在 Phase 0/1 上线，先记录为 `null`
+
+## Review on 2026-09-12
+
+已对照 `scripts/docs/collect_harness_baseline.sh`、freshness lint 和快照模板复核合同。此次只更新文档，不生成新指标快照，也不将历史数值当作当前测量；无法采集的指标继续保留 `null` 与原因。
