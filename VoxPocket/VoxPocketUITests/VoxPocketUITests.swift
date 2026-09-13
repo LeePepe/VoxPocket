@@ -30,11 +30,11 @@ final class VoxPocketUITests: XCTestCase {
 
     // MARK: - App Launch Test
 
-    /// Verifies the app starts and the main record/stop control is visible within 10 s.
+    /// macOS 主窗口按需打开；iOS 仍直接进入主页面。
     @MainActor
     func testAppLaunchShowsRecordButton() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchOpeningMainWindow()
 
         // The primary control renders as either record or stop depending on state.
         // Wait up to 10 s for one of them to appear.
@@ -55,13 +55,27 @@ final class VoxPocketUITests: XCTestCase {
         }
     }
 
+#if os(macOS)
+    @MainActor
+    func testMacOSLaunchKeepsMainWindowClosed() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.voxMenuBarItem.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.windows["VoxPocket"].isHittable)
+        app.voxMenuBarItem.click()
+        XCTAssertTrue(app.menuItems["打开主窗口…"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.menuItems["设置…"].exists)
+        XCTAssertTrue(app.menuItems["退出 VoxPocket"].exists)
+    }
+#endif
+
     // MARK: - Recording Flow Test
 
     /// Taps the record button and verifies the stop button appears, indicating recording started.
     @MainActor
     func testTapRecordButtonStartsRecording() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchOpeningMainWindow()
 
         let recordButton = app.buttons[VoxID.recordButton]
         guard recordButton.waitForExistence(timeout: 10) else {
@@ -84,7 +98,7 @@ final class VoxPocketUITests: XCTestCase {
     @MainActor
     func testSessionListIsAccessible() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchOpeningMainWindow()
 
         // The session list lives in the sidebar drawer.  On macOS it may be visible by default.
         // We look for either the list container or at least one list item.
@@ -135,7 +149,7 @@ final class VoxAgentEvalIntegrationTests: XCTestCase {
         }
 
         let app = XCUIApplication()
-        app.launch()
+        app.launchOpeningMainWindow()
 
         // Allow the UI to settle.
         _ = app.buttons[VoxID.recordButton].waitForExistence(timeout: 10)
@@ -196,6 +210,31 @@ final class VoxAgentEvalIntegrationTests: XCTestCase {
             result.passed,
             "Claude Vision evaluation failed for '\(result.sceneName)'. Findings: \(result.findings)"
         )
+    }
+}
+
+@MainActor
+private extension XCUIApplication {
+#if os(macOS)
+    var voxMenuBarItem: XCUIElement {
+        // 菜单栏额外项与应用主菜单可能同名；优先使用生产视图的辅助标识。
+        let identified = menuBars.menuBarItems["vox.menuBar"]
+        if identified.exists { return identified }
+        return menuBars.menuBarItems.matching(identifier: "VoxPocket").allElementsBoundByIndex.last
+            ?? menuBars.menuBarItems["VoxPocket"]
+    }
+#endif
+
+    func launchOpeningMainWindow() {
+        launch()
+#if os(macOS)
+        let menu = voxMenuBarItem
+        guard menu.waitForExistence(timeout: 10) else { XCTFail("VoxPocket 菜单栏入口未出现"); return }
+        menu.click()
+        let open = menuItems["打开主窗口…"]
+        guard open.waitForExistence(timeout: 3) else { XCTFail("主窗口入口未出现"); return }
+        open.click()
+#endif
     }
 }
 
