@@ -33,8 +33,10 @@ final class VoxPocketLoggingTests: XCTestCase {
 
     func testInvalidPersistentChoiceFailsClosed() {
         withPreferences { preferences, _ in
-            preferences.set("yes", forKey: VoxPocketLogging.localLoggingEnabledKey)
-            XCTAssertNil(VoxPocketLogging.endpoint(environment: [:], defaults: preferences))
+            for choice in ["yes", 1, [true]] as [Any] {
+                preferences.set(choice, forKey: VoxPocketLogging.localLoggingEnabledKey)
+                XCTAssertNil(VoxPocketLogging.endpoint(environment: [:], defaults: preferences))
+            }
         }
     }
 

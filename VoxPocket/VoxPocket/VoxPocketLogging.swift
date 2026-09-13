@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import LokiKit
 
 /// 本地诊断日志只发送审核过的固定消息和数值；动态文本留在上传边界之外。
@@ -39,7 +40,8 @@ enum VoxPocketLogging {
         #if os(macOS)
         // 持久化设置仅允许本机端点；错误类型按关闭处理，避免意外启用上传。
         if let choice = defaults.object(forKey: localLoggingEnabledKey) {
-            guard let enabled = choice as? Bool, enabled else { return nil }
+            guard let enabled = choice as? NSNumber,
+                  CFGetTypeID(enabled) == CFBooleanGetTypeID(), enabled.boolValue else { return nil }
             return localEndpoint
         }
         #endif
