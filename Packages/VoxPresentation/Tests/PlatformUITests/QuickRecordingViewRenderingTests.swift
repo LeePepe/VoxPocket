@@ -348,6 +348,30 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         }
     }
 
+    func testChineseAndMixedTranscriptKeepsLatestLineVisible() async throws {
+        let earlier = String(repeating: "这是一段较早识别到的测试内容。\n", count: 30)
+        for scheme in [ColorScheme.light, .dark] {
+            for (index, latest) in ["最新内容可以完整阅读。", "最新内容 WebIQ multica。"].enumerated() {
+                let bitmap = try await render(status: .transcribing, transcript: earlier + latest,
+                                              initialTranscript: "开始识别。", reduceMotion: true,
+                                              colorScheme: scheme)
+                let words = try recognizedLines(bitmap, languages: ["zh-Hans", "en-US"]).joined()
+                XCTAssertTrue(words.contains("最新内容"), "\(scheme) 应保留最新中文行")
+                if index == 1 {
+                    // OCR 会混淆 WebIQ 的大写 I 与小写 l；用行首中文、行尾英文确认整行可见。
+                    XCTAssertTrue(words.lowercased().contains("multica"))
+                } else {
+                    XCTAssertTrue(words.contains("可以完整阅读"))
+                }
+                if let directory = ProcessInfo.processInfo.environment["VOX_ISLAND_RENDER_DIR"] {
+                    let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                    let url = URL(fileURLWithPath: directory).appendingPathComponent("scroll-chinese-\(scheme)-\(index).png")
+                    try await Task.detached { try png.write(to: url) }.value
+                }
+            }
+        }
+    }
+
     func testManualScrollIsPreservedWhenNewTextArrives() async throws {
         let original = "Oldest sentence visible.\n" + String(repeating: "Earlier recognized text.\n", count: 40)
         let bitmap = try await render(status: .listening, transcript: original + "Newest addition.",
