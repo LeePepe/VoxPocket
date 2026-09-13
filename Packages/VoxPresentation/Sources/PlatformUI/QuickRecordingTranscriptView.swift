@@ -30,10 +30,13 @@ struct QuickRecordingTranscriptView: View {
             .onChange(of: text) { _, _ in
                 if followsLatest { proxy.scrollTo("transcript-end", anchor: .bottom) }
             }
-            .overlay(alignment: .top) {
-                if hasEarlierText {
-                    LinearGradient(colors: [QuickRecordingColors.background(for: colorScheme), .clear], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 12).allowsHitTesting(false).accessibilityHidden(true)
+            .mask {
+                // 只渐隐滚出视口的文字，不能用实色盖住岛体的阶段渐变背景。
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [hasEarlierText ? .clear : .black, .black],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 12)
+                    Rectangle().fill(.black)
                 }
             }
             .overlay(alignment: .bottomTrailing) { resumeButton(proxy) }

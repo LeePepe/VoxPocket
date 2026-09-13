@@ -319,6 +319,35 @@ final class QuickRecordingViewRenderingTests: XCTestCase {
         XCTAssertFalse(words.contains("First sentence"))
     }
 
+    func testScrollingDoesNotPaintOpaqueBandOverTranscript() async throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let short = try await render(status: .transcribing, transcript: "Sample.",
+                                         reduceMotion: true, colorScheme: scheme)
+            let long = try await render(status: .transcribing,
+                                        transcript: String(repeating: "Sample.\n", count: 20) + "Latest.",
+                                        initialTranscript: "Sample.", reduceMotion: true, colorScheme: scheme)
+            if let directory = ProcessInfo.processInfo.environment["VOX_ISLAND_RENDER_DIR"] {
+                let png = try XCTUnwrap(long.representation(using: .png, properties: [:]))
+                let url = URL(fileURLWithPath: directory).appendingPathComponent("scroll-band-\(scheme).png")
+                try await Task.detached { try png.write(to: url) }.value
+            }
+            let scale = CGFloat(long.pixelsWide) / QuickRecordingLayout.panelWidth
+            // 合成短句只占左侧；中部无字区域应继续透出同一个阶段背景。
+            // 对比真实宿主的短文/长文，捕获滚动后才出现的横向实色遮挡。
+            for pointX in [180, 240, 300] {
+                for pointY in [54, 56, 60] {
+                    let x = Int(CGFloat(pointX) * scale), y = Int(CGFloat(pointY) * scale)
+                    let a = try XCTUnwrap(short.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+                    let b = try XCTUnwrap(long.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+                    let difference = max(abs(a.redComponent - b.redComponent),
+                                         abs(a.greenComponent - b.greenComponent), abs(a.blueComponent - b.blueComponent))
+                    XCTAssertLessThan(difference, 0.06, "\(scheme) scrolling changed background at \(pointX),\(pointY)")
+                }
+            }
+            XCTAssertTrue(try recognizedLines(long).joined(separator: " ").contains("Latest"))
+        }
+    }
+
     func testManualScrollIsPreservedWhenNewTextArrives() async throws {
         let original = "Oldest sentence visible.\n" + String(repeating: "Earlier recognized text.\n", count: 40)
         let bitmap = try await render(status: .listening, transcript: original + "Newest addition.",
