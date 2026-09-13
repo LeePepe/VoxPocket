@@ -4,6 +4,8 @@ import LokiKit
 /// 本地诊断日志只发送审核过的固定消息和数值；动态文本留在上传边界之外。
 @MainActor
 enum VoxPocketLogging {
+    static let localLoggingEnabledKey = "VoxPocketLocalLokiLoggingEnabled"
+    private static let localEndpoint = URL(string: "http://localhost:3100/loki/api/v1/push")
     private static var worker: Task<Void, Never>?
 
     static func start(environment: [String: String] = ProcessInfo.processInfo.environment) {
@@ -27,15 +29,22 @@ enum VoxPocketLogging {
         PrintLogger(subsystem: "Logging").info("Local log collection started")
     }
 
-    static func endpoint(environment: [String: String]) -> URL? {
+    static func endpoint(environment: [String: String], defaults: UserDefaults = .standard) -> URL? {
         if let raw = environment["LOKI_ENDPOINT"] {
             guard let url = URL(string: raw), let host = url.host, !host.isEmpty,
                   ["http", "https"].contains(url.scheme),
                   url.user == nil, url.password == nil else { return nil }
             return url
         }
+        #if os(macOS)
+        // 持久化设置仅允许本机端点；错误类型按关闭处理，避免意外启用上传。
+        if let choice = defaults.object(forKey: localLoggingEnabledKey) {
+            guard let enabled = choice as? Bool, enabled else { return nil }
+            return localEndpoint
+        }
+        #endif
         #if DEBUG && os(macOS)
-        return URL(string: "http://localhost:3100/loki/api/v1/push")
+        return localEndpoint
         #else
         return nil
         #endif

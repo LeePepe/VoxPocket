@@ -13,7 +13,7 @@ cd ~/Development/LokiKit
 docker compose -f stack/docker-compose.yml up -d
 ```
 
-Then launch VoxPocket with:
+For an explicit endpoint, launch VoxPocket from an environment containing:
 
 ```bash
 export LOKI_ENDPOINT=http://localhost:3100/loki/api/v1/push
@@ -31,9 +31,35 @@ Open http://localhost:3010/d/voxpocket-logs for ordinary application logs.
 Grafana polls dashboard files every 30 seconds.
 
 macOS Debug builds automatically mirror `PrintLogger` output to localhost while
-keeping console logging. Release/iOS builds require an explicit `LOKI_ENDPOINT`;
-on a phone, localhost is the phone itself, not the Mac. The shared Compose stack
-binds to the Mac's loopback interface only.
+keeping console logging. macOS Release/TestFlight builds require explicit opt-in.
+For ordinary Finder/TestFlight launches, the App now also reads a persistent,
+non-secret boolean in its own sandbox preferences:
+
+```bash
+# Run as the App's macOS user. Only this preference key is changed.
+defaults write "$HOME/Library/Containers/com.leepepe.voxpocket/Data/Library/Preferences/com.leepepe.voxpocket" \
+  VoxPocketLocalLokiLoggingEnabled -bool true
+```
+
+After saving any text and stopping recording, quit and reopen the installed App.
+This preference is supported by builds containing this change; build 39 does not
+read it. Setting a preference does not update an already-installed binary.
+Opt-in sends only to `http://localhost:3100/loki/api/v1/push`; it does not configure
+a remote collector or store a token. The shared Compose stack remains loopback-only.
+
+Set the same key to `-bool false` to disable automatic local upload, including in
+Debug. Deleting only this key restores build defaults (Debug on, Release off).
+An explicit `LOKI_ENDPOINT` has priority over the preference; an invalid explicit
+endpoint disables upload instead of silently falling back. Invalid preference
+types fail closed. Existing redaction and queue limits are unchanged.
+
+iOS builds still require an explicit `LOKI_ENDPOINT` and ignore this local Mac
+preference; on a phone, localhost is the phone itself, not the Mac.
+
+Verify application log records with `app="VoxPocket", stream="log"` and the
+installed build label. A successful SDK test or saved preference is not evidence
+that the real App has emitted records. CI runs configuration regressions in both
+Debug and Release via `python3 scripts/tests/test_app_logging.py`.
 
 The uploader flushes every 2 seconds (up to 200 records per batch), buffers up to
 1,000 records, and retries after failures. During outages the oldest records are
