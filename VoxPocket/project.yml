@@ -212,7 +212,7 @@ schemes:
     build:
       targets:
         VoxPocket: all
-        VoxPocketWidgetExtension: all
+        # Widget 通过主 App 的 iOS 条件依赖构建，避免 -sdk macosx 强制构建它。
     run:
       config: Debug
       # 运行期凭据经由 xcconfig 注入：真实值在 gitignore 的 Secrets.xcconfig，

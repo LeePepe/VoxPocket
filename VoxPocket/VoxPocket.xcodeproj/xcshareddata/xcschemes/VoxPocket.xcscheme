@@ -21,20 +21,6 @@
                ReferencedContainer = "container:VoxPocket.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "FD9E1C0C9635ECE7235611E0"
-               BuildableName = "VoxPocketWidgetExtension.appex"
-               BlueprintName = "VoxPocketWidgetExtension"
-               ReferencedContainer = "container:VoxPocket.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

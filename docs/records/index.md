@@ -1,6 +1,6 @@
 # Docs Records Index
 
-Last-Reviewed: 2026-03-31
+Last-Reviewed: 2026-09-12
 
 这是 VoxPocket 的文档总地图（system of record）。
 
@@ -12,11 +12,14 @@ Last-Reviewed: 2026-03-31
 ## Architecture
 - `docs/architecture/packages-architecture.md`
 - `docs/architecture/dependency-graph.md`
+- `docs/architecture/tech-context.md`
+- `docs/architecture/private-model-config.md`
 
 ## Product And Specs
 - `PRD.md`
 - `UI.md`
-- `docs/superpowers/specs/`
+- Current Spec Kit records: `specs/`
+- Historical design records: `docs/superpowers/specs/`
 
 ## Plans
 - Product/feature plans: `docs/plans/`
@@ -29,6 +32,9 @@ Last-Reviewed: 2026-03-31
 - Local review: `docs/LOCAL_REVIEW.md`
 - Local CI/CD: `docs/local-cicd.md`
 - Harness notes: `docs/harness/README.md`
+- Current App delivery rules: `AGENTS.md` → TestFlight-only delivery
+- TestFlight release implementation: `.github/workflows/testflight.yml`, `fastlane/Fastfile`
+- Export compliance: `docs/export-compliance.md`
 
 ## Governance
 - Freshness policy: `docs/records/doc-freshness-policy.md`

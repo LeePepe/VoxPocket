@@ -1,6 +1,6 @@
 # VoxPocket Context Index
 
-Last-Reviewed: 2026-04-16
+Last-Reviewed: 2026-09-12
 
 这是仓库的快速入口。先看这里，再按需下钻。
 
@@ -9,7 +9,9 @@ Last-Reviewed: 2026-04-16
 - Agent map: `AGENTS.md`
 - Canonical records map: `docs/records/index.md`
 - App root: `VoxPocket/VoxPocket/VoxPocketApp.swift`
-- Xcode project: `VoxPocket/VoxPocket.xcodeproj`
+- Xcode project source: `VoxPocket/project.yml` (XcodeGen)
+- Build and delivery policy: `AGENTS.md` → TestFlight-only delivery
+- Private runtime model configuration: `docs/architecture/private-model-config.md`
 
 ## Package Quick Map
 
@@ -23,5 +25,5 @@ Last-Reviewed: 2026-04-16
 
 - Architecture: `docs/architecture/`
 - Plans: `docs/plans/`, `docs/superpowers/plans/`
-- Specs: `docs/superpowers/specs/`
+- Current specs: `specs/`; historical specs: `docs/superpowers/specs/`
 - Harness: `docs/harness/`
