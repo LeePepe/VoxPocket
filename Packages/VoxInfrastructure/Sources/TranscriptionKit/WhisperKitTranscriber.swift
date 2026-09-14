@@ -117,7 +117,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 })
                 self._modelLoadingStateSubject.send(.ready)
                 self._engine.withLock { $0 = engine }
-                self.logger.info("WhisperKit model preloaded and ready")
+                SilentBenchmarkLogger.log("WhisperKit model preloaded and ready", logger: self.logger)
                 let loadMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 self.telemetry.track(
                     name: TelemetryEventName.whisperModelLoaded.rawValue,
