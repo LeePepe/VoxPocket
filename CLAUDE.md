@@ -173,11 +173,11 @@ Do not bypass with `--no-verify` or admin-merge; investigate red checks instead.
 
 ## TestFlight Auto-Release
 
-`.github/workflows/testflight.yml` publishes `main` to TestFlight (iOS + macOS, internal group) via Fastlane on the self-hosted mac runner.
+`.github/workflows/testflight.yml` publishes `main` to TestFlight via Fastlane on the self-hosted mac runner. Follow `AGENTS.md` → App Build 与交付 for the current platform scope and user-owned Apple Connect verification.
 
-- **Schedule**: every 6h (`cron "0 */6 * * *"`). Releases **only when `main` has new commits** since the last successful release (tracked by moving tag `testflight/last-released`; cumulative — nothing is lost if a run fails).
-- **Manual**: `gh workflow run testflight.yml -f force=true` to force a release ignoring the "no new commits" gate.
-- **Build number**: `latest_testflight_build_number + 1` (global max across versions/platforms; monotonic). `MARKETING_VERSION` lives in `VoxPocket/project.yml` (`settings.base`); bump it manually there. `CURRENT_PROJECT_VERSION` is a single base source, injected at archive time by fastlane `xcargs` — never hardcoded per target.
+- **Schedule**: defined in `testflight.yml`. The macOS-only release tracks `testflight/macos-last-released`; the legacy dual-platform marker is preserved for a future explicit iOS resumption.
+- **Manual**: `gh workflow run testflight.yml --ref main -f force=true -f platform=macos` to force a macOS release ignoring the "no new commits" gate. iOS remains paused until explicitly resumed by the user.
+- **Build number**: `latest_testflight_build_number(platform: "osx") + 1` for macOS, across marketing versions. Each platform uses its own latest build so pausing iOS cannot cause duplicate macOS numbers. `MARKETING_VERSION` lives in `VoxPocket/project.yml` (`settings.base`); bump it manually there. `CURRENT_PROJECT_VERSION` is a single base source, injected at archive time by fastlane `xcargs` — never hardcoded per target.
 - **Signing**: Release configs use **manual** signing + explicit `Apple Distribution` + App Store provisioning profiles (per-SDK for the multiplatform target). Debug stays Automatic for local dev.
 - **Required GitHub Secrets**: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `KEYCHAIN_PASSWORD` (`GITHUB_TOKEN` is built-in).
 - **One-time人工前置**: ASC App record (iOS + macOS platforms), the `.widget` App ID, and a TestFlight internal group named exactly `Internal` (or set `TESTFLIGHT_GROUPS`).

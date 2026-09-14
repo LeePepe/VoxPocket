@@ -42,17 +42,17 @@ def regenerate_project
   sh("cd ../VoxPocket && xcodegen generate")
 end
 
-# Build number 必须**全局单调递增**（跨 marketing version、跨平台不重置）。
-# 去掉 version: 后查该 app 所有版本的最大 build +1，避免 bump marketing version
-# 后 build 从 1 重置被 ASC 判为旧构建。
-def next_build_number(api_key)
+# Build number 按目标平台递增，跨 marketing version 不重置。
+# macOS 必须显式查询 osx；iOS 暂停后不能继续用默认 iOS 计数，否则 macOS 会重复用号。
+def next_build_number(api_key, platform: "ios")
   latest = latest_testflight_build_number(
     api_key: api_key,
     app_identifier: APP_IDENTIFIER,
+    platform: platform,
     initial_build_number: 0
   )
   nb = latest.to_i + 1
-  UI.message("TestFlight latest build (all versions/platforms) = #{latest}; this build = #{nb}")
+  UI.message("TestFlight latest build (#{platform}, all versions) = #{latest}; this build = #{nb}")
   nb
 end
 
@@ -162,7 +162,7 @@ platform :mac do
   lane :beta do
     api_key = asc_api_key
     regenerate_project
-    next_build = next_build_number(api_key)
+    next_build = next_build_number(api_key, platform: "osx")
 
     # macOS 只有主 app（无 widget，widget 仅 iOS）。拉 macOS App Store profile。
     # provisioning_name 与 project.yml 的 macosx specifier 一致。

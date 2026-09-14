@@ -6,6 +6,7 @@ require "tmpdir"
 require "gym"
 require "yaml"
 require "rexml/document"
+require "open3"
 
 ROOT = File.expand_path("../..", __dir__)
 UI = FastlaneCore::UI
@@ -45,15 +46,20 @@ class FixtureRunner < Gym::Runner
 end
 
 class FixtureLane
-  attr_reader :build_options, :upload_options, :distributed
+  attr_reader :build_options, :upload_options, :distributed, :build_number_options, :requested_build_platform
 
-  def initialize(artifact)
+  def initialize(artifact, stub_build_number: true)
     @artifact = artifact
     @lanes = {}
     instance_eval(File.read(File.join(ROOT, "fastlane/Fastfile")), "Fastfile")
     define_singleton_method(:asc_api_key) { :fixture_key }
     define_singleton_method(:regenerate_project) {}
-    define_singleton_method(:next_build_number) { |_| 40 }
+    if stub_build_number
+      define_singleton_method(:next_build_number) do |_, platform: "ios"|
+        @requested_build_platform = platform
+        40
+      end
+    end
     define_singleton_method(:distribute_to_internal) { |*args| @distributed = args }
   end
 
@@ -73,6 +79,10 @@ class FixtureLane
   end
   def upload_to_testflight(**options)
     @upload_options = options
+  end
+  def latest_testflight_build_number(**options)
+    @build_number_options = options
+    40
   end
   def run(platform)
     instance_exec(&@lanes.fetch([platform, :beta]))
@@ -138,6 +148,14 @@ class TestFlightPackagingTests < Minitest::Test
     assert_equal "osx", lane.upload_options[:app_platform]
     refute lane.upload_options.key?(:ipa)
     assert_equal [40, :mac], lane.distributed
+    assert_equal "osx", lane.requested_build_platform
+  end
+
+  def test_mac_build_number_looks_up_macos_across_versions
+    lane = FixtureLane.new(nil, stub_build_number: false)
+    assert_equal 41, lane.next_build_number(:fixture_key, platform: "osx")
+    assert_equal "osx", lane.build_number_options[:platform]
+    refute lane.build_number_options.key?(:version)
   end
 
   def test_mac_rejects_missing_or_wrong_artifact_before_upload
@@ -149,20 +167,27 @@ class TestFlightPackagingTests < Minitest::Test
     end
   end
 
-  def test_workflow_keeps_dual_platform_default_and_safe_single_platform_retry
+  def test_workflow_pauses_ios_and_defaults_to_macos
     workflow = YAML.load_file(File.join(ROOT, ".github/workflows/testflight.yml"))
     events = workflow.fetch("on") { workflow.fetch(true) }
     selection = events.fetch("workflow_dispatch").fetch("inputs").fetch("platform")
-    assert_equal "all", selection.fetch("default")
-    assert_equal %w[all ios macos], selection.fetch("options")
+    assert_equal "macos", selection.fetch("default")
+    assert_equal ["macos"], selection.fetch("options")
     steps = workflow.fetch("jobs").fetch("release").fetch("steps")
     conditions = steps.to_h { |step| [step["name"], step["if"]] }
-    assert_equal "steps.gate.outputs.release == 'true' && inputs.platform != 'macos'",
+    assert_equal "${{ false }}",
                  conditions.fetch("fastlane iOS beta")
-    assert_equal "steps.gate.outputs.release == 'true' && inputs.platform != 'ios'",
+    assert_equal "steps.gate.outputs.release == 'true'",
                  conditions.fetch("fastlane macOS beta")
-    assert_equal "steps.gate.outputs.release == 'true' && (inputs.platform == '' || inputs.platform == 'all')",
+    assert_equal "steps.gate.outputs.release == 'true'",
                  conditions.fetch("Move last-released tag")
+    gate = steps.find { |step| step["id"] == "gate" }
+    assert_equal "${{ inputs.platform || 'macos' }}", gate.fetch("env").fetch("RELEASE_PLATFORM")
+    assert_includes gate.fetch("run"), '"$RELEASE_PLATFORM" != "macos"'
+    assert_includes gate.fetch("run"), "refs/tags/testflight/macos-last-released"
+    tag_step = steps.find { |step| step["name"] == "Move last-released tag" }
+    assert_includes tag_step.fetch("run"), "refs/tags/testflight/macos-last-released"
+    refute_includes tag_step.fetch("run"), "refs/tags/testflight/last-released"
   end
 
   def test_shared_scheme_does_not_force_ios_widget_into_macos_archive
@@ -172,6 +197,28 @@ class TestFlightPackagingTests < Minitest::Test
     entries = REXML::XPath.match(scheme, "//BuildActionEntry[@buildForArchiving='YES']/BuildableReference")
     assert_equal ["VoxPocket"], entries.map { |entry| entry.attributes["BlueprintName"] }
     assert_equal "YES", REXML::XPath.first(scheme, "//BuildAction").attributes["buildImplicitDependencies"]
+  end
+
+  def test_release_gate_rejects_paused_platforms_and_accepts_macos
+    workflow = YAML.load_file(File.join(ROOT, ".github/workflows/testflight.yml"))
+    gate = workflow.fetch("jobs").fetch("release").fetch("steps").find { |step| step["id"] == "gate" }
+    script = gate.fetch("run").gsub("${{ github.event.inputs.force }}", "false")
+    %w[ios all invalid macos].each do |platform|
+      output_path = File.join(@directory, "output-#{platform}")
+      File.write(output_path, "")
+      output, status = Open3.capture2e(
+        { "RELEASE_PLATFORM" => platform, "GITHUB_OUTPUT" => output_path },
+        "bash", "-c", script, chdir: ROOT
+      )
+      if platform == "macos"
+        assert status.success?, output
+        assert_includes File.read(output_path), "latest="
+      else
+        refute status.success?
+        assert_includes output, "iOS releases are paused"
+        assert_empty File.read(output_path)
+      end
+    end
   end
 
   def test_widget_is_still_an_ios_only_app_dependency
