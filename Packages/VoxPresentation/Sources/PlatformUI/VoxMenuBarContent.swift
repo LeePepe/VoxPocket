@@ -18,13 +18,13 @@ public enum MenuBarConfigurationStatus: CaseIterable, Sendable {
 @MainActor
 public struct VoxMenuBarContent: View {
     let configurationStatus: MenuBarConfigurationStatus
-    let onOpenMainWindow: () -> Void
+    let onOpenMainWindow: (() -> Void)?
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
     public init(
         configurationStatus: MenuBarConfigurationStatus,
-        onOpenMainWindow: @escaping () -> Void,
+        onOpenMainWindow: (() -> Void)? = nil,
         onOpenSettings: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
@@ -38,8 +38,11 @@ public struct VoxMenuBarContent: View {
         Text(configurationStatus.title)
             .accessibilityIdentifier("vox.menu.configuration")
         Divider()
-        Button("打开主窗口…", action: onOpenMainWindow)
-            .accessibilityIdentifier("vox.menu.openMainWindow")
+        // 兼容迁移前的 App 壳；新的设置优先入口不传此动作。
+        if let onOpenMainWindow {
+            Button("打开主窗口…", action: onOpenMainWindow)
+                .accessibilityIdentifier("vox.menu.openMainWindow")
+        }
         Button("设置…", action: onOpenSettings)
             .keyboardShortcut(",", modifiers: .command)
             .accessibilityIdentifier("vox.menu.settings")
