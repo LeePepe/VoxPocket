@@ -17,6 +17,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     fileprivate let recorder: MicrophoneRecorder
     private let config: LocalWhisperKitConfig
     private let logger: Logger
+    private let benchmarkLogger: Logger
     fileprivate let telemetry: TelemetryService
     fileprivate let permissionRequester: @Sendable () async -> Bool
     fileprivate let hasPermissionProvider: @Sendable () -> Bool
@@ -56,11 +57,13 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
         config: LocalWhisperKitConfig,
         logger: Logger = PrintLogger(subsystem: "WhisperKitTranscriber"),
         recorder: MicrophoneRecorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriber.Mic")),
-        telemetry: TelemetryService = NoopTelemetryService()
+        telemetry: TelemetryService = NoopTelemetryService(),
+        benchmarkLogger: Logger = SilentBenchmarkLogger()
     ) {
         self.engineFactory = { SharedLocalWhisperEngineHandle(config: $0, logger: $1) }
         self.config = config
         self.logger = logger
+        self.benchmarkLogger = benchmarkLogger
         self.recorder = recorder
         self.telemetry = telemetry
         self.permissionRequester = { await recorder.requestPermission() }
@@ -76,6 +79,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
         logger: Logger,
         recorder: MicrophoneRecorder,
         telemetry: TelemetryService = NoopTelemetryService(),
+        benchmarkLogger: Logger = SilentBenchmarkLogger(),
         permissionRequester: (@Sendable () async -> Bool)? = nil,
         hasPermissionProvider: (@Sendable () -> Bool)? = nil,
         engineFactory: @escaping @Sendable (LocalWhisperKitConfig, Logger) -> any LocalWhisperEngine,
@@ -83,6 +87,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     ) {
         self.config = config
         self.logger = logger
+        self.benchmarkLogger = benchmarkLogger
         self.recorder = recorder
         self.telemetry = telemetry
         self.permissionRequester = permissionRequester ?? { await recorder.requestPermission() }
@@ -117,7 +122,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 })
                 self._modelLoadingStateSubject.send(.ready)
                 self._engine.withLock { $0 = engine }
-                SilentBenchmarkLogger.log("WhisperKit model preloaded and ready", logger: self.logger)
+                self.benchmarkLogger.info("WhisperKit model preloaded and ready")
                 let loadMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 self.telemetry.track(
                     name: TelemetryEventName.whisperModelLoaded.rawValue,
@@ -674,7 +679,11 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
             onProgress?(1.0)
 
             self.logger.info("Loading WhisperKit pipeline from model folder...")
-            let whisperConfig = WhisperKitConfig(modelFolder: modelFolder.path)
+            let whisperConfig = WhisperKitConfig(
+                modelFolder: modelFolder.path,
+                verbose: !self.config.benchmarkMode,
+                logLevel: self.config.benchmarkMode ? .error : .info
+            )
             return try await WhisperKit(whisperConfig)
         }
 

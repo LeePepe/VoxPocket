@@ -1,3 +1,4 @@
+import Synchronization
 import XCTest
 import LokiKit
 @testable import TranscriptionKit
@@ -31,14 +32,22 @@ final class ProductionAdapterSeamTests: XCTestCase {
     }
 }
 
-private final class SpyLogger: Logger, @unchecked Sendable {
+private final class SpyLogger: Logger {
     struct Entry: Equatable {
         let level: LogLevel
         let message: String
     }
 
-    var minimumLevel: LogLevel = .debug
-    private(set) var entries: [Entry] = []
+    private let state = Mutex(State())
+
+    var minimumLevel: LogLevel {
+        get { state.withLock { $0.minimumLevel } }
+        set { state.withLock { $0.minimumLevel = newValue } }
+    }
+
+    var entries: [Entry] {
+        state.withLock { $0.entries }
+    }
 
     func log(
         _ level: LogLevel,
@@ -47,7 +56,7 @@ private final class SpyLogger: Logger, @unchecked Sendable {
         function: String,
         line: Int
     ) {
-        entries.append(Entry(level: level, message: message()))
+        state.withLock { $0.entries.append(Entry(level: level, message: message())) }
     }
 
     func log(
@@ -58,6 +67,11 @@ private final class SpyLogger: Logger, @unchecked Sendable {
         function: String,
         line: Int
     ) {
-        entries.append(Entry(level: level, message: message()))
+        state.withLock { $0.entries.append(Entry(level: level, message: message())) }
+    }
+
+    private struct State {
+        var minimumLevel: LogLevel = .debug
+        var entries: [Entry] = []
     }
 }

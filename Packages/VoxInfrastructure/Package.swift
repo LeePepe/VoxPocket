@@ -80,6 +80,13 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "PrivateTranscriptionBenchmarkTests",
+            dependencies: [
+                "TranscriptionKit",
+                .product(name: "LokiKit", package: "LokiKit"),
+            ]
+        ),
+        .testTarget(
             name: "LLMKitTests",
             dependencies: [
                 "LLMKit",

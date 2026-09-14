@@ -6,6 +6,8 @@ public struct LocalWhisperKitConfig: Sendable {
     public let model: String
     /// 首次开始时是否预热模型
     public let preloadOnStart: Bool
+    /// benchmark 运行时是否静默引擎日志与噪声输出
+    public let benchmarkMode: Bool
 
     public static var platformDefaultModel: String {
 #if os(iOS)
@@ -17,16 +19,19 @@ public struct LocalWhisperKitConfig: Sendable {
 
     public init(
         model: String = LocalWhisperKitConfig.platformDefaultModel,
-        preloadOnStart: Bool = true
+        preloadOnStart: Bool = true,
+        benchmarkMode: Bool = false
     ) {
         self.model = model
         self.preloadOnStart = preloadOnStart
+        self.benchmarkMode = benchmarkMode
     }
 
     public static let `default` = LocalWhisperKitConfig()
     public static let failingForTest = LocalWhisperKitConfig(
         model: "__failing_model_for_test__",
-        preloadOnStart: true
+        preloadOnStart: true,
+        benchmarkMode: false
     )
 
     /// WhisperKit 真实可下载的 variant 名称（兼容常见别名）

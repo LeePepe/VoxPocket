@@ -7,44 +7,75 @@ enum DefaultAppleSpeechRequestFactory {
         case fileURL
         case unknown
 
-        init(label: String?) {
-            guard let label else {
-                self = .unknown
-                return
+        static func inferredInputModality(from rawValue: String?) -> Route {
+            guard let rawValue, !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return .unknown
             }
 
-            switch label.lowercased() {
+            switch rawValue.lowercased() {
             case "audio", "buffer", "audio_buffer", "audio-buffer", "live":
-                self = .audioBuffer
+                return .audioBuffer
             case "file", "fileurl", "file_url", "file-url", "url":
-                self = .fileURL
+                return .fileURL
             default:
-                self = .unknown
+                return .unknown
             }
         }
     }
 
-    static func makeRequest(for route: Route = .audioBuffer) -> SFSpeechAudioBufferRecognitionRequest {
+    static func makeRequest(for route: Route = .unknown, fileURL: URL? = nil) -> SFSpeechAudioBufferRecognitionRequest {
+        _ = route
+        _ = fileURL
         let request = SFSpeechAudioBufferRecognitionRequest()
+        configureSharedPolicy(on: request)
+        return request
+    }
+
+    static func makeURLRequest(for fileURL: URL, route: Route = .unknown) -> SFSpeechURLRecognitionRequest {
+        _ = route
+        let request = SFSpeechURLRecognitionRequest(url: fileURL)
+        configureSharedPolicy(on: request)
+        return request
+    }
+
+    private static func configureSharedPolicy<T: SFSpeechRecognitionRequest>(on request: T) {
         request.shouldReportPartialResults = true
-        // 系统默认关闭自动标点，所有识别路径都需要显式开启。
         if #available(iOS 16, macOS 13, *) {
             request.addsPunctuation = true
         }
         request.requiresOnDeviceRecognition = false
-        _ = route
-        return request
     }
 
     static func route(for rawValue: String?) -> Route {
-        Route(label: rawValue)
+        _ = rawValue
+        return .unknown
+    }
+
+    static func canonicalAudioInput(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .lowercased()
     }
 
     static func acceptsEquivalentInput(_ lhs: String?, _ rhs: String?) -> Bool {
-        let normalized: (String?) -> String? = { value in
-            guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (canonicalAudioInput(lhs), canonicalAudioInput(rhs)) {
+        case let (lhsValue?, rhsValue?):
+            return lhsValue == rhsValue
+        case (nil, nil):
+            return true
+        default:
+            return false
         }
-        return normalized(lhs) == normalized(rhs)
+    }
+
+    static func acceptsEquivalentInput(_ lhs: URL?, _ rhs: URL?) -> Bool {
+        let canonical: (URL?) -> String? = { value in
+            guard let value else { return nil }
+            return canonicalAudioInput(value.standardizedFileURL.path)
+        }
+        return acceptsEquivalentInput(canonical(lhs), canonical(rhs))
     }
 }
