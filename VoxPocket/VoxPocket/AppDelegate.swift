@@ -74,6 +74,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             windowManager.scheduleQuickRecordingPrewarm()
             observePreferenceChanges()
             await registerHotkeys()
+            // 主窗口已退出 macOS 主流程，存储仍须在后台初始化；磁盘打开不阻塞热键。
+            await serviceContainer.initializePersistence()
             logger.debug("Initialization complete")
         }
 
@@ -213,6 +215,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 Task { @MainActor in
                     // 保存会话到持久化存储
                     let raw = viewModel?.rawTranscription ?? finalText
+                    await self?.serviceContainer.initializePersistence()
                     try? await self?.serviceContainer.sessionUseCase.saveCompletedSession(
                         title: nil,
                         rawText: raw,

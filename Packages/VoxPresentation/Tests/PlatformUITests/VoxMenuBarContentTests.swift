@@ -22,7 +22,7 @@ final class VoxMenuBarContentTests: XCTestCase {
             _ = view.body
             XCTAssertTrue(actions.isEmpty)
             // 配置失败不取消恢复入口；平台生命周期动作仍完全由宿主注入。
-            view.onOpenMainWindow()
+            view.onOpenMainWindow?()
             view.onOpenSettings()
             view.onQuit()
             XCTAssertEqual(actions, ["main", "settings", "quit"])
@@ -79,6 +79,19 @@ final class VoxMenuBarContentTests: XCTestCase {
                 }
             }
         }
+    }
+
+    func testSettingsOnlyMenuDoesNotHaveAMainWindowAction() {
+        var actions: [String] = []
+        let view = VoxMenuBarContent(configurationStatus: .failed,
+                                     onOpenSettings: { actions.append("settings") },
+                                     onQuit: { actions.append("quit") })
+        XCTAssertNil(view.onOpenMainWindow)
+        _ = view.body
+        XCTAssertTrue(actions.isEmpty)
+        view.onOpenSettings()
+        view.onQuit()
+        XCTAssertEqual(actions, ["settings", "quit"])
     }
 
 }
