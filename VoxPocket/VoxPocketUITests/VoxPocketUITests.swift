@@ -34,7 +34,7 @@ final class VoxPocketUITests: XCTestCase {
     @MainActor
     func testAppLaunchShowsRecordButton() throws {
         let app = XCUIApplication()
-        app.launchOpeningMainWindow()
+        try app.launchOpeningMainWindow()
 
         // The primary control renders as either record or stop depending on state.
         // Wait up to 10 s for one of them to appear.
@@ -63,9 +63,26 @@ final class VoxPocketUITests: XCTestCase {
         XCTAssertTrue(app.voxMenuBarItem.waitForExistence(timeout: 10))
         XCTAssertFalse(app.windows["VoxPocket"].isHittable)
         app.voxMenuBarItem.click()
-        XCTAssertTrue(app.menuItems["打开主窗口…"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.menuItems["设置…"].exists)
+        XCTAssertFalse(app.menuItems["打开主窗口…"].exists)
+        XCTAssertTrue(app.menuItems["设置…"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.menuItems["退出 VoxPocket"].exists)
+    }
+
+    @MainActor
+    func testMacOSSettingsContainMigratedPreferences() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.voxMenuBarItem.waitForExistence(timeout: 10))
+        app.voxMenuBarItem.click()
+        let settings = app.menuItems["设置…"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.click()
+        XCTAssertTrue(app.popUpButtons["vox.settings.quickRecordKey"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons[VoxID.recordButton].exists)
+        let textPage = app.buttons["语音与文本"].exists ? app.buttons["语音与文本"] : app.radioButtons["语音与文本"]
+        XCTAssertTrue(textPage.waitForExistence(timeout: 3))
+        textPage.click()
+        XCTAssertTrue(app.popUpButtons["vox.settings.llmProvider"].waitForExistence(timeout: 3))
     }
 #endif
 
@@ -75,7 +92,7 @@ final class VoxPocketUITests: XCTestCase {
     @MainActor
     func testTapRecordButtonStartsRecording() throws {
         let app = XCUIApplication()
-        app.launchOpeningMainWindow()
+        try app.launchOpeningMainWindow()
 
         let recordButton = app.buttons[VoxID.recordButton]
         guard recordButton.waitForExistence(timeout: 10) else {
@@ -98,7 +115,7 @@ final class VoxPocketUITests: XCTestCase {
     @MainActor
     func testSessionListIsAccessible() throws {
         let app = XCUIApplication()
-        app.launchOpeningMainWindow()
+        try app.launchOpeningMainWindow()
 
         // The session list lives in the sidebar drawer.  On macOS it may be visible by default.
         // We look for either the list container or at least one list item.
@@ -149,7 +166,7 @@ final class VoxAgentEvalIntegrationTests: XCTestCase {
         }
 
         let app = XCUIApplication()
-        app.launchOpeningMainWindow()
+        try app.launchOpeningMainWindow()
 
         // Allow the UI to settle.
         _ = app.buttons[VoxID.recordButton].waitForExistence(timeout: 10)
@@ -225,15 +242,11 @@ private extension XCUIApplication {
     }
 #endif
 
-    func launchOpeningMainWindow() {
-        launch()
+    func launchOpeningMainWindow() throws {
 #if os(macOS)
-        let menu = voxMenuBarItem
-        guard menu.waitForExistence(timeout: 10) else { XCTFail("VoxPocket 菜单栏入口未出现"); return }
-        menu.click()
-        let open = menuItems["打开主窗口…"]
-        guard open.waitForExistence(timeout: 3) else { XCTFail("主窗口入口未出现"); return }
-        open.click()
+        throw XCTSkip("macOS 已移除普通主窗口；编辑器测试保留给 iOS，macOS 使用设置/浮窗测试。")
+#else
+        launch()
 #endif
     }
 }

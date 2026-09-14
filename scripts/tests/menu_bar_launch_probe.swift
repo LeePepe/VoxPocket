@@ -17,7 +17,6 @@ private enum ProbeError: Error { case invalidConfiguration }
     var mainContentCreations = 0
     var settingsContentCreations = 0
     var servicesStarted = false
-    var openMain: (() -> Void)?
     var openSettings: (() -> Void)?
 }
 
@@ -33,12 +32,10 @@ struct SettingsView: View {
 
 /// 只在测试进程中取得 SwiftUI 场景动作；不点击桌面，不向其他应用注入事件。
 private struct ProbeControls: View {
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     var body: some View {
         Image(systemName: "circle")
             .onAppear {
-                ProbeState.shared.openMain = { openWindow(id: MacOSAppScenes.mainWindowID) }
                 ProbeState.shared.openSettings = { openSettings() }
             }
     }
@@ -75,18 +72,8 @@ private struct ProbeControls: View {
         require(state.servicesStarted == !LLMAppConfig.shouldFail, "configuration gates services without a window")
 
         let deadline = ContinuousClock.now.advanced(by: .seconds(3))
-        while state.openMain == nil && ContinuousClock.now < deadline { await pause() }
-        require(state.openMain != nil && state.openSettings != nil, "scene commands must be available")
-        state.openMain?()
-        await pause()
-        require(visibleWindows.count == 1, "explicit open must present the main window")
-        let mainWindow = visibleWindows[0]
-        state.openMain?()
-        await pause()
-        require(visibleWindows.count == 1 && visibleWindows[0] === mainWindow, "repeated open must reuse main window")
-        mainWindow.close()
-        await pause()
-        require(visibleWindows.isEmpty, "closing main window must leave background app running")
+        while state.openSettings == nil && ContinuousClock.now < deadline { await pause() }
+        require(state.openSettings != nil, "settings command must be available without a main window")
 
         state.openSettings?()
         await pause()
@@ -95,14 +82,20 @@ private struct ProbeControls: View {
         state.openSettings?()
         await pause()
         require(visibleWindows.count == 1 && visibleWindows[0] === settingsWindow, "settings must reuse one window")
+        require(state.mainContentCreations == 0, "settings must never create main content")
         if LLMAppConfig.shouldFail {
             require(state.mainContentCreations == 0 && state.settingsContentCreations == 0,
                     "failed configuration must show startup error rather than service-backed content")
         } else {
-            require(state.mainContentCreations > 0 && state.settingsContentCreations > 0,
-                    "explicit opens must render their ready content")
+            require(state.settingsContentCreations > 0, "explicit open must render ready settings")
         }
-        print("PASS: menu-first scenes, configuration=\(LLMAppConfig.shouldFail ? "failed" : "ready")")
+        settingsWindow.close()
+        await pause()
+        require(visibleWindows.isEmpty, "closing settings must leave the background app running")
+        state.openSettings?()
+        await pause()
+        require(visibleWindows.count == 1, "settings must be reopenable after closing")
+        print("PASS: settings-only scenes, configuration=\(LLMAppConfig.shouldFail ? "failed" : "ready")")
         exit(0)
     }
 }

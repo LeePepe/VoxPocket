@@ -30,6 +30,7 @@ import PlatformUI
 public final class ServiceContainer: ObservableObject {
     private let preferencesStore = UserDefaultsPreferencesStore.shared
     private let logger: Logger
+    private let persistenceStartup = AppPersistenceStartup()
 
     // MARK: - 单例
 
@@ -51,7 +52,7 @@ public final class ServiceContainer: ObservableObject {
     public let refinementUseCase: DefaultRefinementUseCase
     public let streamingInputCoordinator: DefaultStreamingInputCoordinator
 
-    /// 会话用例代理（启动时用内存实现，UI 就绪后延迟切换到 SwiftData）
+    /// 会话用例代理（启动时用内存实现，后台初始化后切换到 SwiftData）
     public let sessionUseCase: ProxySessionUseCase
 
     /// Deep Link 路由
@@ -414,25 +415,26 @@ public final class ServiceContainer: ObservableObject {
 
     /// 延迟初始化 SwiftData 持久化层
     ///
-    /// 在 UI 首次渲染后调用，避免 ModelContainer 创建阻塞 App 初始化导致 UI 卡死。
+    /// 后台启动与保存入口共享同一初始化；数据库打开不占用主线程。
     public func initializePersistence() async {
-        let schema = Schema([SessionRecord.self])
-        let config = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            cloudKitDatabase: .none
-        )
-        do {
-            let container = try ModelContainer(for: schema, configurations: [config])
-            let repository = SwiftDataSessionRepository(container: container)
+        let ready = await persistenceStartup.prepare { [self] in
+            let repository = try await Self.makeSessionRepository()
             let swiftDataUseCase = DefaultSessionUseCase(repository: repository, telemetry: telemetryService)
             await sessionUseCase.switchBacking(to: swiftDataUseCase)
             logger.debug("SwiftData persistence initialized")
-        } catch {
-            logger.log(.debug, "Failed to initialize SwiftData persistence", context: [
-                "error": error.localizedDescription
-            ])
         }
+        if !ready {
+            logger.error("Session persistence could not be initialized")
+        }
+    }
+
+    nonisolated private static func makeSessionRepository() async throws -> SwiftDataSessionRepository {
+        try await Task.detached(priority: .utility) {
+            let schema = Schema([SessionRecord.self])
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+            let container = try ModelContainer(for: schema, configurations: [config])
+            return SwiftDataSessionRepository(container: container)
+        }.value
     }
 
     // MARK: - ViewModel 工厂方法

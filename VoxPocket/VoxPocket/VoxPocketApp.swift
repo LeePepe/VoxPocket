@@ -39,7 +39,7 @@ struct VoxPocketApp: App {
 
     var body: some Scene {
         #if os(macOS)
-        // macOS 默认只显示菜单栏；主窗口与设置按需打开。
+        // macOS 只保留菜单栏、快捷浮窗与独立设置。
         MacOSAppScenes()
         #else
         // iOS: 标准窗口组
@@ -56,79 +56,3 @@ struct VoxPocketApp: App {
         #endif
     }
 }
-
-// MARK: - 设置视图
-
-#if os(macOS)
-struct SettingsView: View {
-    var body: some View {
-        TabView {
-            GeneralSettingsView()
-                .tabItem {
-                    Label("General", systemImage: "gear")
-                }
-
-            ShortcutsSettingsView()
-                .tabItem {
-                    Label("Shortcuts", systemImage: "keyboard")
-                }
-        }
-        .frame(width: 450, height: 300)
-    }
-}
-
-struct GeneralSettingsView: View {
-    var body: some View {
-        Form {
-            Text("General settings will be added here.")
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-    }
-}
-
-struct ShortcutsSettingsView: View {
-    @StateObject private var viewModel = ShortcutsViewModel()
-
-    var body: some View {
-        Form {
-            Section("Global Shortcuts") {
-                HStack {
-                    Text("Show Panel")
-                    Spacer()
-                    Text(viewModel.showPanelDisplayName)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-
-                HStack {
-                    Text("Quick Recording")
-                    Spacer()
-                    Text("\(viewModel.quickRecordDisplayName) (hold)")
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-            }
-
-            Section {
-                Text("Hold the Quick Recording shortcut for 0.5 seconds to start recording. Release to process and paste.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding()
-        .onAppear {
-            Task { await viewModel.load() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: PreferencesNotification.hotkeysDidChange)) { _ in
-            Task { await viewModel.load() }
-        }
-    }
-}
-#endif

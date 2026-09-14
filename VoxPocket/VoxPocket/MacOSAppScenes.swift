@@ -6,16 +6,9 @@ import PlatformUI
 /// App 壳只负责场景与生命周期接线；菜单和录音界面继续由 SPM 展示层提供。
 @MainActor
 struct MacOSAppScenes: Scene {
-    static let mainWindowID = "vox-main-window"
     @ObservedObject private var startup = AppStartup.shared
 
     var body: some Scene {
-        Window("VoxPocket", id: Self.mainWindowID) {
-            AppStartupView { ContentView() }
-        }
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
-
         MenuBarExtra {
             MacOSMenuBarContent(startup: startup)
         } label: {
@@ -34,7 +27,6 @@ struct MacOSAppScenes: Scene {
 @MainActor
 private struct MacOSMenuBarContent: View {
     @ObservedObject var startup: AppStartup
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     private var configurationStatus: MenuBarConfigurationStatus {
@@ -46,15 +38,12 @@ private struct MacOSMenuBarContent: View {
     }
 
     var body: some View {
-        VoxMenuBarContent(configurationStatus: configurationStatus) {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: MacOSAppScenes.mainWindowID)
-        } onOpenSettings: {
+        VoxMenuBarContent(configurationStatus: configurationStatus, onOpenSettings: {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
-        } onQuit: {
+        }, onQuit: {
             NSApp.terminate(nil)
-        }
+        })
     }
 }
 #endif

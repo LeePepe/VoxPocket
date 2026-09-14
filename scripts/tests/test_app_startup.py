@@ -22,6 +22,7 @@ let package = Package(name: "StartupRegression", platforms: [.macOS(.v15)], targ
 ''')
         (sources / "AppStartup.swift").symlink_to(root / "VoxPocket/VoxPocket/AppStartup.swift")
         (sources / "AppStartupView.swift").symlink_to(root / "VoxPocket/VoxPocket/AppStartupView.swift")
+        (sources / "AppPersistenceStartup.swift").symlink_to(root / "VoxPocket/VoxPocket/AppPersistenceStartup.swift")
         (sources / "FakeLLMAppConfig.swift").write_text('''
 @MainActor enum LLMAppConfig {
     static func loadRuntimeConfiguration() async throws {
@@ -30,6 +31,7 @@ let package = Package(name: "StartupRegression", platforms: [.macOS(.v15)], targ
 }
 ''')
         (tests / "AppStartupTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/AppStartupTests.swift")
+        (tests / "AppPersistenceStartupTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/AppPersistenceStartupTests.swift")
         subprocess.run(["swift", "test", "--package-path", str(package)], check=True, timeout=120)
 
 
