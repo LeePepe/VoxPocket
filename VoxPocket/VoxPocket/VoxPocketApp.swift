@@ -39,16 +39,8 @@ struct VoxPocketApp: App {
 
     var body: some Scene {
         #if os(macOS)
-        // macOS: 主窗口 + 设置窗口
-        WindowGroup("VoxPocket") {
-            AppStartupView { ContentView() }
-        }
-        // 不使用 .modelContainer() — repository 直接持有 container 引用
-
-        // 设置窗口（可选）
-        Settings {
-            AppStartupView { SettingsView() }
-        }
+        // macOS 默认只显示菜单栏；主窗口与设置按需打开。
+        MacOSAppScenes()
         #else
         // iOS: 标准窗口组
         WindowGroup {
