@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last-Reviewed: 2026-09-11
+Last-Reviewed: 2026-09-14
 
 ## Project Snapshot
 
@@ -35,6 +35,8 @@ swift test --package-path Packages/VoxApplication
 
 ## App Build 与交付（TestFlight 唯一渠道）
 
+- **当前平台范围（2026-09-14）**：仅推进 macOS；暂停 iOS 功能开发和 TestFlight 发布，
+  恢复须用户明确要求。保留 iOS 代码、既有产物及 required 兼容性检查，不借暂停删除数据或放宽门禁。
 - **交付**：所有供用户使用的 macOS / iOS App build 统一经 `testflight.yml` 构建并分发到
   TestFlight；不再在主工作目录或 linked worktree 自动生成本地 App build / archive。
 - **安装**：由用户通过 TestFlight 安装；Agent 不主动安装、替换或启动交付 build。
@@ -42,8 +44,10 @@ swift test --package-path Packages/VoxApplication
   `xcodebuild` 验证继续由 CI required 执行，不作为本地交付步骤。
 - **发布边界**：提交不等于发布；沿用分支 → PR → required checks → 合并 → 定时 TestFlight
   发布流程。手动触发发布仍需用户明确要求。
-- **完成条件**：代码任务报告 commit 与验证结果；发布任务须确认 build 在 TestFlight
-  可供测试并报告版本/build number，不能仅凭上传成功宣称可用。保留已有本地产物，不自动清理。
+- **完成条件**：代码任务报告 commit 与验证结果；Agent 监督 PR 合并和获授权的 macOS
+  TF 构建上传，报告版本/build number、run 链接与分发警告。Apple Connect／TestFlight 的
+  最终可测试性由用户核实；Agent 不自行登录或查找 ASC 凭据，不把上传成功等同于可测试。
+  保留已有本地产物，不自动清理。
 
 ## Engineering Rules
 
