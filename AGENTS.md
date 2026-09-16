@@ -42,8 +42,8 @@ swift test --package-path Packages/VoxApplication
 - **安装**：由用户通过 TestFlight 安装；Agent 不主动安装、替换或启动交付 build。
 - **验证**：本地保留受影响 layer 的 SPM build/test 与快速检查；App target 的
   `xcodebuild` 验证继续由 CI required 执行，不作为本地交付步骤。
-- **发布边界**：提交不等于发布；沿用分支 → PR → required checks → 合并 → 定时 TestFlight
-  发布流程。手动触发发布仍需用户明确要求。
+- **发布边界**：提交不等于发布；沿用分支 → PR → required checks → 合并流程。
+  TestFlight 自动发布已暂停，仅在用户明确要求后通过 `workflow_dispatch` 手动发布。
 - **完成条件**：代码任务报告 commit 与验证结果；Agent 监督 PR 合并和获授权的 macOS
   TF 构建上传，报告版本/build number、run 链接与分发警告。Apple Connect／TestFlight 的
   最终可测试性由用户核实；Agent 不自行登录或查找 ASC 凭据，不把上传成功等同于可测试。
@@ -103,8 +103,8 @@ swift test --package-path Packages/VoxApplication
 
 - **PR → main（服务端强制）**：`main` 由 ruleset 保护，**禁止直推**。改动一律走分支 → PR，
   required checks 全绿（`SPM <pkg>`×5 / `App target` / `Lint & policy` / `codex-review-target`）后，
-  非 draft PR 由 auto-merge 自动 squash 合并。发布走 `testflight.yml`（cron 每 6h，有新 commit 才发；
-  详见 CLAUDE.md → TestFlight Auto-Release）。
+  非 draft PR 由 auto-merge 自动 squash 合并。发布走 `testflight.yml`（仅在用户明确要求后手动触发；
+  详见 CLAUDE.md → TestFlight Manual Release）。
   `claude-review` 已暂停;`kimi-review` 只发 advisory comment,不参与合并门。
 - **pre-commit / pre-push**（本地，可绕过）：只跑快门禁——改到的 layer 增量 build+test、
   frontmatter 防腐校验、"改代码必带测试"。目标 < 60s。脚本在 `scripts/gates/`，经 `.local-review.yml` 接入。

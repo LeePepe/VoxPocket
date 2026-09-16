@@ -1,11 +1,7 @@
 name: testflight
 
-# 定时把 main 的 macOS 版本打包上传 TestFlight（内部测试）；iOS 按用户要求暂停。
-#   - schedule: 每天凌晨 3 点（CST）检查一次；仅当 main 自上次成功发布后有新 commit 才 build。
-#     GitHub cron 延迟超过 60 分钟时整次跳过，避免过期任务在白天占用本机 runner。
-#     macOS 上次发布点记录在 `testflight/macos-last-released`（累积式：build 失败
-#     或机器关机期间不丢 commit，下次开机的 cron 会把攒的一起发）。
-#   - workflow_dispatch: 手动触发兜底，force=true 可忽略"无新提交"检查强制发。
+# 仅通过 workflow_dispatch 手动构建 main 并上传 macOS TestFlight；iOS 继续暂停。
+# 自动发布已暂停。force=true 可忽略“无新提交”检查；发布标记仍记录成功版本。
 #
 # 跑在 self-hosted runner（macmini-local，与 VitalStride 同一台物理机）：Apple
 # Distribution 证书已在登录钥匙串。签名走 project.yml 的 manual + App Store profile。
@@ -14,16 +10,6 @@ name: testflight
 # push tag 不触发 ci.yml（其 push 过滤是 branches:[main]），无副作用。
 
 on:
-  schedule:
-    # 分成逐星期规则，让 github.event.schedule 携带预定星期；否则每日 cron
-    # 只有时分，无法区分「今天晚 30 分钟」和「昨天晚 24 小时 30 分钟」。
-    - cron: "0 19 * * 0" # Sunday, 19:00 UTC = 03:00 CST
-    - cron: "0 19 * * 1"
-    - cron: "0 19 * * 2"
-    - cron: "0 19 * * 3"
-    - cron: "0 19 * * 4"
-    - cron: "0 19 * * 5"
-    - cron: "0 19 * * 6"
   workflow_dispatch:
     inputs:
       force:
@@ -45,55 +31,9 @@ permissions:
   contents: write # 移动 macOS 发布标记，保留旧双平台标记
 
 jobs:
-  freshness:
-    name: Reject stale schedule
-    runs-on: ubuntu-latest
-    outputs:
-      proceed: ${{ steps.deadline.outputs.proceed }}
-    steps:
-      - name: Check schedule delay
-        id: deadline
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_SCHEDULE: ${{ github.event.schedule }}
-          SCHEDULED_UTC_HOUR: "19"
-          SCHEDULED_UTC_MINUTE: "0"
-          MAX_DELAY_MINUTES: "60"
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" != "schedule" ]; then
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-            echo "Manual dispatch: schedule deadline does not apply."
-            exit 0
-          fi
-
-          scheduled_dow="${EVENT_SCHEDULE##* }"
-          if [[ ! "$scheduled_dow" =~ ^[0-6]$ ]]; then
-            echo "::error::Unexpected schedule expression: $EVENT_SCHEDULE"
-            exit 1
-          fi
-
-          read -r now_dow now_hour now_minute < <(date -u '+%w %H %M')
-          now_minutes=$((10#$now_hour * 60 + 10#$now_minute))
-          scheduled_minutes=$((SCHEDULED_UTC_HOUR * 60 + SCHEDULED_UTC_MINUTE))
-          elapsed_days=$(((10#$now_dow - 10#$scheduled_dow + 7) % 7))
-          delay_minutes=$((elapsed_days * 1440 + now_minutes - scheduled_minutes))
-          if [ "$delay_minutes" -lt 0 ]; then
-            delay_minutes=$((delay_minutes + 10080))
-          fi
-          echo "Scheduled for 19:00 UTC; current delay is ${delay_minutes} minute(s)."
-
-          if [ "$delay_minutes" -gt "$MAX_DELAY_MINUTES" ]; then
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping stale TestFlight schedule (${delay_minutes}m > ${MAX_DELAY_MINUTES}m)."
-          else
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-          fi
-
   release:
     name: Build & upload to TestFlight
-    needs: freshness
-    if: needs.freshness.outputs.proceed == 'true'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 60
     steps:

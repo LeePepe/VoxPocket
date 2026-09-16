@@ -171,11 +171,11 @@ This loop is Claude's responsibility. The user should never need to ask for a re
 
 Do not bypass with `--no-verify` or admin-merge; investigate red checks instead.
 
-## TestFlight Auto-Release
+## TestFlight Manual Release
 
 `.github/workflows/testflight.yml` publishes `main` to TestFlight via Fastlane on the self-hosted mac runner. Follow `AGENTS.md` → App Build 与交付 for the current platform scope and user-owned Apple Connect verification.
 
-- **Schedule**: defined in `testflight.yml`. The macOS-only release tracks `testflight/macos-last-released`; the legacy dual-platform marker is preserved for a future explicit iOS resumption.
+- **Trigger**: `workflow_dispatch` only, after an explicit user request. Automatic releases are paused; merging a PR does not publish a build. The macOS-only release tracks `testflight/macos-last-released`; the legacy dual-platform marker is preserved for a future explicit iOS resumption.
 - **Manual**: `gh workflow run testflight.yml --ref main -f force=true -f platform=macos` to force a macOS release ignoring the "no new commits" gate. iOS remains paused until explicitly resumed by the user.
 - **Build number**: `latest_testflight_build_number(platform: "osx") + 1` for macOS, across marketing versions. Each platform uses its own latest build so pausing iOS cannot cause duplicate macOS numbers. `MARKETING_VERSION` lives in `VoxPocket/project.yml` (`settings.base`); bump it manually there. `CURRENT_PROJECT_VERSION` is a single base source, injected at archive time by fastlane `xcargs` — never hardcoded per target.
 - **Signing**: Release configs use **manual** signing + explicit `Apple Distribution` + App Store provisioning profiles (per-SDK for the multiplatform target). Debug stays Automatic for local dev.
