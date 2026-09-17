@@ -18,7 +18,7 @@ struct BenchmarkAudio: Sendable {
         var audioFile: AudioFileID?
         let opened = AudioFileOpenWithCallbacks(retained.toOpaque(), { client, offset, requested, output, actual in
             let data = Unmanaged<EncodedBenchmarkAudio>.fromOpaque(client).takeUnretainedValue().bytes
-            guard offset >= 0, offset <= data.count else { actual.pointee = 0; return noErr }
+            guard offset >= 0, offset <= Int64(data.count) else { actual.pointee = 0; return noErr }
             let count = min(Int(requested), data.count - Int(offset))
             if count > 0 {
                 data.withUnsafeBytes { raw in
