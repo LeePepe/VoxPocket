@@ -54,4 +54,15 @@ final class WhisperEngineRequestTests: XCTestCase {
             XCTAssertFalse(error.localizedDescription.contains("PRIVATE_AUDIO_TEXT"))
         }
     }
+
+    func testValidatedAudioBytesCanBeSubmittedWithoutAFilePath() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let engine = WhisperEngine(config: .init(endpoint: URL(string: "https://example.invalid/audio/transcriptions")!,
+                                                 apiKey: "test-key"), session: URLSession(configuration: configuration))
+        MockURLProtocol.status.withLock { $0 = 200 }
+        let result = try await engine.transcribe(audioData: Data("synthetic-memory-fixture".utf8),
+                                                language: Locale(identifier: "zh-Hans"))
+        XCTAssertEqual(result, "几点开始？")
+    }
 }

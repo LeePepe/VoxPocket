@@ -545,20 +545,26 @@ final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
     }
 }
 
-private actor LocalWhisperKitEngine: LocalWhisperEngine {
+actor LocalWhisperKitEngine: LocalWhisperEngine {
     private let config: LocalWhisperKitConfig
     private let logger: Logger
+    /// 仅供独立文件评测：绕过共享池、下载与缓存修复；生产入口保持原行为。
+    private let preparedModelFolder: URL?
 
 #if canImport(WhisperKit)
     private var pipeline: WhisperKit?
+    // 评测引擎独占借出；异步调用期间池中为空，杜绝可重入访问非 Sendable 的供应商对象。
+    private let benchmarkPipeline = Mutex<WhisperKit?>(nil)
+    private var benchmarkPrepared = false
     private var streamTranscriber: AudioStreamTranscriber?
     private var streamTask: Task<Void, Error>?
     private var prepareTask: Task<Void, Error>?
 #endif
 
-    init(config: LocalWhisperKitConfig, logger: Logger) {
+    init(config: LocalWhisperKitConfig, logger: Logger, preparedModelFolder: URL? = nil) {
         self.config = config
         self.logger = logger
+        self.preparedModelFolder = preparedModelFolder
     }
 
     private static func dedicatedDownloadBase() -> URL? {
@@ -610,7 +616,7 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
 
     func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
 #if canImport(WhisperKit)
-        if pipeline != nil {
+        if pipeline != nil || benchmarkPrepared {
             return
         }
 
@@ -638,6 +644,11 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
 
 #if canImport(WhisperKit)
     private func performPrepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
+        if let preparedModelFolder {
+            try await loadBenchmarkPipeline(from: preparedModelFolder)
+            benchmarkPrepared = true
+            return
+        }
         let modelVariant = config.resolvedModelVariant
         logger.info("Downloading/locating WhisperKit model: \(config.model)")
         if modelVariant != config.model {
@@ -829,6 +840,50 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
         return nil
 #endif
     }
+
+    /// 与文件模式相同的解码选项，直接消费已规范化、已校验的 16kHz 单声道样本。
+    nonisolated func transcribeCanonicalSamples(_ samples: [Float], languageCode: String?) async throws -> String? {
+#if canImport(WhisperKit)
+        let checkedOut = benchmarkPipeline.withLock { state in
+            let value = state
+            state = nil
+            return value
+        }
+        guard let checkedOut else { return nil }
+        var options = DecodingOptions()
+        options.language = languageCode
+        do {
+            let results = try await checkedOut.transcribe(audioArray: samples, decodeOptions: options)
+            let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            returnBenchmarkPipeline(checkedOut)
+            return text.isEmpty ? nil : text
+        } catch {
+            returnBenchmarkPipeline(checkedOut)
+            throw error
+        }
+#else
+        return nil
+#endif
+    }
+
+#if canImport(WhisperKit)
+    private nonisolated func loadBenchmarkPipeline(from folder: URL) async throws {
+        let loaded = try await WhisperKit(WhisperKitConfig(modelFolder: folder.path, verbose: false, download: false))
+        returnBenchmarkPipeline(loaded)
+    }
+
+    private nonisolated func returnBenchmarkPipeline(_ pipeline: sending WhisperKit) {
+        // sending 转移所有权；中转 Mutex 使闭包不捕获仍属于调用方隔离域的引用。
+        let transfer = Mutex<WhisperKit?>(pipeline)
+        benchmarkPipeline.withLock { destination in
+            destination = transfer.withLock { source in
+                let value = source
+                source = nil
+                return value
+            }
+        }
+    }
+#endif
 
     func pauseStreaming() async {
 #if canImport(WhisperKit)
