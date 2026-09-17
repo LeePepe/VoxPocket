@@ -73,6 +73,11 @@ let package = Package(
             dependencies: []
         ),
         .testTarget(
+            name: "PrivateTranscriptionBenchmarkTests",
+            dependencies: ["TranscriptionKit", "LLMKit", "Preferences", .product(name: "LokiKit", package: "LokiKit")],
+            exclude: ["README.md"]
+        ),
+        .testTarget(
             name: "TranscriptionKitTests",
             dependencies: [
                 "TranscriptionKit",

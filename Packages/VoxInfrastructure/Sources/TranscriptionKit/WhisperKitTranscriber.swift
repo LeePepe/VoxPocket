@@ -545,9 +545,11 @@ final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
     }
 }
 
-private actor LocalWhisperKitEngine: LocalWhisperEngine {
+actor LocalWhisperKitEngine: LocalWhisperEngine {
     private let config: LocalWhisperKitConfig
     private let logger: Logger
+    /// 仅供独立文件评测：绕过共享池、下载与缓存修复；生产入口保持原行为。
+    private let preparedModelFolder: URL?
 
 #if canImport(WhisperKit)
     private var pipeline: WhisperKit?
@@ -556,9 +558,10 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
     private var prepareTask: Task<Void, Error>?
 #endif
 
-    init(config: LocalWhisperKitConfig, logger: Logger) {
+    init(config: LocalWhisperKitConfig, logger: Logger, preparedModelFolder: URL? = nil) {
         self.config = config
         self.logger = logger
+        self.preparedModelFolder = preparedModelFolder
     }
 
     private static func dedicatedDownloadBase() -> URL? {
@@ -638,6 +641,12 @@ private actor LocalWhisperKitEngine: LocalWhisperEngine {
 
 #if canImport(WhisperKit)
     private func performPrepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
+        if let preparedModelFolder {
+            pipeline = try await WhisperKit(WhisperKitConfig(
+                modelFolder: preparedModelFolder.path, verbose: false, download: false
+            ))
+            return
+        }
         let modelVariant = config.resolvedModelVariant
         logger.info("Downloading/locating WhisperKit model: \(config.model)")
         if modelVariant != config.model {
