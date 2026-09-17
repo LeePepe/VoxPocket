@@ -553,6 +553,9 @@ actor LocalWhisperKitEngine: LocalWhisperEngine {
 
 #if canImport(WhisperKit)
     private var pipeline: WhisperKit?
+    // 评测引擎独占借出；异步调用期间池中为空，杜绝可重入访问非 Sendable 的供应商对象。
+    private let benchmarkPipeline = Mutex<WhisperKit?>(nil)
+    private var benchmarkPrepared = false
     private var streamTranscriber: AudioStreamTranscriber?
     private var streamTask: Task<Void, Error>?
     private var prepareTask: Task<Void, Error>?
@@ -613,7 +616,7 @@ actor LocalWhisperKitEngine: LocalWhisperEngine {
 
     func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
 #if canImport(WhisperKit)
-        if pipeline != nil {
+        if pipeline != nil || benchmarkPrepared {
             return
         }
 
@@ -642,9 +645,8 @@ actor LocalWhisperKitEngine: LocalWhisperEngine {
 #if canImport(WhisperKit)
     private func performPrepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
         if let preparedModelFolder {
-            pipeline = try await WhisperKit(WhisperKitConfig(
-                modelFolder: preparedModelFolder.path, verbose: false, download: false
-            ))
+            try await loadBenchmarkPipeline(from: preparedModelFolder)
+            benchmarkPrepared = true
             return
         }
         let modelVariant = config.resolvedModelVariant
@@ -840,19 +842,48 @@ actor LocalWhisperKitEngine: LocalWhisperEngine {
     }
 
     /// 与文件模式相同的解码选项，直接消费已规范化、已校验的 16kHz 单声道样本。
-    func transcribeCanonicalSamples(_ samples: [Float], languageCode: String?) async throws -> String? {
+    nonisolated func transcribeCanonicalSamples(_ samples: [Float], languageCode: String?) async throws -> String? {
 #if canImport(WhisperKit)
-        guard let pipeline else { return nil }
+        let checkedOut = benchmarkPipeline.withLock { state in
+            let value = state
+            state = nil
+            return value
+        }
+        guard let checkedOut else { return nil }
         var options = DecodingOptions()
         options.language = languageCode
-        nonisolated(unsafe) let pipelineRef = pipeline
-        let results = try await pipelineRef.transcribe(audioArray: samples, decodeOptions: options)
-        let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
+        do {
+            let results = try await checkedOut.transcribe(audioArray: samples, decodeOptions: options)
+            let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            returnBenchmarkPipeline(checkedOut)
+            return text.isEmpty ? nil : text
+        } catch {
+            returnBenchmarkPipeline(checkedOut)
+            throw error
+        }
 #else
         return nil
 #endif
     }
+
+#if canImport(WhisperKit)
+    private nonisolated func loadBenchmarkPipeline(from folder: URL) async throws {
+        let loaded = try await WhisperKit(WhisperKitConfig(modelFolder: folder.path, verbose: false, download: false))
+        returnBenchmarkPipeline(loaded)
+    }
+
+    private nonisolated func returnBenchmarkPipeline(_ pipeline: sending WhisperKit) {
+        // sending 转移所有权；中转 Mutex 使闭包不捕获仍属于调用方隔离域的引用。
+        let transfer = Mutex<WhisperKit?>(pipeline)
+        benchmarkPipeline.withLock { destination in
+            destination = transfer.withLock { source in
+                let value = source
+                source = nil
+                return value
+            }
+        }
+    }
+#endif
 
     func pauseStreaming() async {
 #if canImport(WhisperKit)

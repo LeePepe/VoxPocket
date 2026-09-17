@@ -47,21 +47,25 @@ final class ApprovedOwnerBenchmarkTests: XCTestCase {
             throw XCTSkip("Private benchmark requires explicit owner opt-in")
         }
         do {
-            try await Task.detached {
+            try await Task<Void, Error>.detached { @Sendable [env] in
                 let context = try BenchmarkContext.load(env)
                 if env["VOX_BENCHMARK_GROUP"] == "prepare" {
-                    try Self.prepare(context)
+                    try BenchmarkPreparation.prepare(context)
                 } else if let group = env["VOX_BENCHMARK_GROUP"].flatMap(BenchmarkGroup.init(rawValue:)) {
                     try await BenchmarkExecution(context: context, group: group).run()
                 } else { throw BenchmarkFailure.invalidConfiguration }
             }.value
         } catch {
             // 绝不把解码器、路径、供应商错误体或私密字符串传给 XCTest。
-            XCTFail("Benchmark could not produce a protected report")
+            let code = (error as? BenchmarkFailure)?.rawValue ?? "unexpected"
+            XCTFail("Benchmark could not produce a protected report: \(code)")
         }
     }
 
-    private static func prepare(_ context: BenchmarkContext) throws {
+}
+
+enum BenchmarkPreparation {
+    static func prepare(_ context: BenchmarkContext) throws {
         let input = context.root.appendingPathComponent(context.manifest.audio_file)
         let validatedInput = try ProtectedBenchmarkFiles.read(input, beneath: context.root, maximumBytes: 25_000_000)
         let start = benchmarkNow()
@@ -76,7 +80,7 @@ final class ApprovedOwnerBenchmarkTests: XCTestCase {
     }
 }
 
-struct BenchmarkExecution {
+struct BenchmarkExecution: Sendable {
     let context: BenchmarkContext
     let group: BenchmarkGroup
 

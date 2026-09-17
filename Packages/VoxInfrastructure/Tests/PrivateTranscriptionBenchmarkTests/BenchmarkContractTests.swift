@@ -91,6 +91,20 @@ final class BenchmarkContractTests: XCTestCase {
         XCTAssertTrue(BenchmarkCloudConfiguration.validDeployment("configured-model"))
     }
 
+    func testUnpreparedLocalBenchmarkDoesNotAutoloadOrUseSharedProductionEngine() async {
+        let engine = LocalWhisperKitEngine(config: LocalWhisperKitConfig(model: "synthetic-not-a-model", preloadOnStart: false),
+            logger: SilentBenchmarkLogger(), preparedModelFolder: URL(fileURLWithPath: "/not-a-model"))
+        let emptyResults = await withTaskGroup(of: Bool.self) { group in
+            for _ in 0..<4 {
+                group.addTask { (try? await engine.transcribeCanonicalSamples([0], languageCode: "zh")) == nil }
+            }
+            var results: [Bool] = []
+            for await result in group { results.append(result) }
+            return results
+        }
+        XCTAssertEqual(emptyResults, [true, true, true, true])
+    }
+
     func testValidatedAudioSnapshotSurvivesPathReplacement() throws {
         let root = try temporaryRoot()
         let directory = root.appendingPathComponent("results")
