@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import Darwin
 import Speech
 import XCTest
 @testable import TranscriptionKit
@@ -40,8 +41,7 @@ final class BenchmarkContractTests: XCTestCase {
     }
 
     func testProtectedIORejectsPermissionsSymlinksEscapeAndOverwrite() throws {
-        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-            .appendingPathComponent(UUID().uuidString)
+        let root = try temporaryRoot()
         let output = root.appendingPathComponent("results")
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
@@ -59,13 +59,13 @@ final class BenchmarkContractTests: XCTestCase {
     }
 
     func testCanonicalAudioIsByteEquivalentForFileAndBuffer() throws {
-        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent(UUID().uuidString)
+        let root = try temporaryRoot()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let url = root.appendingPathComponent("synthetic.wav")
         let canonical = BenchmarkAudio(samples: [0, 0.5, -0.5, 0.99, -0.99] + Array(repeating: 0, count: 15995)).canonicalized()
         try canonical.wav().write(to: url)
-        let fromFile = try BenchmarkAudio.decode(url)
+        let fromFile = try BenchmarkAudio.decode(Data(contentsOf: url))
         XCTAssertEqual(fromFile.samples, canonical.samples)
         XCTAssertEqual(fromFile.duration, 1)
     }
@@ -79,6 +79,40 @@ final class BenchmarkContractTests: XCTestCase {
         XCTAssertFalse(BenchmarkGroup.localBase.usesCloud)
         XCTAssertTrue(BenchmarkGroup.hybridBase.isHybrid)
         XCTAssertNil(BenchmarkGroup.azure.localModel)
+    }
+
+    func testConfigurationBoundaryRejectsInsecureOrAmbiguousURLs() {
+        for raw in ["http://example.invalid", "https://user:pass@example.invalid", "https://example.invalid/path",
+                    "https://example.invalid?query=1", "https://example.invalid#fragment"] {
+            XCTAssertFalse(BenchmarkCloudConfiguration.validEndpoint(URL(string: raw)!))
+        }
+        XCTAssertTrue(BenchmarkCloudConfiguration.validEndpoint(URL(string: "https://example.invalid")!))
+        for name in ["../bad", "", "name\n", "x/y"] { XCTAssertFalse(BenchmarkCloudConfiguration.validDeployment(name)) }
+        XCTAssertTrue(BenchmarkCloudConfiguration.validDeployment("configured-model"))
+    }
+
+    func testValidatedAudioSnapshotSurvivesPathReplacement() throws {
+        let root = try temporaryRoot()
+        let directory = root.appendingPathComponent("results")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                               attributes: [.posixPermissions: 0o700])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let path = directory.appendingPathComponent("sample.wav")
+        let original = BenchmarkAudio(samples: Array(repeating: 0, count: 16000))
+        try ProtectedBenchmarkFiles.writeData(original.wav(), to: path, beneath: root)
+        let snapshot = try ProtectedBenchmarkFiles.read(path, beneath: root, maximumBytes: 65536)
+        try FileManager.default.removeItem(at: path)
+        try Data("replacement-sentinel".utf8).write(to: path)
+        XCTAssertEqual(try BenchmarkAudio.decode(snapshot).samples, original.samples)
+        XCTAssertThrowsError(try BenchmarkAudio.decode(Data("bad-audio".utf8)))
+    }
+
+    private func temporaryRoot() throws -> URL {
+        guard let resolved = realpath(FileManager.default.temporaryDirectory.path, nil) else {
+            throw BenchmarkFailure.unsafePath
+        }
+        defer { free(resolved) }
+        return URL(fileURLWithPath: String(cString: resolved)).appendingPathComponent(UUID().uuidString)
     }
 }
 #endif

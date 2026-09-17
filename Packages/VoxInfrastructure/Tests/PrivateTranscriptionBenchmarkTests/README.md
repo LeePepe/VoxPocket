@@ -25,8 +25,10 @@ MY-1544 的独立实验框架；只在明确获准的当前 Mac 执行。不改�
 - `VOX_BENCHMARK_SHA`：实际已审查源码的完整 commit SHA
 - `VOX_BENCHMARK_GROUP`：先 `prepare`，再依次 `appleAutomatic`、`appleOnDevice`、`azure`、`localBase`、`localTurbo`、`hybridAzure`、`hybridBase`、`hybridTurbo`
 
-`prepare` 只做一次规范化：单声道 16kHz PCM16 WAV；Apple 缓冲从同一 WAV 解码。加载/转换在识别计时外。
+`prepare` 只做一次规范化：单声道 16kHz PCM16 WAV；Apple/本地缓冲从同一 WAV 解码。加载/转换在识别计时外。
+所有解码/上传直接消费安全文件描述符读出的 Data 快照，不在校验后按路径重开输入；本地引擎使用同等文件解码参数的 audioArray 入口。
 每个可用组新进程/新适配器冷运行一次，再复用同一引擎热运行五次，串行执行，不输出 p95。
+Azure-only 组运行间隔 15 秒以避开既有小配额；间隔不计入任何识别指标。
 模型只取现有标准 WhisperKit 缓存；缺失明确记录 `missingModel`，不自动下载、清理缓存或回退。
 Apple 只检查已有授权，不发起系统权限请求。不可用时记录固定状态，不能伪装为另一条路径成功。
 
@@ -38,7 +40,7 @@ Apple 只检查已有授权，不发起系统权限请求。不可用时记录�
 - 混合组组合真实 Apple 请求、生产文件引擎、`mergedTranscription`/`LLMTranscriptionMerger`、生产精炼服务。
   顺序为实时输入完成 → 文件 ASR → 合并 → 精炼；不是 UI/麦克风端到端性能或流式精炼重叠的测量。
 - 纯 ASR 不精炼；混合组固定跳过前置分析，分别保存 ASR、合并、精炼评分和阶段耗时。
-- 云端配置仅用生产私密配置加载器读取现有配置文件（无进程环境覆盖）；不根据部署别名猜实际 backing model。
+- 云端配置仅用生产私密配置加载器读取现有配置文件（无进程环境覆盖）；加载器和评测边界均验证 HTTPS 根地址、禁止 URL 凭据/query/fragment、验证部署名。允许的主机来自这份已批准的配置，不硬编码供应商域名；不根据部署别名猜实际 backing model。
 - CER 使用 NFKC、小写、去空白/标点；混合 token 指汉字逐字、ASCII 英文/数字按词。
 - 标点指标是标点序列编辑次数及参考数量，**不评价标点插入位置**；英文 `test` 按独立词元检查。
 - 单段音频只能支持个案结论；Apple 权限、缓存、版本、下载状态、热冷定义必须随结果披露。

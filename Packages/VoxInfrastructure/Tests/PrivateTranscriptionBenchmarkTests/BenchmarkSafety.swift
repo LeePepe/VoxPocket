@@ -55,7 +55,9 @@ enum ProtectedBenchmarkFiles {
               url.resolvingSymlinksInPath().path == url.standardizedFileURL.path else {
             throw BenchmarkFailure.unsafePath
         }
-        let fd = open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
+        let parent = try openParent(of: url)
+        defer { close(parent) }
+        let fd = openat(parent, url.lastPathComponent, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
         guard fd >= 0 else { throw BenchmarkFailure.unsafeFile }
         defer { close(fd) }
         var info = stat()
@@ -75,10 +77,30 @@ enum ProtectedBenchmarkFiles {
 
     static func writeData(_ data: Data, to url: URL, beneath root: URL) throws {
         try validateDirectory(url.deletingLastPathComponent(), beneath: root)
-        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        let parent = try openParent(of: url)
+        defer { close(parent) }
+        var info = stat()
+        guard fstat(parent, &info) == 0, info.st_uid == getuid(), info.st_mode & 0o7777 == 0o700 else {
+            throw BenchmarkFailure.unsafeFile
+        }
+        let fd = openat(parent, url.lastPathComponent, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
         guard fd >= 0 else { throw BenchmarkFailure.unsafeFile }
         defer { close(fd) }
         try FileHandle(fileDescriptor: fd, closeOnDealloc: false).write(contentsOf: data)
+    }
+
+    /// 每个路径分量都通过目录描述符解析，避免祖先目录在检查后被换成符号链接。
+    private static func openParent(of url: URL) throws -> Int32 {
+        let parts = url.pathComponents.dropFirst().dropLast()
+        var descriptor = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        guard descriptor >= 0 else { throw BenchmarkFailure.unsafePath }
+        for part in parts {
+            let next = openat(descriptor, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            close(descriptor)
+            guard next >= 0 else { throw BenchmarkFailure.unsafePath }
+            descriptor = next
+        }
+        return descriptor
     }
 
     static func manifest(in root: URL) throws -> BenchmarkManifest {

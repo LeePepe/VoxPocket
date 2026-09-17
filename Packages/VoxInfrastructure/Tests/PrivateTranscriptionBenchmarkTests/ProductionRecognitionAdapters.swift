@@ -96,7 +96,8 @@ struct BenchmarkCloudConfiguration: Sendable {
         let values = runtime.environmentValues
         guard runtime.loadedPrivateFile, let root = values["AZURE_OPENAI_ENDPOINT"].flatMap(URL.init(string:)),
               let speechName = values["AZURE_TRANSCRIPTION_DEPLOYMENT"],
-              let textName = values["AZURE_FOUNDRY_MODEL"], let key = values["whisperkey"] else {
+              let textName = values["AZURE_FOUNDRY_MODEL"], let key = values["whisperkey"],
+              validEndpoint(root), validDeployment(speechName), validDeployment(textName), !key.isEmpty else {
             throw BenchmarkFailure.invalidConfiguration
         }
         var components = URLComponents(url: root.appendingPathComponent(
@@ -106,6 +107,17 @@ struct BenchmarkCloudConfiguration: Sendable {
         return Self(speech: AzureWhisperConfig(endpoint: endpoint, apiKey: key),
                     refinement: AzureFoundryDeployment(name: "benchmark", endpoint: root, model: textName,
                         apiKey: key, authMode: .apiKey, apiStyle: .openAIV1, reasoningEffort: "none"))
+    }
+
+    // 主机权威来自已批准的私密配置（生产加载器同样校验）；不接受环境覆盖，不硬编码供应商域名。
+    static func validEndpoint(_ url: URL) -> Bool {
+        url.scheme == "https" && url.host?.isEmpty == false && url.user == nil && url.password == nil
+            && url.query == nil && url.fragment == nil && (url.path.isEmpty || url.path == "/")
+    }
+
+    static func validDeployment(_ name: String) -> Bool {
+        name.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", options: .regularExpression) != nil
+            && !name.contains("\n") && !name.contains("\r")
     }
 }
 

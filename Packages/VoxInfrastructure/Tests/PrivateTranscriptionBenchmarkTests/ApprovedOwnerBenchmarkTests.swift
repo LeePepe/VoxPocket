@@ -63,9 +63,9 @@ final class ApprovedOwnerBenchmarkTests: XCTestCase {
 
     private static func prepare(_ context: BenchmarkContext) throws {
         let input = context.root.appendingPathComponent(context.manifest.audio_file)
-        _ = try ProtectedBenchmarkFiles.read(input, beneath: context.root, maximumBytes: 25_000_000)
+        let validatedInput = try ProtectedBenchmarkFiles.read(input, beneath: context.root, maximumBytes: 25_000_000)
         let start = benchmarkNow()
-        let audio = try BenchmarkAudio.decode(input).canonicalized()
+        let audio = try BenchmarkAudio.decode(validatedInput).canonicalized()
         guard abs(audio.duration - context.manifest.duration_seconds) < 0.1 else {
             throw BenchmarkFailure.invalidAudio
         }
@@ -82,8 +82,8 @@ struct BenchmarkExecution {
 
     func run() async throws {
         let wav = context.output.appendingPathComponent("canonical.wav")
-        _ = try ProtectedBenchmarkFiles.read(wav, beneath: context.root, maximumBytes: 2_000_000)
-        let audio = try BenchmarkAudio.decode(wav)
+        let validatedWAV = try ProtectedBenchmarkFiles.read(wav, beneath: context.root, maximumBytes: 2_000_000)
+        let audio = try BenchmarkAudio.decode(validatedWAV)
         var runs: [BenchmarkRun] = [], recognized: [String] = [], merged: [String] = [], refined: [String] = []
         let folder = modelFolder()
         let prepareStart = benchmarkNow()
@@ -97,7 +97,9 @@ struct BenchmarkExecution {
             let loadSeconds = group.localModel == nil ? nil : benchmarkNow() - localStart
             let preparationSeconds = benchmarkNow() - prepareStart
             for iteration in 0..<6 {
-                let record = await measure(iteration: iteration, audio: audio, wav: wav, apple: apple,
+                // 既有云端小配额：仅在运行之间等待，不计入识别耗时。
+                if iteration > 0, group == .azure { try await Task.sleep(for: .seconds(15)) }
+                let record = await measure(iteration: iteration, audio: audio, wav: validatedWAV, apple: apple,
                                            cloud: cloud, local: local, llm: llm,
                                            loadSeconds: iteration == 0 ? loadSeconds : (local == nil ? nil : 0),
                                            preparationSeconds: iteration == 0 ? preparationSeconds : 0)
@@ -121,8 +123,8 @@ struct BenchmarkExecution {
                                            beneath: context.root)
     }
 
-    private func measure(iteration: Int, audio: BenchmarkAudio, wav: URL, apple: AppleBenchmarkAdapter?,
-                         cloud: WhisperEngine?, local: (any LocalWhisperEngine)?, llm: BenchmarkLLMService?,
+    private func measure(iteration: Int, audio: BenchmarkAudio, wav: Data, apple: AppleBenchmarkAdapter?,
+                         cloud: WhisperEngine?, local: LocalWhisperKitEngine?, llm: BenchmarkLLMService?,
                          loadSeconds: Double?, preparationSeconds: Double) async -> (BenchmarkRun, String, String, String) {
         var run = BenchmarkRun(iteration: iteration, cold: iteration == 0)
         run.loadSeconds = loadSeconds
@@ -134,9 +136,9 @@ struct BenchmarkExecution {
             run.firstPartialSeconds = appleResult?.firstPartial
             run.inputSeconds = appleResult?.inputSeconds
             let asrStart = benchmarkNow()
-            if let local { text = try await local.transcribeAudioFile(atPath: wav.path, languageCode: "zh") ?? "" }
+            if let local { text = try await local.transcribeCanonicalSamples(audio.samples, languageCode: "zh") ?? "" }
             else if group == .azure || group == .hybridAzure, let cloud {
-                text = try await cloud.transcribe(fileURL: wav, language: Locale(identifier: "zh-Hans"))
+                text = try await cloud.transcribe(audioData: wav, language: Locale(identifier: "zh-Hans"))
             } else { text = appleResult?.text ?? "" }
             guard !text.isEmpty else { throw BenchmarkFailure.emptyResult }
             run.requestSeconds = appleResult != nil && !group.isHybrid ? appleResult?.totalSeconds : benchmarkNow() - asrStart
@@ -163,7 +165,7 @@ struct BenchmarkExecution {
         return (run, text, mergeText, refinedText)
     }
 
-    private func localEngine(_ folder: URL?) async throws -> (any LocalWhisperEngine)? {
+    private func localEngine(_ folder: URL?) async throws -> LocalWhisperKitEngine? {
         guard let model = group.localModel else { return nil }
         guard let folder else { throw BenchmarkFailure.missingModel }
         let engine = LocalWhisperKitEngine(config: LocalWhisperKitConfig(model: model, preloadOnStart: false),

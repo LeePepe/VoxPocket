@@ -1,38 +1,66 @@
 #if os(macOS)
-import AVFoundation
+import AudioToolbox
 import Foundation
+
+private final class EncodedBenchmarkAudio {
+    let bytes: Data
+    init(_ bytes: Data) { self.bytes = bytes }
+}
 
 struct BenchmarkAudio: Sendable {
     let samples: [Float]
     var duration: Double { Double(samples.count) / 16000 }
 
-    /// 一次解码、单声道 16kHz；识别时两种适配器消费同一 PCM。
-    static func decode(_ url: URL) throws -> BenchmarkAudio {
-        let file = try AVAudioFile(forReading: url)
-        guard file.length > 0, file.length < AVAudioFramePosition(file.processingFormat.sampleRate * 60),
-              let source = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
-                                            frameCapacity: AVAudioFrameCount(file.length)),
-              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000,
-                                         channels: 1, interleaved: false),
-              let converter = AVAudioConverter(from: file.processingFormat, to: format),
-              let target = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 960001) else {
-            throw BenchmarkFailure.invalidAudio
-        }
-        try file.read(into: source)
-        var supplied = false
-        var conversionError: NSError?
-        let status = converter.convert(to: target, error: &conversionError) { _, outputStatus in
-            if supplied { outputStatus.pointee = .endOfStream; return nil }
-            supplied = true; outputStatus.pointee = .haveData; return source
-        }
-        guard status != .error, conversionError == nil, target.frameLength > 0,
-              target.frameLength <= 960000, let data = target.floatChannelData else {
-            throw BenchmarkFailure.invalidAudio
-        }
-        return BenchmarkAudio(samples: Array(UnsafeBufferPointer(start: data[0], count: Int(target.frameLength))))
+    /// Core Audio 只读已校验的内存快照，不重开任何私密文件路径。
+    static func decode(_ bytes: Data) throws -> BenchmarkAudio {
+        let retained = Unmanaged.passRetained(EncodedBenchmarkAudio(bytes))
+        defer { retained.release() }
+        var audioFile: AudioFileID?
+        let opened = AudioFileOpenWithCallbacks(retained.toOpaque(), { client, offset, requested, output, actual in
+            let data = Unmanaged<EncodedBenchmarkAudio>.fromOpaque(client).takeUnretainedValue().bytes
+            guard offset >= 0, offset <= data.count else { actual.pointee = 0; return noErr }
+            let count = min(Int(requested), data.count - Int(offset))
+            if count > 0 {
+                data.withUnsafeBytes { raw in
+                    output.copyMemory(from: raw.baseAddress!.advanced(by: Int(offset)), byteCount: count)
+                }
+            }
+            actual.pointee = UInt32(count)
+            return noErr
+        }, nil, { client in
+            Int64(Unmanaged<EncodedBenchmarkAudio>.fromOpaque(client).takeUnretainedValue().bytes.count)
+        }, nil, 0, &audioFile)
+        guard opened == noErr, let audioFile else { throw BenchmarkFailure.invalidAudio }
+        defer { AudioFileClose(audioFile) }
+        return try decodeFile(audioFile)
     }
 
-    /// 固定 PCM16 WAV；先量化再返回供 Apple 使用的样本，消除输入量化差异。
+    private static func decodeFile(_ audioFile: AudioFileID) throws -> BenchmarkAudio {
+        var extended: ExtAudioFileRef?
+        guard ExtAudioFileWrapAudioFileID(audioFile, false, &extended) == noErr, let extended else {
+            throw BenchmarkFailure.invalidAudio
+        }
+        defer { ExtAudioFileDispose(extended) }
+        var format = AudioStreamBasicDescription(mSampleRate: 16000, mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked, mBytesPerPacket: 4,
+            mFramesPerPacket: 1, mBytesPerFrame: 4, mChannelsPerFrame: 1, mBitsPerChannel: 32, mReserved: 0)
+        guard ExtAudioFileSetProperty(extended, kExtAudioFileProperty_ClientDataFormat,
+                                      UInt32(MemoryLayout.size(ofValue: format)), &format) == noErr else {
+            throw BenchmarkFailure.invalidAudio
+        }
+        var samples = Array(repeating: Float(0), count: 960001)
+        var frames: UInt32 = 960001
+        let status = samples.withUnsafeMutableBytes { raw in
+            var buffers = AudioBufferList(mNumberBuffers: 1,
+                mBuffers: AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(raw.count), mData: raw.baseAddress))
+            return ExtAudioFileRead(extended, &frames, &buffers)
+        }
+        guard status == noErr, frames > 0, frames <= 960000 else { throw BenchmarkFailure.invalidAudio }
+        samples = Array(samples.prefix(Int(frames)))
+        guard samples.allSatisfy({ $0.isFinite && abs($0) <= 16 }) else { throw BenchmarkFailure.invalidAudio }
+        return BenchmarkAudio(samples: samples)
+    }
+
     func canonicalized() -> BenchmarkAudio {
         BenchmarkAudio(samples: samples.map { Float(Int16(max(-32768, min(32767, Int($0 * 32767))))) / 32768 })
     }

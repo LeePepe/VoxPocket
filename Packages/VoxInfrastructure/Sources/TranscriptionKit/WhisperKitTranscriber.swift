@@ -839,6 +839,21 @@ actor LocalWhisperKitEngine: LocalWhisperEngine {
 #endif
     }
 
+    /// 与文件模式相同的解码选项，直接消费已规范化、已校验的 16kHz 单声道样本。
+    func transcribeCanonicalSamples(_ samples: [Float], languageCode: String?) async throws -> String? {
+#if canImport(WhisperKit)
+        guard let pipeline else { return nil }
+        var options = DecodingOptions()
+        options.language = languageCode
+        nonisolated(unsafe) let pipelineRef = pipeline
+        let results = try await pipelineRef.transcribe(audioArray: samples, decodeOptions: options)
+        let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+#else
+        return nil
+#endif
+    }
+
     func pauseStreaming() async {
 #if canImport(WhisperKit)
         pipeline?.audioProcessor.pauseRecording()

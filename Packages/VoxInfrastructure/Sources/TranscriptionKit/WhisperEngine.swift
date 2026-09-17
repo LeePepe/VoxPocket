@@ -54,13 +54,26 @@ public struct WhisperEngine: Sendable {
     ///   - language: 音频语言（仅用于日志）
     /// - Returns: 转录文本
     public func transcribe(fileURL: URL, language: Locale) async throws -> String {
+        try validateConfiguration()
+        return try await transcribe(audioData: Data(contentsOf: fileURL), language: language)
+    }
+
+    /// 调用方已校验的音频快照；避免校验后重新按路径打开造成输入替换。
+    public func transcribe(audioData: Data, language: Locale) async throws -> String {
+        try validateConfiguration()
+        return try await performTranscription(audioData: audioData, language: language)
+    }
+
+    private func validateConfiguration() throws {
         guard config.endpoint.scheme == "https", config.endpoint.host != nil,
               config.endpoint.user == nil, config.endpoint.password == nil,
               !config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NSError(domain: "WhisperEngine", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "云端转写配置缺失或无效"])
         }
-        let audioData = try Data(contentsOf: fileURL)
+    }
+
+    private func performTranscription(audioData: Data, language: Locale) async throws -> String {
         logger.debug("Transcribing \(audioData.count) bytes, lang: \(language.identifier)")
 
         let boundary = "Boundary-\(UUID().uuidString)"
