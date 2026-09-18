@@ -3,8 +3,30 @@ import Combine
 @testable import UseCases
 import TranscriptionKit
 import CoreModels
+import LokiKit
+import Synchronization
 
 final class UseCasesTests: XCTestCase {
+    func testLiveTranscriptionIsNotLoggedOrPublishedAsFinal() {
+        let coordinator = LiveResultTranscriptionCoordinator()
+        let logger = FakeTranscriptionLogger()
+        let useCase = DefaultTranscriptionUseCase(coordinator: coordinator, editing: FakeEditingUseCase(), logger: logger)
+        var snapshots: [String] = []
+        var live: [String] = []
+        let snapshotSubscription = useCase.snapshotPublisher.sink { snapshots.append($0) }
+        let liveSubscription = useCase.liveTextPublisher.sink { live.append($0) }
+        defer { snapshotSubscription.cancel(); liveSubscription.cancel() }
+        let text = "SYNTHETIC_PRIVATE_SENTINEL"
+        coordinator.sendLiveText(text)
+        coordinator.sendLiveText(text + " continued")
+        XCTAssertTrue(snapshots.isEmpty)
+        XCTAssertEqual(live.last, text + " continued")
+        coordinator.sendFinalText(text)
+        XCTAssertEqual(snapshots, [text])
+        XCTAssertFalse(logger.messages.contains { $0.contains(text) })
+        XCTAssertTrue(logger.messages.contains { $0.contains("chars=") })
+    }
+
     func testRecordingOperationsAreSerialized() async throws {
         let coordinator = FakeTranscriptionCoordinator()
         let useCase = DefaultRecordingUseCase(coordinator: coordinator)
@@ -264,6 +286,29 @@ private final class LiveResultTranscriptionCoordinator: TranscriptionCoordinator
                 locale: Locale(identifier: "zh-Hans")
             )
         )
+    }
+
+    func sendFinalText(_ text: String) {
+        finalSubject.send(TranscriptionResult(text: text, type: .final, confidence: nil,
+                                              timestamp: Date(), locale: Locale(identifier: "zh-Hans")))
+    }
+}
+
+private final class FakeTranscriptionLogger: LokiKit.Logger {
+    private let stored = Mutex<[String]>([])
+    private let level = Mutex<LogLevel>(.debug)
+    var minimumLevel: LogLevel {
+        get { level.withLock { $0 } }
+        set { level.withLock { $0 = newValue } }
+    }
+    var messages: [String] { stored.withLock { $0 } }
+    func log(_ level: LogLevel, _ message: @autoclosure () -> String, file: String, function: String, line: Int) {
+        let value = message()
+        stored.withLock { $0.append(value) }
+    }
+    func log(_ level: LogLevel, _ message: @autoclosure () -> String, context: [String: Any], file: String, function: String, line: Int) {
+        let value = message() + String(describing: context)
+        stored.withLock { $0.append(value) }
     }
 }
 

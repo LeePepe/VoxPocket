@@ -60,6 +60,14 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
     /// - Parameter bufferHandler: 每个 PCM buffer 的同步回调（在音频线程调用）。
     ///   可用于将 buffer 实时喂给语音识别引擎。
     public func start(bufferHandler: ((AVAudioPCMBuffer) -> Void)? = nil) async throws {
+        try await startIfAllowed(shouldStart: { true }, bufferHandler: bufferHandler)
+    }
+
+    func startIfAllowed(
+        shouldStart: @escaping @Sendable () -> Bool,
+        bufferHandler: ((AVAudioPCMBuffer) -> Void)? = nil
+    ) async throws {
+        guard shouldStart() else { throw CancellationError() }
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -73,6 +81,8 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
             )
         }
         #endif
+        try Task.checkCancellation()
+        guard shouldStart() else { throw CancellationError() }
 
         // 用户音频只在应用数据目录暂存；目录创建不占用主线程。
         let tempURL = try await Task.detached { try Self.makeRecordingFileURL() }.value
@@ -92,6 +102,7 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
 
         // AVAudioEngine node configuration must run on the main thread.
         try await MainActor.run {
+            guard shouldStart() else { throw CancellationError() }
             let inputNode = audioEngine.inputNode
             audioEngine.stop()
             inputNode.removeTap(onBus: 0)
@@ -103,6 +114,7 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
 
             audioEngine.prepare()
+            guard shouldStart() else { throw CancellationError() }
             try audioEngine.start()
             captureStateSubject.send(.recording)
         }
@@ -114,6 +126,7 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
     /// - Returns: 临时 WAV 文件 URL，调用方负责在使用完毕后删除。无录音时返回 nil。
     @discardableResult
     public func stop() -> URL? {
+        guard tempFileURL != nil else { return nil }
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         audioFile = nil

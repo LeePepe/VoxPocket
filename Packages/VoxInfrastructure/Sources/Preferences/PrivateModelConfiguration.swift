@@ -14,13 +14,14 @@ public enum PrivateModelConfigurationError: String, Error, Sendable, LocalizedEr
     }
 }
 
-/// 仅允许四个 Azure 配置字段；不承载任意环境设置或文件路径。
+/// 仅映射允许的 Azure 字段；不承载任意环境设置或文件路径。
 struct PrivateModelConfiguration: Decodable, Sendable {
     struct Azure: Decodable, Sendable {
         let endpoint: String
         let apiKey: String
         let transcriptionDeployment: String
         let refinementDeployment: String
+        let realtimeTranscriptionDeployment: String?
     }
     let azure: Azure
 
@@ -40,13 +41,18 @@ struct PrivateModelConfiguration: Decodable, Sendable {
             throw PrivateModelConfigurationError.invalidFields
         }
         // 文件默认值采用旧别名，使显式共享密钥或各工作负载的环境覆盖仍优先。
-        return [
+        var defaults = [
             "AZURE_OPENAI_ENDPOINT": url.absoluteString,
             "whisperkey": key,
             "kimikey": key,
             "AZURE_TRANSCRIPTION_DEPLOYMENT": azure.transcriptionDeployment,
             "AZURE_FOUNDRY_MODEL": azure.refinementDeployment
         ]
+        if let realtime = azure.realtimeTranscriptionDeployment {
+            guard validDeployment(realtime) else { throw PrivateModelConfigurationError.invalidFields }
+            defaults["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = realtime
+        }
+        return defaults
     }
 
     private func validDeployment(_ value: String) -> Bool {

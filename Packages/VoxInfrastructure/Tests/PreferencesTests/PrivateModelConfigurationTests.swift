@@ -16,6 +16,26 @@ final class PrivateModelConfigurationTests: XCTestCase {
         XCTAssertEqual(result.environmentValues, environment)
     }
 
+    func testOptionalRealtimeDeploymentIsBackwardCompatibleAndEnvironmentOverrides() async throws {
+        let old = try PrivateModelConfiguration.decode(encoded(fixture)).environmentDefaults()
+        XCTAssertNil(old["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+        var fields = fixture
+        fields["realtimeTranscriptionDeployment"] = "fixture-live"
+        let url = try makeFile(data: encoded(fields))
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let defaults = try await DefaultPrivateModelConfigurationLoader(fileURL: url).load(environment: [:])
+        XCTAssertEqual(defaults.environmentValues["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"], "fixture-live")
+        let overrides = try await DefaultPrivateModelConfigurationLoader(fileURL: url).load(environment: [
+            "AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT": "override-live"
+        ])
+        XCTAssertEqual(overrides.environmentValues["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"], "override-live")
+        for invalid in ["", "../bad", "bad\n", String(repeating: "a", count: 129)] {
+            fields["realtimeTranscriptionDeployment"] = invalid
+            let config = try PrivateModelConfiguration.decode(encoded(fields))
+            XCTAssertThrowsError(try config.environmentDefaults())
+        }
+    }
+
     func testValidFileWorksWithoutEnvironmentAndIsExcludedFromBackup() async throws {
         let url = try makeFile(data: encoded(fixture))
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
