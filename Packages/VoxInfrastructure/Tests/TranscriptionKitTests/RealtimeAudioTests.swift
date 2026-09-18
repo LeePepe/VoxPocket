@@ -51,13 +51,15 @@ final class RealtimeAudioTests: XCTestCase {
     func testBoundedQueueOverflowFailsRatherThanDroppingAudio() async throws {
         let socket = FakeRealtimeTransport()
         let session = DefaultRealtimeTranscriptionSession(config: try config(), transport: socket, onPartial: { _ in })
-        let pipeline = RealtimeAudioPipeline(session: session, capacity: 1)
+        let failed = Mutex(0)
+        let pipeline = RealtimeAudioPipeline(session: session, capacity: 1) { failed.withLock { $0 += 1 } }
         pipeline.append(audio()); pipeline.append(audio())
         pipeline.start(language: "zh")
         do { _ = try await pipeline.finish(); XCTFail("Expected overflow") }
         catch { XCTAssertEqual(error as? RealtimeTranscriptionError, .audioOverflow) }
         let events = await socket.sent
         XCTAssertFalse(events.contains("input_audio_buffer.commit"))
+        XCTAssertEqual(failed.withLock { $0 }, 1)
     }
 
     func testNoFinalResponseCannotHangPipeline() async throws {

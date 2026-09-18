@@ -130,9 +130,14 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         let request = DefaultAppleSpeechRequestFactory.makeRequest()
         recognitionRequest = request
         let pipeline = realtimeConfig.map { config in
-            RealtimeAudioPipeline(session: DefaultRealtimeTranscriptionSession(config: config) { [weak self] text in
+            let session = DefaultRealtimeTranscriptionSession(config: config) { [weak self] text in
                 self?.receiveCloudText(text, id: id, locale: language)
-            })
+            }
+            return RealtimeAudioPipeline(session: session) { [weak self] in
+                guard let self, let text = self.recording.restoreApplePreview(id), !text.isEmpty else { return }
+                self.liveResultSubject.send(TranscriptionResult(text: text, type: .partial, confidence: nil,
+                                                               timestamp: Date(), locale: language))
+            }
         }
         try recording.attach(pipeline, id: id)
 

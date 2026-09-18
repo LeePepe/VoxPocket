@@ -70,6 +70,21 @@ final class HybridRecordingLifecycleTests: XCTestCase {
         lifecycle.complete(id)
     }
 
+    func testCloudFailureRestoresApplePreviewAndRejectsOldFailure() throws {
+        let lifecycle = HybridRecordingLifecycle()
+        let id = try lifecycle.begin(locale: .current)
+        try lifecycle.didStart(id)
+        XCTAssertTrue(lifecycle.receiveCloud("cloud partial", id: id))
+        XCTAssertFalse(lifecycle.receiveApple("newer apple partial", id: id))
+        XCTAssertEqual(lifecycle.restoreApplePreview(id), "newer apple partial")
+        XCTAssertTrue(lifecycle.receiveApple("still recording", id: id))
+        lifecycle.complete(id)
+        let next = try lifecycle.begin(locale: .current)
+        try lifecycle.didStart(next)
+        XCTAssertNil(lifecycle.restoreApplePreview(id))
+        lifecycle.complete(next)
+    }
+
     func testCancelledCaptureDoesNotAskForHardwarePermission() async {
         let recorder = MicrophoneRecorder()
         do { try await recorder.startIfAllowed(shouldStart: { false }); XCTFail("Expected cancellation") }

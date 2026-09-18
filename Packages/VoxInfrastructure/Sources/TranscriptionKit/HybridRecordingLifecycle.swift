@@ -71,6 +71,14 @@ final class HybridRecordingLifecycle: Sendable {
         }
     }
 
+    func restoreApplePreview(_ id: UUID) -> String? {
+        state.withLock { state in
+            guard state.session?.id == id, state.phase == .recording else { return nil }
+            state.session?.cloudText = ""
+            return state.session?.appleText
+        }
+    }
+
     func requestStop() -> StopAction {
         state.withLock { state in
             guard let session = state.session else { return .none }

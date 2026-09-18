@@ -81,14 +81,17 @@ final class RealtimeAudioPipeline: Sendable {
     private let session: DefaultRealtimeTranscriptionSession
     private let stream: AsyncThrowingStream<RealtimeAudioSnapshot, Error>
     private let continuation: AsyncThrowingStream<RealtimeAudioSnapshot, Error>.Continuation
+    private let onFailure: @Sendable () -> Void
     private struct WorkerState {
         var task: Task<String, Error>?
         var cancelled = false
     }
     private let worker = Mutex(WorkerState())
 
-    init(session: DefaultRealtimeTranscriptionSession, capacity: Int = 128) {
+    init(session: DefaultRealtimeTranscriptionSession, capacity: Int = 128,
+         onFailure: @escaping @Sendable () -> Void = {}) {
         self.session = session
+        self.onFailure = onFailure
         let pair = AsyncThrowingStream<RealtimeAudioSnapshot, Error>.makeStream(bufferingPolicy: .bufferingOldest(capacity))
         stream = pair.stream
         continuation = pair.continuation
@@ -106,7 +109,7 @@ final class RealtimeAudioPipeline: Sendable {
     func start(language: String) {
         worker.withLock { state in
             guard state.task == nil, !state.cancelled else { return }
-            state.task = Task.detached { [stream, session] in
+            state.task = Task.detached { [stream, session, onFailure] in
                 do {
                     try await session.open(language: language)
                     let converter = RealtimePCMConverter()
@@ -120,6 +123,7 @@ final class RealtimeAudioPipeline: Sendable {
                     return try await session.finish()
                 } catch {
                     await session.cancel()
+                    onFailure()
                     throw (error as? RealtimeTranscriptionError) ?? .connectionFailed
                 }
             }
