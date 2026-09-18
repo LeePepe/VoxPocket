@@ -3,7 +3,6 @@ import Combine
 import Foundation
 import LokiKit
 import Speech
-import Synchronization
 
 /// Apple Speech + Azure Whisper 混合转录器
 ///
@@ -32,16 +31,7 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
     // MARK: - State
 
     private let logger: Logger
-    private struct RecordingState {
-        enum Phase { case idle, starting, recording, finishing }
-        var phase: Phase = .idle
-        var id = UUID()
-        var locale = Locale(identifier: "zh-Hans")
-        var appleText = ""
-        var cloudText = ""
-        var realtime: RealtimeAudioPipeline?
-    }
-    private let recording = Mutex(RecordingState())
+    private let recording = HybridRecordingLifecycle()
 
     // MARK: - 多识别器结果合并
 
@@ -91,26 +81,19 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
     }
 
     public var isTranscribing: Bool {
-        recording.withLock { $0.phase == .recording }
+        recording.isRecording
     }
 
     public func start(language: Locale) async throws {
         logger.info("start() language: \(language.identifier)")
 
-        let id = UUID()
-        let accepted = recording.withLock { state in
-            guard state.phase == .idle else { return false }
-            state = RecordingState(phase: .starting, id: id, locale: language)
-            return true
-        }
-        guard accepted else { throw RealtimeTranscriptionError.protocolRejected }
+        let id = try recording.begin(locale: language)
         do { try await startRecording(language: language, id: id) }
         catch {
-            let pipeline = recording.withLock { $0.realtime }
-            pipeline?.cancel()
+            if case .cancelStart(let session) = recording.requestStop() { session.realtime?.cancel() }
             let file = await MainActor.run { self.stopRecorder() }
             await Self.removeAudio(file)
-            recording.withLock { $0 = RecordingState() }
+            recording.complete(id)
             throw error
         }
     }
@@ -128,6 +111,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
         }
         try Task.checkCancellation()
+        guard recording.isStarting(id) else { throw CancellationError() }
 
         // 更新 recognizer locale
         if speechRecognizer?.locale.language.languageCode != language.language.languageCode {
@@ -150,10 +134,10 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                 self?.receiveCloudText(text, id: id, locale: language)
             })
         }
-        recording.withLock { $0.realtime = pipeline }
+        try recording.attach(pipeline, id: id)
 
         // 启动录音：buffer 同步喂给 Apple Speech，同时写入 WAV 文件（由 MicrophoneRecorder 负责）
-        try await recorder.start { buffer in
+        try await recorder.startIfAllowed(shouldStart: { [recording] in recording.isStarting(id) }) { buffer in
             request.append(buffer)
             pipeline?.append(buffer)
         }
@@ -165,11 +149,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
 
             if let result {
                 let text = result.bestTranscription.formattedString
-                let publish = self.recording.withLock { state in
-                    guard state.id == id, state.phase == .recording else { return false }
-                    if !text.isEmpty { state.appleText = text }
-                    return state.cloudText.isEmpty
-                }
+                let publish = self.recording.receiveApple(text, id: id)
                 guard publish else { return }
 
                 let transcriptionResult = TranscriptionResult(
@@ -190,23 +170,27 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                 self.logger.error("Apple Speech failed, code=\(e.code)")
             }
         }
-        recording.withLock { $0.phase = .recording }
         pipeline?.start(language: language.language.languageCode?.identifier ?? "zh")
+        try recording.didStart(id)
         captureStateSubject.send(.recording)
         logger.info("Recording + Apple Speech started")
     }
 
     public func stop() async {
-        let snapshot: RecordingState? = recording.withLock { state in
-            guard state.phase == .recording else { return nil }
-            state.phase = .finishing
-            return state
+        switch recording.requestStop() {
+        case .none: return
+        case .cancelStart(let session):
+            session.realtime?.cancel()
+            await recording.waitForCleanup(session.id)
+        case .finish(let session):
+            await finishRecording(session)
         }
-        guard let snapshot else { return }
-        defer { recording.withLock { $0 = RecordingState() } }
+    }
+
+    private func finishRecording(_ snapshot: HybridRecordingLifecycle.Session) async {
+        defer { recording.complete(snapshot.id) }
         recognitionRequest?.endAudio()
         let fileURL = await MainActor.run { self.stopRecorder() }
-        let hadContent = !snapshot.appleText.isEmpty || !snapshot.cloudText.isEmpty
         let appleSpeechText = snapshot.appleText
 
         guard let fileURL else {
@@ -215,8 +199,8 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             return
         }
 
-        // 只有 Apple Speech 有内容时才调用 Whisper
-        guard hadContent else {
+        // 实时会话必须排空/兜底，不能把尚未收到 partial 当成静默。
+        guard snapshot.shouldFinalize else {
             snapshot.realtime?.cancel()
             logger.info("Apple Speech had no content → skipping Whisper")
             await Self.removeAudio(fileURL)
@@ -271,11 +255,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
     // MARK: - Private
 
     private func receiveCloudText(_ text: String, id: UUID, locale: Locale) {
-        let active = recording.withLock { state in
-            guard state.id == id, state.phase == .recording || state.phase == .finishing else { return false }
-            state.cloudText = text
-            return true
-        }
+        let active = recording.receiveCloud(text, id: id)
         guard active, !text.isEmpty else { return }
         liveResultSubject.send(TranscriptionResult(text: text, type: .partial, confidence: nil,
                                                    timestamp: Date(), locale: locale))
