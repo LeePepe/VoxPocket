@@ -81,7 +81,11 @@ final class RealtimeAudioPipeline: Sendable {
     private let session: DefaultRealtimeTranscriptionSession
     private let stream: AsyncThrowingStream<RealtimeAudioSnapshot, Error>
     private let continuation: AsyncThrowingStream<RealtimeAudioSnapshot, Error>.Continuation
-    private let worker = Mutex<Task<String, Error>?>(nil)
+    private struct WorkerState {
+        var task: Task<String, Error>?
+        var cancelled = false
+    }
+    private let worker = Mutex(WorkerState())
 
     init(session: DefaultRealtimeTranscriptionSession, capacity: Int = 128) {
         self.session = session
@@ -100,9 +104,9 @@ final class RealtimeAudioPipeline: Sendable {
 
     /// 麦克风授权及启动完成之后才连远端，避免权限对话框期间开启计费会话。
     func start(language: String) {
-        worker.withLock { task in
-            guard task == nil else { return }
-            task = Task.detached { [stream, session] in
+        worker.withLock { state in
+            guard state.task == nil, !state.cancelled else { return }
+            state.task = Task.detached { [stream, session] in
                 do {
                     try await session.open(language: language)
                     let converter = RealtimePCMConverter()
@@ -124,7 +128,7 @@ final class RealtimeAudioPipeline: Sendable {
 
     func finish(timeout: Duration = .seconds(8)) async throws -> String {
         continuation.finish()
-        guard let task = worker.withLock({ $0 }) else { throw RealtimeTranscriptionError.cancelled }
+        guard let task = worker.withLock({ $0.task }) else { throw RealtimeTranscriptionError.cancelled }
         let deadline = Task { [self] in
             do { try await Task.sleep(for: timeout) } catch { return }
             cancel()
@@ -134,14 +138,18 @@ final class RealtimeAudioPipeline: Sendable {
     }
 
     func cancel() {
+        let task = worker.withLock { state in
+            state.cancelled = true
+            return state.task
+        }
         continuation.finish(throwing: RealtimeTranscriptionError.cancelled)
-        worker.withLock { $0 }?.cancel()
+        task?.cancel()
         Task { [session] in await session.cancel() }
     }
 
     deinit {
         continuation.finish()
-        worker.withLock { $0 }?.cancel()
+        worker.withLock { $0.task }?.cancel()
         Task { [session] in await session.cancel() }
     }
 }

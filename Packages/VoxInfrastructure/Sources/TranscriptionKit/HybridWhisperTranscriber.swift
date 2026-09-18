@@ -106,14 +106,11 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         guard accepted else { throw RealtimeTranscriptionError.protocolRejected }
         do { try await startRecording(language: language, id: id) }
         catch {
-            let pipeline = recording.withLock { state in
-                let pipeline = state.realtime
-                state = RecordingState()
-                return pipeline
-            }
+            let pipeline = recording.withLock { $0.realtime }
             pipeline?.cancel()
             let file = await MainActor.run { self.stopRecorder() }
             await Self.removeAudio(file)
+            recording.withLock { $0 = RecordingState() }
             throw error
         }
     }
@@ -162,11 +159,6 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         }
         try Task.checkCancellation()
 
-        captureStateSubject.send(.recording)
-        recording.withLock { $0.phase = .recording }
-        pipeline?.start(language: language.language.languageCode?.identifier ?? "zh")
-        logger.info("Recording + Apple Speech started")
-
         // 启动 Apple Speech 识别任务
         recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
@@ -198,6 +190,10 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                 self.logger.error("Apple Speech failed, code=\(e.code)")
             }
         }
+        recording.withLock { $0.phase = .recording }
+        pipeline?.start(language: language.language.languageCode?.identifier ?? "zh")
+        captureStateSubject.send(.recording)
+        logger.info("Recording + Apple Speech started")
     }
 
     public func stop() async {

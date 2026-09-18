@@ -70,6 +70,18 @@ final class RealtimeAudioTests: XCTestCase {
         catch { XCTAssertEqual(error as? RealtimeTranscriptionError, .cancelled) }
     }
 
+    func testCancellationBeforeMicrophoneStartsNeverOpensSession() async throws {
+        let socket = FakeRealtimeTransport()
+        let session = DefaultRealtimeTranscriptionSession(config: try config(), transport: socket, onPartial: { _ in })
+        let pipeline = RealtimeAudioPipeline(session: session)
+        pipeline.cancel()
+        pipeline.start(language: "zh")
+        do { _ = try await pipeline.finish(); XCTFail("Expected cancellation") }
+        catch { XCTAssertEqual(error as? RealtimeTranscriptionError, .cancelled) }
+        let messages = await socket.sent
+        XCTAssertTrue(messages.isEmpty)
+    }
+
     func testHealthyStreamingSkipsBatchAndFailureFallsBackOnce() async throws {
         var fallbackCount = 0
         let streamed = try await RealtimeASRFinalizer.resolve(realtime: { "streamed" }, fallback: {
