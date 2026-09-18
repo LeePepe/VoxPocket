@@ -79,6 +79,18 @@ enum LLMAppConfig {
         return AzureWhisperConfig(endpoint: url, apiKey: key)
     }
 
+    /// 独立实时部署显式启用；旧配置及 iOS 保持原 ASR 路径。
+    static func realtimeTranscriptionConfig(environment: [String: String]) -> AzureRealtimeTranscriptionConfig? {
+        #if os(macOS)
+        guard let deployment = nonempty(environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"]),
+              let endpoint = secureURL(environment["AZURE_OPENAI_ENDPOINT"]),
+              let key = nonempty(environment["AZURE_API_KEY"]) ?? nonempty(environment["whisperkey"]) else { return nil }
+        return try? AzureRealtimeTranscriptionConfig(endpoint: endpoint, apiKey: key, deployment: deployment)
+        #else
+        return nil
+        #endif
+    }
+
     private static func nonempty(_ value: String?) -> String? {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
         return value
