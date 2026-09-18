@@ -69,7 +69,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
             .map(\.text)
             .removeDuplicates()
             .catch { [weak self] error -> Empty<String, Never> in
-                self?.logger.error("❌ liveResultPublisher error: \(error.localizedDescription)")
+                self?.logger.error("Live transcription stream failed")
                 // Send empty string to clear live text, but don't complete the stream
                 self?.liveTextSubject.send("")
                 // Return Empty that never completes, allowing stream to continue
@@ -77,7 +77,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
             }
             .sink { [weak self] text in
                 guard let self else { return }
-                self.logger.debug("📥 [TranscriptionUseCase] Received live result, sending to liveTextSubject: '\(text)'")
+                self.logger.debug("Received live transcription, chars=\(text.count)")
                 self.liveTextSubject.send(text)
             }
             .store(in: &cancellables)
