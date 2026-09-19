@@ -42,6 +42,11 @@ public final class DefaultLLMService: LLMService, Sendable {
         self.state = Mutex(initialState)
     }
 
+    init(providers: [LLMProviderType: any LLMProvider], logger: Logger = PrintLogger(subsystem: "LLMService")) {
+        self.logger = logger
+        state = Mutex(State(providers: providers, currentProvider: providers[.appleIntelligence]))
+    }
+
     // MARK: - Streaming Helpers
 
     private func streamFromSingle(
@@ -128,16 +133,8 @@ public final class DefaultLLMService: LLMService, Sendable {
         missingSteps: Set<AnalysisStep>
     )
 
-    private func analyzeContent(_ request: RefinementRequest) async -> AnalysisResult {
-        let snapshot = state.withLock { state in
-            (
-                providers: state.providers,
-                currentProviderType: state.currentProvider?.providerType,
-                overrides: state.analysisProviderOverrides
-            )
-        }
-
-        guard let defaultProviderType = snapshot.currentProviderType else {
+    private func analyzeContent(_ request: RefinementRequest, configuration: State) async -> AnalysisResult {
+        guard let defaultProviderType = configuration.currentProvider?.providerType else {
             logger.log(.error, "分析失败：未配置默认 provider", context: [
                 "text_length": request.text.count
             ], file: #file, function: #function, line: #line)
@@ -146,7 +143,7 @@ public final class DefaultLLMService: LLMService, Sendable {
 
         var providersByStep: [AnalysisStep: LLMProviderType] = [:]
         for step in AnalysisStep.allCases {
-            providersByStep[step] = snapshot.overrides[step] ?? defaultProviderType
+            providersByStep[step] = configuration.analysisProviderOverrides[step] ?? defaultProviderType
         }
 
         var stepsByProvider: [LLMProviderType: Set<AnalysisStep>] = [:]
@@ -177,7 +174,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         )
 
         for (providerType, steps) in stepsByProvider {
-            guard let provider = snapshot.providers[providerType] else {
+            guard let provider = configuration.providers[providerType] else {
                 missing.formUnion(steps)
                 logger.log(.error, "分析 provider 缺失，使用默认值", context: [
                     "provider": providerType.rawValue,
@@ -201,7 +198,7 @@ public final class DefaultLLMService: LLMService, Sendable {
                 do {
                     let partial = try await provider.analyze(analysisRequest, steps: stepSet)
 
-                    // 记录详细的分析结果
+                    // 只记录类别与计数，模型提取的正文片段不进入日志。
                     var resultContext: [String: Any] = [
                         "provider": providerType.rawValue,
                         "steps": stepLabel
@@ -223,20 +220,15 @@ public final class DefaultLLMService: LLMService, Sendable {
                         entities = value
                         missing.remove(.entities)
                         resultContext["entities_count"] = value.count
-                        resultContext["entities"] = value.joined(separator: ", ")
                     }
                     if stepSet.contains(.tags), let value = partial.tags {
                         tags = value
                         missing.remove(.tags)
                         resultContext["tags_count"] = value.count
-                        resultContext["tags"] = value.joined(separator: ", ")
                     }
                     if stepSet.contains(.params), let value = partial.params {
                         params = value
                         missing.remove(.params)
-                        if let targetLang = value.targetLanguage {
-                            resultContext["target_language"] = targetLang
-                        }
                     }
 
                     logger.performanceEnd(
@@ -249,13 +241,12 @@ public final class DefaultLLMService: LLMService, Sendable {
                     )
                 } catch {
                     logger.performanceEnd(
-                        "分析步骤",
+                        "分析步骤失败",
                         start: perfStart,
                         context: [
                             "provider": providerType.rawValue,
                             "steps": stepLabel
                         ],
-                        error: error,
                         file: #file,
                         function: #function,
                         line: #line
@@ -311,11 +302,12 @@ public final class DefaultLLMService: LLMService, Sendable {
     // MARK: - 文本优化（便捷方法）
 
     public func refine(_ request: RefinementRequest) async throws -> RefinementResponse {
-        guard let provider = currentProvider else {
+        let configuration = state.withLock { $0 }
+        guard let provider = configuration.currentProvider else {
             throw VoxError.llmProviderNotConfigured
         }
 
-        let shouldSkip = state.withLock { $0.skipContentAnalysis }
+        let shouldSkip = configuration.skipContentAnalysis
         logger.log(.info, "开始文本优化", context: [
             "text_length": request.text.count,
             "provider": provider.providerType.rawValue,
@@ -323,7 +315,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         ], file: #file, function: #function, line: #line)
         let analysis: AnalysisResult = shouldSkip
             ? (intent: IntentAnalysis(), tone: ToneAnalysis(), missingSteps: Set(AnalysisStep.allCases))
-            : await analyzeContent(request)
+            : await analyzeContent(request, configuration: configuration)
         let prompt = RefinementPromptBuilder.build(
             text: request.text,
             customPrompt: request.customPrompt
@@ -344,10 +336,11 @@ public final class DefaultLLMService: LLMService, Sendable {
     }
 
     public func refineStreaming(_ request: RefinementRequest) async throws -> AsyncThrowingStream<String, Error> {
-        guard let provider = currentProvider else {
+        let configuration = state.withLock { $0 }
+        guard let provider = configuration.currentProvider else {
             throw VoxError.llmProviderNotConfigured
         }
-        let shouldSkip = state.withLock { $0.skipContentAnalysis }
+        let shouldSkip = configuration.skipContentAnalysis
         logger.log(.info, "开始流式文本优化", context: [
             "text_length": request.text.count,
             "provider": provider.providerType.rawValue,
@@ -355,14 +348,14 @@ public final class DefaultLLMService: LLMService, Sendable {
         ], file: #file, function: #function, line: #line)
 
         if !shouldSkip {
-            _ = await analyzeContent(request)
+            _ = await analyzeContent(request, configuration: configuration)
         }
 
         let prompt = RefinementPromptBuilder.build(
             text: request.text,
             customPrompt: request.customPrompt
         )
-        let stream = try await completeStreaming(prompt: prompt)
+        let stream = try await provider.completeStreaming(prompt: prompt)
         return AsyncThrowingStream { continuation in
             Task { @Sendable in
                 do {
@@ -375,8 +368,7 @@ public final class DefaultLLMService: LLMService, Sendable {
                     continuation.finish()
                 } catch {
                     logger.log(.error, "流式文本优化失败", context: [
-                        "provider": provider.providerType.rawValue,
-                        "error": error.localizedDescription
+                        "provider": provider.providerType.rawValue
                     ], file: #file, function: #function, line: #line)
                     continuation.finish(throwing: error)
                 }

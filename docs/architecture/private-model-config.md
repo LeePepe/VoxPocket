@@ -14,12 +14,22 @@ macOS 当前 bundle 的实际位置：
 
 iOS 使用其应用沙箱内同一相对路径。本轮不提供 iOS 文件导入器或设置编辑器。文件修改后重启生效；普通 Finder 启动不再依赖终端环境。已有精炼服务商偏好仍保留；macOS 在“设置 → 语音与文本”选择精炼服务商，iOS 保留原“我的 → 模型服务”入口。
 
-### 可选 macOS 实时语音转写
+### macOS 分阶段模型设置
 
-`azure.realtimeTranscriptionDeployment` 为可选字段（省略或 `null` 保持原路径），对应环境变量
-`AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT`。填写经过实时音频验证的专用 transcription 部署名，
+「设置 → 语音与文本」独立选择语音识别、意图分析、语气分析及文本精炼模型。
+没有保存过识别选择时默认选实时流式；已有精炼服务商与跳过分析偏好保留。
+模型选择在下一次录音生效，当前录音/终稿及精炼请求持有本次模型快照。
+识别可切换流式云端、整段云端、Apple Speech；文本各阶段可选择 Apple Intelligence
+或当前配置的 Azure 文本模型。不虚构尚未部署的模型选项。
+
+`azure.realtimeTranscriptionDeployment` 为可选字段（省略或 `null` 不提供实时部署默认值），对应环境变量
+`AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT`。也可在设置的「实时部署配置」填写非敏感部署名覆盖值，
+留空使用私密配置/环境中的部署名。填写经过实时音频验证的专用 transcription 部署名，
 使用同一 HTTPS 资源根地址和语音密钥。不要直接填普通文件转写模型名来猜测实时能力。
 仅 macOS 使用此字段；iOS 仍使用原转写实现。
+
+缺少实时部署或凭据时，设置页明确显示当前回退到整段云端/Apple Speech，不将默认选择视为远端验证成功。
+只将模型选择及用户填写的安全部署短标识存入偏好；不复制私密配置对象、端点或 API key 到 UserDefaults。
 
 启用后录音期间发送 24 kHz mono PCM16，Apple Speech 保留为预览备用；松手后排空并提交终稿。
 连接/协议失败、音频队列溢出或收尾超过 8 秒时，至多回退一次原整文件 ASR。

@@ -38,7 +38,7 @@ public struct MacOSSettingsView: View {
                     .accessibilityIdentifier("vox.settings.loading")
             }
         }
-        .frame(minWidth: 560, idealWidth: 620, minHeight: 380, idealHeight: 420)
+        .frame(minWidth: 560, idealWidth: 640, minHeight: 480, idealHeight: 680)
         .accessibilityIdentifier("vox.settings")
         .task {
             await providerSettings.load()
@@ -52,6 +52,9 @@ public struct MacOSSettingsView: View {
             Task { await providerSettings.load() }
         }
         .onReceive(NotificationCenter.default.publisher(for: PreferencesNotification.llmAnalysisSettingsDidChange)) { _ in
+            Task { await providerSettings.load() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: PreferencesNotification.stageModelsDidChange)) { _ in
             Task { await providerSettings.load() }
         }
     }
@@ -116,6 +119,7 @@ struct MacOSShortcutSettingsPane: View {
 struct MacOSTextSettingsPane: View {
     @ObservedObject var viewModel: LLMProviderSettingsViewModel
     let localModelLoadingStatus: LocalModelLoadingStatus?
+    @State private var deploymentExpanded = false
 
     var providerBinding: Binding<LLMProviderSelection> {
         Binding(get: { viewModel.selectedProvider },
@@ -129,27 +133,120 @@ struct MacOSTextSettingsPane: View {
 
     var body: some View {
         Form {
+            speechSection
+            analysisSection
+            refinementSection
+            if let status = localModelLoadingStatus { MacOSLocalModelSettingsSection(status: status) }
             Section {
-                Picker("精炼服务商", selection: providerBinding) {
-                    ForEach(LLMProviderSelection.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .accessibilityIdentifier("vox.settings.llmProvider")
-                Text("只影响文本精炼，不切换语音识别引擎。云端服务会接收需要精炼的文本。")
-                    .font(.callout).foregroundStyle(.secondary)
-                Toggle("跳过意图与语气分析", isOn: skipAnalysisBinding)
-                .accessibilityIdentifier("vox.settings.skipAnalysis")
-                Text("仅跳过前置分析，仍会执行文本精炼。")
-                    .font(.callout).foregroundStyle(.secondary)
-            } header: { Text("文本精炼") }
-            if let status = localModelLoadingStatus {
-                MacOSLocalModelSettingsSection(status: status)
-            }
-            Section {
-                Text("密钥与部署名仍由本机配置管理。已有历史数据会保留，不因移除主窗口而删除。")
+                Text("模型选择自动保存，下次录音生效，不改变正在处理的录音。密钥和服务地址仍由受保护的本机配置管理。")
                     .font(.callout).foregroundStyle(.secondary)
             } header: { Text("配置与数据") }
         }
         .formStyle(.grouped)
+        .task { deploymentExpanded = !viewModel.realtimeReady }
+        .onChange(of: viewModel.speechModel) { _, model in
+            if model == .realtime && !viewModel.realtimeReady { deploymentExpanded = true }
+        }
+    }
+
+    private var speechSection: some View {
+        Section {
+                Picker("识别模型", selection: Binding(get: { viewModel.speechModel }, set: { model in
+                    Task { await viewModel.updateSpeechModel(model) }
+                })) {
+                    Text("gpt-live-transcribe · 流式（默认）").tag(SpeechModelSelection.realtime)
+                    Text("已配置的 Azure 模型 · 整段").tag(SpeechModelSelection.batch)
+                    Text("Apple Speech · 系统识别").tag(SpeechModelSelection.appleSpeech)
+                }
+                .accessibilityIdentifier("vox.settings.speechModel")
+                speechStatus
+                if viewModel.speechModel == .realtime {
+                    Text("边录音边发送音频；服务失败时回退整段转写。配置就绪不代表已通过真实音频验证。")
+                        .font(.callout).foregroundStyle(.secondary)
+                    DisclosureGroup("实时部署配置", isExpanded: $deploymentExpanded) {
+                        HStack {
+                            TextField("部署名", text: $viewModel.realtimeDeploymentDraft,
+                                      prompt: Text(viewModel.availability.realtimeDeployment.isEmpty
+                                                   ? "填写资源中的实时部署名" : viewModel.availability.realtimeDeployment))
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityIdentifier("vox.settings.realtimeDeployment")
+                            Button("保存") { Task { await viewModel.saveRealtimeDeployment() } }
+                                .accessibilityIdentifier("vox.settings.saveRealtimeDeployment")
+                        }
+                        Text("部署名不一定等于模型名。留空使用本机配置；这里只保存部署名，不保存密钥。")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let message = viewModel.deploymentMessage {
+                            Text(message).font(.caption)
+                                .accessibilityIdentifier("vox.settings.deploymentMessage")
+                        }
+                    }
+                } else if viewModel.speechModel == .batch {
+                    Text("Apple Speech 提供预览；松手后上传整段音频获取终稿。")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            } header: { Text("1 · 语音识别") }
+    }
+
+    private var analysisSection: some View {
+        Section {
+                Toggle("跳过意图与语气分析", isOn: skipAnalysisBinding)
+                    .accessibilityIdentifier("vox.settings.skipAnalysis")
+                Picker("意图模型", selection: Binding(get: { viewModel.intentModel }, set: { model in
+                    Task { await viewModel.updateIntentModel(model) }
+                })) { analysisOptions }
+                    .disabled(viewModel.skipContentAnalysis)
+                    .accessibilityIdentifier("vox.settings.intentModel")
+                Picker("语气模型", selection: Binding(get: { viewModel.toneModel }, set: { model in
+                    Task { await viewModel.updateToneModel(model) }
+                })) { analysisOptions }
+                    .disabled(viewModel.skipContentAnalysis)
+                    .accessibilityIdentifier("vox.settings.toneModel")
+                Text("跳过可减少前置处理步骤，仍会执行文本精炼。")
+                    .font(.callout).foregroundStyle(.secondary)
+            } header: { Text("2 · 内容分析") }
+    }
+
+    private var refinementSection: some View {
+        Section {
+                Picker("精炼模型", selection: providerBinding) {
+                    Text("Apple Intelligence").tag(LLMProviderSelection.appleIntelligence)
+                    Text(viewModel.cloudModelLabel).tag(LLMProviderSelection.azureFoundry)
+                }
+                .accessibilityIdentifier("vox.settings.llmProvider")
+                Text("云端模型会接收对应阶段的文本。Apple Intelligence 需要设备支持并已启用。")
+                    .font(.callout).foregroundStyle(.secondary)
+                if !viewModel.availability.textConfigured &&
+                    (viewModel.selectedProvider == .azureFoundry || (!viewModel.skipContentAnalysis &&
+                     (viewModel.intentModel == .azureFoundry || viewModel.toneModel == .azureFoundry))) {
+                    Label {
+                        Text("意图、语气或精炼所选的云端模型尚未配置，请检查本机模型配置。")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                    }
+                    .font(.callout).foregroundStyle(.primary)
+                }
+            } header: { Text("3 · 文本精炼") }
+    }
+
+    private var analysisOptions: some View {
+        Group {
+            Text("Apple Intelligence").tag(TextModelSelection.appleIntelligence)
+            Text(viewModel.cloudModelLabel).tag(TextModelSelection.azureFoundry)
+        }
+    }
+
+    private var speechStatus: some View {
+        Label {
+            Text(viewModel.speechStatus).foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: viewModel.hasSpeechWarning ? "exclamationmark.triangle" : "checkmark.circle")
+                .foregroundStyle(viewModel.hasSpeechWarning ? Color.orange : Color.accentColor)
+        }
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background((viewModel.hasSpeechWarning ? Color.orange : Color.accentColor).opacity(0.12), in: Capsule())
+            .accessibilityIdentifier("vox.settings.speechStatus")
     }
 }
 

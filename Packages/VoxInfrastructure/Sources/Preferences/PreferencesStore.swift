@@ -5,12 +5,17 @@ public enum PreferencesKey: String, CaseIterable, Sendable {
     case quickRecordHotkey = "hotkey.quickRecord"
     case llmProvider = "llm.provider"
     case llmSkipContentAnalysis = "llm.skipContentAnalysis"
+    case speechModel = "model.speech"
+    case intentModel = "model.intent"
+    case toneModel = "model.tone"
+    case realtimeDeployment = "model.realtimeDeployment"
 }
 
 public enum PreferencesNotification {
     public static let hotkeysDidChange = Notification.Name("vox.preferences.hotkeysDidChange")
     public static let llmProviderDidChange = Notification.Name("vox.preferences.llmProviderDidChange")
     public static let llmAnalysisSettingsDidChange = Notification.Name("vox.preferences.llmAnalysisSettingsDidChange")
+    public static let stageModelsDidChange = Notification.Name("vox.preferences.stageModelsDidChange")
 }
 
 public protocol PreferencesStore: AnyObject, Sendable {

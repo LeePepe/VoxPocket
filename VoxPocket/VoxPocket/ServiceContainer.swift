@@ -41,7 +41,12 @@ public final class ServiceContainer: ObservableObject {
     /// 主转录器：Apple 实时预览，配置齐全时使用 Azure 文件转写终稿。
     public let transcriber: any TranscriptionCoordinator
     public let localModelLoadingObservable: (any ModelLoadingObservable)?
+    #if os(macOS)
+    public let llmService: DefaultStageTextModelService
+    public let quickLLMService: DefaultStageTextModelService
+    #else
     public let llmService: DefaultLLMService
+    #endif
 
     // MARK: - Use Cases
 
@@ -94,6 +99,15 @@ public final class ServiceContainer: ObservableObject {
         logger = PrintLogger(subsystem: "ServiceContainer")
         telemetryService = Self.makeTelemetryService()
         let azureConfig = Self.makeAzureFoundryConfig()
+        #if os(macOS)
+        let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings)
+        let configuredLLM = textModels.main
+        let configuredQuickLLM = textModels.quick
+        quickLLMService = configuredQuickLLM
+        #else
+        let configuredLLM = DefaultLLMService(azureFoundryConfig: azureConfig)
+        #endif
+        llmService = configuredLLM
 
         // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
         switch LLMAppConfig.defaultTranscriberProvider {
@@ -109,10 +123,13 @@ public final class ServiceContainer: ObservableObject {
             transcriber = hybrid
             localModelLoadingObservable = hybrid
         default:
-            transcriber = Self.makeTranscriber(preloadOnStart: true)
+            transcriber = Self.makeTranscriber(preloadOnStart: true, beforeSession: { settings in
+                #if os(macOS)
+                configuredLLM.configure(settings)
+                #endif
+            })
             localModelLoadingObservable = nil
         }
-        llmService = DefaultLLMService(azureFoundryConfig: azureConfig)
 #if os(macOS)
         clipboardService = MacOSClipboardService.shared
         accessibilityService = MacOSAccessibilityService.shared
@@ -142,7 +159,9 @@ public final class ServiceContainer: ObservableObject {
 #if os(macOS)
         // 快速录音使用独立 coordinator，避免主编辑器和快速录音串流/状态互相污染。
         // 本地 Whisper engine 在底层共享，不会重复下载同一模型。
-        quickTranscriber = Self.makeQuickTranscriber()
+        quickTranscriber = Self.makeQuickTranscriber(beforeSession: { settings in
+            configuredQuickLLM.configure(settings)
+        })
         quickEditingUseCase = DefaultEditingUseCase()
         quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService)
         quickTranscriptionUseCase = DefaultTranscriptionUseCase(
@@ -151,7 +170,7 @@ public final class ServiceContainer: ObservableObject {
             telemetry: telemetryService
         )
         quickRefinementUseCase = DefaultRefinementUseCase(
-            llmService: llmService,
+            llmService: configuredQuickLLM,
             editing: quickEditingUseCase,
             telemetry: telemetryService
         )
@@ -168,12 +187,14 @@ public final class ServiceContainer: ObservableObject {
         injectMergerIfNeeded(into: quickTranscriber)
 #endif
 
+        #if !os(macOS)
         configureLLMService()
         observeProviderPreferenceChanges()
         Task { [weak self] in
             await self?.applyProviderPreferenceIfExists()
             await self?.applyAnalysisSettingsPreference()
         }
+        #endif
 
         logger.debug("Initialized")
     }
@@ -220,7 +241,8 @@ public final class ServiceContainer: ObservableObject {
 
     static func makeTranscriber(
         preloadOnStart: Bool = true,
-        environment: [String: String]? = nil
+        environment: [String: String]? = nil,
+        beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
     ) -> any TranscriptionCoordinator {
         let environment = environment ?? LLMAppConfig.runtimeEnvironment
         switch LLMAppConfig.defaultTranscriberProvider {
@@ -230,6 +252,10 @@ public final class ServiceContainer: ObservableObject {
                 fallback: AppleSpeechTranscriber()
             )
         case .hybridWhisper:
+            #if os(macOS)
+            return StageModelRouting.makeTranscriber(environment: environment, preferences: UserDefaultsPreferencesStore.shared,
+                                                    beforeSession: beforeSession)
+            #else
             if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
                 return HybridWhisperTranscriber(
                     whisperConfig: config,
@@ -238,6 +264,7 @@ public final class ServiceContainer: ObservableObject {
             }
             PrintLogger(subsystem: "ServiceContainer").warning("Azure transcription configuration missing; actual_provider=appleSpeech")
             return AppleSpeechTranscriber()
+            #endif
         case .azureWhisper:
             if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
                 return AzureWhisperTranscriber(config: config)
@@ -255,8 +282,9 @@ public final class ServiceContainer: ObservableObject {
         }
     }
 
-    static func makeQuickTranscriber(environment: [String: String]? = nil) -> any TranscriptionCoordinator {
-        makeTranscriber(preloadOnStart: true, environment: environment)
+    static func makeQuickTranscriber(environment: [String: String]? = nil,
+                                    beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil) -> any TranscriptionCoordinator {
+        makeTranscriber(preloadOnStart: true, environment: environment, beforeSession: beforeSession)
     }
 
     private static func makeLocalWhisperTranscriber(preloadOnStart: Bool) -> WhisperKitTranscriber {

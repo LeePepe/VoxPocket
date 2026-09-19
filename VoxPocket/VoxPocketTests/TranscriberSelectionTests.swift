@@ -66,14 +66,24 @@ struct TranscriberSelectionTests {
     @MainActor @Test func mainAndQuickUseSeparateCloudCoordinatorsWithoutMerger() {
         let main = ServiceContainer.makeTranscriber(environment: cloudEnvironment)
         let quick = ServiceContainer.makeQuickTranscriber(environment: cloudEnvironment)
+        #if os(macOS)
+        #expect(main is DefaultSelectableTranscriptionCoordinator)
+        #expect(quick is DefaultSelectableTranscriptionCoordinator)
+        #else
         #expect(main is HybridWhisperTranscriber)
         #expect(quick is HybridWhisperTranscriber)
+        #endif
         #expect((main as AnyObject) !== (quick as AnyObject))
         #expect((quick as? HybridWhisperTranscriber)?.merger == nil)
     }
 
     @MainActor @Test func missingCloudConfigurationKeepsRecordingAvailableLocally() {
+        #if os(macOS)
+        #expect(ServiceContainer.makeTranscriber(environment: [:]) is DefaultSelectableTranscriptionCoordinator)
+        #expect(StageModelRouting.resolvedSpeechModel(settings: .init(), environment: [:]) == .appleSpeech)
+        #else
         #expect(ServiceContainer.makeTranscriber(environment: [:]) is AppleSpeechTranscriber)
+        #endif
     }
 
     private var cloudEnvironment: [String: String] {
