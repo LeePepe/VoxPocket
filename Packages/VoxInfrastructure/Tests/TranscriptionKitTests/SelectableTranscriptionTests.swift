@@ -5,6 +5,21 @@ import XCTest
 @testable import TranscriptionKit
 
 final class SelectableTranscriptionTests: XCTestCase {
+    func testSystemSpeechFinalCanArriveAfterStopReturns() async throws {
+        let fake = FakeSelectableTranscriber()
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: fake) { fake }
+        let seen = Mutex<[String]>([])
+        let subscription = router.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { value in
+            seen.withLock { $0.append(value.text) }
+        })
+        defer { subscription.cancel() }
+        try await router.start(language: .current)
+        await router.stop()
+        XCTAssertFalse(router.isTranscribing)
+        fake.sendFinal("delayed system final")
+        XCTAssertEqual(seen.withLock { $0 }, ["delayed system final"])
+    }
+
     func testSelectionChangesOnNextStartAndOldPublishersAreIsolated() async throws {
         let first = FakeSelectableTranscriber()
         let second = FakeSelectableTranscriber()

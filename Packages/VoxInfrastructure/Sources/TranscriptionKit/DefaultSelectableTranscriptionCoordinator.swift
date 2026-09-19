@@ -48,14 +48,19 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
     public var isTranscribing: Bool { stateLock.withLock { $0.phase == .recording } }
 
     public func start(language: Locale) async throws {
-        let task = try stateLock.withLock { state in
+        let prepared = try stateLock.withLock { state in
             guard state.phase == .idle else { throw RealtimeTranscriptionError.protocolRejected }
+            // 旧订阅在锁外取消，避免 Combine 取消回调重入同一把锁。
+            let old = (state.active, state.subscriptions)
+            state.active = nil; state.subscriptions = nil
             state.phase = .starting
             let id = UUID(); state.id = id
             let task = Task { try await self.startSession(id: id, language: language) }
             state.startup = task
-            return task
+            return (task, old)
         }
+        prepared.1.1?.cancel()
+        let task = prepared.0
         try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
     }
 
@@ -97,10 +102,10 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
                 state.phase = .stopping
                 return state.active
             }
-            if let active { await active.stop(); clear(snapshot.2) }
+            if let active { await active.stop(); clear(snapshot.2, keepResults: true) }
         } else if let active = snapshot.1 {
             await active.stop()
-            clear(snapshot.2)
+            clear(snapshot.2, keepResults: true)
         }
     }
 
@@ -119,7 +124,8 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
     }
 
     private func isCurrent(_ id: UUID) -> Bool {
-        stateLock.withLock { $0.id == id && $0.phase != .idle }
+        // Apple Speech.stop 返回后才可能发出终稿；保留这一代直到下一次 start。
+        stateLock.withLock { $0.id == id && $0.active != nil }
     }
 
     private func bind(_ chosen: any TranscriptionCoordinator, id: UUID) -> Subscriptions {
@@ -144,12 +150,14 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
         ])
     }
 
-    private func clear(_ id: UUID) {
-        let result = stateLock.withLock { state -> (Bool, Subscriptions?) in
-            guard state.id == id else { return (false, nil) }
-            let subscriptions = state.subscriptions
-            state = State()
-            return (true, subscriptions)
+    private func clear(_ id: UUID, keepResults: Bool = false) {
+        let result = stateLock.withLock { state -> (Bool, Subscriptions?, (any TranscriptionCoordinator)?) in
+            guard state.id == id else { return (false, nil, nil) }
+            state.phase = .idle; state.startup = nil
+            if keepResults { return (true, nil, nil) }
+            let old = (state.subscriptions, state.active)
+            state.subscriptions = nil; state.active = nil
+            return (true, old.0, old.1)
         }
         guard result.0 else { return }
         result.1?.cancel()
