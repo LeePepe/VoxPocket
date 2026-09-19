@@ -180,7 +180,7 @@ Do not bypass with `--no-verify` or admin-merge; investigate red checks instead.
 - **Build number**: `latest_testflight_build_number(platform: "osx") + 1` for macOS, across marketing versions. Each platform uses its own latest build so pausing iOS cannot cause duplicate macOS numbers. `MARKETING_VERSION` lives in `VoxPocket/project.yml` (`settings.base`); bump it manually there. `CURRENT_PROJECT_VERSION` is a single base source, injected at archive time by fastlane `xcargs` — never hardcoded per target.
 - **Signing**: Release configs use **manual** signing + explicit `Apple Distribution` + App Store provisioning profiles (per-SDK for the multiplatform target). Debug stays Automatic for local dev.
 - **Required GitHub Secrets**: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `KEYCHAIN_PASSWORD` (`GITHUB_TOKEN` is built-in).
-- **One-time人工前置**: ASC App record (iOS + macOS platforms), the `.widget` App ID, and a TestFlight internal group named exactly `Internal` (or set `TESTFLIGHT_GROUPS`).
+- **One-time人工前置**: ASC App record (iOS + macOS platforms) and the `.widget` App ID. Manage TestFlight tester groups and automatic distribution in App Store Connect; the release lane only uploads and waits for processing, without assigning builds to groups. Upload success does not verify tester availability.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
