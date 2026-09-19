@@ -94,8 +94,8 @@ public final class ServiceContainer: ObservableObject {
         logger = PrintLogger(subsystem: "ServiceContainer")
         telemetryService = Self.makeTelemetryService()
         let azureConfig = Self.makeAzureFoundryConfig()
-        llmService = DefaultLLMService(azureFoundryConfig: azureConfig)
-        let configuredLLM = llmService
+        let configuredLLM = DefaultLLMService(azureFoundryConfig: azureConfig)
+        llmService = configuredLLM
 
         // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
         switch LLMAppConfig.defaultTranscriberProvider {
