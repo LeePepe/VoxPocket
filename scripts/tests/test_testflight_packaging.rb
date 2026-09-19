@@ -147,8 +147,20 @@ class TestFlightPackagingTests < Minitest::Test
     assert_equal pkg, lane.upload_options[:pkg]
     assert_equal "osx", lane.upload_options[:app_platform]
     refute lane.upload_options.key?(:ipa)
-    assert_equal [40, :mac], lane.distributed
+    assert_nil lane.distributed
     assert_equal "osx", lane.requested_build_platform
+  end
+
+  def test_upload_lanes_leave_group_distribution_to_app_store_connect
+    { mac: "pkg", ios: "ipa" }.each do |platform, extension|
+      lane = FixtureLane.new(artifact("VoxPocket.#{extension}"))
+      lane.run(platform)
+      assert_nil lane.distributed, "#{platform} must not manually assign beta groups"
+      assert_equal false, lane.upload_options[:skip_waiting_for_build_processing]
+      assert_equal true, lane.upload_options[:skip_submission]
+      assert_equal false, lane.upload_options[:distribute_external]
+      refute lane.upload_options.key?(:groups)
+    end
   end
 
   def test_mac_build_number_looks_up_macos_across_versions
