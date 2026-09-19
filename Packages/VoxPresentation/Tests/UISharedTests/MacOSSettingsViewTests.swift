@@ -103,7 +103,12 @@ final class MacOSSettingsViewTests: XCTestCase {
             for section in [MacOSSettingsView.Section.shortcuts, .text] {
                 let bitmap = try await render(section: section, scheme: scheme)
                 let words = try recognize(bitmap).joined(separator: " ")
-                XCTAssertTrue(words.contains(section == .shortcuts ? "快捷录音" : "精炼服务商"), "Synthetic settings OCR: \(words)")
+                XCTAssertTrue(words.contains(section == .shortcuts ? "快捷录音" : "识别模型"), "Synthetic settings OCR: \(words)")
+                if section == .text {
+                    XCTAssertTrue(words.contains("意图模型"))
+                    XCTAssertTrue(words.contains("语气模型"))
+                    XCTAssertTrue(words.contains("精炼模型"))
+                }
                 // 离屏 cacheDisplay 未能可靠捕获系统玻璃页签；这里只验表单正文，导航交互由 App XCUITest 覆盖。
                 for placeholder in ["VAD", "Verbose", "30 days", "VoxPocket 用户", "未连接"] {
                     XCTAssertFalse(words.contains(placeholder))
@@ -117,16 +122,41 @@ final class MacOSSettingsViewTests: XCTestCase {
         }
     }
 
-    private func render(section: MacOSSettingsView.Section, scheme: ColorScheme) async throws -> NSBitmapImageRep {
-        let provider = LLMProviderSettingsViewModel(preferences: store)
+    func testUnconfiguredRealtimeShowsFallbackAndDeploymentEntry() async throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let bitmap = try await render(section: .text, scheme: scheme, configured: false)
+            let words = try recognize(bitmap).joined()
+            XCTAssertTrue(words.contains("回退"))
+            XCTAssertTrue(words.contains("部署名"))
+            XCTAssertFalse(words.contains("实时配置就绪"))
+            if let directory = ProcessInfo.processInfo.environment["VOX_SETTINGS_RENDER_DIR"] {
+                let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                let url = URL(fileURLWithPath: directory).appendingPathComponent("settings-unconfigured-\(scheme).png")
+                try await Task.detached { try png.write(to: url) }.value
+            }
+        }
+    }
+
+    private func render(section: MacOSSettingsView.Section, scheme: ColorScheme,
+                        configured: Bool = true) async throws -> NSBitmapImageRep {
+        let availability: ModelSettingsAvailability = configured ? .init(
+            batchConfigured: true, realtimeCredentialsConfigured: true, realtimeDeployment: "fixture-live",
+            textConfigured: true, textModelName: "gpt-5.6-luna"
+        ) : .init()
+        let provider = LLMProviderSettingsViewModel(preferences: store, availability: availability)
         let shortcuts = ShortcutsViewModel(preferences: store)
+        let previousAppearance = NSApplication.shared.appearance
+        let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+        NSApplication.shared.appearance = appearance
+        defer { NSApplication.shared.appearance = previousAppearance }
         let host = NSHostingView(rootView: MacOSSettingsView(providerSettings: provider, shortcuts: shortcuts,
                                                             initialSection: section)
             .environment(\.colorScheme, scheme))
-        let panel = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 620, height: 420),
+        host.appearance = appearance
+        let panel = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 640, height: 760),
                             styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "VoxPocket 设置"
-        panel.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+        panel.appearance = appearance
         panel.contentView = host
         panel.makeKeyAndOrderFront(nil)
         defer { panel.orderOut(nil) }
