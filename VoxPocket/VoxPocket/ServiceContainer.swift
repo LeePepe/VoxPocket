@@ -41,7 +41,12 @@ public final class ServiceContainer: ObservableObject {
     /// 主转录器：Apple 实时预览，配置齐全时使用 Azure 文件转写终稿。
     public let transcriber: any TranscriptionCoordinator
     public let localModelLoadingObservable: (any ModelLoadingObservable)?
+    #if os(macOS)
+    public let llmService: DefaultStageTextModelService
+    public let quickLLMService: DefaultStageTextModelService
+    #else
     public let llmService: DefaultLLMService
+    #endif
 
     // MARK: - Use Cases
 
@@ -94,7 +99,14 @@ public final class ServiceContainer: ObservableObject {
         logger = PrintLogger(subsystem: "ServiceContainer")
         telemetryService = Self.makeTelemetryService()
         let azureConfig = Self.makeAzureFoundryConfig()
+        #if os(macOS)
+        let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings)
+        let configuredLLM = textModels.main
+        let configuredQuickLLM = textModels.quick
+        quickLLMService = configuredQuickLLM
+        #else
         let configuredLLM = DefaultLLMService(azureFoundryConfig: azureConfig)
+        #endif
         llmService = configuredLLM
 
         // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
@@ -112,7 +124,9 @@ public final class ServiceContainer: ObservableObject {
             localModelLoadingObservable = hybrid
         default:
             transcriber = Self.makeTranscriber(preloadOnStart: true, beforeSession: { settings in
-                try StageModelRouting.applyTextModels(settings, to: configuredLLM)
+                #if os(macOS)
+                configuredLLM.configure(settings)
+                #endif
             })
             localModelLoadingObservable = nil
         }
@@ -146,7 +160,7 @@ public final class ServiceContainer: ObservableObject {
         // 快速录音使用独立 coordinator，避免主编辑器和快速录音串流/状态互相污染。
         // 本地 Whisper engine 在底层共享，不会重复下载同一模型。
         quickTranscriber = Self.makeQuickTranscriber(beforeSession: { settings in
-            try StageModelRouting.applyTextModels(settings, to: configuredLLM)
+            configuredQuickLLM.configure(settings)
         })
         quickEditingUseCase = DefaultEditingUseCase()
         quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService)
@@ -156,7 +170,7 @@ public final class ServiceContainer: ObservableObject {
             telemetry: telemetryService
         )
         quickRefinementUseCase = DefaultRefinementUseCase(
-            llmService: llmService,
+            llmService: configuredQuickLLM,
             editing: quickEditingUseCase,
             telemetry: telemetryService
         )
@@ -173,11 +187,8 @@ public final class ServiceContainer: ObservableObject {
         injectMergerIfNeeded(into: quickTranscriber)
 #endif
 
+        #if !os(macOS)
         configureLLMService()
-        #if os(macOS)
-        do { try StageModelRouting.applyTextModels(LLMAppConfig.initialStageModelSettings, to: llmService) }
-        catch { logger.warning("Saved text model selection is not configured") }
-        #else
         observeProviderPreferenceChanges()
         Task { [weak self] in
             await self?.applyProviderPreferenceIfExists()
@@ -231,7 +242,7 @@ public final class ServiceContainer: ObservableObject {
     static func makeTranscriber(
         preloadOnStart: Bool = true,
         environment: [String: String]? = nil,
-        beforeSession: (@MainActor @Sendable (StageModelSettings) throws -> Void)? = nil
+        beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
     ) -> any TranscriptionCoordinator {
         let environment = environment ?? LLMAppConfig.runtimeEnvironment
         switch LLMAppConfig.defaultTranscriberProvider {
@@ -272,7 +283,7 @@ public final class ServiceContainer: ObservableObject {
     }
 
     static func makeQuickTranscriber(environment: [String: String]? = nil,
-                                    beforeSession: (@MainActor @Sendable (StageModelSettings) throws -> Void)? = nil) -> any TranscriptionCoordinator {
+                                    beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil) -> any TranscriptionCoordinator {
         makeTranscriber(preloadOnStart: true, environment: environment, beforeSession: beforeSession)
     }
 
