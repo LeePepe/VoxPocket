@@ -28,6 +28,7 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
     ])
 ''')
         (sources / "LLMAppConfig.swift").symlink_to(root / "VoxPocket/VoxPocket/LLMAppConfig.swift")
+        (sources / "StageModelRouting.swift").symlink_to(root / "VoxPocket/VoxPocket/StageModelRouting.swift")
         (tests / "RealtimeTranscriberConfigurationTests.swift").symlink_to(
             root / "VoxPocket/VoxPocketTests/RealtimeTranscriberConfigurationTests.swift"
         )
