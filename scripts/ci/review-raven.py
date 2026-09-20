@@ -7,7 +7,6 @@ Never load auth files, print credential values, edit configuration or retry.
 import json
 import os
 from pathlib import Path
-import re
 import sys
 import tomllib
 from urllib.parse import urlsplit
@@ -35,8 +34,9 @@ def build_command(config_path, binary, arguments, environment):
         raise ValueError("Raven endpoint must be local and contain no authentication data")
     if provider.get("wire_api") != "responses" or provider.get("requires_openai_auth", False) is not False:
         raise ValueError("Raven must use Responses without OpenAI account authentication")
-    if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key_name):
-        raise ValueError("Invalid Raven credential environment name")
+    # Raven's existing supported names only; never select unrelated CI secrets.
+    if key_name not in {"OPENAI_API_KEY", "RAVEN_API_KEY"}:
+        raise ValueError("Unsupported Raven credential environment name")
     if not environment.get(key_name):
         raise ValueError(f"Runner is missing Raven environment variable {key_name}; no direct fallback")
     # A complete inline provider replaces any stale review-home Raven definition.

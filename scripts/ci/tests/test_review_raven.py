@@ -24,7 +24,7 @@ hooks = true
 name = "raven"
 base_url = "http://localhost:7024/v1"
 wire_api = "responses"
-env_key = "RAVEN_TEST_KEY"
+env_key = "RAVEN_API_KEY"
 '''
 
 
@@ -39,7 +39,7 @@ class RavenRoutingTests(unittest.TestCase):
         return raven.build_command(
             self.config, "/opt/homebrew/bin/codex",
             ["--output-schema", "schema.json", "-o", "out.json", "synthetic prompt"],
-            {"RAVEN_TEST_KEY": "fixture-not-a-real-credential"} if env is None else env,
+            {"RAVEN_API_KEY": "fixture-not-a-real-credential"} if env is None else env,
         )
 
     def test_imports_only_raven_connection_not_daily_model_or_capabilities(self):
@@ -49,15 +49,34 @@ class RavenRoutingTests(unittest.TestCase):
         self.assertIn('model_provider="raven"', text)
         self.assertIn('base_url = "http://localhost:7024/v1"', text)
         self.assertIn('requires_openai_auth = false', text)
-        self.assertIn('env_key = "RAVEN_TEST_KEY"', text)
+        self.assertIn('env_key = "RAVEN_API_KEY"', text)
         self.assertNotIn("fixture-not-a-real-credential", text)
         self.assertNotIn("daily-model", text)
         self.assertNotIn("hooks", text)
         self.assertEqual(command[-1], "synthetic prompt")
 
     def test_missing_environment_fails_before_codex_without_fallback(self):
-        with self.assertRaisesRegex(ValueError, "RAVEN_TEST_KEY"):
+        with self.assertRaisesRegex(ValueError, "RAVEN_API_KEY"):
             self.command({})
+
+    def test_unrelated_ci_credentials_are_rejected_before_environment_lookup(self):
+        class MockNoCredentialReads(dict):
+            def get(self, key, default=None):
+                raise AssertionError("Unrelated credential environment must not be inspected")
+
+        for key in ("GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY", "AZURE_API_KEY"):
+            with self.subTest(key=key):
+                self.config.write_text(CONFIG.replace("RAVEN_API_KEY", key))
+                with self.assertRaisesRegex(ValueError, "Unsupported Raven credential environment name"):
+                    self.command(MockNoCredentialReads())
+
+    def test_both_existing_raven_credential_names_remain_supported(self):
+        for key in ("RAVEN_API_KEY", "OPENAI_API_KEY"):
+            with self.subTest(key=key):
+                self.config.write_text(CONFIG.replace("RAVEN_API_KEY", key))
+                command = self.command({key: "fixture-not-a-real-credential"})
+                self.assertIn(f'env_key = "{key}"', " ".join(command))
+                self.assertNotIn("fixture-not-a-real-credential", " ".join(command))
 
     def test_missing_or_malformed_config_is_sanitized(self):
         self.config.write_text('secret = "fixture-sensitive-invalid')
@@ -102,7 +121,7 @@ class RavenRoutingTests(unittest.TestCase):
             'print(json.dumps({"args":sys.argv[1:],"review_home":os.environ.get("CODEX_HOME")}))\n'
         )
         fake.chmod(0o700)
-        env = dict(os.environ, CODEX_RAVEN_CONFIG=str(self.config), RAVEN_TEST_KEY="fixture")
+        env = dict(os.environ, CODEX_RAVEN_CONFIG=str(self.config), RAVEN_API_KEY="fixture")
         result = subprocess.run([sys.executable, str(HELPER), str(fake), "--skip-git-repo-check", "fixture"],
                                 env=env, capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
