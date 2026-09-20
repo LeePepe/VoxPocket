@@ -89,7 +89,6 @@ Message format:
 | SwiftUI views, ViewModels | `ui-expert` |
 | macOS/iOS platform APIs, hotkeys | `platform-expert` |
 | Design/UX decisions | `designer` |
-| Review gate config / local-review-skill | `local-reviewer-meta` |
 
 For independent tasks, request multiple specialists in a single message so the team lead can dispatch them in parallel.
 

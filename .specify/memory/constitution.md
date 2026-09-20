@@ -79,7 +79,8 @@ system boundary before use. Fail fast with a clear message. Never trust external
 - **CI required (server-side, unbypassable)**: full per-package tests, app-target build, and
   frontmatter validation, pinned to a fixed Xcode version. This is the only gate `--no-verify`
   cannot skip; heavy verification (`xcodebuild`, simulator) lives here, not in local hooks.
-- Existing `local-review-skill` hooks (Codex review) are retained and run alongside these checks.
+- Repository-owned `.githooks/` run the deterministic checks directly, including docs-map and
+  freshness on commit. Internal AI Reviewer and PR Actions review responsibilities are unchanged.
 
 ## Governance
 
@@ -89,4 +90,8 @@ change — the projection must stay in sync. Amendments are deliberate: state th
 and the migration impact. Complexity that appears to require crossing a red line must be
 redesigned, not excepted.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-09-09
+**Amendment (2026-09-20)**: Retire the duplicate local AI review dispatcher and its auto-fix
+configuration. Preserve the existing deterministic checks through direct hook calls; this changes
+hook ownership only, not layer red lines, CI requirements, or internal review responsibilities.
+
+**Version**: 1.1.1 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-09-20

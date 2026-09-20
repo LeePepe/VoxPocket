@@ -130,7 +130,7 @@ macOS services in `PlatformAdapters`: `MacOSClipboardService`, `MacOSAccessibili
 
 ## Git Hooks
 
-Hooks live in `.githooks/` (`core.hooksPath=.githooks`) and are managed by `local-review-skill` (v2.3.0; skill path resolved via `git config local-review.skill-path`). On commit/push/merge-to-main they run the commands in `.local-review.yml` plus Codex-based review agents (`provider: codex`, `fail_on: critical`). The `.local-review.yml` commands now also invoke the layered gate scripts (`scripts/gates/gate-precommit.sh` on commit, `scripts/gates/gate-prepush.sh` on push). If a hook blocks a commit, investigate the review output rather than bypassing with `--no-verify`.
+Repository-owned `.githooks/` (`core.hooksPath=.githooks`) invoke deterministic checks directly. Read `docs/local-gates.md` when changing hooks or diagnosing a blocked commit/push; it defines the commands and supported push scope. Internal AI Reviewer approval and PR Actions reviews remain separate gates. Investigate failed checks instead of bypassing them with `--no-verify`.
 
 ## Task Workflow
 
@@ -164,7 +164,7 @@ This loop is Claude's responsibility. The user should never need to ask for a re
 `main` is protected by a GitHub ruleset — **direct pushes are rejected**. All changes land via PR:
 
 1. Branch off `main` (`git checkout -b <type>/<slug>`).
-2. Make logical commits (`git add <specific files>`, never `git add -A`; conventional commit messages). Local hooks (`.local-review.yml` + layered gates) still run per-commit.
+2. Make logical commits (`git add <specific files>`, never `git add -A`; conventional commit messages). Repository-owned local hooks run the layered and documentation checks per-commit.
 3. Push the branch and open a PR to `main`.
 4. **CI required checks** must go green: `SPM <pkg>` (×5), `App target`, `Lint & policy`, `claude-review`.
 5. Non-draft PRs get **squash auto-merge** enabled automatically (`.github/workflows/auto-merge.yml`); GitHub merges once all required checks pass + branch is up to date (strict).

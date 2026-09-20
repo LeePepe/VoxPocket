@@ -8,6 +8,10 @@
 
 **Tech Stack:** Markdown (`docs/`), `zsh`, `jq`, `rg`, GitHub Actions YAML, existing local-review hooks
 
+> Historical plan: its `local-review-skill` / `.local-review.yml` integration was retired on
+> 2026-09-20. Current deterministic hook wiring is documented in `docs/local-gates.md`;
+> the commands below preserve the historical plan and are not installation instructions.
+
 ---
 
 ## File Structure (Planned Changes)
