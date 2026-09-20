@@ -131,7 +131,9 @@ jobs:
       - name: Advisory review policy contract
         run: bash scripts/ci/kimi-review.contract.test.sh
       - name: Review prompt transport contract
-        run: python3 scripts/ci/tests/test_review_prompt.py
+        run: |
+          python3 scripts/ci/tests/test_review_prompt.py
+          python3 scripts/ci/tests/test_review_raven.py
       - name: TestFlight manual-only release policy
         run: python3 scripts/tests/test_testflight_schedule.py
       # 密钥扫描：拦硬编码 API key / token / password。测试假 key 在 .gitleaks.toml allowlist。
