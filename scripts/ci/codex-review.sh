@@ -2,7 +2,7 @@
 # VoxPocket 自动 code review（codex）—— 在 self-hosted runner 上用本地 `codex` CLI 跑。
 #
 # 与 claude-review.sh 并列的第二道独立门（不同模型交叉验证）。
-# 由 .github/workflows/codex-review.yml 的 codex-review job 调用。
+# 由 .github/workflows/codex-review-target.yml 的 trusted-base job 调用。
 # **安全边界在 workflow YAML 的 job-level `if`**(来自 base 分支、fork 改不到):
 # 只有同仓库分支 PR 才会到达这里;fork PR 由另一个 job 处理,PR 代码不在本机执行。
 # 本脚本不自行判 fork —— 那个判断放在被 PR 篡改的脚本里是不可信的。
@@ -23,7 +23,7 @@
 set -uo pipefail
 
 # 独立 CODEX_HOME:review 门专用,不碰用户日常的 ~/.codex(raven/cmux)。
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex-review}"
+export CODEX_HOME="${CODEX_REVIEW_HOME:-$HOME/.codex-review}"
 # 保留标准 codex 二进制；下方 launcher 显式接入 Raven，不依赖 PATH 中的日常 shim。
 CODEX_BIN="${CODEX_BIN:-/opt/homebrew/bin/codex}"
 command -v "$CODEX_BIN" >/dev/null 2>&1 || CODEX_BIN="codex"
@@ -32,6 +32,12 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 : "${PR_NUMBER:?}"; : "${BASE_SHA:?}"; : "${HEAD_SHA:?}"; : "${BASE_REPO:?}"
+
+# 先验证 provider / 环境 / binary；不调用模型，也不把 setup PASS 当作 review PASS。
+if ! python3 "$REPO_ROOT/scripts/ci/review-raven.py" --check-setup "$CODEX_BIN"; then
+    echo "[codex-review] setup failed before review; prepare runner environment before retry" >&2
+    exit 1
+fi
 
 STICKY="<!-- voxpocket-codex-review -->"
 

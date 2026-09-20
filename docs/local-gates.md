@@ -37,3 +37,53 @@ Regression checks (isolated Git fixtures; no AI, network, or product build):
 ```bash
 python3 -m unittest discover -s scripts/gates/tests -p 'test_local_hooks.py' -v
 ```
+
+## Actions Raven bootstrap (runner operations)
+
+The required `codex-review-target` gate is independent of local hooks. Its launcher reads only
+Raven connection metadata from `CODEX_RAVEN_CONFIG` (default `~/.codex/config.toml`): an explicit
+Raven provider, loopback endpoint with a port, Responses API, and no OpenAI account auth.
+It accepts only the configured `OPENAI_API_KEY` or `RAVEN_API_KEY` environment name. It never
+loads `auth.json`, copies credentials, evaluates shell configuration, or falls back to OpenAI.
+
+Two auth layers must be prepared separately by the Owner: the runner's Raven client key permits
+access to Raven; Raven's own Copilot authentication permits upstream model use. A valid client
+key does not prove the upstream login is ready. Terminal environment variables do not imply
+that a launchd/noninteractive runner has them. Provision the private environment source and
+narrow runner-startup wiring outside this repository, owner-only, without sourcing the full
+interactive shell configuration. Keep key values environment-only in the review invocation;
+never place them in CLI arguments, logs, GitHub comments, repository files or config examples.
+Credential creation/rotation and any runner/Raven service restart remain Owner operations.
+
+`CODEX_REVIEW_HOME` is the only review-home override; otherwise `~/.codex-review` is used even
+when daily `CODEX_HOME` is inherited. The launcher rejects the daily provider-config directory
+as a review home (including symlink aliases). The Owner must retain the existing review-only
+model/effort and no-hooks/no-MCP/read-only/never-approval profile there; do not copy the full
+daily config. This change neither provisions nor edits the host profile or credentials.
+
+Setup-only diagnostic, from the trusted checkout in the intended runner environment:
+
+```bash
+python3 scripts/ci/review-raven.py --check-setup /opt/homebrew/bin/codex
+```
+
+This checks provider metadata, required environment presence, binary availability and home
+separation only. It does not read credential files, inspect the profile contents, start Codex,
+contact Raven, or verify upstream auth. Setup PASS is not runtime/model, review-verdict or merge
+PASS. The review script runs this check before fetching/rendering the diff; setup failures have
+sanitized diagnostics and stop without a model call. Fix environment readiness before a targeted
+retry, not by repeatedly rerunning a missing-key failure. A later model failure, verdict, required
+check result and merge outcome are distinct stages and must be reported separately.
+
+Bootstrap order matters: `pull_request_target` checks out the trusted **base** scripts and reads
+the PR diff as data. A candidate launcher change cannot repair its own old-base execution path.
+Prepare the Owner-managed runner environment for the current trusted base first, then perform
+an authorized targeted review retry and the normal required-check/merge flow. Never execute PR
+head bootstrap code to bypass that boundary. This candidate does not change required/advisory
+status, prompts, auto-merge, paused workflows or release settings.
+
+Offline regressions (synthetic environment/metadata; no live model or host configuration change):
+
+```bash
+python3 -m unittest discover -s scripts/ci/tests -p 'test_review_*.py' -v
+```

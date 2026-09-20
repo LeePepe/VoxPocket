@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from unittest import mock
 import subprocess
 import sys
 import tempfile
@@ -121,22 +122,121 @@ class RavenRoutingTests(unittest.TestCase):
             'print(json.dumps({"args":sys.argv[1:],"review_home":os.environ.get("CODEX_HOME")}))\n'
         )
         fake.chmod(0o700)
-        env = dict(os.environ, CODEX_RAVEN_CONFIG=str(self.config), RAVEN_API_KEY="fixture")
+        review_home = str(Path(self.directory.name) / "review-home")
+        env = dict(os.environ, CODEX_RAVEN_CONFIG=str(self.config), RAVEN_API_KEY="fixture",
+                   CODEX_HOME="daily-home-must-not-leak", CODEX_REVIEW_HOME=review_home)
         result = subprocess.run([sys.executable, str(HELPER), str(fake), "--skip-git-repo-check", "fixture"],
                                 env=env, capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         output = json.loads(result.stdout)
         self.assertEqual(output["args"][0], "exec")
         self.assertEqual(output["args"][-2:], ["--skip-git-repo-check", "fixture"])
-        self.assertEqual(output["review_home"], os.environ.get("CODEX_HOME"))
+        self.assertEqual(output["review_home"], str(Path(review_home).resolve()))
 
     def test_caller_keeps_isolation_and_uses_raven_launcher(self):
         source = (CI / "codex-review.sh").read_text()
         self.assertIn('python3 "$REPO_ROOT/scripts/ci/review-raven.py" "$CODEX_BIN"', source)
-        self.assertIn('CODEX_HOME="${CODEX_HOME:-$HOME/.codex-review}"', source)
+        self.assertIn('CODEX_HOME="${CODEX_REVIEW_HOME:-$HOME/.codex-review}"', source)
+        self.assertLess(source.index('--check-setup'), source.index('if ! git fetch'))
         self.assertIn("-c sandbox_mode=read-only", source)
         self.assertIn("-c approval_policy=never", source)
         self.assertNotIn('"$CODEX_BIN" exec', source)
+
+    def test_default_review_home_ignores_daily_home_and_does_not_mutate_environment(self):
+        environment = {"CODEX_HOME": "daily-home-must-not-leak"}
+        with mock.patch.object(raven.Path, "home", return_value=Path(self.directory.name)):
+            actual = raven.review_environment(environment, self.config)
+        self.assertEqual(actual["CODEX_HOME"], str((Path(self.directory.name) / ".codex-review").resolve()))
+        self.assertEqual(environment, {"CODEX_HOME": "daily-home-must-not-leak"})
+
+    def test_explicit_daily_home_and_symlink_alias_are_rejected(self):
+        alias = Path(self.directory.name) / "daily-alias"
+        alias.symlink_to(self.config.parent, target_is_directory=True)
+        for home in (str(self.config.parent), str(alias), str(Path.home() / ".codex")):
+            with self.subTest(home=home), self.assertRaisesRegex(ValueError, "separate"):
+                raven.review_environment({"CODEX_REVIEW_HOME": home}, self.config)
+
+    def setup_check(self, config=None, **overrides):
+        if config is not None:
+            self.config.write_text(config)
+        env = {key: value for key, value in os.environ.items()
+               if key not in {"OPENAI_API_KEY", "RAVEN_API_KEY"}}
+        env.update(CODEX_RAVEN_CONFIG=str(self.config), RAVEN_API_KEY="fixture-private-key",
+                   CODEX_REVIEW_HOME=str(Path(self.directory.name) / "review-home"))
+        env.update(overrides)
+        return subprocess.run([sys.executable, str(HELPER), "--check-setup", sys.executable],
+                              env=env, capture_output=True, text=True, timeout=5)
+
+    def test_setup_only_never_starts_binary_or_reads_auth_files(self):
+        with mock.patch.dict(os.environ, {
+            "CODEX_RAVEN_CONFIG": str(self.config), "RAVEN_API_KEY": "fixture-private-key",
+            "CODEX_REVIEW_HOME": str(Path(self.directory.name) / "review-home"),
+        }), mock.patch.object(sys, "argv", [str(HELPER), "--check-setup", sys.executable]), \
+                mock.patch.object(raven.os, "execvpe") as execute, \
+                mock.patch.object(Path, "read_text", autospec=True, return_value=CONFIG) as read, \
+                mock.patch("builtins.print") as output:
+            self.assertEqual(raven.main(), 0)
+            execute.assert_not_called()
+            self.assertEqual([call.args[0] for call in read.call_args_list], [self.config])
+            text = str(output.call_args_list)
+            self.assertIn("no model request", text)
+            self.assertNotIn("fixture-private-key", text)
+
+    def test_setup_subprocess_pass_is_not_review_pass(self):
+        result = self.setup_check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Raven setup PASS", result.stdout)
+        self.assertIn("no model request, profile validation, verdict or merge verification", result.stdout)
+        self.assertNotIn("fixture-private-key", result.stdout + result.stderr)
+
+    def test_setup_errors_are_sanitized_and_fail_closed(self):
+        for config in ('secret = "fixture-private-key',
+                       'model_provider = "raven"\nmodel_providers = "fixture-private-key"',
+                       'model_provider = "raven"\n[model_providers]\nraven = "fixture-private-key"',
+                       CONFIG.replace("localhost:7024", "localhost:fixture-private-key")):
+            with self.subTest(config=config):
+                result = self.setup_check(config)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("Raven setup failed", result.stderr)
+                self.assertNotIn("fixture-private-key", result.stdout + result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+        result = self.setup_check(CONFIG, RAVEN_API_KEY="")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Runner is missing Raven environment variable RAVEN_API_KEY", result.stderr)
+
+    def test_missing_binary_is_sanitized(self):
+        with mock.patch.dict(os.environ, {
+            "CODEX_RAVEN_CONFIG": str(self.config), "RAVEN_API_KEY": "fixture-private-key",
+            "CODEX_REVIEW_HOME": str(Path(self.directory.name) / "review-home"),
+        }), mock.patch.object(sys, "argv", [str(HELPER), "--check-setup", "/fixture-private-key"]), \
+                mock.patch("builtins.print") as output:
+            self.assertEqual(raven.main(), 1)
+            self.assertIn("Codex executable is unavailable", str(output.call_args_list))
+            self.assertNotIn("fixture-private-key", str(output.call_args_list))
+
+    def test_shell_setup_failure_stops_before_fetch_github_or_model(self):
+        fake_bin = Path(self.directory.name) / "bin"
+        fake_bin.mkdir()
+        marker = Path(self.directory.name) / "unexpected-call"
+        for name in ("git", "gh", "codex"):
+            binary = fake_bin / name
+            body = f'#!/bin/bash\nprintf unexpected > "{marker}"\nexit 91\n'
+            if name == "git":
+                body = (f'#!/bin/bash\nif [ "$1" = rev-parse ]; then\n'
+                        f'  printf "%s\\n" "{CI.parents[1]}"\n  exit 0\nfi\n'
+                        f'printf unexpected > "{marker}"\nexit 91\n')
+            binary.write_text(body)
+            binary.chmod(0o700)
+        env = dict(os.environ, PATH=f"{fake_bin}:{os.environ['PATH']}",
+                   CODEX_RAVEN_CONFIG=str(self.config), CODEX_BIN=str(fake_bin / "codex"),
+                   CODEX_HOME="daily-must-not-leak", RAVEN_API_KEY="", OPENAI_API_KEY="",
+                   CODEX_REVIEW_HOME=str(Path(self.directory.name) / "review-home"),
+                   PR_NUMBER="51", BASE_SHA="fixture", HEAD_SHA="fixture", BASE_REPO="fixture")
+        result = subprocess.run(["bash", str(CI / "codex-review.sh")], env=env,
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("setup failed before review", result.stderr)
+        self.assertFalse(marker.exists(), "setup failure must not fetch, post or invoke a model")
 
 
 if __name__ == "__main__":
