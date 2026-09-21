@@ -7,6 +7,7 @@ Never load auth files, print credential values, edit configuration or retry.
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import tomllib
 from urllib.parse import urlsplit
@@ -19,7 +20,10 @@ def build_command(config_path, binary, arguments, environment):
         raise ValueError("Cannot read daily Codex provider configuration") from None
     if config.get("model_provider") != "raven":
         raise ValueError("Daily Codex must explicitly select the Raven provider")
-    provider = config.get("model_providers", {}).get("raven", {})
+    providers = config.get("model_providers", {})
+    if not isinstance(providers, dict) or not isinstance(providers.get("raven"), dict):
+        raise ValueError("Raven provider must be a configuration table")
+    provider = providers["raven"]
     endpoint = provider.get("base_url")
     key_name = provider.get("env_key")
     if not isinstance(endpoint, str) or not isinstance(key_name, str):
@@ -48,14 +52,40 @@ def build_command(config_path, binary, arguments, environment):
             "-c", "model_providers.raven=" + table, *arguments]
 
 
+def review_environment(environment, config_path):
+    # Only the explicit review override is trusted, never an inherited daily CODEX_HOME.
+    home = Path(environment.get("CODEX_REVIEW_HOME") or Path.home() / ".codex-review")
+    try:
+        home = home.expanduser().resolve()
+        daily_homes = {(Path.home() / ".codex").resolve(), Path(config_path).expanduser().resolve().parent}
+    except (OSError, RuntimeError, ValueError):
+        raise ValueError("Cannot resolve review home or provider configuration location") from None
+    if home in daily_homes:
+        raise ValueError("Review home must be separate from daily provider configuration")
+    return dict(environment, CODEX_HOME=str(home))
+
+
 def main():
-    if len(sys.argv) < 2:
-        print("[codex-review] expected Codex binary and exec arguments", file=sys.stderr)
+    arguments = sys.argv[1:]
+    setup_only = bool(arguments and arguments[0] == "--check-setup")
+    if setup_only:
+        arguments = arguments[1:]
+    if not arguments or (setup_only and len(arguments) != 1):
+        print("[codex-review] expected [--check-setup] Codex binary; exec arguments only in review mode",
+              file=sys.stderr)
         return 1
     config = os.environ.get("CODEX_RAVEN_CONFIG", str(Path.home() / ".codex/config.toml"))
     try:
-        command = build_command(config, sys.argv[1], sys.argv[2:], os.environ)
-        os.execvp(command[0], command)
+        environment = review_environment(os.environ, config)
+        command = build_command(config, arguments[0], arguments[1:], environment)
+        binary = shutil.which(command[0])
+        if binary is None:
+            raise ValueError("Codex executable is unavailable; check runner PATH or CODEX_BIN")
+        if setup_only:
+            print("[codex-review] Raven setup PASS (metadata, environment, binary, home isolation only); "
+                  "no model request, profile validation, verdict or merge verification")
+            return 0
+        os.execvpe(binary, command, environment)
     except (ValueError, OSError) as error:
         # Never print an OSError filename/argv or a TOML parser's source excerpt.
         detail = str(error) if isinstance(error, ValueError) else "Cannot start Codex executable"

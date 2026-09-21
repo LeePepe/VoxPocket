@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-# managed-by: local-review-skill
-# local-review-skill version: 2.2.0
+# 仓库自有快门禁；AI 审查由内部 Reviewer / PR Actions 负责。
 
 set -euo pipefail
 
 hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$hook_dir/.." && pwd)"
 
-skill_path="$(git -C "$repo_root" config local-review.skill-path 2>/dev/null || true)"
-if [[ -z "$skill_path" || ! -f "$skill_path/assets/repo-scripts/review.sh" ]]; then
-  echo "[local-review] error: skill path not found — re-run the installer" >&2
-  exit 1
-fi
-
-exec "$skill_path/assets/repo-scripts/review.sh" commit
+cd "$repo_root"
+bash scripts/gates/gate-precommit.sh
+zsh scripts/docs/lint_docs_map.sh
+zsh scripts/docs/lint_docs_freshness.sh

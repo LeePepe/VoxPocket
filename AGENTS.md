@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last-Reviewed: 2026-09-14
+Last-Reviewed: 2026-09-20
 
 ## Project Snapshot
 
@@ -107,7 +107,8 @@ swift test --package-path Packages/VoxApplication
   详见 CLAUDE.md → TestFlight Manual Release）。
   `claude-review` 已暂停;`kimi-review` 只发 advisory comment,不参与合并门。
 - **pre-commit / pre-push**（本地，可绕过）：只跑快门禁——改到的 layer 增量 build+test、
-  frontmatter 防腐校验、"改代码必带测试"。目标 < 60s。脚本在 `scripts/gates/`，经 `.local-review.yml` 接入。
+  frontmatter 防腐校验、"改代码必带测试"。目标 < 60s。`.githooks/` 直接调用 `scripts/gates/`；
+  commit 同时执行 docs-map / freshness 检查。接线与范围见 `docs/local-gates.md`。
 - **CI required**（服务端，不可绕过）：全量 per-package 测试 + app-target `xcodebuild` + frontmatter 校验，
   锁定 Xcode 版本。重验证（xcodebuild/模拟器）只在这里，不进 pre-push。Codex 是 required
   review;Kimi 的结果只供参考,不能满足或阻塞 required gate。
@@ -117,7 +118,7 @@ swift test --package-path Packages/VoxApplication
   线上 ruleset 通过 `scripts/rulesets/apply` 与同目录 JSON 同步。
 - **防腐**：`scripts/gates/check_frontmatter.py` 校验每层 frontmatter 与代码一致（layer 名、`depends_on`
   双向、`roles` 角色词表与目录/前缀）。架构变了就更新 tech-context，别绕过。
-- 既有 `local-review-skill`（Codex 审查）hook 保留，与上述快门禁并行。
+- 本地 hook 仅执行确定性检查；内部 AI Reviewer 与 PR Actions 独立审查职责保持不变。
 
 ## 主工作目录修改记录
 

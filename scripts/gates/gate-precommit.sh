@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gate-precommit.sh — 增量 layer 级发现(秒级)。全量与重验证在 CI required。
 # 只对暂存改动涉及的 Packages/<layer> 跑 swift build + swift test,并跑 frontmatter 防腐。
-# 由 .local-review.yml 的 commit.commands 调用;可被本地 --no-verify 绕过(CI 照样拦)。
+# 由 .githooks/pre-commit 直接调用;可被本地 --no-verify 绕过(CI 照样拦)。
 set -uo pipefail
 REPO="$(git rev-parse --show-toplevel)"
 cd "$REPO"

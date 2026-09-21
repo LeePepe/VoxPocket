@@ -29,7 +29,7 @@ Last-Reviewed: 2026-09-12
 - Tracker: `docs/records/tech-debt-tracker.md`
 
 ## Runbooks And Operations
-- Local review: `docs/LOCAL_REVIEW.md`
+- Local deterministic gates: `docs/local-gates.md`
 - Local CI/CD: `docs/local-cicd.md`
 - Harness notes: `docs/harness/README.md`
 - Current App delivery rules: `AGENTS.md` → TestFlight-only delivery

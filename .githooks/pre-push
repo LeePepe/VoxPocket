@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# managed-by: local-review-skill
-# local-review-skill version: 2.2.0
+# 仓库自有快门禁；检查已提交的分支内容，与工作区是否干净无关。
 
 set -euo pipefail
 
 hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$hook_dir/.." && pwd)"
 
-skill_path="$(git -C "$repo_root" config local-review.skill-path 2>/dev/null || true)"
-if [[ -z "$skill_path" || ! -f "$skill_path/assets/repo-scripts/review.sh" ]]; then
-  echo "[local-review] error: skill path not found — re-run the installer" >&2
-  exit 1
-fi
-
-exec "$skill_path/assets/repo-scripts/review.sh" push
+cd "$repo_root"
+head_sha="$(git rev-parse HEAD)"
+has_update=0
+# 现有快门禁检查 HEAD 对 origin/main；拒绝让它替其他候选背书。
+while read -r local_ref local_sha remote_ref remote_sha extra; do
+  if [[ -z "$remote_sha" || -n "$extra" ]]; then
+    echo "[pre-push] 无法解析推送范围；停止推送" >&2
+    exit 1
+  fi
+  [[ "$local_sha" =~ ^0+$ ]] && continue # 删除远端引用，没有新候选。
+  if [[ "$remote_ref" != refs/heads/* || "$local_sha" != "$head_sha" ]]; then
+    echo "[pre-push] 仅支持当前 HEAD 分支；请切换到待推送分支后重试：$local_ref" >&2
+    exit 1
+  fi
+  has_update=1
+done
+[[ "$has_update" -eq 1 ]] || exit 0
+exec bash scripts/gates/gate-prepush.sh
