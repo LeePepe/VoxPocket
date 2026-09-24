@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """Block undeclared removal or weakening of tests (AGENTS.md: never weaken or skip tests).
 
-Against the merge base (VERIFY_BASE, default origin/main), every removed or changed
-assertion/test-case line, deleted test file and added skip marker is a loss, whatever else
-the change adds. A line re-added verbatim in a test file of the same change counts as moved.
+Same design as shared-ci `scripts/quality/test_integrity.py` (G5/G6), so a later re-pin can
+switch to it without changing behaviour. Against the merge base (VERIFY_BASE, default
+origin/main), with no netting:
 
-A loss passes only when the change adds or edits docs/test-weakening/<name>.md naming each
-affected test path and the reason. .github/CODEOWNERS owns that directory, so the ruleset's
-required code-owner review makes the Owner approve every declared weakening; this script
-fails closed if that CODEOWNERS entry is missing. On a pull request (PR_BODY, or the body in
-$GITHUB_EVENT_PATH) the "Removed or weakened tests or policy" section must also not be "none".
+- every removed assertion line in a test file is a loss unless the same line
+  (whitespace-normalized) is added somewhere in the diff (a move or re-indent);
+- every test name present at the base but gone at the head is a loss (moves are fine);
+- every added skip marker is a loss; a deleted test file loses all its assertions and tests.
+
+Each affected test file must be covered by a line added in this change to the ledger
+`.github/test-weakening.md`: `- <test file path>: <reason> (approved: @<owner>)`. The ledger
+sits under a CODEOWNERS-owned path, so the ruleset's required code-owner review makes the
+Owner approve every declared loss; the check fails closed if CODEOWNERS does not cover it.
+On a pull request (PR_BODY, or the body in $GITHUB_EVENT_PATH) the "Removed or weakened
+tests or policy" section must name each affected test file; with no losses it may say "none".
 """
 from collections import Counter
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -25,8 +32,10 @@ ASSERTION = re.compile(
     r"\bself\.assert\w+\s*\(|^\s*assert\s")
 SKIP = re.compile(r"\.disabled\b|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
                   r"\bself\.skipTest\s*\(")
+TEST_NAME = re.compile(r"@Test\b[^\n]*?\bfunc\s+(\w+)|\bfunc\s+(test\w*)\s*\(|\bdef\s+(test\w*)\s*\(")
 SECTION = "## Removed or weakened tests or policy"
-DECLARATIONS = "docs/test-weakening"
+LEDGER = ".github/test-weakening.md"
+LEDGER_LINE = re.compile(r"^\+-\s+(\S+?):\s+\S.*\(approved:\s*@\S+\)\s*$")
 
 
 def git(*args):
@@ -37,65 +46,93 @@ def normalized(line):
     return re.sub(r"\s+", " ", line.strip())
 
 
-def losses(base):
-    """Return (path, finding) pairs for every removed assertion/test case, deleted test file
-    or added skip marker. A removed line only counts as moved (not lost) when the identical
-    line is added back in some test file of the same change; unrelated additions never
-    offset a removal."""
-    diff = git("diff", "--unified=0", "--no-color", "--diff-filter=ADMR", "-M", base, "HEAD")
+def test_names(text):
+    return Counter(next(group for group in match.groups() if group) for match in TEST_NAME.finditer(text))
+
+
+def changed_test_files(base):
+    """(status, old_path, new_path) for test files touched between base and HEAD."""
+    rows = []
+    for line in git("diff", "--name-status", "-M", base, "HEAD").splitlines():
+        parts = line.split("\t")
+        status, old, new = parts[0][0], parts[1], parts[-1]
+        if TEST_PATH.search(old) or TEST_PATH.search(new):
+            rows.append((status, old, new))
+    return rows
+
+
+def assertion_losses(base):
+    diff = git("diff", "--unified=0", "--no-color", "-M", base, "HEAD")
     removed, added, findings = [], Counter(), []
-    current_old = current_new = None
+    old_path = new_path = None
     for line in diff.splitlines():
         if line.startswith("--- "):
-            path = line[6:] if line.startswith("--- a/") else None
-            current_old = path if path and TEST_PATH.search(path) else None
+            old_path = line[6:] if line.startswith("--- a/") and TEST_PATH.search(line[6:]) else None
         elif line.startswith("+++ "):
-            path = line[6:] if line.startswith("+++ b/") else None
-            current_new = path if path and TEST_PATH.search(path) else None
-        elif line.startswith("-") and current_old and ASSERTION.search(line[1:]):
-            removed.append((current_old, normalized(line[1:])))
-        elif line.startswith("+") and current_new:
+            new_path = line[6:] if line.startswith("+++ b/") and TEST_PATH.search(line[6:]) else None
+        elif line.startswith("-") and old_path and ASSERTION.search(line[1:]):
+            removed.append((old_path, normalized(line[1:])))
+        elif line.startswith("+") and new_path:
             if ASSERTION.search(line[1:]):
                 added[normalized(line[1:])] += 1
             if SKIP.search(line[1:]):
-                findings.append((current_new, f"skip marker added in {current_new}: {line[1:].strip()[:120]}"))
-    for path in git("diff", "--name-only", "--diff-filter=D", "-M", base, "HEAD").splitlines():
-        if TEST_PATH.search(path):
-            findings.append((path, f"test file deleted: {path}"))
+                findings.append((new_path, f"skip marker added: {line[1:].strip()[:120]}"))
     for path, text in removed:
         if added[text] > 0:
-            added[text] -= 1  # the same assertion moved or was re-indented
-            continue
-        findings.append((path, f"assertion/test case removed or changed in {path}: {text[:120]}"))
+            added[text] -= 1  # moved or re-indented
+        else:
+            findings.append((path, f"assertion removed or changed: {text[:120]}"))
     return findings
 
 
-def owned_by_codeowners(root):
-    """True when .github/CODEOWNERS assigns an owner to the declaration directory."""
+def test_name_losses(base, rows):
+    before, after, where = Counter(), Counter(), {}
+    for status, old, new in rows:
+        if status != "A" and TEST_PATH.search(old):
+            names = test_names(git("show", f"{base}:{old}"))
+            before.update(names)
+            where.update({name: old for name in names})
+        if status != "D" and TEST_PATH.search(new):
+            after.update(test_names(git("show", f"HEAD:{new}")))
+    return [(where[name], f"test removed: {name}") for name in sorted(before) if before[name] > after[name]]
+
+
+def losses(base):
+    rows = changed_test_files(base)
+    findings = assertion_losses(base) + test_name_losses(base, rows)
+    findings += [(old, "test file deleted") for status, old, _ in rows if status == "D"]
+    return findings
+
+
+def ledger_paths(base):
+    """Test paths declared by lines added to the ledger in this change."""
+    diff = git("diff", "--unified=0", "--no-color", base, "HEAD", "--", LEDGER)
+    return {match.group(1) for match in map(LEDGER_LINE.match, diff.splitlines()) if match}
+
+
+def ledger_owned(root):
+    """True when a CODEOWNERS rule with an owner matches the ledger path (last match wins)."""
     codeowners = root / ".github" / "CODEOWNERS"
     if not codeowners.is_file():
         return False
+    owned = False
     for raw in codeowners.read_text().splitlines():
         parts = raw.split("#", 1)[0].split()
-        if len(parts) >= 2 and parts[0].rstrip("*").rstrip("/") in (f"/{DECLARATIONS}", DECLARATIONS):
-            return True
-    return False
+        if not parts:
+            continue
+        pattern = parts[0].lstrip("/")
+        hit = (pattern.endswith("/") and LEDGER.startswith(pattern)) or fnmatch.fnmatch(LEDGER, pattern) \
+            or fnmatch.fnmatch(LEDGER, pattern.replace("**/", ""))
+        if hit:
+            owned = len(parts) >= 2
+    return owned
 
 
-def declarations(base):
-    """Text of declaration files added or changed in this range (README excluded)."""
-    changed = git("diff", "--name-only", "--diff-filter=AM", base, "HEAD", "--", DECLARATIONS).splitlines()
-    return "\n".join(git("show", f"HEAD:{path}") for path in changed
-                     if path.endswith(".md") and not path.endswith("/README.md"))
-
-
-def declared_in_body(body):
-    """True when the PR template section names something other than 'none'."""
+def body_section(body):
     if SECTION not in body:
-        return False
+        return None
     text = body.split(SECTION, 1)[1].split("\n## ", 1)[0]
-    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL).strip().strip("-* ").strip()
-    return bool(text) and text.rstrip(".").lower() not in {"none", "n/a", "no"}
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL).strip()
 
 
 def pr_body():
@@ -111,6 +148,22 @@ def pr_body():
     return None
 
 
+def problems_for(findings, base, root, body):
+    paths = sorted({path for path, _ in findings})
+    problems = []
+    if not ledger_owned(root):
+        problems.append(f".github/CODEOWNERS does not cover {LEDGER}, so a declaration would not need Owner review")
+    missing = [path for path in paths if path not in ledger_paths(base)]
+    if missing:
+        problems.append(f"no line added to {LEDGER} for: " + ", ".join(missing))
+    if body is not None:
+        section = body_section(body) or ""
+        unnamed = [path for path in paths if path not in section]
+        if unnamed:
+            problems.append(f'PR body section "{SECTION[3:]}" does not name: ' + ", ".join(unnamed))
+    return problems
+
+
 def main():
     event_name = os.environ.get("GITHUB_EVENT_NAME")
     if event_name and not event_name.startswith("pull_request"):
@@ -119,36 +172,27 @@ def main():
     base_ref = os.environ.get("VERIFY_BASE") or "origin/main"
     try:
         base = git("merge-base", base_ref, "HEAD").strip()
-    except subprocess.CalledProcessError:
-        sys.exit(f"[test-weakening] cannot find the merge base with {base_ref}; fetch it and retry")
-    findings = losses(base)
+        findings = losses(base)
+        root = Path(git("rev-parse", "--show-toplevel").strip())
+        problems = problems_for(findings, base, root, pr_body()) if findings else []
+    except subprocess.CalledProcessError as error:
+        sys.exit(f"[test-weakening] git failed ({' '.join(error.cmd[1:3])}); cannot use merge base "
+                 f"with {base_ref}; fetch it and retry")
     if not findings:
         print("Test weakening guard: passed")
         return
-    root = Path(git("rev-parse", "--show-toplevel").strip())
-    problems = []
-    if not owned_by_codeowners(root):
-        problems.append(f".github/CODEOWNERS does not own /{DECLARATIONS}/, so a declaration would not need "
-                        "Owner review")
-    declared = declarations(base)
-    undeclared = sorted({path for path, _ in findings if path not in declared})
-    if undeclared:
-        problems.append(f"no {DECLARATIONS}/<name>.md added in this change names: " + ", ".join(undeclared))
-    body = pr_body()
-    if body is not None and not declared_in_body(body):
-        problems.append(f'the PR body says "none" (or lacks) "{SECTION[3:]}"')
     if not problems:
         print("Test weakening guard: declared (Owner code-owner review required) -> "
-              + "; ".join(finding for _, finding in findings))
+              + "; ".join(f"{path}: {finding}" for path, finding in findings))
         return
     print("Blocked: tests were removed or weakened without an Owner-gated declaration "
           "(AGENTS.md: never weaken or skip tests):", file=sys.stderr)
-    for _, finding in findings:
-        print(f"  - {finding}", file=sys.stderr)
+    for path, finding in findings:
+        print(f"  - {path}: {finding}", file=sys.stderr)
     for problem in problems:
         print(f"  ! {problem}", file=sys.stderr)
-    print(f"Fix the code instead, or add {DECLARATIONS}/<name>.md naming each test path with the reason "
-          "(CODEOWNERS makes the ruleset require Owner approval) and list it in the PR template.",
+    print(f"Fix the code instead, or add `- <test file path>: <reason> (approved: @<owner>)` to {LEDGER} "
+          "(CODEOWNERS makes the ruleset require Owner approval) and name each file in the PR template.",
           file=sys.stderr)
     sys.exit(1)
 

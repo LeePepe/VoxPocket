@@ -5,8 +5,6 @@
 /CLAUDE.md                        @LeePepe
 /.specify/memory/constitution.md  @LeePepe
 /docs/architecture/               @LeePepe
-# Declared test removal/weakening: owning this makes the ruleset require Owner review.
-/docs/test-weakening/             @LeePepe
 **/tech-context.md                @LeePepe
 /scripts/verify                   @LeePepe
 /policy/                          @LeePepe
