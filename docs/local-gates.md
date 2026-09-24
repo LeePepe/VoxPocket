@@ -1,6 +1,6 @@
 # Local deterministic gates
 
-Last-Reviewed: 2026-09-20
+Last-Reviewed: 2026-09-24
 
 Repository-owned `.githooks/` use `core.hooksPath=.githooks`. They run shell/Python checks,
 not AI reviewers or automatic repair. A failed command stops the Git operation with a nonzero
@@ -10,7 +10,15 @@ the repository, including when invoked from a subdirectory or a path containing 
 | Hook | Direct commands, in order |
 | --- | --- |
 | `pre-commit` | `bash scripts/gates/gate-precommit.sh`, `zsh scripts/docs/lint_docs_map.sh`, `zsh scripts/docs/lint_docs_freshness.sh` |
-| `pre-push` | `bash scripts/gates/gate-prepush.sh` |
+| `pre-push` | `scripts/verify` (changed mode) |
+
+`scripts/verify` is the single entry shared with CI. It fetches the shared-ci resolver at the SHA
+pinned in `AGENTS.md` into `.shared-ci/` (gitignored), runs the contract audit and workflow-lint,
+then `bash scripts/gates/gate-prepush.sh` (unchanged checks below), then the resolver-selected
+gates of changed layers outside `Packages/` (for example `VoxPocketApp`). CI runs
+`scripts/verify --all`, `--layer <name>` (the `SPM <pkg>` and `App target` checks) and
+`--policy` (`Lint & policy`). External packages are fetched at pinned SHAs by
+`scripts/ci/fetch-external-deps.sh`.
 
 The commit gate uses staged files. The push gate uses committed `HEAD` changes since the
 merge-base with `origin/main`, even when the working tree is clean. The hook checks Git's

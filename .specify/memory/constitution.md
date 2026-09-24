@@ -69,13 +69,17 @@ system boundary before use. Fail fast with a clear message. Never trust external
   test doubles are `Fake*` / `Mock*`. Depend on protocols, not concrete types.
 - **File organization**: many small focused files over few large ones. Functions < 50 lines,
   files < 800 lines, nesting ≤ 4 levels.
-- **LokiKit is external**: it lives at `~/Development/LokiKit` (referenced as `../../../LokiKit`),
-  not inside this repository. Changes to LokiKit are out of scope for this repo's gates.
+- **LokiKit is external**: it is published by `LeePepe/shared-telemetry`, checked out next to this
+  repository (referenced as `../../../LokiKit`) at a pinned full SHA. Changes to LokiKit are out of
+  scope for this repo's gates.
+- **Platforms**: macOS and iOS are both in development scope; CI builds and tests both. App
+  delivery is TestFlight-only; iOS TestFlight releases need separate Owner authorization.
 
 ## Quality Gates
 
 - **pre-commit / pre-push (local, bypassable)**: incremental layer build + that layer's tests +
-  frontmatter anti-rot + "changed code must carry tests". Fast (< 60s target); no heavy verification.
+  frontmatter anti-rot + "changed code must carry tests". pre-push runs `scripts/verify`, the same
+  entry CI uses. Fast (< 60s target); no heavy verification.
 - **CI required (server-side, unbypassable)**: full per-package tests, app-target build, and
   frontmatter validation, pinned to a fixed Xcode version. This is the only gate `--no-verify`
   cannot skip; heavy verification (`xcodebuild`, simulator) lives here, not in local hooks.
@@ -94,4 +98,8 @@ redesigned, not excepted.
 configuration. Preserve the existing deterministic checks through direct hook calls; this changes
 hook ownership only, not layer red lines, CI requirements, or internal review responsibilities.
 
-**Version**: 1.1.1 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-09-20
+**Amendment (2026-09-24)**: Adopt the shared-ci repository contract: one `scripts/verify` entry for
+hooks and CI, LokiKit pinned from shared-telemetry, iOS back in development scope (Owner decision Q6/Q12).
+Layer red lines are unchanged.
+
+**Version**: 1.2.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-09-24
