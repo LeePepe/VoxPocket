@@ -1,131 +1,124 @@
-# AGENTS.md
+# AGENTS.md — VoxPocket
 
-Last-Reviewed: 2026-09-20
+Last-Reviewed: 2026-09-24
 
-## Project Snapshot
+VoxPocket is a SwiftUI voice recording and transcription app for macOS and iOS
+(default speech locale `zh-Hans`, text refinement with Apple Intelligence or a
+configured provider). Every agent that edits it follows the protocol below.
+Tool-specific files (CLAUDE.md etc.) only point here.
 
-VoxPocket 是 macOS/iOS 的 SwiftUI 语音转写应用，默认语音识别语言为 `zh-Hans`，并支持 Apple Intelligence 文本精炼。
+## Read first
 
-## Layered Architecture
+1. `.specify/memory/constitution.md` — non-negotiable principles (immutability, layer
+   direction, concurrency, privacy of voice/text, secrets hygiene, input validation)
+2. `docs/architecture/tech-context.md` — layer table: layer → paths → depends_on
+3. The leaf `tech-context.md` of every layer you touch
+   (`python3 .shared-ci/scripts/context/_context.py contexts <path>` after one `scripts/verify`)
+4. Index: `docs/index.md` · records map: `docs/records/index.md` · feature specs: `specs/`
+   (Spec Kit, `.specify/`); historical plans: `docs/plans/`
+
+Layer map (dependencies point down only; `LokiKit` and `AppleUITesting` are external):
 
 ```
-VoxPresentation  ->  VoxApplication  ->  VoxInfrastructure + LokiKit  ->  VoxDomain
+VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, delivery
+  → VoxPresentation   SwiftUI views and view models
+  → VoxApplication    use cases
+  → VoxInfrastructure transcription, LLM, persistence, platform adapters, preferences (+ LokiKit)
+  → VoxDomain         pure domain models, no external dependencies
+VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 
-- `VoxDomain`: 纯领域模型（`CoreModels`, `TextHistory`）
-- `VoxInfrastructure`: 转写、LLM、持久化、平台适配、偏好设置
-- `LokiKit`: 独立可观测性/遥测包（日志、监控、Loki telemetry）
-- `VoxApplication`: UseCases 业务编排
-- `VoxPresentation`: SwiftUI 视图与 ViewModel
+A change that spans 2+ layers is too big: split it by layer. Fix a failure inside the
+failing layer while honouring that layer's `red_lines`; a root cause elsewhere is a new task.
 
-## Start Here
+## Protocol
 
-- Fast index: `docs/index.md`
-- Records index (source of truth map): `docs/records/index.md`
-- Architecture docs: `docs/architecture/`
-- Harness baseline: `docs/harness/metrics-baseline.md`
+Follow `LeePepe/shared-ci@761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md).
+It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
-## Build And Test
+Plan-Review Loop (mandatory for any implementation plan, spec or plan change):
 
-```bash
-swift build --package-path Packages/VoxDomain
-swift test --package-path Packages/VoxPresentation
-swift test --package-path Packages/VoxApplication
+1. Plan — a planner creates or updates the plan (`specs/` via Spec Kit, or `docs/plans/`).
+2. Review — an independent reviewer reviews it immediately.
+3. Revise — CRITICAL or MEDIUM findings are fixed in the plan.
+4. Re-review — the reviewer reviews again without being asked.
+5. Repeat until the reviewer outputs `APPROVED` with no CRITICAL finding.
+6. Only then present the plan to the Owner for execution approval.
+
+## Verify
+
+```sh
+git config core.hooksPath .githooks   # once per clone
+scripts/verify            # changed layers vs origin/main + policy (what pre-push runs)
+scripts/verify --all      # every layer gate + policy (what CI runs)
+scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one layer
 ```
 
-## App Build 与交付（TestFlight 唯一渠道）
+- External packages live next to the repository: `../LokiKit` (LeePepe/shared-telemetry) and
+  `../AppleUITesting`. `scripts/ci/fetch-external-deps.sh` checks out the pinned SHAs.
+- `pre-commit` keeps the fast staged-layer build/test plus docs map/freshness checks.
+- Local verification is SPM build/test plus deterministic scripts. The app-target
+  `xcodebuild` runs in CI only (`RUN_HEAVY=1 scripts/verify` opts in locally).
+- Never `--no-verify`, never weaken or skip tests, never edit policy/gates to pass.
 
-- **当前平台范围（2026-09-14）**：仅推进 macOS；暂停 iOS 功能开发和 TestFlight 发布，
-  恢复须用户明确要求。保留 iOS 代码、既有产物及 required 兼容性检查，不借暂停删除数据或放宽门禁。
-- **交付**：所有供用户使用的 macOS / iOS App build 统一经 `testflight.yml` 构建并分发到
-  TestFlight；不再在主工作目录或 linked worktree 自动生成本地 App build / archive。
-- **安装**：由用户通过 TestFlight 安装；Agent 不主动安装、替换或启动交付 build。
-- **验证**：本地保留受影响 layer 的 SPM build/test 与快速检查；App target 的
-  `xcodebuild` 验证继续由 CI required 执行，不作为本地交付步骤。
-- **发布边界**：提交不等于发布；沿用分支 → PR → required checks → 合并流程。
-  TestFlight 自动发布已暂停，仅在用户明确要求后通过 `workflow_dispatch` 手动发布。
-- **完成条件**：代码任务报告 commit 与验证结果；Agent 监督 PR 合并和获授权的 macOS
-  TF 构建上传，报告版本/build number、run 链接与分发警告。Apple Connect／TestFlight 的
-  最终可测试性由用户核实；Agent 不自行登录或查找 ASC 凭据，不把上传成功等同于可测试。
-  保留已有本地产物，不自动清理。
+## Required checks
 
-## Engineering Rules
+Merging to `main` requires (must match the live ruleset `main protection`):
 
-- **模型配置 / 启动入口**：修改时先读 `docs/architecture/private-model-config.md`（含启动交互回归命令）；私密配置只在沙箱运行时读取，模板才入库，交付前检查安装包不含私密文件。
+- `SPM VoxDomain`
+- `SPM VoxInfrastructure`
+- `SPM VoxApplication`
+- `SPM VoxPresentation`
+- `SPM VoxUITesting`
+- `App target`
+- `Lint & policy`
+- `codex-review-target`
 
-- 协议驱动 DI，默认实现用 `Default*` 命名。
-- 测试替身使用 `Fake*` / `Mock*` 命名。
-- 不向 `VoxDomain` 引入外部依赖。
-- 变更前后优先保持分层依赖方向不变。
+`quality / aggregate` (shared-ci fail-closed gate) and `iOS simulator` also run on every PR;
+they are not yet required (the ruleset change awaits Owner approval). `kimi-review` is
+advisory and never required.
 
-## Agent 读取契约（Read Contract）
+## Red lines
 
-任务开始前，按你要碰的东西先读对应文档 —— 不读就动手 = 违规。
+- Privacy (constitution IV): recorded audio, transcripts and refined text never go into
+  logs or telemetry payloads (metrics only: durations, counts, source labels, session IDs),
+  and never leave the app sandbox (`~/Library/Application Support/VoxPocket/`).
+- Secrets (constitution V): no keys or tokens in source. Keys come from environment
+  variables. Azure model credentials may come from the runtime-only sandbox file
+  `config.private.json` (owner-only 0600, excluded from backups, Git and app bundles,
+  contents and decoder errors never logged); only the empty `config.example.json` template
+  is committed. Read `docs/architecture/private-model-config.md` before touching it.
+- No Microsoft/Azure resource identifiers, real endpoints, tenant IDs or other
+  project-specific non-public values in Git (code, tests, fixtures, docs). Use synthetic
+  `example-*` values; real values stay in gitignored local files with a committed template.
+- Delivery is TestFlight only: every user-facing macOS/iOS App build goes through
+  `.github/workflows/testflight.yml` (manual `workflow_dispatch` after an explicit Owner
+  request). Agents do not create local archives, install, replace or launch delivery builds,
+  or sign in to App Store Connect. Upload success is not "testable"; the Owner verifies.
+- Platforms: macOS is released via TestFlight. iOS is enabled for development with CI
+  build/test; iOS TestFlight releases need separate Owner authorization.
+- `VoxPocket/project.yml` (XcodeGen) is the source of truth for the Xcode project.
+- Changes to `.github/**`, hooks, `scripts/verify`, rulesets, tech-context or AGENTS/
+  constitution are important PRs.
+- No personal account names, credential-profile paths or local home paths in the repo.
 
-| 你要做的事 | 必读（前置） | 拿什么 |
-|---|---|---|
-| 任何任务 | `.specify/memory/constitution.md` | 不可违反的红线（先确认不踩） |
-| 决定做什么 / 改需求 | `.specify/`（spec-kit：`/speckit-specify` → `specs/`）；历史计划见 `docs/plans/` | 功能意图、验收标准、范围边界 |
-| 改全局架构 / 跨层设计 | `docs/architecture/tech-context.md`（+ `packages-architecture.md`、`dependency-graph.md`） | 架构决策、数据流、layer 划分、`canonical_roles` |
-| 改 `Packages/<pkg>/**` | `Packages/<pkg>/tech-context.md` | 该层职责 / 依赖 / 红线 / 测试命令 |
-| 改 `VoxPocket/VoxPocket/**`（app 壳） | `docs/architecture/tech-context.md` 的 app-target 小节 | 该处不是 layer，验证归 CI（xcodebuild） |
+Approved exceptions: none.
 
-## Layer 索引（Layer Map）
+## Dependencies
 
-| Layer | 职责（一句话） | 文档 | 依赖（本地） |
-|---|---|---|---|
-| VoxDomain | 纯领域模型（CoreModels, TextHistory），无外部依赖 | `Packages/VoxDomain/tech-context.md` | （无） |
-| VoxInfrastructure | 转写 / LLM / 持久化 / 平台适配 / 偏好 | `Packages/VoxInfrastructure/tech-context.md` | VoxDomain（+ ext LokiKit） |
-| VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure（+ ext LokiKit） |
-| VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication（+ ext LokiKit） |
-| VoxUITesting | 快照测试 · Claude Vision UI 评估（standalone） | `Packages/VoxUITesting/tech-context.md` | （无） |
+- `shared-ci` `761fe6b0b3ca5e2c57d244182d495ab8041851fa` — https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/
+- LokiKit from LeePepe/shared-telemetry at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` (no tag
+  or `ai/` bundle yet; pinned in `scripts/ci/fetch-external-deps.sh`).
+- AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (same script).
 
-> **LokiKit** 是外部包（`~/Development/LokiKit`），不在本仓库、不进 `depends_on`、不受本仓库门禁约束。
-> **`VoxPocket/VoxPocket/`** 是 Xcode app 壳，不是 layer；其 `xcodebuild` 全量验证归 CI required。
+## Delivery
 
-**渐进展开**：先读本表定位相关 layer → 只下钻该 layer 的 `tech-context.md` → 拿约束再动手。
-不预读所有 layer 文档。改哪层读哪层。
-
-**按 layer 收窄范围**：
-- 改动只落 1 个 layer → 一个任务直接做。
-- 跨 2+ layer → 太大，按 layer 拆成 N 个独立可 build/test 的子任务（一层一 commit）。
-- 单层内仍很大 → 按技术切面再拆（纯逻辑 → 校验 → 编排 → 输出转换 → fixture → 文档 → 迁移）。
-- 收尾遗留记为新任务，不回头扩大当前任务。
-
-## 分层修复约定
-
-失败信号带 `{layer, red_lines}`。无论谁来修：
-- 只在失败所在 layer 内改；根因在别层则记新任务，不跨层改。
-- 带着该层 `red_lines` 修（别为了过测试踩红线，尤其"内容进日志/遥测"这条）。
-- 修完跑该层 `test`（见各层 frontmatter）验证再交。
-
-## 门禁与防腐
-
-- **PR → main（服务端强制）**：`main` 由 ruleset 保护，**禁止直推**。改动一律走分支 → PR，
-  required checks 全绿（`SPM <pkg>`×5 / `App target` / `Lint & policy` / `codex-review-target`）后，
-  非 draft PR 由 auto-merge 自动 squash 合并。发布走 `testflight.yml`（仅在用户明确要求后手动触发；
-  详见 CLAUDE.md → TestFlight Manual Release）。
-  `claude-review` 已暂停;`kimi-review` 只发 advisory comment,不参与合并门。
-- **pre-commit / pre-push**（本地，可绕过）：只跑快门禁——改到的 layer 增量 build+test、
-  frontmatter 防腐校验、"改代码必带测试"。目标 < 60s。`.githooks/` 直接调用 `scripts/gates/`；
-  commit 同时执行 docs-map / freshness 检查。接线与范围见 `docs/local-gates.md`。
-- **CI required**（服务端，不可绕过）：全量 per-package 测试 + app-target `xcodebuild` + frontmatter 校验，
-  锁定 Xcode 版本。重验证（xcodebuild/模拟器）只在这里，不进 pre-push。Codex 是 required
-  review;Kimi 的结果只供参考,不能满足或阻塞 required gate。
-  Required-check policy 镜像在 `scripts/rulesets/main-protection.json`,线上 ruleset
-  变更必须同步该文件。
-  `codex-review-target.yml` 是 required AI 控制面；旧 `pull_request` workflow 已停用。
-  线上 ruleset 通过 `scripts/rulesets/apply` 与同目录 JSON 同步。
-- **防腐**：`scripts/gates/check_frontmatter.py` 校验每层 frontmatter 与代码一致（layer 名、`depends_on`
-  双向、`roles` 角色词表与目录/前缀）。架构变了就更新 tech-context，别绕过。
-- 本地 hook 仅执行确定性检查；内部 AI Reviewer 与 PR Actions 独立审查职责保持不变。
-
-## 主工作目录修改记录
-
-- 2026-09-10：修复配置预加载导致的主队列饥饿；入口同步启动，服务等待异步配置。补充生产入口交互回归和启动状态测试。
-- 2026-09-11：按用户要求改为 TestFlight 唯一 App build 交付渠道，取消自动本地归档与主动安装。
-
-## 写入前核对
-
-- push / 开 PR 前核对实际 fetch/push URL 与目标仓库；归属不明的 remote 先问 Owner。
-- 账号与凭据选择由 Owner 私有 agent 配置负责，按 Owner 决定不写入仓库。写入前确认当前认证账号对目标仓库有所需权限；无法核验或不符时停止并报告，不回退到环境 token 或其他账号。
+- One task → one branch + worktree → one PR using `.github/pull_request_template.md`.
+- Done = required checks green on the PR head SHA; a new push invalidates old evidence.
+- Non-draft PRs get squash auto-merge (`auto-merge.yml`). CODEOWNERS paths (`.github/**`,
+  policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval;
+  until enforced, add the `owner-review` label and disable auto-merge on that PR.
+- Code tasks report the commit, verification and PR. For an authorized TestFlight run,
+  report version/build number, run link and distribution warnings. Keep existing local
+  artifacts; do not clean them up automatically.

@@ -24,7 +24,8 @@ class TestFlightManualOnlyTests(unittest.TestCase):
 
     def test_release_rejects_non_manual_events(self):
         guards = re.findall(r"^    if: (.+)$", self.release, re.M)
-        self.assertEqual(guards, ["github.event_name == 'workflow_dispatch'"])
+        self.assertEqual(len(guards), 1)
+        self.assertTrue(guards[0].startswith("github.event_name == 'workflow_dispatch' && ("), guards)
         self.assertNotIn("needs: freshness", self.release)
         self.assertNotIn("  freshness:", self.workflow)
 

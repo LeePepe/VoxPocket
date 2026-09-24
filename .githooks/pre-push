@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 仓库自有快门禁；检查已提交的分支内容，与工作区是否干净无关。
+# Same entry as CI: scripts/verify. Checks the committed HEAD branch content,
+# independent of the working tree. Enable once per clone: git config core.hooksPath .githooks
 
 set -euo pipefail
 
@@ -9,7 +10,7 @@ repo_root="$(cd "$hook_dir/.." && pwd)"
 cd "$repo_root"
 head_sha="$(git rev-parse HEAD)"
 has_update=0
-# 现有快门禁检查 HEAD 对 origin/main；拒绝让它替其他候选背书。
+# verify checks HEAD against origin/main; refuse to vouch for any other candidate.
 while read -r local_ref local_sha remote_ref remote_sha extra; do
   if [[ -z "$remote_sha" || -n "$extra" ]]; then
     echo "[pre-push] 无法解析推送范围；停止推送" >&2
@@ -23,4 +24,4 @@ while read -r local_ref local_sha remote_ref remote_sha extra; do
   has_update=1
 done
 [[ "$has_update" -eq 1 ]] || exit 0
-exec bash scripts/gates/gate-prepush.sh
+exec scripts/verify

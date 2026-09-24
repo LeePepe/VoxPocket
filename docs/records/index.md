@@ -1,6 +1,6 @@
 # Docs Records Index
 
-Last-Reviewed: 2026-09-12
+Last-Reviewed: 2026-09-24
 
 这是 VoxPocket 的文档总地图（system of record）。
 
@@ -14,6 +14,7 @@ Last-Reviewed: 2026-09-12
 - `docs/architecture/dependency-graph.md`
 - `docs/architecture/tech-context.md`
 - `docs/architecture/private-model-config.md`
+- `docs/architecture/runtime-notes.md`
 
 ## Product And Specs
 - `PRD.md`
@@ -32,7 +33,8 @@ Last-Reviewed: 2026-09-12
 - Local deterministic gates: `docs/local-gates.md`
 - Local CI/CD: `docs/local-cicd.md`
 - Harness notes: `docs/harness/README.md`
-- Current App delivery rules: `AGENTS.md` → TestFlight-only delivery
+- Current App delivery rules: `AGENTS.md` → Red lines (TestFlight-only delivery)
+- TestFlight release mechanics: `docs/testflight-release.md`
 - TestFlight release implementation: `.github/workflows/testflight.yml`, `fastlane/Fastfile`
 - Export compliance: `docs/export-compliance.md`
 
