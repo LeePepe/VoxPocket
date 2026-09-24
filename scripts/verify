@@ -6,6 +6,9 @@
 #   scripts/verify --all        every layer gate + policy
 #   scripts/verify --policy     repository policy checks only (CI "Lint & policy")
 #   scripts/verify --layer L    one layer's gates (CI "SPM <pkg>" / App target lanes)
+#   scripts/verify --selected   CI changed-only (quality / verify): policy + the layers
+#                               in $CI_SELECTED_LAYERS; every layer unless
+#                               $CI_SELECTION_FULL is exactly "false"
 #
 # Layer selection and gates come from the tech-context layer map through the
 # shared-ci resolver pinned in AGENTS.md ($SHARED_CI, default .shared-ci).
@@ -26,9 +29,10 @@ case "${1:-}" in
     ""|--changed) mode="changed" ;;
     --all) mode="all" ;;
     --policy) mode="policy" ;;
+    --selected) mode="selected" ;;
     --layer) mode="layer"; layer="${2:?--layer needs a layer name}" ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
-    *) echo "[verify] unknown option: $1 (use --changed, --all, --policy or --layer L)" >&2; exit 2 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    *) echo "[verify] unknown option: $1 (use --changed, --all, --selected, --policy or --layer L)" >&2; exit 2 ;;
 esac
 
 # ---- shared-ci resolver at the pinned SHA -----------------------------------
@@ -108,6 +112,20 @@ case "$mode" in
         for name in $layers; do run_layer "$name"; done
         heavy_app_build
         echo "[verify] ok: all layers ($(echo $layers | tr '\n' ' '))"
+        exit 0 ;;
+    selected)
+        policy
+        all_layers="$("${context[@]}" layers --all)"
+        if [ "${CI_SELECTION_FULL:-true}" = "false" ]; then
+            layers="${CI_SELECTED_LAYERS:-}"
+            for name in $layers; do
+                case " $(echo $all_layers) " in *" $name "*) ;; *) echo "[verify] unknown selected layer: $name" >&2; exit 1 ;; esac
+            done
+        else
+            layers="$all_layers"
+        fi
+        for name in $layers; do run_layer "$name"; done
+        echo "[verify] ok: selected layers ($(echo ${layers:-none}))"
         exit 0 ;;
 esac
 

@@ -7,6 +7,14 @@ name: CI
 #     names in the ruleset. They now call the same entry as the local hook:
 #     scripts/verify --layer <name> / --policy. Renaming them needs a ruleset change.
 #   - "iOS simulator": iOS build/test lane, NOT required (plan Q13).
+#
+# Changed-layer selection (shared-ci select.yml + quality.yml changed-only):
+# each required lane ALWAYS runs and reports under its existing name. The
+# first step decides whether its layer is selected; when it is not, the lane
+# prints "not selected: <layer> (<reason>)" and its later steps are skipped,
+# so the check still succeeds. A failed or missing selection, any push to
+# main, workflow_dispatch, and any PR touching .github/**, scripts/verify,
+# scripts/ci/**, manifests, layer maps or unmapped paths run everything.
 on:
   push:
     branches: [main]
@@ -28,62 +36,124 @@ env:
 
 jobs:
   quality:
-    uses: LeePepe/shared-ci/.github/workflows/quality.yml@761fe6b0b3ca5e2c57d244182d495ab8041851fa
+    uses: LeePepe/shared-ci/.github/workflows/quality.yml@78996e63e4c705b0bd802b1be47365830f35ac69
     with:
       runs-on: macos-26
       setup-command: scripts/ci/fetch-external-deps.sh && brew install gitleaks
-      verify-command: scripts/verify --all
+      changed-only: true
+      verify-command: scripts/verify --selected
       contract-audit: true
       workflow-lint: true
+
+  select:
+    uses: LeePepe/shared-ci/.github/workflows/select.yml@78996e63e4c705b0bd802b1be47365830f35ac69
 
   # ---- REQUIRED: 5 SPM packages, one check per package ----
   spm:
     name: SPM ${{ matrix.package }}
+    needs: select
+    if: "!cancelled()"
     runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
         package: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxUITesting]
     steps:
+      - name: Layer selection
+        id: lane
+        env:
+          SELECT_RESULT: ${{ needs.select.result }}
+          FULL: ${{ needs.select.outputs.full }}
+          LAYERS: ${{ needs.select.outputs.layers-space }}
+          REASON: ${{ needs.select.outputs.reason }}
+          LAYER: ${{ matrix.package }}
+        run: |
+          run=true
+          if [ "$SELECT_RESULT" = "success" ] && [ "$FULL" = "false" ]; then
+            case " $LAYERS " in *" $LAYER "*) ;; *) run=false ;; esac
+          elif [ "$SELECT_RESULT" != "success" ]; then
+            echo "::warning::select result is ${SELECT_RESULT:-unknown}; running $LAYER in full (fail-closed)"
+          fi
+          if [ "$run" = "false" ]; then
+            echo "not selected: $LAYER ($REASON)"
+            echo "not selected: $LAYER ($REASON)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "selected: $LAYER (${REASON:-full run})"
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Checkout VoxPocket
+        if: steps.lane.outputs.run == 'true'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: repo
       - name: External packages at pinned SHAs (LokiKit from shared-telemetry)
+        if: steps.lane.outputs.run == 'true'
         working-directory: repo
         run: scripts/ci/fetch-external-deps.sh
       - name: Select latest Xcode
+        if: steps.lane.outputs.run == 'true'
         run: |
           latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
           if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
           swift --version
       - name: Layer gates (swift build + swift test)
+        if: steps.lane.outputs.run == 'true'
         working-directory: repo
         run: scripts/verify --layer ${{ matrix.package }}
 
   # ---- REQUIRED: app target — xcodegen + xcodebuild (no signing) ----
   app:
     name: App target
+    needs: select
+    if: "!cancelled()"
     runs-on: macos-26
     steps:
+      - name: Layer selection
+        id: lane
+        env:
+          SELECT_RESULT: ${{ needs.select.result }}
+          FULL: ${{ needs.select.outputs.full }}
+          LAYERS: ${{ needs.select.outputs.layers-space }}
+          REASON: ${{ needs.select.outputs.reason }}
+          LAYER: VoxPocketApp
+        run: |
+          run=true
+          if [ "$SELECT_RESULT" = "success" ] && [ "$FULL" = "false" ]; then
+            case " $LAYERS " in *" $LAYER "*) ;; *) run=false ;; esac
+          elif [ "$SELECT_RESULT" != "success" ]; then
+            echo "::warning::select result is ${SELECT_RESULT:-unknown}; running $LAYER in full (fail-closed)"
+          fi
+          if [ "$run" = "false" ]; then
+            echo "not selected: $LAYER ($REASON)"
+            echo "not selected: $LAYER ($REASON)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "selected: $LAYER (${REASON:-full run})"
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Checkout VoxPocket
+        if: steps.lane.outputs.run == 'true'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: repo
       - name: External packages at pinned SHAs
+        if: steps.lane.outputs.run == 'true'
         working-directory: repo
         run: scripts/ci/fetch-external-deps.sh
       - name: Select latest Xcode
+        if: steps.lane.outputs.run == 'true'
         run: |
           latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
           if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
           xcodebuild -version
       - name: Install XcodeGen
+        if: steps.lane.outputs.run == 'true'
         run: brew install xcodegen
       - name: Regenerate xcodeproj from project.yml
+        if: steps.lane.outputs.run == 'true'
         working-directory: repo/VoxPocket
         run: xcodegen generate --spec project.yml
       - name: Build app — macOS (no signing)
+        if: steps.lane.outputs.run == 'true'
         working-directory: repo
         run: |
           set -o pipefail
@@ -92,11 +162,13 @@ jobs:
             CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tee /tmp/xcodebuild-macos.log
       - name: App shell regressions (startup, menu bar, quick record, realtime, logging)
+        if: steps.lane.outputs.run == 'true'
         working-directory: repo
         timeout-minutes: 15
         run: scripts/verify --layer VoxPocketApp
       # iOS generic build stays required: iOS compile debt used to hide until release.
       - name: Build app — iOS (no signing)
+        if: steps.lane.outputs.run == 'true'
         working-directory: repo
         run: |
           set -o pipefail
@@ -108,6 +180,10 @@ jobs:
   # ---- NOT REQUIRED: iOS simulator build + package tests (plan Q13) ----
   ios:
     name: iOS simulator
+    needs: select
+    # Not required, so a job-level skip is harmless: skip only when the selection
+    # succeeded and selected no layer (e.g. docs-only PRs).
+    if: "!cancelled() && !(needs.select.result == 'success' && needs.select.outputs.any-layer == 'false')"
     runs-on: macos-26
     continue-on-error: true
     steps:

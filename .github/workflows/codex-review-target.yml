@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   codex-review-target:
-    uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@761fe6b0b3ca5e2c57d244182d495ab8041851fa
+    uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@78996e63e4c705b0bd802b1be47365830f35ac69
     with:
       codex-launcher: python3 scripts/ci/review-raven.py
       codex-bin: /opt/homebrew/bin/codex
