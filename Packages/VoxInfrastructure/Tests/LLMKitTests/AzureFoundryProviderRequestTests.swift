@@ -57,7 +57,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
             config: LLMProviderConfig(
                 providerType: .azureFoundry,
                 apiKey: "test-key",
-                baseURL: URL(string: "https://usllm.services.ai.azure.com")!,
+                baseURL: URL(string: "https://example-resource.services.ai.azure.com")!,
                 modelIdentifier: "Kimi-K2.5",
                 options: ["azure.api_version": "2024-05-01-preview"]
             ),
@@ -70,7 +70,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
-        XCTAssertEqual(request.url?.absoluteString, "https://usllm.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview")
+        XCTAssertEqual(request.url?.absoluteString, "https://example-resource.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview")
     }
 
     func testCompleteUsesAPIKeyHeaderForProjectEndpoint() async throws {
@@ -94,7 +94,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
             config: LLMProviderConfig(
                 providerType: .azureFoundry,
                 apiKey: "test-key",
-                baseURL: URL(string: "https://voxpocketllm.services.ai.azure.com/api/projects/voxpocketllm")!,
+                baseURL: URL(string: "https://example-project.services.ai.azure.com/api/projects/example-project")!,
                 modelIdentifier: "gpt-4.1-mini",
                 options: ["azure.api_version": "2024-05-01-preview"]
             ),
@@ -106,7 +106,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         let request = try XCTUnwrap(capturedRequest.value)
         XCTAssertEqual(request.value(forHTTPHeaderField: "api-key"), "test-key")
         XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-        XCTAssertEqual(request.url?.absoluteString, "https://voxpocketllm.services.ai.azure.com/api/projects/voxpocketllm/models/chat/completions?api-version=2024-05-01-preview")
+        XCTAssertEqual(request.url?.absoluteString, "https://example-project.services.ai.azure.com/api/projects/example-project/models/chat/completions?api-version=2024-05-01-preview")
     }
 
     func testCompleteRequestBodyContainsFoundryFields() async throws {
@@ -130,7 +130,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
             config: LLMProviderConfig(
                 providerType: .azureFoundry,
                 apiKey: "test-key",
-                baseURL: URL(string: "https://usllm.services.ai.azure.com")!,
+                baseURL: URL(string: "https://example-resource.services.ai.azure.com")!,
                 modelIdentifier: "Kimi-K2.5"
             ),
             session: session
@@ -156,7 +156,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
     func testDeploymentConfigCanBuildProviderConfig() throws {
         let deployment = AzureFoundryDeployment(
             name: "kimi-prod",
-            endpoint: URL(string: "https://usllm.services.ai.azure.com")!,
+            endpoint: URL(string: "https://example-resource.services.ai.azure.com")!,
             model: "Kimi-K2.5",
             apiKey: "secret-123",
             apiVersion: "2024-05-01-preview",
@@ -166,7 +166,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         let providerConfig = deployment.providerConfig
         XCTAssertEqual(providerConfig.providerType, .azureFoundry)
         XCTAssertEqual(providerConfig.modelIdentifier, "Kimi-K2.5")
-        XCTAssertEqual(providerConfig.baseURL?.absoluteString, "https://usllm.services.ai.azure.com")
+        XCTAssertEqual(providerConfig.baseURL?.absoluteString, "https://example-resource.services.ai.azure.com")
         XCTAssertEqual(providerConfig.apiKey, "secret-123")
         XCTAssertEqual(providerConfig.options["azure.api_version"], "2024-05-01-preview")
         XCTAssertEqual(providerConfig.options["azure.auth_mode"], "bearer")
