@@ -29,3 +29,5 @@ Last-Reviewed: 2026-09-24
 - Plans: `docs/plans/`, `docs/superpowers/plans/`
 - Current specs: `specs/`; historical specs: `docs/superpowers/specs/`
 - Harness: `docs/harness/`
+
+<!-- Changed-layer CI selection demo: a docs-only change selects no layer. -->
