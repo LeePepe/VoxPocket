@@ -20,6 +20,21 @@ cd "$root"
 # and never reinitialises or fetches into the caller's repository.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 
+# Fail fast on an interpreter the checks cannot run on (policy tests import tomllib, 3.11+).
+# Login shells on macOS often resolve python3 to the system 3.9 before Homebrew's.
+python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' || {
+    echo "[verify] python3 is $(python3 --version 2>&1 || echo missing); 3.11+ is required." >&2
+    echo "[verify] Put a newer python3 first on PATH (e.g. Homebrew's) and rerun; do not skip checks." >&2
+    exit 1
+}
+
+# External local packages (../LokiKit, ../AppleUITesting) at their pinned SHAs. The script
+# only fills missing directories, so a fresh clone or worktree needs no manual step.
+fetch_deps() {
+    [ -x scripts/ci/fetch-external-deps.sh ] || return 0
+    scripts/ci/fetch-external-deps.sh >/dev/null || { echo "[verify] cannot fetch external packages" >&2; exit 1; }
+}
+
 mode="changed"
 layer=""
 case "${1:-}" in
@@ -101,9 +116,10 @@ heavy_app_build() {
 
 case "$mode" in
     policy) policy; echo "[verify] ok: policy"; exit 0 ;;
-    layer) run_layer "$layer"; echo "[verify] ok: $layer"; exit 0 ;;
+    layer) fetch_deps; run_layer "$layer"; echo "[verify] ok: $layer"; exit 0 ;;
     all)
         policy
+        fetch_deps
         layers="$("${context[@]}" layers --all)"
         for name in $layers; do run_layer "$name"; done
         heavy_app_build
@@ -118,6 +134,7 @@ esac
 # package), then resolver-selected gates for changed layers outside Packages/.
 "${context[@]}" audit >/dev/null
 python3 "$shared_ci/scripts/lint/workflows.py" --root . >/dev/null
+fetch_deps
 bash scripts/gates/gate-prepush.sh
 
 base="$(git merge-base "${VERIFY_BASE:-origin/main}" HEAD)"
