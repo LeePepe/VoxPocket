@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Block undeclared removal or weakening of tests (AGENTS.md: never weaken or skip tests).
 
-Compares the committed diff against the merge base (VERIFY_BASE, default origin/main) and
-counts, per test file, assertion/test-case lines removed versus added, deleted test files
-and newly added skip markers. Any net loss must be declared:
+Against the merge base (VERIFY_BASE, default origin/main), every removed or changed
+assertion/test-case line, deleted test file and added skip marker is a loss, whatever else
+the change adds. A line re-added verbatim in a test file of the same change counts as moved.
 
-- on a pull request (PR_BODY, or the body in $GITHUB_EVENT_PATH in Actions): the
-  "Removed or weakened tests or policy" section must name the change (not "none");
-- locally (no PR_BODY), a commit in the range must carry a `Test-Weakening: <reason>` trailer.
-
-Moving assertions between test files in the same change is not a loss.
+A loss passes only when the change adds or edits docs/test-weakening/<name>.md naming each
+affected test path and the reason. .github/CODEOWNERS owns that directory, so the ruleset's
+required code-owner review makes the Owner approve every declared weakening; this script
+fails closed if that CODEOWNERS entry is missing. On a pull request (PR_BODY, or the body in
+$GITHUB_EVENT_PATH) the "Removed or weakened tests or policy" section must also not be "none".
 """
+from collections import Counter
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -24,38 +26,67 @@ ASSERTION = re.compile(
 SKIP = re.compile(r"\.disabled\b|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
                   r"\bself\.skipTest\s*\(")
 SECTION = "## Removed or weakened tests or policy"
-TRAILER = re.compile(r"^Test-Weakening:\s*\S", re.IGNORECASE | re.MULTILINE)
+DECLARATIONS = "docs/test-weakening"
 
 
 def git(*args):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
+def normalized(line):
+    return re.sub(r"\s+", " ", line.strip())
+
+
 def losses(base):
-    """Return human-readable findings for a net loss of assertions or added skips."""
+    """Return (path, finding) pairs for every removed assertion/test case, deleted test file
+    or added skip marker. A removed line only counts as moved (not lost) when the identical
+    line is added back in some test file of the same change; unrelated additions never
+    offset a removal."""
     diff = git("diff", "--unified=0", "--no-color", "--diff-filter=ADMR", "-M", base, "HEAD")
-    removed = added = 0
-    findings, current = [], None
+    removed, added, findings = [], Counter(), []
+    current_old = current_new = None
     for line in diff.splitlines():
-        if line.startswith("+++ "):
+        if line.startswith("--- "):
+            path = line[6:] if line.startswith("--- a/") else None
+            current_old = path if path and TEST_PATH.search(path) else None
+        elif line.startswith("+++ "):
             path = line[6:] if line.startswith("+++ b/") else None
-            current = path if path and TEST_PATH.search(path) else None
-        elif line.startswith("--- "):
-            continue
-        elif current and line.startswith("-") and ASSERTION.search(line[1:]):
-            removed += 1
-        elif current and line.startswith("+"):
+            current_new = path if path and TEST_PATH.search(path) else None
+        elif line.startswith("-") and current_old and ASSERTION.search(line[1:]):
+            removed.append((current_old, normalized(line[1:])))
+        elif line.startswith("+") and current_new:
             if ASSERTION.search(line[1:]):
-                added += 1
+                added[normalized(line[1:])] += 1
             if SKIP.search(line[1:]):
-                findings.append(f"skip marker added in {current}: {line[1:].strip()[:120]}")
-    for path in git("diff", "--name-only", "--diff-filter=D", base, "HEAD").splitlines():
+                findings.append((current_new, f"skip marker added in {current_new}: {line[1:].strip()[:120]}"))
+    for path in git("diff", "--name-only", "--diff-filter=D", "-M", base, "HEAD").splitlines():
         if TEST_PATH.search(path):
-            findings.append(f"test file deleted: {path}")
-            removed += sum(1 for text in git("show", f"{base}:{path}").splitlines() if ASSERTION.search(text))
-    if removed > added:
-        findings.append(f"net {removed - added} assertion/test-case line(s) removed ({removed} removed, {added} added)")
+            findings.append((path, f"test file deleted: {path}"))
+    for path, text in removed:
+        if added[text] > 0:
+            added[text] -= 1  # the same assertion moved or was re-indented
+            continue
+        findings.append((path, f"assertion/test case removed or changed in {path}: {text[:120]}"))
     return findings
+
+
+def owned_by_codeowners(root):
+    """True when .github/CODEOWNERS assigns an owner to the declaration directory."""
+    codeowners = root / ".github" / "CODEOWNERS"
+    if not codeowners.is_file():
+        return False
+    for raw in codeowners.read_text().splitlines():
+        parts = raw.split("#", 1)[0].split()
+        if len(parts) >= 2 and parts[0].rstrip("*").rstrip("/") in (f"/{DECLARATIONS}", DECLARATIONS):
+            return True
+    return False
+
+
+def declarations(base):
+    """Text of declaration files added or changed in this range (README excluded)."""
+    changed = git("diff", "--name-only", "--diff-filter=AM", base, "HEAD", "--", DECLARATIONS).splitlines()
+    return "\n".join(git("show", f"HEAD:{path}") for path in changed
+                     if path.endswith(".md") and not path.endswith("/README.md"))
 
 
 def declared_in_body(body):
@@ -94,21 +125,31 @@ def main():
     if not findings:
         print("Test weakening guard: passed")
         return
+    root = Path(git("rev-parse", "--show-toplevel").strip())
+    problems = []
+    if not owned_by_codeowners(root):
+        problems.append(f".github/CODEOWNERS does not own /{DECLARATIONS}/, so a declaration would not need "
+                        "Owner review")
+    declared = declarations(base)
+    undeclared = sorted({path for path, _ in findings if path not in declared})
+    if undeclared:
+        problems.append(f"no {DECLARATIONS}/<name>.md added in this change names: " + ", ".join(undeclared))
     body = pr_body()
-    if body is not None:
-        ok = declared_in_body(body)
-        how = f'declare each item under "{SECTION[3:]}" in the PR body and add the owner-review label'
-    else:
-        ok = bool(TRAILER.search(git("log", f"{base}..HEAD", "--format=%B")))
-        how = "add a `Test-Weakening: <reason and approver>` commit trailer and declare it in the PR template"
-    if ok:
-        print("Test weakening guard: declared -> " + "; ".join(findings))
+    if body is not None and not declared_in_body(body):
+        problems.append(f'the PR body says "none" (or lacks) "{SECTION[3:]}"')
+    if not problems:
+        print("Test weakening guard: declared (Owner code-owner review required) -> "
+              + "; ".join(finding for _, finding in findings))
         return
-    print("Blocked: tests were removed or weakened without a declaration (AGENTS.md: never weaken or skip tests):",
-          file=sys.stderr)
-    for finding in findings:
+    print("Blocked: tests were removed or weakened without an Owner-gated declaration "
+          "(AGENTS.md: never weaken or skip tests):", file=sys.stderr)
+    for _, finding in findings:
         print(f"  - {finding}", file=sys.stderr)
-    print(f"Fix the code instead, or {how}.", file=sys.stderr)
+    for problem in problems:
+        print(f"  ! {problem}", file=sys.stderr)
+    print(f"Fix the code instead, or add {DECLARATIONS}/<name>.md naming each test path with the reason "
+          "(CODEOWNERS makes the ruleset require Owner approval) and list it in the PR template.",
+          file=sys.stderr)
     sys.exit(1)
 
 

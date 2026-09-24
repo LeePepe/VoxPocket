@@ -48,6 +48,7 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.git("config", "user.name", "Guard Test")
         self.git("config", "user.email", "guard@example.invalid")
         self.write(TEST_FILE, ORIGINAL)
+        self.write(".github/CODEOWNERS", "/docs/test-weakening/  @owner\n")
         self.commit("seed")
         self.git("update-ref", "refs/remotes/origin/main", "HEAD")
         self.git("checkout", "-q", "-b", "task")
@@ -74,6 +75,11 @@ class TestWeakeningGuardTests(unittest.TestCase):
                                         .replace('    #expect(!valid("bad\\n"))\n', ""))
         self.commit(message)
 
+    def declare(self, paths=(TEST_FILE,), name="drop-rejects.md"):
+        self.write(f"docs/test-weakening/{name}", "Reason: validator removed in #99.\n"
+                   + "".join(f"- `{path}`\n" for path in paths))
+        self.commit("docs: declare test weakening")
+
     def test_added_assertions_pass(self):
         self.write(TEST_FILE, ORIGINAL + '\n@Test func more() {\n    #expect(valid("b"))\n}\n')
         self.commit("test: more")
@@ -85,11 +91,59 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.remove_assertions()
         result = self.run_guard()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("net 2 assertion", result.stderr)
+        self.assertEqual(result.stderr.count("removed or changed"), 2)
 
-    def test_local_trailer_declares_removal(self):
-        self.remove_assertions("test: drop assertion\n\nTest-Weakening: obsolete input, approved by Owner")
-        self.assertEqual(self.run_guard().returncode, 0)
+    def test_codeowned_declaration_file_allows_removal(self):
+        self.remove_assertions()
+        self.declare()
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Owner code-owner review required", result.stdout)
+
+    def test_commit_trailer_alone_is_not_a_declaration(self):
+        self.remove_assertions("test: drop assertion\n\nTest-Weakening: approved by Owner")
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("docs/test-weakening", result.stderr)
+
+    def test_declaration_must_name_every_affected_test_file(self):
+        self.remove_assertions()
+        self.declare(paths=("Packages/Other/Tests/OtherTests.swift",))
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(TEST_FILE, result.stderr)
+
+    def test_declaration_without_codeowners_entry_fails_closed(self):
+        self.remove_assertions()
+        self.write(".github/CODEOWNERS", "/docs/architecture/  @owner\n")
+        self.commit("drop owner entry")
+        self.declare()
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("CODEOWNERS does not own", result.stderr)
+
+    def test_readme_is_not_a_declaration(self):
+        self.remove_assertions()
+        self.write("docs/test-weakening/README.md", f"- `{TEST_FILE}`\n")
+        self.commit("docs")
+        self.assertNotEqual(self.run_guard().returncode, 0)
+
+    def test_removal_offset_by_unrelated_addition_still_blocks(self):
+        # codex-review #65: repo-wide totals let one removal hide behind an unrelated addition.
+        self.write(TEST_FILE, ORIGINAL.replace('    #expect(!valid("../secret"))\n', ""))
+        self.write("Packages/Fixture/Tests/FixtureTests/OtherTests.swift",
+                   'import Testing\n\n@Test func unrelated() {\n    #expect(valid("zzz"))\n}\n')
+        self.commit("test: swap a check")
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('valid("../secret")', result.stderr)
+
+    def test_weakened_assertion_in_place_blocks(self):
+        self.write(TEST_FILE, ORIGINAL.replace('#expect(!valid("../secret"))', "#expect(true)"))
+        self.commit("test: weaken")
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("removed or changed", result.stderr)
 
     def test_pr_body_none_blocks_and_declaration_passes(self):
         self.remove_assertions()
@@ -97,9 +151,13 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.assertNotEqual(blocked.returncode, 0)
         self.assertIn("PR body", blocked.stderr)
         self.assertNotEqual(self.run_guard(PR_BODY="no template at all").returncode, 0)
+        body_only = self.run_guard(PR_BODY=TEMPLATE.format(declaration="- Removed two rejects() cases"))
+        self.assertNotEqual(body_only.returncode, 0)  # the PR body alone is not Owner-gated
+        self.declare()
         declared = self.run_guard(PR_BODY=TEMPLATE.format(
-            declaration="- Removed two rejects() cases: validator removed in #99, approved by Owner"))
+            declaration="- Removed two rejects() cases, see docs/test-weakening/drop-rejects.md"))
         self.assertEqual(declared.returncode, 0, declared.stderr)
+        self.assertNotEqual(self.run_guard(PR_BODY=TEMPLATE.format(declaration="none")).returncode, 0)
 
     def test_actions_event_payload_is_read_and_push_events_skip(self):
         self.remove_assertions()

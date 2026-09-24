@@ -61,9 +61,9 @@ scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one 
 - Local verification is SPM build/test plus deterministic scripts. The app-target
   `xcodebuild` runs in CI only (`RUN_HEAVY=1 scripts/verify` opts in locally).
 - Never `--no-verify`, never weaken or skip tests, never edit policy/gates to pass.
-- A removed, skipped or weakened test or assertion is only allowed with Owner approval and
-  must be declared: a `Test-Weakening: <reason, approver>` commit trailer locally and the PR
-  template section in CI (`scripts/gates/check_test_weakening.py` blocks it otherwise).
+- A removed, skipped or weakened test or assertion needs Owner approval: declare it in a new
+  `docs/test-weakening/<topic>.md` (CODEOWNERS-gated, so the ruleset makes the Owner approve)
+  and in the PR template; `scripts/gates/check_test_weakening.py` blocks it otherwise.
 
 ## Required checks
 
