@@ -3,9 +3,9 @@ name: codex-review-target
 # Required AI review gate. Calls shared-ci's reusable codex review (fork guard,
 # trusted base checkout, PR diff read as data). VoxPocket keeps its local Raven
 # launcher (scripts/ci/review-raven.py, read from the trusted base tree).
-# Check contexts: `codex-review-target / codex-review` (shared-ci template name) and
-# `codex-review-target` (the current required context, kept by the legacy-context job
-# until the ruleset maps it; see the ruleset plan in the introducing PR).
+# Check contexts: `codex-review-target / codex-review` (shared-ci template name; the
+# required context since ruleset R3) and `codex-review-target` (legacy-context job,
+# no longer required; kept so older references still resolve).
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
@@ -26,7 +26,7 @@ jobs:
       codex-launcher: python3 scripts/ci/review-raven.py
       codex-bin: /opt/homebrew/bin/codex
 
-  # Keeps the existing required check context `codex-review-target` (ruleset) green
+  # Keeps the legacy check context `codex-review-target` (no longer required) green
   # only when the reusable review succeeded on this PR head; fails closed otherwise.
   legacy-context:
     name: codex-review-target

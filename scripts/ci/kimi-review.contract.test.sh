@@ -26,7 +26,7 @@ grep -q '^  pull_request_target:$' "$KIMI_WORKFLOW"
 grep -Fq '    branches: [main]' "$KIMI_WORKFLOW"
 grep -Eq "uses: ${SHARED_CI_PIN}kimi-review\.yml@[0-9a-f]{40}$" "$KIMI_WORKFLOW"
 ! grep -Fq 'github.event.pull_request.head.sha' "$KIMI_WORKFLOW"
-# Codex: required, trusted-base caller that keeps the `codex-review-target` check context.
+# Codex: required (`codex-review-target / codex-review`), trusted-base caller; its legacy-context job still emits `codex-review-target`.
 grep -q '^  pull_request_target:$' "$CODEX_TARGET_WORKFLOW"
 grep -q '^  codex-review-target:$' "$CODEX_TARGET_WORKFLOW"
 grep -q '^    name: codex-review-target$' "$CODEX_TARGET_WORKFLOW"
@@ -43,8 +43,26 @@ if [ -f "$ROOT/scripts/rulesets/main-protection.json" ]; then
     ! jq -e '.rules[]? | select(.type=="required_status_checks")
       | .parameters.required_status_checks[]? | select(.context=="kimi-review" or .context=="claude-review")' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    # Codex review is required under the shared-ci reusable context; the legacy
+    # `codex-review-target` context is no longer required (R3, ruleset 19169340).
     jq -e '.rules[]? | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[]? | select(.context=="codex-review-target / codex-review")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    jq -e '.rules[]? | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[]? | select(.context=="quality / aggregate")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    ! jq -e '.rules[]? | select(.type=="required_status_checks")
       | .parameters.required_status_checks[]? | select(.context=="codex-review-target")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    # AGENTS.md "Required checks" lists exactly the mirror's required contexts.
+    agents_checks="$(sed -n '/^## Required checks$/,/^## /p' "$ROOT/AGENTS.md" | sed -n 's/^- `\(.*\)`$/\1/p' | sort)"
+    mirror_checks="$(jq -r '.rules[] | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[].context' "$ROOT/scripts/rulesets/main-protection.json" | sort)"
+    [ -n "$agents_checks" ] && [ "$agents_checks" = "$mirror_checks" ] || {
+        echo "AGENTS.md required checks differ from scripts/rulesets/main-protection.json" >&2; exit 1; }
+    # CODEOWNERS gates important paths (G): code-owner review on, no extra approvals.
+    jq -e '.rules[]? | select(.type=="pull_request") | .parameters
+      | select(.require_code_owner_review == true and .required_approving_review_count == 0)' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
 fi
 

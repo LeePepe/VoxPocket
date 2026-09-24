@@ -48,7 +48,7 @@ python3 -m unittest discover -s scripts/gates/tests -p 'test_local_hooks.py' -v 
 
 ## Actions Raven bootstrap (runner operations)
 
-The required `codex-review-target` gate is independent of local hooks. Its launcher reads only
+The required `codex-review-target / codex-review` gate is independent of local hooks. Its launcher reads only
 Raven connection metadata from `CODEX_RAVEN_CONFIG` (default `~/.codex/config.toml`): an explicit
 Raven provider, loopback endpoint with a port, Responses API, and no OpenAI account auth.
 It accepts only the configured `OPENAI_API_KEY` or `RAVEN_API_KEY` environment name. It never
