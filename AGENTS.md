@@ -64,8 +64,11 @@ scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one 
 
 ## Required checks
 
-Merging to `main` requires (must match the live ruleset `main protection`):
+Merging to `main` requires (must match the live ruleset `main protection`, mirrored in
+`scripts/rulesets/main-protection.json`):
 
+- `quality / aggregate`
+- `codex-review-target / codex-review`
 - `SPM VoxDomain`
 - `SPM VoxInfrastructure`
 - `SPM VoxApplication`
@@ -73,11 +76,15 @@ Merging to `main` requires (must match the live ruleset `main protection`):
 - `SPM VoxUITesting`
 - `App target`
 - `Lint & policy`
-- `codex-review-target`
 
-`quality / aggregate` (shared-ci fail-closed gate) and `iOS simulator` also run on every PR;
-they are not yet required (the ruleset change awaits Owner approval). `kimi-review` is
-advisory and never required.
+The ruleset also requires CODEOWNERS review (0 extra approvals) and dismisses stale reviews on
+push. It does not require the branch to be up to date (`strict` off). Owner-approved R3
+(2026-09-24) made that trade: `quality / aggregate` fails unless every lane passed on the PR
+head SHA (and the PR body is complete), and stale reviews are dismissed on push, so evidence
+is always for the head being merged.
+`codex-review-target / codex-review` replaced the legacy `codex-review-target` context,
+which the workflow still emits but is not required. `iOS simulator` and `kimi-review` run on
+every PR and are never required.
 
 ## Red lines
 
@@ -117,8 +124,8 @@ Approved exceptions: none.
 - One task → one branch + worktree → one PR using `.github/pull_request_template.md`.
 - Done = required checks green on the PR head SHA; a new push invalidates old evidence.
 - Non-draft PRs get squash auto-merge (`auto-merge.yml`). CODEOWNERS paths (`.github/**`,
-  policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval;
-  until enforced, add the `owner-review` label and disable auto-merge on that PR.
+  policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval, which
+  the ruleset enforces (code-owner review required); add the `owner-review` label to them.
 - Code tasks report the commit, verification and PR. For an authorized TestFlight run,
   report version/build number, run link and distribution warnings. Keep existing local
   artifacts; do not clean them up automatically.

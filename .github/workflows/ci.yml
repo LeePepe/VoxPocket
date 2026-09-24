@@ -2,8 +2,7 @@ name: CI
 
 # Caller of the shared-ci fail-closed quality gate plus VoxPocket's own lanes.
 #   - quality / aggregate: shared-ci reusable workflow (verify, contract audit,
-#     workflow-lint, PR-body check). Not yet required; the ruleset change is an
-#     Owner decision (see the PR that introduced this file).
+#     workflow-lint, PR-body check). Required (ruleset R3, see AGENTS.md).
 #   - "SPM <pkg>", "App target", "Lint & policy": the existing required check
 #     names in the ruleset. They now call the same entry as the local hook:
 #     scripts/verify --layer <name> / --policy. Renaming them needs a ruleset change.
