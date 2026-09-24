@@ -1,0 +1,27 @@
+# Important paths need Owner review (enforced once the ruleset requires code-owner review).
+/.github/                         @LeePepe
+/.githooks/                       @LeePepe
+/AGENTS.md                        @LeePepe
+/CLAUDE.md                        @LeePepe
+/.specify/memory/constitution.md  @LeePepe
+/docs/architecture/               @LeePepe
+**/tech-context.md                @LeePepe
+/scripts/verify                   @LeePepe
+/policy/                          @LeePepe
+/schemas/                         @LeePepe
+# Dependency manifests and lockfiles (pin upgrades)
+**/Package.swift                  @LeePepe
+**/Package.resolved               @LeePepe
+**/project.yml                    @LeePepe
+**/package.json                   @LeePepe
+**/package-lock.json              @LeePepe
+**/pyproject.toml                 @LeePepe
+**/uv.lock                        @LeePepe
+**/requirements*.txt              @LeePepe
+# VoxPocket-specific important paths
+/scripts/gates/                   @LeePepe
+/scripts/rulesets/                @LeePepe
+/scripts/ci/                      @LeePepe
+/config.example.json              @LeePepe
+/.gitleaks.toml                   @LeePepe
+/fastlane/                        @LeePepe
