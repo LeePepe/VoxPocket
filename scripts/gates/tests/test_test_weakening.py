@@ -39,6 +39,7 @@ x
 """
 # Built from pieces so this fixture file does not itself add a skip marker.
 DISABLED = "." + 'disabled("slow")'
+ENABLED_IF_FALSE = "." + "enabled(if: false)"
 
 
 class TestWeakeningGuardTests(unittest.TestCase):
@@ -126,6 +127,12 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.commit("test: rename away")
         self.assert_blocked("test removed: accepts")
 
+    def test_retagging_a_test_declaration_is_not_a_loss(self):
+        self.write(TEST_FILE, ORIGINAL.replace("@Test func accepts", '@Test(.tags(.fast)) func accepts'))
+        self.commit("test: tag")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_moving_tests_between_files_passes(self):
         moved = 'import Testing\n\n@Test func rejects() {\n    #expect(!valid("../secret"))\n    #expect(!valid("bad\\n"))\n}\n'
         self.write(TEST_FILE, ORIGINAL.split("@Test func rejects")[0])
@@ -143,6 +150,13 @@ class TestWeakeningGuardTests(unittest.TestCase):
     def test_added_skip_marker_blocks(self):
         self.write(TEST_FILE, ORIGINAL.replace("@Test func rejects", f"@Test({DISABLED}) func rejects"))
         self.commit("test: skip")
+        self.assert_blocked("skip marker")
+
+    def test_multiline_enabled_if_false_trait_blocks(self):
+        # codex-review #65 round 2: a multiline @Test trait that disables the test (ENABLED_IF_FALSE).
+        self.write(TEST_FILE, ORIGINAL.replace("@Test func rejects()",
+                                               f"@Test(\n    {ENABLED_IF_FALSE}\n)\nfunc rejects()"))
+        self.commit("test: disable")
         self.assert_blocked("skip marker")
 
     def test_non_test_sources_are_ignored(self):

@@ -28,9 +28,10 @@ import sys
 
 TEST_PATH = re.compile(r"(^|/)Tests/.*\.swift$|Tests\.swift$|(^|/)tests?/.*\.py$|(^|/)test_[^/]*\.py$")
 ASSERTION = re.compile(
-    r"#expect\b|#require\b|\bXCTAssert\w*\s*\(|\bXCTFail\s*\(|@Test\b|\bfunc\s+test\w*\s*\(|"
-    r"\bself\.assert\w+\s*\(|^\s*assert\s")
-SKIP = re.compile(r"\.disabled\b|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
+    r"#expect\b|#require\b|\bXCTAssert\w*\s*\(|\bXCTFail\s*\(|\bXCTUnwrap\s*\(|"
+    r"\bself\.assert\w+\s*\(|^\s*assert\s|\bpytest\.raises\s*\(")
+# Test declarations are tracked by name (TEST_NAME), not as assertion lines.
+SKIP = re.compile(r"\.disabled\b|\.enabled\s*\(\s*if:|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
                   r"\bself\.skipTest\s*\(")
 TEST_NAME = re.compile(r"@Test\b[^\n]*?\bfunc\s+(\w+)|\bfunc\s+(test\w*)\s*\(|\bdef\s+(test\w*)\s*\(")
 SECTION = "## Removed or weakened tests or policy"
