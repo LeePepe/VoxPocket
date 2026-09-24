@@ -159,6 +159,16 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.commit("test: disable")
         self.assert_blocked("skip marker")
 
+    def test_removed_multiline_test_declaration_blocks(self):
+        # codex-review #65 round 3: @Test(...) and func on separate lines, body without assertions.
+        base = ORIGINAL + '\n@Test(\n    "smoke"\n)\nfunc smoke() {\n    _ = valid("x")\n}\n'
+        self.write(TEST_FILE, base)
+        self.commit("test: add smoke")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        self.write(TEST_FILE, ORIGINAL)
+        self.commit("test: drop smoke")
+        self.assert_blocked("test removed: smoke")
+
     def test_non_test_sources_are_ignored(self):
         self.write("Packages/Fixture/Sources/Fixture/Fixture.swift", "func f() { assert(true) }\n")
         self.commit("feat")

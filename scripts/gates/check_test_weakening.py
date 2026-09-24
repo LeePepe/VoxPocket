@@ -33,7 +33,7 @@ ASSERTION = re.compile(
 # Test declarations are tracked by name (TEST_NAME), not as assertion lines.
 SKIP = re.compile(r"\.disabled\b|\.enabled\s*\(\s*if:|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
                   r"\bself\.skipTest\s*\(")
-TEST_NAME = re.compile(r"@Test\b[^\n]*?\bfunc\s+(\w+)|\bfunc\s+(test\w*)\s*\(|\bdef\s+(test\w*)\s*\(")
+TEST_NAME = re.compile(r"@Test\b[\s\S]{0,600}?\bfunc\s+(\w+)|\bfunc\s+(test\w*)\s*\(|\bdef\s+(test\w*)\s*\(")
 SECTION = "## Removed or weakened tests or policy"
 LEDGER = ".github/test-weakening.md"
 LEDGER_LINE = re.compile(r"^\+-\s+(\S+?):\s+\S.*\(approved:\s*@\S+\)\s*$")
