@@ -34,11 +34,32 @@ class LocalHookTests(unittest.TestCase):
         self.git("update-ref", "refs/remotes/origin/main", self.base)
         for name in ("pre-commit", "pre-push"):
             self.copy(f".githooks/{name}")
+        self.copy("scripts/verify")
+        self.fake_shared_ci()
         for name in ("codex", "claude", "kimi", "copilot", "xcodebuild"):
             self.tool(name, 'echo "UNEXPECTED_AI_OR_HEAVY" >> "$HOOK_TEST_LOG"\nexit 99\n')
 
     def tearDown(self):
         self.assertNotIn("UNEXPECTED_AI_OR_HEAVY", self.calls())
+
+    def fake_shared_ci(self):
+        """Offline shared-ci stand-in at the SHA pinned in AGENTS.md: audit/lint pass, no layers."""
+        shared = Path(self.temporary.name) / "shared-ci"
+        (shared / "scripts/context").mkdir(parents=True)
+        (shared / "scripts/lint").mkdir(parents=True)
+        (shared / "scripts/context/_context.py").write_text(
+            "import sys, os\n"
+            "open(os.environ['HOOK_TEST_LOG'], 'a').write('context:' + ' '.join(sys.argv[1:]) + '\\n')\n"
+            "sys.exit(int(os.environ.get('TEST_CONTEXT_STATUS', '0')))\n")
+        (shared / "scripts/lint/workflows.py").write_text("")
+        subprocess.run(["git", "init", "-q", str(shared)], check=True, env=self.env)
+        subprocess.run(["git", "-C", str(shared), "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                        "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "pin"],
+                       check=True, env=self.env)
+        pin = subprocess.run(["git", "-C", str(shared), "rev-parse", "HEAD"], check=True, env=self.env,
+                             capture_output=True, text=True).stdout.strip()
+        self.write("AGENTS.md", f"Follow `LeePepe/shared-ci@{pin}/ai/agent-protocol.md`\n")
+        self.env["SHARED_CI"] = str(shared)
 
     def write(self, relative, content):
         path = self.repo / relative
@@ -116,7 +137,7 @@ class LocalHookTests(unittest.TestCase):
         self.write("scripts/gates/gate-prepush.sh", 'echo "push:$PWD" >> "$HOOK_TEST_LOG"\nexit 31\n')
         result = self.hook("pre-push", self.push_input(), cwd=self.repo / "scripts")
         self.assertEqual(result.returncode, 31)
-        self.assertEqual(self.calls(), f"push:{self.repo}\n")
+        self.assertEqual(self.calls(), f"context:audit\npush:{self.repo.resolve()}\n")
 
     def test_actual_commit_gate_runs_build_test_and_docs(self):
         self.actual_gate_tools()
@@ -192,13 +213,21 @@ class LocalHookTests(unittest.TestCase):
         self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
         result = self.hook("pre-push", self.push_input() + self.push_input())
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(self.calls(), "push\n")
+        self.assertEqual(self.calls(), "context:audit\npush\n")
+
+    def test_push_runs_shared_verify_entry_and_contract_failure_blocks(self):
+        self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
+        self.env["TEST_CONTEXT_STATUS"] = "1"
+        result = self.hook("pre-push", self.push_input())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.calls(), "context:audit\n")
+        self.assertIn("scripts/verify", (REPO / ".githooks/pre-push").read_text())
 
     def test_explicit_head_to_branch_is_supported(self):
         self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
         result = self.hook("pre-push", self.push_input(local_ref="HEAD"))
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(self.calls(), "push\n")
+        self.assertEqual(self.calls(), "context:audit\npush\n")
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ Historical plans mentioning the retired configuration describe the old arrangeme
 Regression checks (isolated Git fixtures; no AI, network, or product build):
 
 ```bash
-python3 -m unittest discover -s scripts/gates/tests -p 'test_local_hooks.py' -v
+python3 -m unittest discover -s scripts/gates/tests -p 'test_local_hooks.py' -v   # hooks + scripts/verify wiring
 ```
 
 ## Actions Raven bootstrap (runner operations)
