@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | T101 | VoxInfrastructure | 注入接缝（零行为变化）：plan §3.1a 的协议（含语音/麦克风授权提供者）与 Hybrid/Apple transcriber、`MicrophoneRecorder` 的 internal init | T002, T003, T004 | US1-AC1 |
 | T102 | VoxInfrastructure/Tests + scripts | golden 基线 (a)(b-macOS)(c)，`golden-trace/v1` schema，`GoldenTraceTests` target，`scripts/tests/test_golden_routing.py` | T101 | US1-AC1 |
-| T102a | App 壳 + .github | 1.0c：`VoxPocketTests/GoldenRoutingTests`（golden (b) iOS 行，1.0a 代码上录制）+ 提前加入非 required `App unit tests (iOS)` lane；**闸门**：CI 在 1.0c commit 上跑通 golden (c) 与 golden (b) iOS 行，run 链接写入 PR 描述后才推送 T103 起的 commit | T102 | US1-AC1, US5-AC3 |
+| T102a | VoxInfrastructure + App 壳 + .github | 1.0c：先加零行为变化接缝（VoxInfrastructure commit：`DefaultLLMService.resolvedAnalysisRouting` 只读 internal 访问器；App 壳 commit：`ServiceContainer` 测试专用 `internal init(environment:preferences:llmServiceFactory:)`，`shared` 与 `private init()` 路径不变，不改任何生产调用路径，plan §3.1 1.0c）；`VoxPocketTests/GoldenRoutingTests`（golden (b) iOS 行，1.0a 代码上录制）+ 提前加入非 required `App unit tests (iOS)` lane；**闸门**：CI 在 1.0c commit 上跑通 golden (c) 与 golden (b) iOS 行，run 链接写入 PR 描述后才推送 T103 起的 commit | T102 | US1-AC1, US5-AC3 |
 | T103 | docs/.specify + scripts/gates | 修宪 1.2.0；`Packages/VoxKit/tech-context.md`；根 tech-context / AGENTS / dependency-graph；`check_frontmatter.py` 识别 VoxKit | T102a | US7-AC1, US7-AC2 |
 | T104 | VoxKit | 新包 VoxCore + VoxCoreTests | T103 | US2-AC2/AC3/AC6 |
 | T105 | VoxKit | `scripts/redlines` R1–R5 + 负例 + 正例 + `--self-test`（编译型 fixture 匹配期望诊断文本，正例由同一 harness 同一参数编译）；记录 Sendable 基线；对当前 kit 代码跑一次，产出违规基线清单，逐项映射到 T107–T111 | T104 | US4-AC1, US4-AC3, US4-AC4 |
@@ -26,7 +26,7 @@
 | T108 | VoxInfrastructure | RB-1、RB-2（Q7：删除 `LocalWhisperRawOutputLoggerTests`，新增「日志不含转写」测试）、RB-3（同时更新基线）、RB-5、RB-6，各一 commit | T107 | US4-AC2, US1-AC5, US1-AC6 |
 | T108a | VoxInfrastructure | `GuidedGenerationTests` 改为 `XCTSkip` + test plan 开关，移除内容 `print` | T108 | US4-AC2 |
 | T109 | VoxInfrastructure | 新建 `TemporaryAudioStore` 统一临时音频 I/O；注入 `VoxStorageLocations`（`temporaryAudio`、`modelCache`、`modelCacheCleanupCandidates`，KI-4）；删 `CoreModels` 依赖与无用 `import Combine` | T108 | US2-AC6 |
-| T110 | VoxInfrastructure | 拆混合文件（`MultiRecognizerTranscriber`、`AudioCaptureState`、`ModelLoadingStartControlling`、`ASRProviderType`）；在 TranscriptionKit 新建无 Combine 文件 `SpeechSession`/`TranscriptionEvent`、`SpeechSessionSource`（完整能力面，plan §2.4）、`SpeechSessionFactory`、`ModelLoadingStateProviding`（`module-map.json` → VoxCore，2.1 mv）；预置 `import VoxCore` + `module-map.json` 与检查；async 核心；新 target/product `TranscriptionKitCombine`：五个 Combine 协议文件 + 独立包装类（逐协议 conformance 表、串行 pause/resume，RB-7）；新 target/product `VoxKitBridge`；Combine 形状 kit 测试改写并列入 PR 说明 | T108a, T109 | US2-AC4, US1-AC1 |
+| T110 | VoxInfrastructure | 拆混合文件（`MultiRecognizerTranscriber`、`AudioCaptureState`、`ModelLoadingStartControlling`、`ASRProviderType`）；在 TranscriptionKit 新建无 Combine 文件 `SpeechSession`/`TranscriptionEvent`、`SpeechSessionSource`（完整能力面，plan §2.4）、`SpeechSessionFactory`、`ModelLoadingStateProviding`、`public` 的 `TranscriptionMergerConfigurable`（`setMerger(_:)`，无 Combine，供 Bridge 跨包转发 merger；列入 R4 公共 API 检查）（`module-map.json` → VoxCore，2.1 mv）；在 Sources **与 VoxInfrastructure `Tests/`** 预置 `import VoxCore` + `module-map.json` 与检查（`module-map.py` 的 import 检查覆盖 Tests）；async 核心；新 target/product `TranscriptionKitCombine`：五个 Combine 协议文件 + 独立包装类（逐协议 conformance 表、串行 pause/resume，RB-7）；新 target/product `VoxKitBridge`；Combine 形状 kit 测试改写并列入 PR 说明 | T108a, T109 | US2-AC4, US1-AC1 |
 | T111 | VoxInfrastructure | iOS 采集（RB-11）+ 合成音频源 | T110 | US5-AC2 |
 | T112 [P] | VoxApplication | import / 错误匹配 | T110 | US1-AC2 |
 | T113 [P] | VoxPresentation | import | T110 | US1-AC2 |
@@ -40,7 +40,7 @@
 
 | ID | 层 | 任务 | 依赖 | AC |
 |---|---|---|---|---|
-| T201 | VoxKit + VoxInfrastructure/Package.swift（E1） | 按依赖序的纯 `git mv` + 最小 manifest：VoxCore（含 1.6 新建协议文件与 `ASRProviderType`）→ VoxSpeech+VoxSpeechWhisperKit（同 commit）→ VoxRefine+VoxLLM（同 commit） | T117 | US6-AC1 |
+| T201 | VoxKit + VoxInfrastructure/Package.swift（E1） | 按依赖序的纯 `git mv` + 最小 manifest：VoxCore（含 1.6 新建协议文件、`TranscriptionMergerConfigurable` 与 `ASRProviderType`；因 T110 已在 Tests 预置 `import VoxCore`，每个 commit 本层 `swift test` 通过）→ VoxSpeech+VoxSpeechWhisperKit（同 commit）→ VoxRefine+VoxLLM（同 commit） | T117 | US6-AC1 |
 | T202 | VoxKit | 拆为 plan §2.1 模块、import、access level、测试 target；golden (a)(c) 迁入 VoxKit tests，`Packages/VoxInfrastructure/Tests/GoldenTraceTests/` 清空 | T201 | US2-AC5 |
 | T203 | VoxKit | `Examples/MinimalConsumer`（macOS + iOS）+ 无 WhisperKit 符号检查 | T202 | US2-AC1, US2-AC5 |
 | T204 | VoxInfrastructure | `TranscriptionKitCombine` 纯 mv 入 `VoxKitBridge/Combine/`（mv commit + import/manifest edit commit）；删旧 target 与依赖；基准测试改依赖 | T202 | US1-AC2 |
