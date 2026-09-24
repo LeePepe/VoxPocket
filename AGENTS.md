@@ -128,3 +128,4 @@ swift test --package-path Packages/VoxApplication
 ## 写入前核对
 
 - push / 开 PR 前核对实际 fetch/push URL 与目标仓库；归属不明的 remote 先问 Owner。
+- 账号与凭据选择由 Owner 私有 agent 配置负责，按 Owner 决定不写入仓库。写入前确认当前认证账号对目标仓库有所需权限；无法核验或不符时停止并报告，不回退到环境 token 或其他账号。
