@@ -32,15 +32,22 @@ case "${1:-}" in
 esac
 
 # ---- shared-ci resolver at the pinned SHA -----------------------------------
-shared_ci="${SHARED_CI:-$root/.shared-ci}"
+default_cache="$root/.shared-ci"
+shared_ci="${SHARED_CI:-$default_cache}"
 pin="$(sed -n 's|.*LeePepe/shared-ci@\([0-9a-f]\{40\}\)/ai/agent-protocol\.md.*|\1|p' AGENTS.md | head -1)"
 [ -n "$pin" ] || { echo "[verify] AGENTS.md has no full-SHA shared-ci protocol pointer" >&2; exit 1; }
 if [ "$(git -C "$shared_ci" rev-parse HEAD 2>/dev/null || true)" != "$pin" ]; then
-    rm -rf "$shared_ci"
-    git init -q "$shared_ci"
-    git -C "$shared_ci" fetch -q --depth=1 "${SHARED_CI_URL:-https://github.com/LeePepe/shared-ci.git}" "$pin" \
+    # Only the repository-owned, gitignored cache may be recreated. A caller-supplied
+    # SHARED_CI directory is never deleted: it must already be a checkout at the pin.
+    if [ "$shared_ci" != "$default_cache" ]; then
+        echo "[verify] SHARED_CI=$shared_ci is not a shared-ci checkout at $pin; refusing to modify it" >&2
+        exit 1
+    fi
+    rm -rf "$default_cache"
+    git init -q "$default_cache"
+    git -C "$default_cache" fetch -q --depth=1 "${SHARED_CI_URL:-https://github.com/LeePepe/shared-ci.git}" "$pin" \
         || { echo "[verify] cannot fetch shared-ci $pin" >&2; exit 1; }
-    git -C "$shared_ci" checkout -q --detach FETCH_HEAD
+    git -C "$default_cache" checkout -q --detach FETCH_HEAD
 fi
 context=(python3 "$shared_ci/scripts/context/_context.py")
 

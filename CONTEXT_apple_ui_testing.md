@@ -26,7 +26,7 @@
 "apple-ui-tester": {
   "type": "stdio",
   "command": "node",
-  "args": ["~/.claude/mcp-servers/apple-ui-tester/dist/index.js"],
+  "args": ["<absolute path to your home>/.claude/mcp-servers/apple-ui-tester/dist/index.js"],
   "env": { "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}" }
 }
 ```

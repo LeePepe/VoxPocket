@@ -232,7 +232,7 @@ class LocalHookTests(unittest.TestCase):
         # the caller repository as bare and added a shallow graft.
         source = Path(self.env["SHARED_CI"])
         self.env["SHARED_CI_URL"] = str(source)
-        self.env["SHARED_CI"] = str(Path(self.temporary.name) / "fresh-shared-ci")
+        self.env.pop("SHARED_CI")  # use the repository-owned default cache
         subprocess.run(["git", "-C", str(source), "config", "uploadpack.allowAnySHA1InWant", "true"],
                        check=True, env=self.env)
         self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
@@ -243,7 +243,18 @@ class LocalHookTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.git("config", "--bool", "core.bare").stdout.strip(), "false")
         self.assertFalse((Path(git_dir) / "shallow").exists())
-        self.assertTrue((Path(self.env["SHARED_CI"]) / ".git").is_dir())
+        self.assertTrue((self.repo / ".shared-ci/.git").is_dir())
+
+    def test_custom_shared_ci_directory_is_never_deleted(self):
+        keep = Path(self.temporary.name) / "someone else's checkout"
+        keep.mkdir()
+        (keep / "precious.txt").write_text("keep me\n")
+        self.env["SHARED_CI"] = str(keep)
+        self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
+        result = self.hook("pre-push", self.push_input())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing to modify", result.stderr)
+        self.assertEqual((keep / "precious.txt").read_text(), "keep me\n")
 
     def test_explicit_head_to_branch_is_supported(self):
         self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
