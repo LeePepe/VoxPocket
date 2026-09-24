@@ -56,6 +56,10 @@ class LocalHookTests(unittest.TestCase):
         subprocess.run(["git", "-C", str(shared), "-c", "user.name=t", "-c", "user.email=t@example.invalid",
                         "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "pin"],
                        check=True, env=self.env)
+        subprocess.run(["git", "-C", str(shared), "add", "."], check=True, env=self.env)
+        subprocess.run(["git", "-C", str(shared), "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                        "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fake engines"],
+                       check=True, env=self.env)
         pin = subprocess.run(["git", "-C", str(shared), "rev-parse", "HEAD"], check=True, env=self.env,
                              capture_output=True, text=True).stdout.strip()
         self.write("AGENTS.md", f"Follow `LeePepe/shared-ci@{pin}/ai/agent-protocol.md`\n")
@@ -222,6 +226,24 @@ class LocalHookTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.calls(), "context:audit\n")
         self.assertIn("scripts/verify", (REPO / ".githooks/pre-push").read_text())
+
+    def test_hook_git_environment_never_touches_the_caller_repository(self):
+        # Regression: with GIT_DIR exported by git, fetching shared-ci reinitialised
+        # the caller repository as bare and added a shallow graft.
+        source = Path(self.env["SHARED_CI"])
+        self.env["SHARED_CI_URL"] = str(source)
+        self.env["SHARED_CI"] = str(Path(self.temporary.name) / "fresh-shared-ci")
+        subprocess.run(["git", "-C", str(source), "config", "uploadpack.allowAnySHA1InWant", "true"],
+                       check=True, env=self.env)
+        self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
+        git_dir = self.git("rev-parse", "--absolute-git-dir").stdout.strip()
+        env = dict(self.env, GIT_DIR=git_dir)
+        result = subprocess.run(["bash", str(self.repo / ".githooks/pre-push")], cwd=self.repo,
+                                input=self.push_input(), text=True, capture_output=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.git("config", "--bool", "core.bare").stdout.strip(), "false")
+        self.assertFalse((Path(git_dir) / "shallow").exists())
+        self.assertTrue((Path(self.env["SHARED_CI"]) / ".git").is_dir())
 
     def test_explicit_head_to_branch_is_supported(self):
         self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')

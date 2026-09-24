@@ -12,6 +12,8 @@ APPLE_UI_TESTING_REPO="LeePepe/AppleUITesting"
 APPLE_UI_TESTING_SHA="e6be2fcdf83341a9f3000a4cc489237655461a07"
 
 root="$(git rev-parse --show-toplevel)"
+# Never let an inherited GIT_DIR (hooks) redirect the dependency checkouts into this repository.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 dest="${1:-$(cd "$root/.." && pwd)}"
 
 fetch() {
