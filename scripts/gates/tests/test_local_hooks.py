@@ -23,7 +23,10 @@ class LocalHookTests(unittest.TestCase):
         self.bin.mkdir()
         self.env = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1",
                         HOOK_TEST_LOG=str(self.log), PATH=f"{self.bin}:{os.environ['PATH']}")
-        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "RUN_HEAVY"):
+        # Also drop CI's verify settings (quality.yml sets VERIFY_BASE to the PR base SHA,
+        # which does not exist in these fixture repositories).
+        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "RUN_HEAVY",
+                    "VERIFY_BASE", "VERIFY_MODE", "SHARED_CI", "SHARED_CI_URL"):
             self.env.pop(key, None)
         self.git("init", "-b", "main")
         self.git("config", "user.name", "Hook Test")
