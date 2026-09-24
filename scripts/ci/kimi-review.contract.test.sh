@@ -43,8 +43,20 @@ if [ -f "$ROOT/scripts/rulesets/main-protection.json" ]; then
     ! jq -e '.rules[]? | select(.type=="required_status_checks")
       | .parameters.required_status_checks[]? | select(.context=="kimi-review" or .context=="claude-review")' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    # Codex review is required under the shared-ci reusable context; the legacy
+    # `codex-review-target` context is no longer required (R3, ruleset 19169340).
     jq -e '.rules[]? | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[]? | select(.context=="codex-review-target / codex-review")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    jq -e '.rules[]? | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[]? | select(.context=="quality / aggregate")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    ! jq -e '.rules[]? | select(.type=="required_status_checks")
       | .parameters.required_status_checks[]? | select(.context=="codex-review-target")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    # CODEOWNERS gates important paths (G): code-owner review on, no extra approvals.
+    jq -e '.rules[]? | select(.type=="pull_request") | .parameters
+      | select(.require_code_owner_review == true and .required_approving_review_count == 0)' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
 fi
 
