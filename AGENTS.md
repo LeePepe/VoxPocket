@@ -116,9 +116,10 @@ Approved exceptions: none.
 
 - One task → one branch + worktree → one PR using `.github/pull_request_template.md`.
 - Done = required checks green on the PR head SHA; a new push invalidates old evidence.
-- Non-draft PRs get squash auto-merge (`auto-merge.yml`). CODEOWNERS paths (`.github/**`,
-  policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval;
-  until enforced, add the `owner-review` label and disable auto-merge on that PR.
+- Non-draft PRs get squash auto-merge (`auto-merge.yml`); `preserve-history` PRs get
+  merge-commit auto-merge. CODEOWNERS paths (`.github/**`, policy/schemas/gates, AGENTS.md,
+  constitution, dependency pins) need Owner approval: label the PR `owner-review`, and
+  `auto-merge.yml` keeps auto-merge off (the Owner merges).
 - Code tasks report the commit, verification and PR. For an authorized TestFlight run,
   report version/build number, run link and distribution warnings. Keep existing local
   artifacts; do not clean them up automatically.

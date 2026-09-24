@@ -63,6 +63,7 @@ policy() {
     python3 scripts/ci/tests/test_review_raven.py
     bash scripts/ci/kimi-review.contract.test.sh
     python3 scripts/tests/test_testflight_schedule.py
+    python3 scripts/tests/test_auto_merge_policy.py
     if command -v gitleaks >/dev/null 2>&1; then
         gitleaks detect --no-banner --config .gitleaks.toml --redact
     elif [ "${VERIFY_MODE:-}" = "ci" ]; then
