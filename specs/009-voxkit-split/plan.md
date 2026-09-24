@@ -408,7 +408,7 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
    - 已知命中（Owner 个人邮箱、提交信息中的内部 issue 号、测试历史中的 Azure 资源主机名）已由上面的 `--mailmap`/`--replace-message`/`--replace-text` 处置（Owner Q2）；预检在处置后的导出历史上重跑，必须零发现，否则停下交 Owner。
 3. **建 repo 并推送**：Owner 确认后建 `LeePepe/VoxKit`（public，MIT），推 `main`。
 4. **`repo-kit init`（VK-1 PR）**：按 shared-ci@<当时发布的 40 位 SHA> 模板：AGENTS.md（≤150 行；Read first / Protocol / Verify / Required checks / Red lines / Delivery / Dependencies）、thin CLAUDE.md、`scripts/verify`（macOS `swift build/test`、iOS Simulator `xcodebuild test`（目的地同 `VOXKIT_IOS_DESTINATION`）、`scripts/redlines/check.sh` + self-test）、`.githooks/pre-push`、caller `ci.yml`（`runs-on: macos-26`；build/test 输入含 iOS Simulator，计入 `quality / aggregate`；contract audit；workflow-lint；PR body 检查）、`review.yml` caller、PR 模板、CODEOWNERS（`/.github/`、`/AGENTS.md`、`/Package.swift`、`/scripts/redlines/`、`/ai/`、`/.gitignore`）、根 `tech-context.md` layer 表（每个 module 一个 layer）；`ai/` 七件套（README/USAGE/INTEGRATION/EXAMPLES/COMPATIBILITY/MIGRATION/registry.json）。**非公开配置（Owner Q2）**：`.gitignore` 忽略 `*.private.*`、`*.local.*`、`config.private.json`；需要真实 endpoint 的只有可选（默认跳过）的集成测试，它们由测试 harness 读取 gitignore 的 `Tests/Integration/azure.local.json`，仓内提交 `Tests/Integration/azure.example.json`（只含 `example` 主机与空 key）；AGENTS「Red lines」写明该规则；`scripts/verify` 与 CI 运行 gitleaks 与 R5 模式扫描，命中即失败。验收：shared-ci `audit` 零发现。
-5. **ruleset**：old→new 给 Owner，批准后设置：禁直推；required `quality / aggregate` 与 `codex-review-target / codex-review`；**tag 保护**（Owner Q6）：tag ruleset 作用于 `refs/tags/*`，规则 `creation`、`update`、`deletion`、`non_fast_forward` 全部启用，bypass actor 只有 repository admin（Owner），即只有 Owner 能创建 tag、任何人不能移动或删除；若日后用 release workflow 建 tag，须把该 workflow 的 App 另列为 `creation` 的 bypass actor，并经 Owner 批准；回读 `rules/branches/main` 与 tag ruleset。
+5. **ruleset**：old→new 给 Owner，批准后设置：禁直推；required `quality / aggregate` 与 `codex-review-target / codex-review`；**tag 保护**（Owner Q6）：GitHub 的 bypass 作用于整个 ruleset，因此拆为**两个** tag ruleset，均作用于 `refs/tags/*`：(A) `tags-immutable`：规则 `update`、`deletion`、`non_fast_forward`，**bypass actor 列表为空**（包括 repository admin/Owner 在内，任何人都不能移动或删除已发布 tag，保证 `exact:` 依赖的供应链不可变）；(B) `tags-create`：只有规则 `creation`，bypass actor 只有 repository admin（Owner），即只有 Owner 能创建 tag。若日后用 release workflow 建 tag，须把该 workflow 的 App 加为 (B) 的 bypass actor，并经 Owner 批准；**(A) 永远不加 bypass actor**。回读时断言 (A) 的 `bypass_actors` 为空、(B) 只含 Owner；回读 `rules/branches/main` 与两个 tag ruleset。
 6. **Tag**：`0.1.0`（Owner 已定，§12 Q6；由 Owner 或其批准的发布流程在 tag 保护生效后创建），release notes 指向 `ai/`；按 W5 用 `ai/INTEGRATION.md` 的外部消费者 fixture 在干净目录以 `exact: "0.1.0"` 在 macOS 与 iOS Simulator 构建。
 7. **VoxPocket `repo-kit adopt`（PR-4）**：
    - 4.1（E2）：VoxInfrastructure/Application/Presentation 的 `Package.swift` 与 `project.yml` 同一 commit 改为 `.package(url: "https://github.com/LeePepe/VoxKit", exact: "0.1.0")`，删除 `Packages/VoxKit`。
@@ -443,6 +443,7 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 | 4b（修订，未再复核） | — | — | 按 Q10 不再循环复核，交 Owner 审阅为最终结论 |
 | 4c（定点修订，verified by coordinator） | — | 3 项：R4-M2 补测试 import、R4-M5 补 App 壳接缝、新 MEDIUM `MergerConfigurable` 可见性 | 见下；不再做复核轮 |
 | 4d（codex-review blockers @4e1ed3b） | NEEDS_REVISION | 3 HIGH：`Credential` 未定义、`setMerger(_:)` 就地修改违反宪法 I、§8 把 WhisperKit 回调列入 III 豁免 | 见下 |
+| 4e（codex-review @199c7c8，最后一轮） | NEEDS_REVISION | 1 HIGH：tag ruleset 的 admin bypass 同时绕过 update/deletion，与「任何人不能移动或删除」矛盾；1 条非阻塞建议（VoxKit roles 中 Repo 与 Service 的划分） | 拆为 `tags-immutable`（update/deletion/non_fast_forward，无 bypass）与 `tags-create`（creation，仅 Owner bypass），§9 步骤 5、T405；建议留待 1.1 落地 tech-context 时处理 |
 
 第 1 轮要点与修订：
 - C1 squash 合并抹掉一层一 commit 与 mv 历史 → §1.2 `preserve-history` + merge commit，PR-0b，Q9；`--follow` 证据在合并后的 `main` 上采集。
@@ -496,6 +497,10 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 - HIGH-1 `Credential` 未定义：§2.4 定义 `public struct Credential: Sendable`（不可变；`description`/`debugDescription` 为 `Credential(<redacted>)`，`customMirror` 无子项，不遵循 Codable/Equatable）与 `CredentialKey`；§2.1 阶段 1 VoxCore 清单与 `module-map.json`（`voxcore_native` 条目）同步；R4 API 快照包含它。
 - HIGH-2 `setMerger(_:)` 就地修改共享引用（宪法 I）：核实今天 merger 只在 `ServiceContainer.init` 写入一次，无运行时修改 → merger 改为 transcriber init 参数（`public let`，同时删除两处 `nonisolated(unsafe)`），`TranscriptionMergerConfigurable` 由只读的 `MultiRecognizerSpeechSource` 取代，`MultiRecognizerTranscriber.merger` 改为只读；1.10 在构造时传入 merger 并删除 `injectMergerIfNeeded`；需要变更时重建 coordinator（§2.1、§2.2、§2.3、§2.4、1.10、3.10、§6 R4、T110、T114、T201、T310）。
 - HIGH-3 §8 把 WhisperKit 列入 `@unchecked Sendable`/`nonisolated(unsafe)` 豁免：删除；豁免只限 Apple API 边界；WhisperKit 回调经 actor、`Mutex<State>` 或 `AsyncStream` continuation 桥接，`VoxSpeechWhisperKit` 计数必须为 0，1.6 实施（§2.1、§6、§8、T105、T110）。
+
+第 4e 轮（codex-review @199c7c8，最后一轮）修订：
+- HIGH tag 保护自相矛盾：单一 ruleset 的 admin bypass 会同时绕过 `update`/`deletion` → 拆为两个 ruleset：`tags-immutable`（`update`、`deletion`、`non_fast_forward`，`bypass_actors` 为空，Owner 也不能移动/删除）与 `tags-create`（仅 `creation`，bypass 仅 Owner；release workflow 的 App 只能加到这里）；回读断言两者的 bypass 列表（§9 步骤 5、T405）。
+- 非阻塞建议（VoxSpeech/VoxSpeechWhisperKit/VoxLLM 的 role 更接近 `Service` 而非 `Repo`）：未在本轮修改，留待 1.1 落地 `Packages/VoxKit/tech-context.md` 时按 `canonical_roles` 校正。
 
 ## 12. Owner 决策（已定，2026-09-24）
 

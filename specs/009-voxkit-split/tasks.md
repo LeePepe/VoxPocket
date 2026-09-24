@@ -79,7 +79,7 @@
 | T402 | 临时 clone | 隐私预检（含音频 blob、作者列表），在处置后的历史上必须零发现；计数报告交 Owner | T401 | US6-AC2 |
 | T403 | VoxKit | 建 `LeePepe/VoxKit`（public，MIT），推 `main` | T402 + Owner 确认 | — |
 | T404 | VoxKit | `repo-kit init` PR（AGENTS/CLAUDE/verify/hooks/ci/review/PR 模板/CODEOWNERS/tech-context/`ai/`）；`.gitignore` 忽略本地私密配置 + 提交 `.example` 模板（Q2）；`audit` 零发现 | T403 | US6-AC3, US6-AC7 |
-| T405 | VoxKit | ruleset（分支 + tag 保护，Q6）old→new 给 Owner，批准后设置并回读 | T404 | US6-AC3, US6-AC7 |
+| T405 | VoxKit | ruleset（分支 + tag 保护，Q6：`tags-immutable` = update/deletion/non_fast_forward、无任何 bypass；`tags-create` = creation、仅 Owner bypass）old→new 给 Owner，批准后设置并回读（断言两者 bypass 列表） | T404 | US6-AC3, US6-AC7 |
 | T406 | VoxKit | tag `0.1.0`（Q6）+ release notes；外部消费者 exact 版本验证（macOS + iOS Simulator） | T405 | US6-AC4, US2-AC1 |
 | T407 | VoxPocket（E2） | 所有 manifest + `project.yml` 同一 commit 切到远程 exact；删除 `Packages/VoxKit` | T406 | US6-AC5 |
 | T408 | VoxPocket | `.gitignore` 放行并提交 4 个 `Package.resolved` | T407 | US6-AC5 |
