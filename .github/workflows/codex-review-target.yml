@@ -1,8 +1,11 @@
 name: codex-review-target
 
-# Trusted replacement for codex-review. pull_request_target evaluates this workflow from
-# the default branch; the job checks out the trusted base and reads the PR diff as data.
-
+# Required AI review gate. Calls shared-ci's reusable codex review (fork guard,
+# trusted base checkout, PR diff read as data). VoxPocket keeps its local Raven
+# launcher (scripts/ci/review-raven.py, read from the trusted base tree).
+# Check contexts: `codex-review-target / codex-review` (shared-ci template name) and
+# `codex-review-target` (the current required context, kept by the legacy-context job
+# until the ruleset maps it; see the ruleset plan in the introducing PR).
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
@@ -18,27 +21,21 @@ concurrency:
 
 jobs:
   codex-review-target:
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 25
-    steps:
-      - name: Checkout base (trusted script source)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.base.sha }}
+    uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@761fe6b0b3ca5e2c57d244182d495ab8041851fa
+    with:
+      codex-launcher: python3 scripts/ci/review-raven.py
+      codex-bin: /opt/homebrew/bin/codex
 
-      - name: Run local Codex review (trusted target gate)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_REPO: ${{ github.repository }}
-        run: scripts/ci/codex-review.sh
-
-  codex-review-target-fork:
-    if: github.event.pull_request.head.repo.full_name != github.repository
+  # Keeps the existing required check context `codex-review-target` (ruleset) green
+  # only when the reusable review succeeded on this PR head; fails closed otherwise.
+  legacy-context:
+    name: codex-review-target
+    needs: [codex-review-target]
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Codex review is skipped for fork pull requests."
+      - env:
+          RESULT: ${{ needs.codex-review-target.result }}
+        run: |
+          echo "codex-review result: $RESULT"
+          [ "$RESULT" = "success" ] || { echo "::error::codex review did not pass ($RESULT)"; exit 1; }

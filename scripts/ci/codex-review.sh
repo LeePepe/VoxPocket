@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # VoxPocket 自动 code review（codex）—— 在 self-hosted runner 上用本地 `codex` CLI 跑。
 #
-# 与 claude-review.sh 并列的第二道独立门（不同模型交叉验证）。
+# 旧 VoxPocket 自有 review 入口；required gate 现由 shared-ci codex-review.yml 调用 review-raven.py。
 # 由 .github/workflows/codex-review-target.yml 的 trusted-base job 调用。
 # **安全边界在 workflow YAML 的 job-level `if`**(来自 base 分支、fork 改不到):
 # 只有同仓库分支 PR 才会到达这里;fork PR 由另一个 job 处理,PR 代码不在本机执行。
@@ -118,7 +118,7 @@ cat > "$SCHEMA_FILE" <<'SCHEMA_EOF'
 SCHEMA_EOF
 
 # ---- review prompt ------------------------------------------------------
-# 维度与 claude-review.sh 保持一致（同一套仓库宪法），两个模型交叉验证。
+# 维度依据同一套仓库宪法。
 # Trusted Markdown is rendered as data: no shell evaluation or recursive substitution.
 if ! PROMPT="$(CHANGED="$CHANGED" TRUNCATED="$TRUNCATED" DIFF="$DIFF" \
     python3 "$REPO_ROOT/scripts/ci/render-review-prompt.py" "$REPO_ROOT/scripts/ci/review-prompt.md")"; then
