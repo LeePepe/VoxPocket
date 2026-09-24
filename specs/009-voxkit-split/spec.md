@@ -1,6 +1,6 @@
 # VoxKit 拆分：语音 SDK 独立 + VoxPocket 只保留 App
 
-- 状态：Draft（Owner 审阅中，`owner-review`）
+- 状态：Draft（Owner 审阅中，`owner-review`）；plan §12 Q1–Q10 已由 Owner 决定（2026-09-24）
 - 日期：2026-09-24
 - 需求来源：Owner 的 VoxKit 拆分需求稿（未入库）；Owner 决策来自 Owner 的仓库治理计划（不在本仓），相关条目摘录在本文 §2，以本文为准
 - 配套：[`plan.md`](./plan.md)（分阶段计划与 Plan-Review 记录）· [`tasks.md`](./tasks.md)（依赖顺序任务）· [`research.md`](./research.md)（引擎选型与代码现状调研）
@@ -29,6 +29,8 @@ VoxPocket 只保留 UI、编辑器领域、持久化、平台适配，经 VoxKit
 | D5 | 阶段 5（设置页 workflow 编辑 UI）不在范围，见 backlog #53 |
 | D6 | 拆仓前对 filter-repo 导出历史做隐私预检 |
 | D7 | iOS build/test 先作非 required lane；阶段 1 修绿 SDK iOS 后改 required |
+| D8 | plan §12 Q1–Q10 已定；其中 Q2（Owner 修改）：个人信息从导出历史删除；非公开项目信息（Azure 主机名、内部 endpoint/配置、内部 issue 号）不进 git，用 gitignore 的本地文件 + 提交 `.example` 模板，VoxPocket 与 VoxKit 同样适用 |
+| D9 | App 与 VoxKit 都做 iOS build/test（App 单元测试也在 iOS Simulator 上运行，Q6） |
 
 ## 3. 既有行为（Existing behaviour，基线 = `origin/main` @ `afec620`）
 
@@ -46,16 +48,16 @@ VoxPocket 只保留 UI、编辑器领域、持久化、平台适配，经 VoxKit
   | `.realtime` | 有 | 缺失 | `HybridWhisperTranscriber(realtimeConfig: nil)`（降为 batch） |
   | `.realtime` | 有 | 有 | `HybridWhisperTranscriber(realtimeConfig: …)` |
 
-  iOS：`realtimeTranscriptionConfig` 恒为 nil；batch 配置齐全用 `HybridWhisperTranscriber`，否则 `AppleSpeechTranscriber` 并打 warning。其余 `TranscriberProvider` 分支（`localWhisperKit` 走 `LoadingFallbackTranscriptionCoordinator(primary: WhisperKit, fallback: AppleSpeech)`，`hybridLocalWhisper`，`azureWhisper`，`appleSpeech`）代码保留，当前默认不走。
+  iOS（App 壳 `ServiceContainer.makeTranscriber` 的 `#else` 分支）：`realtimeTranscriptionConfig` 恒为 nil；batch 配置齐全用 `HybridWhisperTranscriber(realtimeConfig: nil)`，否则 `AppleSpeechTranscriber` 并打 warning（`Azure transcription configuration missing; actual_provider=appleSpeech`）。其余 `TranscriberProvider` 分支（`localWhisperKit` 走 `LoadingFallbackTranscriptionCoordinator(primary: WhisperKit, fallback: AppleSpeech)`，`hybridLocalWhisper`，`azureWhisper`，`appleSpeech`）代码保留，当前默认不走。
 - **EB-2 Hybrid（Azure）**：`MicrophoneRecorder` 采集，buffer 同时喂 Apple Speech 与 WAV 文件；Apple Speech partial 驱动实时文本与自动停止；realtime 会话在录音期间发送音频，`finish()` 失败时回退 `WhisperEngine` 整段转写（`RealtimeASRFinalizer`）；`shouldFinalize` 为假（无 realtime 且 Apple/云端都无文本）时跳过云端调用并删除音频；终稿只 `finalResultPublisher` 发送一次；未使用合并器时 live 也同步发送终稿。
 - **EB-3 合并器注入**：`ServiceContainer.injectMergerIfNeeded` 对 `HybridWhisperTranscriber` **不注入**；对其他 `MultiRecognizerTranscriber`（`HybridLocalWhisperTranscriber`）注入 `LLMTranscriptionMerger`。`mergedTranscription` 规则：合并器为空、Apple 文本为空、或两路相同 → 直接用 Whisper；合并器抛错 → Whisper；输出长度 > 较长输入 × 1.5 → Whisper。
 - **EB-4 两套独立栈**（macOS）：主编辑器与快捷录音各自一套转写器 / 文本模型服务 / UseCase，互不污染；本地 Whisper engine 底层共享（`SharedLocalWhisperEnginePool`）。
-- **EB-5 临时音频**：录音 WAV 暂存 `Application Support/VoxPocket/TemporaryAudio/`，目录 0700、排除备份，终稿后删除；WhisperKit 模型下载到 `Caches/VoxPocketWhisperKitHub`。
+- **EB-5 临时音频与模型缓存**：录音 WAV 暂存 `Application Support/VoxPocket/TemporaryAudio/`，目录 0700、排除备份，终稿后删除；WhisperKit 模型下载到 `Caches/VoxPocketWhisperKitHub`；模型快照损坏时，`resetCorruptedCache` 还会删除 HuggingFace 缓存候选目录（`Caches/huggingface/hub/models--argmaxinc--whisperkit-coreml`，macOS 另加 `~/.cache/huggingface/hub/…`）。
 - **EB-6 权限**：macOS `AVCaptureDevice.requestAccess(.audio)`；iOS `AVAudioSession` `.record/.measurement/.duckOthers` 并 `setActive(true)`；Speech 授权由 `SFSpeechRecognizer.requestAuthorization`。默认识别语言 `zh-Hans`。
 
 ### 3.2 文本模型与精炼
 
-- **EB-7 文本模型服务**：macOS 每个入口一个 `DefaultStageTextModelService`，每次录音 `configure(settings)` 新建 `DefaultLLMService`，不改正在精炼的实例；`settings.refinement == .azureFoundry` 且 Azure 不可用 → 精炼请求明确失败（`ConfigurationError.unavailable`，文案「所选文本模型尚未配置，请检查语音与文本设置。」），**不偷偷改用 Apple**；语音采集不受影响。iOS 用单个 `DefaultLLMService`，由偏好 `llmProvider` / `llmSkipContentAnalysis` 与通知驱动。
+- **EB-7 文本模型服务**：macOS 每个入口一个 `DefaultStageTextModelService`，每次录音 `configure(settings)` 新建 `DefaultLLMService`，不改正在精炼的实例；`settings.refinement == .azureFoundry` 且 Azure 不可用 → 精炼请求明确失败（`ConfigurationError.unavailable`，文案「所选文本模型尚未配置，请检查语音与文本设置。」），**不偷偷改用 Apple**；语音采集不受影响。iOS 用单个 `DefaultLLMService`：精炼 provider 初始为 `LLMAppConfig.defaultProvider`（`azureFoundry`），偏好 `llm.provider` 有合法存值时切换为该值，存值非法或被删除时保持当前 provider；intent 与 tone **固定**路由到 `appleIntelligence`（`LLMAppConfig.analysisProviderOverrides`），entities/tags/params 用当前精炼 provider（macOS 则跟随 `settings.intent`）；`llmSkipContentAnalysis` → `setSkipContentAnalysis`；`llmProviderDidChange` / `llmAnalysisSettingsDidChange` 通知时重新应用。
 - **EB-8 分析路由**：`StageModelRouting.analysisOptions` 把 intent（含 entities/tags/params）路由到 `settings.intent`，tone 路由到 `settings.tone`；`DefaultLLMService.analyzeContent` 按 provider 分组，同一 provider 内**先 intent 组后 tone 组顺序执行**；**不同 provider 组之间的顺序不确定**（遍历 `Dictionary`，每进程哈希种子不同）；某步失败或 provider 缺失 → 该步用默认值并记入 `missingAnalysisSteps`，不阻断精炼。
 - **EB-9 跳过分析**：`skipAnalysis == true` → 不调用任何分析，`missingAnalysisSteps = 全部`。
 - **EB-10 精炼 prompt**：`RefinementPromptBuilder.build(text:customPrompt:)` 的默认指令逐字固定；`refine` 用 `complete`，`refineStreaming` 先（非跳过时）等待分析结束再流式输出 chunk；Apple / Azure provider 自身的 `refine*` 也用同一 builder。
@@ -83,7 +85,7 @@ AC 编号稳定，plan/tasks/测试名引用它们；只可追加，不重编号
 
 作为 VoxPocket 用户，我在整个迁移期间录音、转写、精炼、快捷录音与设置的行为与今天完全一样。
 
-- **US1-AC1**：阶段 1 最先两个 commit（零行为变化的注入接缝 + 基线录制，plan §3.4）得到 golden trace；阶段 1、2、3 合并前，相同矩阵的 trace 与基线按 plan §3.4 的比较规则相等：转写事件序列、每个 provider 收到的 prompt 原文、每步分析选用的 provider、`RefinementResponse` 字段、`missingAnalysisSteps`、遥测事件名与属性键逐项相等；跨 provider 的分析组顺序（今天即不确定）从基线起按 (provider, 步骤) 归一；阶段 3 起同层分析调用顺序按 RB-12 归一。
+- **US1-AC1**：阶段 1 最先三个 commit（零行为变化的注入接缝 + 基线录制，plan §3.1 1.0a–1.0c、§3.4）得到 golden trace；阶段 1、2、3 合并前，相同矩阵的 trace 与基线按 plan §3.4 的比较规则相等：转写事件序列、每个 provider 收到的 prompt 原文、每步分析选用的 provider、`RefinementResponse` 字段、`missingAnalysisSteps`、遥测事件名与属性键逐项相等；跨 provider 的分析组顺序（今天即不确定）从基线起按 (provider, 步骤) 归一；阶段 3 起同层分析调用顺序按 RB-12 归一。
 - **US1-AC2**：现有 SPM 与 App 测试全部通过；除 §6 列出并获 Owner 批准的项外，不删除、不跳过、不放宽任何断言。
 - **US1-AC3**：`StageModelSettings` 的持久化键（`model.speech`/`model.intent`/`model.tone`/`llm.provider`/`llm.skipContentAnalysis`/`model.realtimeDeployment`）、默认值与「下一次录音生效，进行中不切换」语义不变（EB-1、EB-7）。
 - **US1-AC4**：主编辑器与快捷录音栈仍相互隔离（EB-4）；有测试证明两个栈的 workflow 运行实例不共享可变状态（有意共享的本地 Whisper engine pool 除外）。
@@ -130,17 +132,18 @@ AC 编号稳定，plan/tasks/测试名引用它们；只可追加，不重编号
 
 - **US5-AC1**：SDK 代码（`Packages/VoxKit` 与阶段 1–2 期间仍在 VoxInfrastructure 的两个 kit 及 `VoxKitBridge`）在 iOS Simulator 上 build + test 通过；PR-1 合并后该 lane 由非 required 改为 required（ruleset 变更经 Owner 批准）。
 - **US5-AC2**：iOS 采集：请求录音权限、设置并在停止/中断时释放 `AVAudioSession`、处理中断与路由变化通知；模拟器测试以注入的合成音频源运行，不依赖真实麦克风。
-- **US5-AC3**：App iOS target 继续 CI 构建通过；AGENTS/constitution 中不再有「iOS 暂停」表述（若 S3 已完成则只核对）。
+- **US5-AC3**：App iOS target 继续 CI 构建通过，`VoxPocketTests` 在 iOS Simulator 上运行通过（Owner Q6）；AGENTS/constitution 中不再有「iOS 暂停」表述（S3 完成，只核对）。
 - **US5-AC4**：不触发 iOS TestFlight；`testflight.yml` 的 iOS 路径不改。
 
 ### US6 — 拆出独立 repo 并由 App 远程依赖（P1）
 
 - **US6-AC1**：新 repo 历史由 `git filter-repo` 从 VoxPocket 导出，包含 TranscriptionKit/LLMKit 迁入前后的提交；导出树与 `main:Packages/VoxKit` 一致；在 `main` 上与导出 repo 中抽查的文件 `git log --follow` 都能追溯到阶段 1 之前的提交。
-- **US6-AC2**：推送前隐私预检（凭据、私有配置文件名、身份模式、Azure 资源标识、个人邮箱与内部 issue 号）结果为零发现，或每个发现都有 Owner 书面处置。
+- **US6-AC2**：导出历史中不含个人信息（作者/提交者/trailer 邮箱统一为 noreply）与非公开项目信息（Azure 资源主机名、内部 endpoint/配置、内部 issue 号）：由 filter-repo 的 `--mailmap`/`--replace-text`/`--replace-message` 处置；推送前隐私预检（凭据、私有配置文件名、身份模式、Azure 资源标识、个人邮箱与内部 issue 号）在处置后的历史上结果为零发现（Owner Q2）。
 - **US6-AC3**：新 repo 满足 shared-ci repo 合同 v1 的 8 项（`audit` 零发现），`quality / aggregate` 与 `codex-review-target / codex-review` 为 required，含 macOS 与 iOS lane。
 - **US6-AC4**：首个版本 tag 随源码发布 `ai/`（README/USAGE/INTEGRATION/EXAMPLES/COMPATIBILITY/MIGRATION/registry.json）；外部消费者按 exact 版本验证通过。
 - **US6-AC5**：VoxPocket 改为 `.package(url:…, exact: <tag>)`，删除 `Packages/VoxKit`，`Package.resolved` 入库，AGENTS 依赖段写明版本与 `ai/` 链接；全部既有测试与 golden trace 仍通过。
 - **US6-AC6**：回滚路径：revert adopt PR 即恢复 path 依赖并通过 CI（在 adopt PR 上演练一次 revert 的 CI）。
+- **US6-AC7**：VoxKit 与 VoxPocket 的非公开配置只存在于 gitignore 的本地文件，仓内只有 `.example` 模板；`LeePepe/VoxKit` 的 tag 受保护（不可删除、不可移动）。
 
 ### US7 — 治理文档同步（P2）
 
@@ -169,11 +172,11 @@ AC 编号稳定，plan/tasks/测试名引用它们；只可追加，不重编号
 | # | 移除/改变 | 阶段 | 理由 | 测试影响 |
 |---|---|---|---|---|
 | RB-1 | `LLMTranscriptionMerger` 的 5 处内容日志 → 只记长度与回退原因枚举 | 1 | 宪法 IV（KI-1） | 新增隐私金丝雀测试 |
-| RB-2 | `LocalWhisperRawOutputLogger` 删除（不再记录原始输出） | 1 | 宪法 IV（KI-1） | **`LocalWhisperRawOutputLoggerTests` 两个用例被替换**为「不记录内容」断言（弱化/删除既有测试，须 Owner 批准） |
+| RB-2 | `LocalWhisperRawOutputLogger` 删除（不再记录原始输出） | 1 | 宪法 IV（KI-1） | **`LocalWhisperRawOutputLoggerTests` 删除**（Owner Q7 已批准），新增「日志不含转写」测试 |
 | RB-3 | WhisperKit 遥测 `reason` 自由文本 → `error_kind` 枚举 | 1 | 宪法 IV（KI-2） | 遥测键断言更新 |
 | RB-4 | SDK 内所有插值日志改为 `StaticString` + 字段；非允许名单的控制台日志文本改变 | 1 | R3 类型化 | 无既有断言依赖（已核查只有 RB-2 的测试） |
 | RB-5 | SDK 候选错误 case 改由 `VoxKitError` 承载 | 1 | SDK 不得依赖 VoxDomain | `LLMKitTests` 中 `catch VoxError.llmProviderNotConfigured` 改为 `VoxKitError`（同语义） |
-| RB-6 | 测试 fixture 中的 Azure 资源主机名换成 `example.services.ai.azure.com` | 1 | 宪法 V（KI-3） | 断言值同步替换，覆盖不变 |
+| RB-6 | 测试 fixture 中的 Azure 资源主机名换成 `example.services.ai.azure.com`；需要真实 endpoint 的配置只放 gitignore 的本地文件，仓内提交 `.example` 模板（Owner Q2） | 1 | 宪法 V（KI-3） | 断言值同步替换，覆盖不变 |
 | RB-7 | SDK public API 移除 Combine publisher；App 经 `VoxKitBridge` 获得同形状 publisher | 1 | R4 | 桥接行为测试新增 |
 | RB-8 | `LLMProviderConfig.options` 的 `analysis.*.provider` 字符串路由、`setSkipContentAnalysis`、`MultiRecognizerTranscriber.merger` 可变注入被 workflow 定义替代 | 3 | 流程改由 workflow 表达 | 覆盖这些 API 的测试迁为 golden/preset 测试 |
 | RB-9 | App 中 `TranscriberProvider` 枚举与 `ServiceContainer.makeTranscriber` 分支 → preset id | 3 | 同上 | `TranscriberSelectionTests` 迁为 preset 选择测试，矩阵不缩小 |
@@ -186,6 +189,6 @@ AC 编号稳定，plan/tasks/测试名引用它们；只可追加，不重编号
 
 - 设置页 workflow 编辑 UI（#53）；新增 SR/LLM 供应商；iOS TestFlight 发布；更改默认模型或 prompt 文案；私密基准测试 `PrivateTranscriptionBenchmarkTests` 的迁移（留在 VoxPocket，作为 VoxKit 的消费者测试）。
 
-## 8. 需 Owner 回答的问题
+## 8. Owner 决策
 
-见 [`plan.md` §12](./plan.md#12-待-owner-决策)。
+全部已由 Owner 决定，见 [`plan.md` §12](./plan.md#12-owner-决策已定2026-09-24)。

@@ -51,8 +51,12 @@
 | 流程写死 | `DefaultLLMService.analyzeContent`（分组顺序执行）、`HybridWhisperTranscriber.finishRecording`（realtime→batch→merge）、`ServiceContainer.injectMergerIfNeeded`、`StageModelRouting.resolveTranscriber` |
 | 使用方 | VoxApplication 5 个源文件、VoxPresentation 8 个源文件、App 壳 5 个文件 import 两个 kit；kit 以外 12 个测试文件（Application 3、Presentation 7、App 2）import 两个 kit；`scripts/tests/test_realtime_config.py` 以 path 依赖编译 App 壳配置文件 |
 | 平台 | `MicrophoneRecorder` 已有 `#if os(iOS)` 的 `AVAudioSession`；缺中断/路由变化处理与 `setActive(false)`；realtime 配置在 iOS 由 App 的 `LLMAppConfig.realtimeTranscriptionConfig`（`#if os(macOS)`）置为 nil，kit 本身无 iOS 排除 |
+| 授权 | `SFSpeechRecognizer.requestAuthorization` 为静态调用，在 `AppleSpeechTranscriber`、`HybridWhisperTranscriber`、`HybridLocalWhisperTranscriber` 中共 6 处；macOS `AVCaptureDevice.requestAccess(for: .audio)` 在 `MicrophoneRecorder.requestPermission` 与 `startIfAllowed` 内部调用。无注入点，因此 golden (c) 需要 plan §3.1a 的授权接缝 |
+| Combine 适配 | publisher 由实现类的 `private` subject 驱动（`WhisperKitTranscriber`、`HybridLocalWhisperTranscriber`、`LoadingFallbackTranscriptionCoordinator` 等），`ModelLoadingObservable` conformance 以同文件 extension 实现；跨 target 的 extension 无法访问，适配器必须是只用 public async API 的包装类（plan §2.2） |
+| 模型缓存清理 | `WhisperKitTranscriber.resetCorruptedCache` 在快照损坏时删除 `huggingFaceWhisperKitRepoCacheCandidates()`（`cachesDirectory` 下与 macOS `~/.cache` 下的 HuggingFace 缓存）；删除路径解析时须由宿主注入同一结果（`VoxStorageLocations.modelCacheCleanupCandidates`） |
+| iOS App 路由 | iOS 的转写器选择与 LLM 配置在 App 壳 `ServiceContainer` 的 `#else` 分支：batch 配置有→`HybridWhisperTranscriber`（realtime nil），否则 `AppleSpeechTranscriber` + warning；provider 未存→`LLMAppConfig.defaultProvider = .azureFoundry`；intent/tone 固定 `appleIntelligence`（`analysisProviderOverrides`）。`VoxPocketTests` 的 target 支持 iOS，但 CI 今天不跑 |
 | iOS CI | `App target` job 已有 `Build app — iOS (no signing)` 步骤，最近 main run 成功；SPM 包只在 macOS 上 `swift build/test`，无 iOS Simulator 测试 |
-| 历史 | 两个 kit 的源与测试路径自始至终在 `Packages/VoxInfrastructure/{Sources,Tests}/{TranscriptionKit,LLMKit}*`，共 30 个提交触及；作者邮箱为 Owner 个人邮箱；1 个提交信息含内部 issue 号（MY-1544）；测试 diff 历史中出现 Azure 资源主机名 |
+| 历史 | 两个 kit 的源与测试路径自始至终在 `Packages/VoxInfrastructure/{Sources,Tests}/{TranscriptionKit,LLMKit}*`，共 30 个提交触及；作者邮箱为 Owner 个人邮箱；1 个提交信息含内部 issue 号；测试 diff 历史中出现 Azure 资源主机名。当前树另有 3 个文件含内部 issue 号（App 测试注释、`scripts/ci` 注释、基准测试 README），由 PR-0c 清理（Owner Q2） |
 
 ## R-3 SwiftPM 可选重依赖
 
