@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 VoxPocket is a macOS/iOS voice recording and transcription app built with SwiftUI. It captures audio, transcribes speech (default locale: `zh-Hans`), and refines text using Apple Intelligence LLM. The codebase uses Chinese comments throughout.
 
-**Linear**: https://linear.app/tianpeili/issue/TIA-6/voxpocket
-
 ## Build & Test Commands
 
 App build delivery and installation follow `AGENTS.md` → **App Build 与交付（TestFlight 唯一渠道）**.
@@ -134,17 +132,10 @@ Repository-owned `.githooks/` (`core.hooksPath=.githooks`) invoke deterministic 
 
 ## Task Workflow
 
-When the user submits a problem or task, Claude MUST follow this sequence:
+When the user submits a non-trivial problem or task:
 
-1. **Create or update a Linear issue** under the VoxPocket project (TIA-6) via the Linear GraphQL API (`lin_api_*` key from env or user). The issue should have a clear title and initial description.
-2. **Invoke the planner agent** to expand the issue: break it into subtasks, define acceptance criteria, identify risks and dependencies. Update the Linear issue description with the enriched plan.
-3. **Create sub-issues** in Linear for each subtask, all parented to the main issue.
-4. **Assign subtasks to teammates** using the Agent tool in parallel where tasks are independent.
-
-Linear API endpoint: `https://api.linear.app/graphql`
-Team ID: `56d7d04f-ffb2-43f3-ad40-23fd78f551d8`
-Project ID: `662a9249-b377-47c0-ad20-ccca738f4e8e`
-VoxPocket parent issue: `dc74c224-59f0-4eb1-87d9-81a62a668da7` (TIA-6)
+1. **Invoke the planner agent** to break it into subtasks, define acceptance criteria, and identify risks and dependencies. Record the plan via spec-kit (`specs/`) or `docs/plans/`.
+2. **Assign subtasks to teammates** using the Agent tool in parallel where tasks are independent.
 
 ## Plan-Review Loop (MANDATORY)
 
