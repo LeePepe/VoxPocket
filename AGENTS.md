@@ -125,7 +125,6 @@ swift test --package-path Packages/VoxApplication
 - 2026-09-10：修复配置预加载导致的主队列饥饿；入口同步启动，服务等待异步配置。补充生产入口交互回归和启动状态测试。
 - 2026-09-11：按用户要求改为 TestFlight 唯一 App build 交付渠道，取消自动本地归档与主动安装。
 
-## GitHub 身份（原生 Git / gh）
+## 写入前核对
 
-- **任何 Git / gh 操作前必读并遵守**：[GitHub 身份完整规则](docs/agents/github-identity.md)，包括新 clone/worktree/Multica checkout、只读核验及写入；这些规则也适用于本文件其他章节的命令。
-- 目标为 `LeePepe/VoxPocket`（ID `1197276028`），预期账号 `LeePepe`；使用已有 `$HOME/.config/github-identity/profiles/LeePepe`，按完整规则隔离环境 token 覆盖并核验身份与权限。
+- push / 开 PR 前核对实际 fetch/push URL 与目标仓库；归属不明的 remote 先问 Owner。
