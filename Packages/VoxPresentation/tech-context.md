@@ -1,10 +1,11 @@
 ---
 layer: VoxPresentation
 role: SwiftUI 视图与 ViewModel —— 展示层,驱动录音/编辑/精炼的用户界面
+owns: [Packages/VoxPresentation/**]
 depends_on: [VoxDomain, VoxInfrastructure, VoxApplication]
-depended_by: []
+gate: {build: "swift build --package-path Packages/VoxPresentation", test: "swift test --package-path Packages/VoxPresentation"}
 red_lines:
-  - 可依赖下层三包(+ 外部 LokiKit);本层是依赖链顶端,不得被任何 layer 依赖(宪法 II)
+  - 可依赖下层三包(+ 外部 LokiKit);除 App 组装壳外不得被任何 layer 依赖(宪法 II)
   - 所有 ViewModel 与 UI 代码 @MainActor;禁止主线程阻塞调用(宪法 III)
   - 转写/精炼文本是用户敏感数据,禁止写入日志或遥测负载(宪法 IV)
   - ViewState 契约用协议;@Published 驱动 SwiftUI,状态更新走不可变副本(宪法 I)
@@ -13,7 +14,7 @@ roles:
   Runtime: [ViewModels, Snackbar]
   UI:      [Views, Components]
 test: swift test --package-path Packages/VoxPresentation
-owns: [UIShared, PlatformUI, WidgetUI]
+targets: [UIShared, PlatformUI, WidgetUI]
 ---
 
 # VoxPresentation Tech Context
