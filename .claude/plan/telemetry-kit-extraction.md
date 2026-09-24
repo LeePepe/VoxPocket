@@ -3,7 +3,7 @@
 ## Status: APPROVED
 
 ## Acceptance Criteria
-- [ ] New standalone SPM package `LokiKit` exists at `/Users/tianpli/Development/LokiKit/` and builds successfully with `swift build`
+- [ ] New standalone SPM package `LokiKit` exists at `../LokiKit/` and builds successfully with `swift build`
 - [ ] `LokiKit` has no VoxPocket-specific coupling (no hardcoded "VoxPocket" strings, no app-specific event names)
 - [ ] `LokiKit` exposes a clean public API: `Logger`, `LogLevel`, `PrintLogger`, `TelemetryService`, `TelemetryEvent`, `LokiTelemetryService`, `NoopTelemetryService`
 - [ ] `VoxInfrastructure` is updated to depend on `LokiKit` via local path reference and no longer contains the `Observability` target sources
@@ -52,18 +52,18 @@ VoxPocket/Packages/VoxInfrastructure/
 
 | File | Operation |
 |------|-----------|
-| `/Users/tianpli/Development/LokiKit/Package.swift` | Create — standalone SPM, platforms iOS 26+/macOS 26+, no external deps |
-| `/Users/tianpli/Development/LokiKit/Sources/LokiKit/Logger.swift` | Create — copied, unchanged |
-| `/Users/tianpli/Development/LokiKit/Sources/LokiKit/LogLevel.swift` | Create — copied, unchanged |
-| `/Users/tianpli/Development/LokiKit/Sources/LokiKit/PrintLogger.swift` | Create — copied, unchanged |
-| `/Users/tianpli/Development/LokiKit/Sources/LokiKit/TelemetryService.swift` | Create — remove TelemetryEventName; keep TelemetryEvent struct here |
-| `/Users/tianpli/Development/LokiKit/Sources/LokiKit/LokiTelemetryService.swift` | Create — remove hardcoded "VoxPocket" default |
-| `/Users/tianpli/Development/LokiKit/Sources/LokiKit/LokiShipper.swift` | Create — copied, unchanged |
-| `/Users/tianpli/Development/LokiKit/Sources/LokiKit/TelemetryQueue.swift` | Create — change default path to "telemetry/pending" |
-| `/Users/tianpli/Development/LokiKit/Tests/LokiKitTests/TelemetryQueueTests.swift` | Create — migrated, update import |
-| `/Users/tianpli/Development/LokiKit/Tests/LokiKitTests/PrintLoggerTimestampTests.swift` | Create — migrated, update import |
-| `/Users/tianpli/Development/LokiKit/.gitignore` | Create — standard Swift gitignore |
-| `/Users/tianpli/Development/LokiKit/README.md` | Create — brief docs |
+| `../LokiKit/Package.swift` | Create — standalone SPM, platforms iOS 26+/macOS 26+, no external deps |
+| `../LokiKit/Sources/LokiKit/Logger.swift` | Create — copied, unchanged |
+| `../LokiKit/Sources/LokiKit/LogLevel.swift` | Create — copied, unchanged |
+| `../LokiKit/Sources/LokiKit/PrintLogger.swift` | Create — copied, unchanged |
+| `../LokiKit/Sources/LokiKit/TelemetryService.swift` | Create — remove TelemetryEventName; keep TelemetryEvent struct here |
+| `../LokiKit/Sources/LokiKit/LokiTelemetryService.swift` | Create — remove hardcoded "VoxPocket" default |
+| `../LokiKit/Sources/LokiKit/LokiShipper.swift` | Create — copied, unchanged |
+| `../LokiKit/Sources/LokiKit/TelemetryQueue.swift` | Create — change default path to "telemetry/pending" |
+| `../LokiKit/Tests/LokiKitTests/TelemetryQueueTests.swift` | Create — migrated, update import |
+| `../LokiKit/Tests/LokiKitTests/PrintLoggerTimestampTests.swift` | Create — migrated, update import |
+| `../LokiKit/.gitignore` | Create — standard Swift gitignore |
+| `../LokiKit/README.md` | Create — brief docs |
 
 ## Files to Create in VoxPocket
 
