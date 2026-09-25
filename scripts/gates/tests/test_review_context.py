@@ -90,6 +90,24 @@ class ReviewContextTests(unittest.TestCase):
         for path in ("Packages/VoxDomain/Tests/CoreModelsTests/TextRangeTests.swift",
                      "VoxPocket/VoxPocketTests/OrdinaryTests.swift"):
             self.assertEqual(owners(path), [], path)
+        regression_paths = set(command(GIT, "ls-files", "--", "scripts/gates/tests/",
+                                       "scripts/ci/tests/").splitlines())
+        self.assertTrue({"scripts/gates/tests/test_local_hooks.py",
+                         "scripts/gates/tests/test_review_context.py",
+                         "scripts/ci/tests/test_review_prompt.py",
+                         "scripts/ci/tests/test_review_raven.py"}.issubset(regression_paths))
+        for path in sorted(regression_paths):
+            with self.subTest(regression=path):
+                self.assertEqual(owners(path), [], path)
+        for path in ("scripts/verify", "scripts/gates/check_private_config.py",
+                     "scripts/gates/check_frontmatter.py", "scripts/gates/gate-precommit.sh",
+                     "scripts/gates/gate-prepush.sh", "scripts/ci/kimi-review.contract.test.sh",
+                     "scripts/ci/review-raven.py", "scripts/ci/fetch-external-deps.sh",
+                     ".github/workflows/codex-review-target.yml", ".github/workflows/kimi-review.yml",
+                     ".githooks/pre-commit", ".githooks/pre-push",
+                     "schemas/example.schema.json", "policy/example.json"):
+            with self.subTest(implementation=path):
+                self.assertEqual(owners(path), owners("AGENTS.md"), path)
 
     def test_test_execution_permission_retains_independent_ai_and_policy_review(self):
         for phrase in ("ordinary in-scope test-code edits or deletions require no\nOwner approval",
@@ -101,6 +119,7 @@ class ReviewContextTests(unittest.TestCase):
             self.assertIn(phrase, self.policy)
         self.assertNotIn("Only then present the plan to the Owner", (ROOT / "docs/plans/README.md").read_text())
         self.assertIn("repository-policy.md#review-and-execution-boundaries", (ROOT / "docs/plans/README.md").read_text())
+        self.assertNotIn("policy-enforcing tests", " ".join(self.policy.split()))
 
     def fixture(self, temporary):
         fixture = Path(temporary)
