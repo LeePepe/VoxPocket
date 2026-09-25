@@ -2,7 +2,7 @@
 //  SingleInstanceGuardTests.swift
 //  VoxPocketTests
 //
-//  单实例保护判定逻辑测试
+//  MY-1303: 单实例保护判定逻辑测试
 //
 
 #if os(macOS)
