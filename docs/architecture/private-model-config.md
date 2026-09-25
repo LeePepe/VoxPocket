@@ -38,6 +38,7 @@ iOS 使用其应用沙箱内同一相对路径。本轮不提供 iOS 文件导�
 
 ## 边界
 
+- 修改配置代码、测试、fixture 或文档前，先读[仓库隐私与配置策略](../repository-policy.md#privacy-and-configuration)；空模板见 [`config.example.json`](../../config.example.json)。
 - SwiftUI 从同步 `main()` 启动系统事件循环；`AppStartup` 随后异步加载配置。窗口内容保持惰性，AppDelegate 的服务初始化、预热与热键注册也等待配置成功；不在主线程同步读取或等待。
 - macOS 不再声明普通主窗口；菜单与 `⌘,` 打开同一 Settings Scene。历史存储在后台启动时初始化，Fn 保存等待同一次初始化完成；数据库 schema 与位置不变。
 - 只读取固定沙箱路径，不搜索仓库、不搜索 bundle、不接受配置中的任意文件路径。
@@ -58,4 +59,4 @@ iOS 使用其应用沙箱内同一相对路径。本轮不提供 iOS 文件导�
 - `python3 scripts/tests/test_startup_interaction.py` 提取生产入口，用会真正挂起的无凭据配置替身与进程内鼠标事件验证主队列、MainActor 任务和视图更新。测试不使用用户数据、麦克风或远端模型。
 - `python3 scripts/tests/test_app_startup.py` 在隔离宿主中编译生产启动控制器和 App 单元测试，覆盖加载顺序、并发入口、调用者取消与失败保持。Xcode App 测试仍使用同一份测试文件。
 - `python3 scripts/tests/test_menu_bar_launch.py` 验证没有主窗口时正常/失败配置均能独立打开设置。
-- 以上回归同时接入 CI 的 App target 验证；本地可跑无凭据隔离宿主，但不生成交付 App 归档。交付遵循 AGENTS.md 的 TestFlight 唯一渠道与当前 macOS-only 范围。
+- 以上回归同时接入 CI 的 App target 验证；本地可跑无凭据隔离宿主，但不生成交付 App 归档。交付遵循 [TestFlight 交付边界](../testflight-release.md#delivery-boundary)。

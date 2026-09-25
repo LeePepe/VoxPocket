@@ -1,5 +1,9 @@
 # 本地 CI/CD 使用说明
 
+> 历史记录：以下是旧本地发布流程，不是当前操作指引。当前验证见
+> [local gates](local-gates.md)，App 交付边界与授权流程见
+> [TestFlight release](testflight-release.md)。
+
 这套流程只在本地运行，不依赖 GitHub Actions、Jenkins 或其他远程 CI。
 
 ## 分支约定

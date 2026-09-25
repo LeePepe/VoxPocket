@@ -1,6 +1,6 @@
 # Docs Records Index
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-09-25
 
 这是 VoxPocket 的文档总地图（system of record）。
 
@@ -23,6 +23,8 @@ Last-Reviewed: 2026-09-24
 - Historical design records: `docs/superpowers/specs/`
 
 ## Plans
+
+- Planning/spec review: [Plan-Review Loop](../plans/README.md)
 - Product/feature plans: `docs/plans/`
 - Superpowers execution plans: `docs/superpowers/plans/`
 
@@ -31,12 +33,13 @@ Last-Reviewed: 2026-09-24
 
 ## Runbooks And Operations
 - Local deterministic gates: `docs/local-gates.md`
-- Local CI/CD: `docs/local-cicd.md`
+- Historical local CI/CD: `docs/local-cicd.md` (not the current delivery procedure)
 - Harness notes: `docs/harness/README.md`
-- Current App delivery rules: `AGENTS.md` → Red lines (TestFlight-only delivery)
-- TestFlight release mechanics: `docs/testflight-release.md`
+- Current App delivery rules and release mechanics: [TestFlight release](../testflight-release.md)
 - TestFlight release implementation: `.github/workflows/testflight.yml`, `fastlane/Fastfile`
 - Export compliance: `docs/export-compliance.md`
 
 ## Governance
+
+- Testing, protected-path review and required checks: [repository policy](../repository-policy.md)
 - Freshness policy: `docs/records/doc-freshness-policy.md`

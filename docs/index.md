@@ -1,6 +1,6 @@
 # VoxPocket Context Index
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-09-25
 
 这是仓库的快速入口。先看这里，再按需下钻。
 
@@ -10,10 +10,12 @@ Last-Reviewed: 2026-09-24
 - Canonical records map: `docs/records/index.md`
 - App root: `VoxPocket/VoxPocket/VoxPocketApp.swift`
 - Xcode project source: `VoxPocket/project.yml` (XcodeGen)
-- Build and delivery policy: `AGENTS.md` → Red lines (TestFlight-only delivery); release mechanics: `docs/testflight-release.md`
+- Build and delivery policy and release mechanics: [TestFlight release](testflight-release.md)
 - Runtime architecture notes (flows, providers, env vars, telemetry): `docs/architecture/runtime-notes.md`
 - Verification entry: `scripts/verify` (see `docs/local-gates.md`)
 - Private runtime model configuration: `docs/architecture/private-model-config.md`
+- Planning/spec review: [Plan-Review Loop](plans/README.md)
+- Testing, protected-path review and required checks: [repository policy](repository-policy.md)
 
 ## Package Quick Map
 

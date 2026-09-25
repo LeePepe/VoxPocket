@@ -2,6 +2,11 @@
 /.github/                         @LeePepe
 /.githooks/                       @LeePepe
 /AGENTS.md                        @LeePepe
+# Policy destinations routed from the agent index (ordinary tests are unchanged).
+/docs/repository-policy.md        @LeePepe
+/docs/local-gates.md              @LeePepe
+/docs/plans/README.md             @LeePepe
+/docs/testflight-release.md       @LeePepe
 /CLAUDE.md                        @LeePepe
 /.specify/memory/constitution.md  @LeePepe
 /docs/architecture/               @LeePepe

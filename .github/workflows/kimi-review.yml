@@ -22,3 +22,5 @@ jobs:
     # shared-ci v0.3.1 (tagged at 6e354f4);
     # the pin change merges only with Owner code-owner review (see AGENTS.md Delivery).
     uses: LeePepe/shared-ci/.github/workflows/kimi-review.yml@6e354f476bc53d68f0f09fc231d5cd938466af9c
+    with:
+      rules-file: docs/repository-policy.md

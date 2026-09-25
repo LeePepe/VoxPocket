@@ -1,9 +1,9 @@
 # Runtime architecture notes
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-09-25
 
-Cross-layer runtime facts moved here from the former CLAUDE.md (repository rules live in
-`AGENTS.md`; per-layer facts live in each `tech-context.md`). Build order of
+Cross-layer runtime facts moved here from the former CLAUDE.md (repository reading routes are in
+[AGENTS.md](../../AGENTS.md); per-layer facts live in each `tech-context.md`). Build order of
 `ServiceContainer` is in `VoxPocket/tech-context.md`.
 
 - **Swift tools**: 6.2 · **Platforms**: iOS 26+, macOS 26+ · external SPM dependencies:
