@@ -138,5 +138,9 @@ jobs:
           fetch-depth: 0
       - name: Install gitleaks
         run: brew install gitleaks
-      - name: Repository policy (contract audit, workflow-lint, frontmatter, privacy, secrets)
+      - name: Repository policy (contract audit, workflow-lint, frontmatter, test weakening, privacy, secrets)
+        env:
+          # Undeclared removed/weakened tests fail against the PR base; the guard reads the
+          # PR template from the event payload (ci.yml reruns on `edited`).
+          VERIFY_BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
         run: scripts/verify --policy

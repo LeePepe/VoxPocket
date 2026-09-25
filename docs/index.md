@@ -12,7 +12,7 @@ Last-Reviewed: 2026-09-24
 - Xcode project source: `VoxPocket/project.yml` (XcodeGen)
 - Build and delivery policy: `AGENTS.md` → Red lines (TestFlight-only delivery); release mechanics: `docs/testflight-release.md`
 - Runtime architecture notes (flows, providers, env vars, telemetry): `docs/architecture/runtime-notes.md`
-- Verification entry: `scripts/verify` (see `docs/local-gates.md`)
+- Verification entry: `scripts/verify` (see `docs/local-gates.md`); declared test removal/weakening: `.github/test-weakening.md`
 - Private runtime model configuration: `docs/architecture/private-model-config.md`
 
 ## Package Quick Map
