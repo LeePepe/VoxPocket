@@ -1,9 +1,14 @@
 # TestFlight release
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-09-25
 
-Delivery rules are in `AGENTS.md` → Red lines (TestFlight only; iOS TestFlight needs separate
-Owner authorization). This page records how `.github/workflows/testflight.yml` works.
+## Delivery boundary
+
+Before releasing, read the [App delivery policy](repository-policy.md#app-delivery-boundary).
+This page owns release mechanics, not a second delivery policy. After an authorized release,
+report version/build number, run link and distribution warnings; preserve existing local artifacts.
+
+## Release mechanics
 
 `.github/workflows/testflight.yml` publishes `main` to TestFlight via Fastlane on the self-hosted mac runner. Apple Connect / TestFlight testability is verified by the Owner.
 

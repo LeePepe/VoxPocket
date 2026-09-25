@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-Read `AGENTS.md` first and follow it; it is the only source of repository rules.
+Read [AGENTS.md](AGENTS.md) first and follow its conditional reading routes.
 
-Claude-specific: run the Plan-Review Loop from AGENTS.md yourself with planner and reviewer
+Claude-specific: run the [Plan-Review Loop](docs/plans/README.md) yourself with planner and reviewer
 subagents; never wait for the Owner to ask for a re-review.
 
 <!-- SPECKIT START -->

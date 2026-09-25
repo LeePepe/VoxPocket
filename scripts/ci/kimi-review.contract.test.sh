@@ -54,12 +54,13 @@ if [ -f "$ROOT/scripts/rulesets/main-protection.json" ]; then
     ! jq -e '.rules[]? | select(.type=="required_status_checks")
       | .parameters.required_status_checks[]? | select(.context=="codex-review-target")' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
-    # AGENTS.md "Required checks" lists exactly the mirror's required contexts.
-    agents_checks="$(sed -n '/^## Required checks$/,/^## /p' "$ROOT/AGENTS.md" | sed -n 's/^- `\(.*\)`$/\1/p' | sort)"
+    # The verification authority lists exactly the mirror's required contexts.
+    grep -Fq '(docs/repository-policy.md#required-checks)' "$ROOT/AGENTS.md"
+    documented_checks="$(sed -n '/^## Required checks$/,/^## /p' "$ROOT/docs/repository-policy.md" | sed -n 's/^- `\(.*\)`$/\1/p' | sort)"
     mirror_checks="$(jq -r '.rules[] | select(.type=="required_status_checks")
       | .parameters.required_status_checks[].context' "$ROOT/scripts/rulesets/main-protection.json" | sort)"
-    [ -n "$agents_checks" ] && [ "$agents_checks" = "$mirror_checks" ] || {
-        echo "AGENTS.md required checks differ from scripts/rulesets/main-protection.json" >&2; exit 1; }
+    [ -n "$documented_checks" ] && [ "$documented_checks" = "$mirror_checks" ] || {
+        echo "docs/repository-policy.md required checks differ from scripts/rulesets/main-protection.json" >&2; exit 1; }
     # CODEOWNERS gates important paths (G): code-owner review on, no extra approvals.
     jq -e '.rules[]? | select(.type=="pull_request") | .parameters
       | select(.require_code_owner_review == true and .required_approving_review_count == 0)' \

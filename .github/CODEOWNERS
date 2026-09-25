@@ -2,6 +2,11 @@
 /.github/                         @LeePepe
 /.githooks/                       @LeePepe
 /AGENTS.md                        @LeePepe
+# Policy destinations routed from the agent index (ordinary tests are unchanged).
+/docs/repository-policy.md        @LeePepe
+/docs/local-gates.md              @LeePepe
+/docs/plans/README.md             @LeePepe
+/docs/testflight-release.md       @LeePepe
 /CLAUDE.md                        @LeePepe
 /.specify/memory/constitution.md  @LeePepe
 /docs/architecture/               @LeePepe
@@ -20,8 +25,11 @@
 **/requirements*.txt              @LeePepe
 # VoxPocket-specific important paths
 /scripts/gates/                   @LeePepe
+# Ordinary regression suites: an empty owner list overrides the protected parent.
+/scripts/gates/tests/
 /scripts/rulesets/                @LeePepe
 /scripts/ci/                      @LeePepe
+/scripts/ci/tests/
 /config.example.json              @LeePepe
 /.gitleaks.toml                   @LeePepe
 /fastlane/                        @LeePepe
