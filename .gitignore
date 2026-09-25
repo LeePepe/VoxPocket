@@ -54,6 +54,8 @@ Secrets.xcconfig
 # Runtime model credentials and editor backups: never commit or bundle.
 *config.private*
 **/*config.private*
+# Non-public project configuration stays local; commit only safe *.example.* templates.
+*.local.*
 __pycache__/
 
 # Fastlane / TestFlight 发布产物与密钥（绝不提交）
