@@ -6,19 +6,19 @@
 
 | ID | 任务 | 依赖 | 完成标准 |
 |---|---|---|---|
-| T001 | Owner 批准本 spec/plan（plan §12 Q1–Q10 已定；Q10：一轮独立复核后以 Owner 审阅为准） | 本 PR | Owner 在 PR 上批准 |
-| T002 | PR-0b：`auto-merge.yml` 对 `preserve-history` 标签不挂 squash（RB-13，Q9 已批准） | T001 | 合并；测试 PR 验证带标签时不挂 auto-merge |
-| T003 | 确认 S3 已合并（Q8：PR-1 等 S3）、S5 状态；按 Q1 派发 PR-1 给 Dev Team（Multica 不可达时用 subagent） | T001 | 状态与派发方式记录在 PR-1 描述 |
+| T001 | 基础 spec/plan 已在 #56 合并；后续修订按当前 Plan-Review Loop 独立复核并经 Owner 审阅，Q9 以撤销后的决定为准 | 对应修订 PR | 基础 PR 的合并与修订 PR 的批准可查；不冒认阶段执行已放行 |
+| T002（已取消，保留编号） | PR-0b 已按 Owner 后续决定删除；沿用 squash auto-merge（plan §12 Q9、spec RB-13） | — | 不执行原历史合并例外；不再作为阶段 1 依赖 |
+| T003 | 确认 S3 已合并且 S5 缺口完成；按 Q1 派发 PR-1 给 Dev Team（Multica 不可达时用 subagent） | T001 | PR-1 描述链接 S3 合并与 S5 关闭证据（已发布共享合同的固定 pin、fresh-clone 验证、获批测试保护及负例复测、Plan-Review 范围决定和其余 G1–G9 处置）；仅 CI 绿或旧实验报告不足以放行 |
 | T004 | PR-0c：删除当前树中的内部 issue 号（3 个文件）与 `.claude/plan/` 中的真实 Azure 主机名，各层一 commit；`.gitignore` 加 `*.local.*`；AGENTS/宪法写入「gitignore 本地文件 + `.example` 模板」规则（Q2） | T001 | 仓库级 `git grep -E` 对 `MY-[0-9]+` 与 `*.services.ai.azure.com`/`*.openai.azure.com`/`*.cognitiveservices.azure.com`（非 `example`）零命中，`AzureFoundryProviderRequestTests` 除外（RB-6） |
 
 ## 阶段 1：仓内切接缝（PR-1）
 
 | ID | 层 | 任务 | 依赖 | AC |
 |---|---|---|---|---|
-| T101 | VoxInfrastructure | 注入接缝（零行为变化）：plan §3.1a 的协议（含语音/麦克风授权提供者）与 Hybrid/Apple transcriber、`MicrophoneRecorder` 的 internal init | T002, T003, T004 | US1-AC1 |
+| T101 | VoxInfrastructure | 注入接缝（零行为变化）：plan §3.1a 的协议（含语音/麦克风授权提供者）与 Hybrid/Apple transcriber、`MicrophoneRecorder` 的 internal init | T003, T004 | US1-AC1 |
 | T102 | VoxInfrastructure/Tests + scripts | golden 基线 (a)(b-macOS)(c)，`golden-trace/v1` schema，`GoldenTraceTests` target，`scripts/tests/test_golden_routing.py` | T101 | US1-AC1 |
 | T102a | VoxInfrastructure + App 壳 + .github | 1.0c：先加零行为变化接缝（VoxInfrastructure commit：`DefaultLLMService.resolvedAnalysisRouting` 只读 internal 访问器；App 壳 commit：`ServiceContainer` 测试专用 `internal init(environment:preferences:llmServiceFactory:)`，`shared` 与 `private init()` 路径不变，不改任何生产调用路径，plan §3.1 1.0c）；`VoxPocketTests/GoldenRoutingTests`（golden (b) iOS 行，1.0a 代码上录制）+ 提前加入非 required `App unit tests (iOS)` lane；**闸门**：CI 在 1.0c commit 上跑通 golden (c) 与 golden (b) iOS 行，run 链接写入 PR 描述后才推送 T103 起的 commit | T102 | US1-AC1, US5-AC3 |
-| T103 | docs/.specify + scripts/gates | 修宪 1.2.0；`Packages/VoxKit/tech-context.md`；根 tech-context / AGENTS / dependency-graph；`check_frontmatter.py` 识别 VoxKit | T102a | US7-AC1, US7-AC2 |
+| T103 | docs/.specify + scripts/gates | 核对执行基线的宪法版本，修宪至下一个 minor（当前 1.2.0 → 1.3.0；漂移处理见 plan §8）；`Packages/VoxKit/tech-context.md`；根 tech-context / AGENTS / dependency-graph；`check_frontmatter.py` 识别 VoxKit | T102a | US7-AC1, US7-AC2 |
 | T104 | VoxKit | 新包 VoxCore（含 `Credential` 脱敏值类型，测试断言 description/debugDescription/Mirror/插值不含密钥）+ VoxCoreTests | T103 | US2-AC2/AC3/AC6 |
 | T105 | VoxKit | `scripts/redlines` R1–R5 + 负例 + 正例 + `--self-test`（编译型 fixture 匹配期望诊断文本，正例由同一 harness 同一参数编译）；记录 Sendable 基线（按模块；`VoxSpeechWhisperKit` 目标为 0，WhisperKit 条目映射到 T110）；对当前 kit 代码跑一次，产出违规基线清单，逐项映射到 T107–T111 | T104 | US4-AC1, US4-AC3, US4-AC4 |
 | T106 | VoxKit | 金丝雀测试工具 | T104 | US4-AC2 |
@@ -34,7 +34,7 @@
 | T115 | .github + 仓根 | 非 required lane：`SPM VoxKit`、`iOS SDK`（`VoxKitSDK.xcworkspace` / scheme `VoxKitSDK` / `VoxKitSDK.xctestplan`，固定 `VOXKIT_IOS_DESTINATION`，checkout LokiKit）、`App unit tests`（macOS）；`SDK red lines` 步骤（`App unit tests (iOS)` 已在 T102a 加入） | T114 | US4-AC3, US5-AC1, US5-AC3 |
 | T116 | scripts/rulesets | `main-protection.json` 加入新 check（只改文件） | T115 | US5-AC1 |
 | GATE-1 | — | 违规基线清单清零；golden 全组相等（含 1.0b 上的 golden (c) CI run）；全部 required 绿；四个新 lane（`SPM VoxKit`、`iOS SDK`、`App unit tests`、`App unit tests (iOS)`）全绿 | T116 | US1-AC1 |
-| T117 | 线上 | PR-1 以 merge commit 合并后，Owner 批准 → `scripts/rulesets/apply` → 回读 | GATE-1 | US5-AC1 |
+| T117 | 线上 | PR-1 由 squash auto-merge 合并后，Owner 批准 → `scripts/rulesets/apply` → 回读 | GATE-1 | US5-AC1 |
 
 ## 阶段 2：搬迁（PR-2）
 
@@ -50,7 +50,7 @@
 | T208 | .github | red lines 全量范围（含 R2(b)(c) 覆盖整个 SDK）；fixture 构建（macOS + iOS Simulator）；`VoxKitSDK` test plan 更新 | T203, T207 | US4-AC3, US2-AC4 |
 | T209 | docs | tech-context/frontmatter/AGENTS | T208 | US7-AC2 |
 | GATE-2 | — | golden 全组相等；全部 required 绿 | T209 | US1-AC1 |
-| T210 | 线上 | merge commit 合并后在 `main` 上采集 3 个文件的 `git log --follow` 证据，贴 PR 评论 | GATE-2 | US6-AC1 |
+| T210 | 线上 | squash 合并后在 `main` 抽查 3 个跨模块迁移文件，记录旧/新路径、阶段 1 前来源 SHA、PR-2 squash SHA 与实际 `git log`/`--follow` 结果；不承诺跨 squash 改名或逐层中间 commit 保留（plan §4.2） | GATE-2 | US6-AC1 |
 
 ## 阶段 3：Workflow（PR-3；SDK 组在前，App 组在后）
 
@@ -75,7 +75,7 @@
 
 | ID | 仓 | 任务 | 依赖 | AC |
 |---|---|---|---|---|
-| T401 | 临时 clone | filter-repo 导出（`--no-tags`、含 `GoldenTraceTests` 路径、`--mailmap` → noreply、`--replace-text`、`--replace-message`；规则文件不提交），树一致性检查 | GATE-3 合并 | US6-AC1, US6-AC2 |
+| T401 | 临时 clone | 固定 main 来源 SHA、仅 clone main 且 `--no-tags`；filter-repo 导出 main 可达的新旧路径历史（含 `GoldenTraceTests`、`--mailmap` → noreply、`--replace-text`、`--replace-message`；规则文件不提交）；以 commit-map 关联阶段 squash 与 T210 来源 SHA；两个 clone 分别读取树作一致性检查，不向导出 clone 取回原始 refs（plan §9） | GATE-3 合并 | US6-AC1, US6-AC2 |
 | T402 | 临时 clone | 隐私预检（含音频 blob、作者列表），在处置后的历史上必须零发现；计数报告交 Owner | T401 | US6-AC2 |
 | T403 | VoxKit | 建 `LeePepe/VoxKit`（public，MIT），推 `main` | T402 + Owner 确认 | — |
 | T404 | VoxKit | `repo-kit init` PR（AGENTS/CLAUDE/verify/hooks/ci/review/PR 模板/CODEOWNERS/tech-context/`ai/`）；`.gitignore` 忽略本地私密配置 + 提交 `.example` 模板（Q2）；`audit` 零发现 | T403 | US6-AC3, US6-AC7 |
@@ -90,4 +90,4 @@
 
 ## 关键路径
 
-T001 → T002 → T003 → T004 → T101 → T102 → T102a（golden (b)(c) CI 闸门）→ T103 → T104 → T107 → T110 → T114 → T115 → GATE-1 → T117 → T201 → T202 → T204 → GATE-2 → T210 → T301 → T307 → T308 → T310 → GATE-3 → T401 → T402 → T404 → T405 → T406 → T407 → GATE-4 → T411
+T001 → T003 → T004 → T101 → T102 → T102a（golden (b)(c) CI 闸门）→ T103 → T104 → T107 → T110 → T114 → T115 → GATE-1 → T117 → T201 → T202 → T204 → GATE-2 → T210 → T301 → T307 → T308 → T310 → GATE-3 → T401 → T402 → T404 → T405 → T406 → T407 → GATE-4 → T411
