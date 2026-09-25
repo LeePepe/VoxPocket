@@ -1,6 +1,32 @@
 # Local deterministic gates
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-09-25
+
+## Bootstrap and commands
+
+Run from the repository root with Python 3.11+ first on `PATH`; `scripts/verify`
+fails early with guidance on an older interpreter. Enable the repository hooks once per clone:
+
+```sh
+git config core.hooksPath .githooks
+scripts/verify                    # changed layers vs origin/main + policy
+scripts/verify --all              # every layer gate + policy
+scripts/verify --policy           # policy only
+scripts/verify --layer VoxDomain  # one layer
+```
+
+Layer-running modes bootstrap missing sibling packages with
+[`fetch-external-deps.sh`](../scripts/ci/fetch-external-deps.sh). Existing local checkouts
+are preserved; CI requires the pinned SHAs. See the
+[external dependency map](architecture/tech-context.md#external-dependencies).
+After the first verification run, resolve the reading route for a changed path with
+`python3 .shared-ci/scripts/context/_context.py contexts <path>`.
+
+Local verification is SPM build/test plus deterministic scripts. App-target `xcodebuild`
+normally runs only in CI; `RUN_HEAVY=1 scripts/verify` explicitly opts into a local build,
+not a delivery archive. [App delivery](testflight-release.md#delivery-boundary) remains separate.
+
+## Hooks
 
 Repository-owned `.githooks/` use `core.hooksPath=.githooks`. They run shell/Python checks,
 not AI reviewers or automatic repair. A failed command stops the Git operation with a nonzero
@@ -32,6 +58,26 @@ checks `HEAD` only and is not evidence for another pushed candidate.
 Layer checks, frontmatter validation, private-config guards, changed-source/test policy and
 documentation checks keep their existing rules. App builds and required AI review remain in
 CI; local checks cannot replace server-side gates. Internal AI Reviewer approval is unchanged.
+
+## Testing and review policy
+
+Before test maintenance or PR review, read the
+[repository policy](repository-policy.md#review-and-execution-boundaries).
+Report the commit, verification and PR for code tasks.
+
+## Required checks
+
+Before merging, read [required checks and head-SHA evidence](repository-policy.md#required-checks).
+The contract test compares that authority's exact check list with the ruleset mirror.
+
+## Reviewer context
+
+Both reusable review callers pass `docs/repository-policy.md` through the published
+`rules-file` input. The pinned launchers read at most 24,000 bytes from the trusted base
+checkout; the offline regression asserts that the entire policy fits and reaches both
+model boundaries. Links are not expanded. Architecture is supplied separately by the
+provider's layer resolver. Missing rules-file falls back to AGENTS in the published
+launcher, so the regression also checks the configured policy is tracked and protected.
 
 ## Retirement record
 

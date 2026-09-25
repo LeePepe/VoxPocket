@@ -1,6 +1,6 @@
 # VoxPocket
 
-Last-Reviewed: 2026-09-12
+Last-Reviewed: 2026-09-25
 
 A macOS/iOS voice recording and transcription app built with SwiftUI. Supports Apple Speech, local WhisperKit and configured Azure transcription, with on-device or configured cloud text refinement.
 
@@ -31,7 +31,7 @@ open VoxPocket/VoxPocket.xcodeproj
 
 The project uses sibling external packages, including LokiKit; use the package manifests and `VoxPocket/project.yml` as the dependency source of truth. CI checks out the required sibling repositories and regenerates the Xcode project.
 
-User-facing builds are delivered through TestFlight. See [AGENTS.md](AGENTS.md) for the build/install boundary and [the release workflow](.github/workflows/testflight.yml) for current dispatch options. Agents do not replace the installed App with a local archive.
+User-facing builds are delivered through TestFlight. See [the delivery boundary](docs/testflight-release.md#delivery-boundary) and [the release workflow](.github/workflows/testflight.yml) for current dispatch options.
 
 ### Configuration
 
