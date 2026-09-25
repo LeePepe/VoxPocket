@@ -28,7 +28,7 @@ env:
 
 jobs:
   quality:
-    uses: LeePepe/shared-ci/.github/workflows/quality.yml@761fe6b0b3ca5e2c57d244182d495ab8041851fa
+    uses: LeePepe/shared-ci/.github/workflows/quality.yml@f7c279c3e606b62c130c6a5ea5c97d80c1a54ed9
     with:
       runs-on: macos-26
       setup-command: scripts/ci/fetch-external-deps.sh && brew install gitleaks
