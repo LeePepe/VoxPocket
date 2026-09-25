@@ -33,8 +33,8 @@ failing layer while honouring that layer's `red_lines`; a root cause elsewhere i
 
 ## Protocol
 
-Follow `LeePepe/shared-ci@761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md`
-(https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md).
+Follow `LeePepe/shared-ci@78996e63e4c705b0bd802b1be47365830f35ac69/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/78996e63e4c705b0bd802b1be47365830f35ac69/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
 Plan-Review Loop (mandatory for any implementation plan, spec or plan change):
@@ -51,7 +51,8 @@ Plan-Review Loop (mandatory for any implementation plan, spec or plan change):
 ```sh
 git config core.hooksPath .githooks   # once per clone
 scripts/verify            # changed layers vs origin/main + policy (what pre-push runs)
-scripts/verify --all      # every layer gate + policy (what CI runs)
+scripts/verify --all      # every layer gate + policy (CI on push to main / full runs)
+scripts/verify --selected # CI quality / verify: policy + layers chosen by shared-ci select
 scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one layer
 ```
 
@@ -87,6 +88,10 @@ is always for the head being merged.
 which the workflow still emits but is not required. `iOS simulator` and `kimi-review` run on
 every PR and are never required.
 
+CI selects layers from the PR diff (shared-ci select.yml, plus dependents). An unselected
+required lane still reports success with "not selected: <reason>". Anything doubtful runs
+in full: .github/**, scripts/verify, scripts/ci/**, manifests, layer maps, unmapped paths.
+
 ## Red lines
 
 - Privacy (constitution IV): recorded audio, transcripts and refined text never go into
@@ -115,7 +120,7 @@ Approved exceptions: none.
 
 ## Dependencies
 
-- `shared-ci` `761fe6b0b3ca5e2c57d244182d495ab8041851fa` — https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/
+- `shared-ci` `78996e63e4c705b0bd802b1be47365830f35ac69` — https://github.com/LeePepe/shared-ci/blob/78996e63e4c705b0bd802b1be47365830f35ac69/ai/
 - LokiKit from LeePepe/shared-telemetry at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` (no tag
   or `ai/` bundle yet; pinned in `scripts/ci/fetch-external-deps.sh`).
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (same script).
