@@ -37,7 +37,9 @@ Follow `LeePepe/shared-ci@761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-prot
 (https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
-Plan-Review Loop (mandatory for any implementation plan, spec or plan change):
+Plan-Review Loop (mandatory for any implementation plan, spec or plan change; a test-only
+change inside one layer with no production code change needs no plan, and its PR says so in
+`Intent`):
 
 1. Plan — a planner creates or updates the plan (`specs/` via Spec Kit, or `docs/plans/`).
 2. Review — an independent reviewer reviews it immediately.
