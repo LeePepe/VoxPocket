@@ -39,6 +39,8 @@ x
 # Built from pieces so this fixture file does not itself add a skip marker.
 DISABLED = "." + 'disabled("slow")'
 ENABLED_IF_FALSE = "." + "enabled(if: false)"
+ENABLED_IF_TRUE = "." + "enabled(if: true)"
+ENABLED_IF_RUNTIME = "." + 'enabled(if: ProcessInfo.processInfo.environment["CI"] != nil)'
 XCT_SKIP = "XCT" + "Skip"
 PYTHON_SKIP = "self." + "skipTest"
 
@@ -334,6 +336,40 @@ class TestWeakeningGuardTests(unittest.TestCase):
                                                f"@Test(\n    {ENABLED_IF_FALSE}\n)\nfunc rejects()"))
         self.commit("test: disable")
         self.assert_blocked("skip marker")
+
+    def test_added_enabled_if_false_trait_blocks(self):
+        traits = (
+            ENABLED_IF_FALSE,
+            ENABLED_IF_FALSE.replace("false)", 'false, "reason")'),
+            "." + 'enabled ( if :\tfalse , "reason" )',
+        )
+        for trait in traits:
+            with self.subTest(trait=trait):
+                self.write(TEST_FILE, ORIGINAL.replace("@Test func rejects", f"@Test({trait}) func rejects"))
+                self.commit("test: disable with literal false")
+                result = self.assert_blocked("skip marker")
+                self.assertEqual(result.stderr.count("skip marker added"), 1)
+
+    def test_multiline_enabled_if_false_argument_blocks(self):
+        trait = ENABLED_IF_FALSE.replace("(", "(\n  ").replace(")", "\n)")
+        self.write(TEST_FILE, ORIGINAL.replace("@Test func rejects", f"@Test({trait}) func rejects"))
+        self.commit("test: disable with multiline condition")
+        result = self.assert_blocked("skip marker")
+        self.assertEqual(result.stderr.count("skip marker added"), 1)
+
+    def test_added_enabled_if_true_trait_passes(self):
+        self.write(TEST_FILE, ORIGINAL.replace("@Test func rejects", f"@Test({ENABLED_IF_TRUE}) func rejects"))
+        self.commit("test: enable with literal true")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+
+    def test_added_enabled_if_runtime_condition_trait_passes(self):
+        self.write(TEST_FILE, ORIGINAL.replace("@Test func rejects", f"@Test({ENABLED_IF_RUNTIME}) func rejects"))
+        self.commit("test: enable with runtime condition")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
 
     def test_removed_multiline_test_declaration_blocks(self):
         # codex-review #65 round 3: @Test(...) and func on separate lines, body without assertions.

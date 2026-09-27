@@ -7,6 +7,7 @@ Against the merge base (VERIFY_BASE, default origin/main), with no netting:
   a loss (whitespace-normalized moves and re-indents are fine, with counts preserved);
 - every test name present at the base but gone at the head is a loss (moves are fine);
 - every added skip marker is a loss; a deleted test file loses all its assertions and tests.
+  Swift Testing .enabled(if:) counts only with literal false, optionally with a comment argument.
 
 On a pull request (PR_BODY, or the body in $GITHUB_EVENT_PATH) the "Removed or weakened
 tests or policy" section must name each affected test file with a reason on the same line,
@@ -28,7 +29,7 @@ ASSERTION = re.compile(
     r"#expect\b|#require\b|\bXCTAssert\w*\s*\(|\bXCTFail\s*\(|\bXCTUnwrap\s*\(|"
     r"\bself\.assert\w+\s*\(|^\s*assert(?=\s|\()|\bpytest\.raises\s*\(")
 # Test declarations are tracked by name (TEST_NAME), not as assertion statements.
-SKIP = re.compile(r"\.disabled\b|\.enabled\s*\(\s*if:|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
+SKIP = re.compile(r"\.disabled\b|\.enabled\s*\(\s*if\s*:\s*false\s*(?=[,)])|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
                   r"\bself\.skipTest\s*\(")
 TEST_NAME = re.compile(r"@Test\b[\s\S]{0,600}?\bfunc\s+(\w+)|\bfunc\s+(test\w*)\s*\(|\bdef\s+(test\w*)\s*\(")
 SECTION = "## Removed or weakened tests or policy"
@@ -140,7 +141,14 @@ def skip_marker_additions(base):
             if new_path:
                 lines = list(code_lines(git("show", f"HEAD:{new_path}"), new_path))
         elif line.startswith("@@ ") and new_path:
-            new_line = int(re.search(r"\+(\d+)", line).group(1)) - 1
+            hunk = re.search(r"\+(\d+)(?:,(\d+))?", line)
+            new_line = int(hunk.group(1)) - 1
+            count = int(hunk.group(2)) if hunk.group(2) is not None else 1
+            # Zero-context hunks contain only additions; retain line breaks to spot split traits.
+            added = "\n".join(lines[new_line:new_line + count])
+            for match in SKIP.finditer(added):
+                if "\n" in match.group():  # Single-line matches are reported below, once per line.
+                    findings.append((new_path, f"skip marker added: {normalized(match.group())[:120]}"))
         elif line.startswith("+") and new_path:
             if SKIP.search(lines[new_line]):
                 findings.append((new_path, f"skip marker added: {line[1:].strip()[:120]}"))
