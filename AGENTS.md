@@ -30,6 +30,8 @@ VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI 
 
 A change that spans 2+ layers is too big: split it by layer. Fix a failure inside the
 failing layer while honouring that layer's `red_lines`; a root cause elsewhere is a new task.
+Package manifests and dependency resolution files (each layer's `Package.swift`, `Package.resolved`, and Xcode project package references) are
+dependency metadata, not layer code. Changing them across layers in one PR is not a cross-layer change; the layer-split rule applies to source and test code.
 
 ## Protocol
 
@@ -117,6 +119,7 @@ Approved exceptions: none.
 
 ## Dependencies
 
+These are the current pins; they change only through Owner-reviewed PRs.
 - `shared-ci` `5b42aa164692911799e927500b5684954f2e075f` — https://github.com/LeePepe/shared-ci/blob/5b42aa164692911799e927500b5684954f2e075f/ai/
 - LokiKit from LeePepe/shared-telemetry at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` (no tag
   or `ai/` bundle yet; pinned in `scripts/ci/fetch-external-deps.sh`).
