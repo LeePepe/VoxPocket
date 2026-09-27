@@ -129,6 +129,9 @@ Approved exceptions: none.
 - Non-draft PRs get squash auto-merge (`auto-merge.yml`). CODEOWNERS paths (`.github/**`,
   policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval, which
   the ruleset enforces (code-owner review required); add the `owner-review` label to them.
+  AI review does not block these changes for missing approval evidence: approval is enforced
+  by the ruleset, not by the reviewer. It still reviews their content (e.g. pins stay full SHAs
+  and consistent with the protocol pointer).
 - Code tasks report the commit, verification and PR. For an authorized TestFlight run,
   report version/build number, run link and distribution warnings. Keep existing local
   artifacts; do not clean them up automatically.
