@@ -73,6 +73,7 @@ policy() {
     python3 "$shared_ci/scripts/lint/workflows.py" --root . >/dev/null
     python3 scripts/gates/check_private_config.py
     python3 scripts/gates/check_frontmatter.py
+    python3 scripts/gates/check_test_weakening.py
     python3 -m unittest discover -s scripts/gates/tests -p 'test_*.py'
     python3 scripts/ci/tests/test_review_prompt.py
     python3 scripts/ci/tests/test_review_raven.py

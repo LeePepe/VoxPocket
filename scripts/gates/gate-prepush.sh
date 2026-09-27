@@ -38,6 +38,9 @@ if [ -n "$src" ] && [ -z "$tst" ]; then
   fi
 fi
 
+# 门1b:自动检测删/弱化/跳过测试；PR 正文须列出受影响文件，本地无 PR 正文时仅提示
+python3 scripts/gates/check_test_weakening.py || exit 1
+
 # 门2:大改动提醒(advisory,不阻塞)—— 跨 layer 时提示按 layer 拆
 n="$(echo "$changed" | grep -oE '^Packages/[^/]+' | sort -u | grep -c . || true)"
 [ "${n:-0}" -gt 1 ] && echo "⚠️ 本次改动涉及 $n 个 layer,考虑按 layer 拆成独立提交(AGENTS.md · 收窄范围)"
