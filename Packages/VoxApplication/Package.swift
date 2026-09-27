@@ -17,9 +17,9 @@ let package = Package(
     dependencies: [
         .package(path: "../VoxDomain"),
         .package(path: "../VoxInfrastructure"),
-        // LokiKit: shared-telemetry 0.1.0 (tag v0.1.0 = 5f4b4d9, guarded by scripts/ci/fetch-external-deps.sh).
+        // LokiKit from shared-telemetry v0.1.0, pinned by full commit SHA (immutable; tag v0.1.0 also cross-checked by scripts/ci/fetch-external-deps.sh).
         // Dependency-source swap only, no API/behaviour change; all Packages/* must switch together because SwiftPM rejects a path and a remote LokiKit in one graph.
-        .package(url: "https://github.com/LeePepe/shared-telemetry.git", exact: "0.1.0"),
+        .package(url: "https://github.com/LeePepe/shared-telemetry.git", revision: "5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"),
     ],
     targets: [
         .target(

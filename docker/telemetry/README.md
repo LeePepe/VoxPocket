@@ -2,7 +2,7 @@
 
 The Loki + Grafana stack lives in the standalone [shared-telemetry repository](https://github.com/LeePepe/shared-telemetry/tree/v0.1.0).
 
-VoxPocket resolves LokiKit through SwiftPM at exact `0.1.0`; a separate checkout is only needed to run this stack, not to build the app.
+VoxPocket resolves LokiKit through SwiftPM at commit `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f` (v0.1.0); a separate checkout is only needed to run this stack, not to build the app.
 
 ## Quick Start
 

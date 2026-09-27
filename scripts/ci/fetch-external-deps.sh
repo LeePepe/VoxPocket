@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Check out AppleUITesting at its pinned full SHA next to the repository root
 # (project.yml references ../../AppleUITesting). Used by CI; locally it only fills
-# missing directories. LokiKit is resolved by SwiftPM from shared-telemetry exact 0.1.0.
+# missing directories. LokiKit is resolved by SwiftPM from shared-telemetry pinned to
+# commit 5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f (v0.1.0).
 #   scripts/ci/fetch-external-deps.sh [DEST]   (default: parent of the repository)
 set -euo pipefail
 
@@ -17,7 +18,7 @@ root="$(git rev-parse --show-toplevel)"
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 dest="${1:-$(cd "$root/.." && pwd)}"
 
-# Manifests pin exact 0.1.0; this guard fails if the tag is ever retargeted.
+# Manifests pin the full commit SHA; this guard fails if the tag is ever retargeted.
 # Package.resolved is gitignored per repo policy.
 verify_lokikit_tag() {
     local refs sha ref peeled="" plain="" actual

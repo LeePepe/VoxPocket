@@ -7,12 +7,15 @@ import subprocess
 import tempfile
 
 
+LOKIKIT_URL = "https://github.com/LeePepe/shared-telemetry.git"
+LOKIKIT_SHA = "5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--configuration", choices=["debug", "release", "both"], default="both")
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
-    lokikit = root.parent / "LokiKit"
     with tempfile.TemporaryDirectory(prefix="vox-logging-unit-") as temporary:
         package = Path(temporary)
         sources = package / "Sources/VoxPocket"
@@ -22,9 +25,9 @@ def main():
         (package / "Package.swift").write_text(f'''// swift-tools-version: 6.2
 import PackageDescription
 let package = Package(name: "LoggingRegression", platforms: [.macOS(.v26)],
-    dependencies: [.package(path: {json.dumps(str(lokikit))})],
+    dependencies: [.package(url: {json.dumps(LOKIKIT_URL)}, revision: {json.dumps(LOKIKIT_SHA)})],
     targets: [
-        .target(name: "VoxPocket", dependencies: [.product(name: "LokiKit", package: "LokiKit")]),
+        .target(name: "VoxPocket", dependencies: [.product(name: "LokiKit", package: "shared-telemetry")]),
         .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket"])
     ])
 ''')
