@@ -28,6 +28,9 @@ env:
 
 jobs:
   quality:
+    # shared-ci pin (same SHA as the AGENTS.md protocol pointer): 5b42aa1 is the Owner-approved
+    # shared-ci v0.2.0 candidate, adopted to validate it on an external consumer before tagging;
+    # the pin change merges only with Owner code-owner review (see AGENTS.md Delivery).
     uses: LeePepe/shared-ci/.github/workflows/quality.yml@5b42aa164692911799e927500b5684954f2e075f
     with:
       runs-on: macos-26
