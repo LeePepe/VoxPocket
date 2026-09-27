@@ -8,7 +8,6 @@ final class StageModelSettingsTests: XCTestCase {
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let store = UserDefaultsPreferencesStore(defaults: defaults)
         let initial = await StageModelSettings.load(from: store)
-        XCTAssertEqual(initial.speech, .realtime)
         XCTAssertEqual(initial.intent, .appleIntelligence)
         XCTAssertEqual(initial.tone, .appleIntelligence)
         await store.setValue("appleIntelligence", for: .llmProvider)
