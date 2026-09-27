@@ -65,20 +65,23 @@ def changed_test_files(base):
     return rows
 
 
-def assertion_statements(text):
-    """Collect balanced arguments and same-line trailing closures, at most 40 lines."""
-    lines = text.splitlines()
+def assertion_statements(text, path):
+    """Collect balanced arguments and same-line trailing closures, at most 40 lines.
+
+    Comments are ignored; string literals are kept in the statement text but not scanned.
+    """
+    lines = list(code_lines(text, path, keep_strings=True))
+    scanned = list(code_lines(text, path))
     index = 0
     while index < len(lines):
-        if not ASSERTION.search(lines[index]):
+        if not ASSERTION.search(scanned[index]):
             index += 1
             continue
         statement, depth, brace_depth = [], 0, 0
         trailing_closure = False
         for _ in range(40):
-            line = lines[index]
-            statement.append(line)
-            delimiters = SIMPLE_STRING.sub("", line)
+            statement.append(lines[index])
+            delimiters = scanned[index]
             for position, char in enumerate(delimiters):
                 if char in "([":
                     depth += 1
@@ -100,9 +103,9 @@ def assertion_losses(base, rows):
     before, after, findings = [], Counter(), []
     for status, old, new in rows:
         if status != "A" and TEST_PATH.search(old):
-            before.extend((old, text) for text in assertion_statements(git("show", f"{base}:{old}")))
+            before.extend((old, text) for text in assertion_statements(git("show", f"{base}:{old}"), old))
         if status != "D" and TEST_PATH.search(new):
-            after.update(assertion_statements(git("show", f"HEAD:{new}")))
+            after.update(assertion_statements(git("show", f"HEAD:{new}"), new))
     for path, text in before:
         if after[text] > 0:
             after[text] -= 1  # moved or re-indented
@@ -111,8 +114,8 @@ def assertion_losses(base, rows):
     return findings
 
 
-def code_lines(text, path):
-    """Strip line-local strings/comments, retaining Swift block-comment state."""
+def code_lines(text, path, keep_strings=False):
+    """Strip comments (and line-local strings unless kept), retaining Swift block-comment state."""
     swift = path.endswith(".swift")
     comment = "//" if swift else "#"
     block_depth = 0
@@ -131,7 +134,7 @@ def code_lines(text, path):
                 continue
             string = LINE_STRING.match(line, index)
             if string:
-                code.append(" ")
+                code.append(string.group() if keep_strings else " ")
                 index = string.end()
             elif line.startswith(comment, index):
                 break

@@ -34,7 +34,7 @@ documentation checks keep their existing rules. App builds and required AI revie
 CI; local checks cannot replace server-side gates. Internal AI Reviewer approval is unchanged.
 
 `scripts/gates/check_test_weakening.py` automatically detects removed/changed assertion
-statements (including multiline arguments and trailing closures), removed test names, added skip
+statements (including multiline arguments and trailing closures; commented-out code is ignored), removed test names, added skip
 markers and deleted test files. Skip detection includes Python `pytest.skip(...)`, `pytest.skip.Exception` and
 `pytest.mark.skip`/`skipif`, plus Swift Testing `.disabled` and every `.enabled(if:)` condition
 except literal `true` (allowing whitespace, multiline traits and trailing arguments).
@@ -56,6 +56,9 @@ This list is the explicit contract of classes it does not detect:
 - Skips via helper functions, custom macros or custom traits other than those listed above.
 - Non-literal skip conditions beyond the flagged `.enabled(if:)` trait (for example, early
   `return`/`guard` statements or environment checks inside test bodies).
+- Edits to an existing multiline skip trait where the changed lines alone do not contain the
+  marker (for example, changing only the `false` line of a split `.enabled(if:)`); skip
+  detection inspects added lines only.
 - Dynamically generated or parameterized tests (for example, changed `arguments:` lists).
 - Assertions wrapped in helper functions or custom macros.
 - Config-level exclusion (`Package.swift`, test plans, CI filters or pytest config).

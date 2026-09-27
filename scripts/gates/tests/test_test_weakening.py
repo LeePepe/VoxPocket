@@ -250,6 +250,36 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.commit("test: change closure at collection limit")
         self.assert_blocked("assertion removed or changed")
 
+    def test_commented_assertion_edits_pass(self):
+        cases = (
+            ("// #expect(foo)\n", ""),
+            ("// #expect(foo)\n", "// #expect(bar)\n"),
+            ("/* #expect(foo)\n   XCTAssertEqual(a, b) */\n", "/* rewritten note */\n"),
+            ("#expect(ready) // TODO: #expect(foo)\n", "#expect(ready) // TODO: done\n"),
+        )
+        for before, after in cases:
+            with self.subTest(before=before, after=after):
+                self.seed_multiline(before)
+                self.write(TEST_FILE, after)
+                self.commit("test: edit commented assertion")
+                result = self.run_guard()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("passed", result.stdout)
+
+    def test_python_commented_assertion_edit_passes(self):
+        path = "tests/test_fixture.py"
+        self.seed_multiline("# self.assertEqual(a, b)\n", path=path)
+        self.write(path, "# note\n")
+        self.commit("test: edit python comment")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_assertion_string_literal_change_still_blocks(self):
+        self.seed_multiline('#expect(name == "a // b")\n')
+        self.write(TEST_FILE, '#expect(name == "c // d")\n')
+        self.commit("test: change asserted string")
+        self.assert_blocked('assertion removed or changed: #expect(name == "a // b")')
+
     def test_multiline_python_assert_argument_changed_blocks(self):
         path = "tests/test_fixture.py"
         statement = "self.assertEqual(\n    actual,\n    expected\n)\n"
