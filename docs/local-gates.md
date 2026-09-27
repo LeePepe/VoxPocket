@@ -35,7 +35,11 @@ CI; local checks cannot replace server-side gates. Internal AI Reviewer approval
 
 `scripts/gates/check_test_weakening.py` automatically detects removed/changed assertion
 statements (including multiline arguments), removed test names, added skip markers and deleted
-test files. Verbatim assertion moves between test files and re-indents are not losses. With a
+test files. Skip detection includes Python `pytest.skip(...)`, `pytest.skip.Exception` and
+`pytest.mark.skip`/`skipif`, plus Swift Testing `.disabled` and every `.enabled(if:)` condition
+except literal `true` (allowing whitespace, multiline traits and trailing arguments).
+Nonliteral enablement is reported as conditional enablement requiring declaration if it can skip.
+Verbatim assertion moves between test files and re-indents are not losses. With a
 PR body available, its "Removed or weakened tests or policy" section must name each affected
 test file with a reason on the same line, after HTML comments are stripped. Several files may
 share one line and reason. Removing the paths, list markers, backticks and punctuation must

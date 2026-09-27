@@ -6,8 +6,10 @@ Against the merge base (VERIFY_BASE, default origin/main), with no netting:
 - every base assertion statement missing from the head of the changed test files is
   a loss (whitespace-normalized moves and re-indents are fine, with counts preserved);
 - every test name present at the base but gone at the head is a loss (moves are fine);
-- every added skip marker is a loss; a deleted test file loses all its assertions and tests.
-  Swift Testing .enabled(if:) counts only with literal false, optionally with a comment argument.
+- every added skip marker (including pytest.skip calls/exceptions and skip/skipif marks)
+  is a loss; a deleted test file loses all its assertions and tests. Swift Testing
+  .enabled(if:) requires declaration unless its condition is literal true; whitespace,
+  multiline traits and optional trailing arguments are supported.
 
 On a pull request (PR_BODY, or the body in $GITHUB_EVENT_PATH) the "Removed or weakened
 tests or policy" section must name each affected test file with a reason on the same line,
@@ -29,8 +31,10 @@ ASSERTION = re.compile(
     r"#expect\b|#require\b|\bXCTAssert\w*\s*\(|\bXCTFail\s*\(|\bXCTUnwrap\s*\(|"
     r"\bself\.assert\w+\s*\(|^\s*assert(?=\s|\()|\bpytest\.raises\s*\(")
 # Test declarations are tracked by name (TEST_NAME), not as assertion statements.
-SKIP = re.compile(r"\.disabled\b|\.enabled\s*\(\s*if\s*:\s*false\s*(?=[,)])|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
-                  r"\bself\.skipTest\s*\(")
+SKIP = re.compile(r"\.disabled\b|\.enabled\s*\(\s*if\s*:\s*false\s*(?=[,)])|"
+                  r"(?P<conditional>\.enabled\s*\(\s*if\s*:(?!\s*true\s*[,)])\s*[^,\n)]*)|"
+                  r"\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
+                  r"\bpytest\.skip(?:\s*\(|\.Exception\b)|\bself\.skipTest\s*\(")
 TEST_NAME = re.compile(r"@Test\b[\s\S]{0,600}?\bfunc\s+(\w+)|\bfunc\s+(test\w*)\s*\(|\bdef\s+(test\w*)\s*\(")
 SECTION = "## Removed or weakened tests or policy"
 SIMPLE_STRING = re.compile(r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*' ''', re.VERBOSE)
@@ -139,22 +143,28 @@ def skip_marker_additions(base):
         if line.startswith("+++ "):
             new_path = line[6:] if line.startswith("+++ b/") and TEST_PATH.search(line[6:]) else None
             if new_path:
-                lines = list(code_lines(git("show", f"HEAD:{new_path}"), new_path))
+                source = git("show", f"HEAD:{new_path}")
+                raw_lines = source.splitlines()
+                lines = list(code_lines(source, new_path))
         elif line.startswith("@@ ") and new_path:
             hunk = re.search(r"\+(\d+)(?:,(\d+))?", line)
             new_line = int(hunk.group(1)) - 1
             count = int(hunk.group(2)) if hunk.group(2) is not None else 1
             # Zero-context hunks contain only additions; retain line breaks to spot split traits.
             added = "\n".join(lines[new_line:new_line + count])
+            reported = set()
             for match in SKIP.finditer(added):
-                if "\n" in match.group():  # Single-line matches are reported below, once per line.
-                    findings.append((new_path, f"skip marker added: {normalized(match.group())[:120]}"))
-        elif line.startswith("+") and new_path:
-            if SKIP.search(lines[new_line]):
-                findings.append((new_path, f"skip marker added: {line[1:].strip()[:120]}"))
-            new_line += 1
-        elif line.startswith(" ") and new_path:
-            new_line += 1
+                marker_line = new_line + added.count("\n", 0, match.start())
+                message = ("conditional enablement; declare if it can skip" if match.group("conditional")
+                           else "skip marker added")
+                if "\n" in match.group():
+                    snippet = normalized(match.group())
+                else:
+                    if (marker_line, message) in reported:
+                        continue
+                    reported.add((marker_line, message))
+                    snippet = raw_lines[marker_line].strip()
+                findings.append((new_path, f"{message}: {snippet[:120]}"))
     return findings
 
 
