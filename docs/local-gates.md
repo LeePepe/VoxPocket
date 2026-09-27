@@ -59,6 +59,8 @@ This list is the explicit contract of classes it does not detect:
 - Edits to an existing multiline skip trait where the changed lines alone do not contain the
   marker (for example, changing only the `false` line of a split `.enabled(if:)`); skip
   detection inspects added lines only.
+- Skips hidden by comment-like text inside Swift multiline (`"""`) or raw strings; string
+  and comment stripping is line-local.
 - Dynamically generated or parameterized tests (for example, changed `arguments:` lists).
 - Assertions wrapped in helper functions or custom macros.
 - Config-level exclusion (`Package.swift`, test plans, CI filters or pytest config).

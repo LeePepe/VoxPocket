@@ -603,6 +603,22 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.assertEqual(named.returncode, 0, named.stderr)
         self.assertIn("declared", named.stdout)
 
+    def test_pr_body_path_inside_longer_path_does_not_declare(self):
+        short, longer = "tests/test_a.py", "sub/tests/test_a.py"
+        for path in (short, longer):
+            self.write(path, "def test_a():\n    assert value == 1\n")
+        self.commit("test: seed nested paths")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        for path in (short, longer):
+            self.write(path, "def test_a():\n    pass\n")
+        self.commit("test: remove both assertions")
+        result = self.assert_blocked(
+            "with a reason", PR_BODY=TEMPLATE.format(declaration=f"- `{longer}`: assertion removed"))
+        self.assertIn(f"with a reason: {short}", result.stderr)
+        declared = self.run_guard(PR_BODY=TEMPLATE.format(
+            declaration=f"- `{longer}`: assertion removed\n- {short}. assertion removed"))
+        self.assertEqual(declared.returncode, 0, declared.stderr)
+
     def test_pr_body_reason_on_different_line_fails(self):
         self.remove_assertions()
         for declaration in (f"- {TEST_FILE}\n  assertion moved into helper",

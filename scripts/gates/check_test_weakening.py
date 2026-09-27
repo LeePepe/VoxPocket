@@ -227,10 +227,13 @@ def problems_for(findings, body):
         section = body_section(body) or ""
         declared = set()
         for line in section.splitlines():
-            named = {path for path in paths if path in line}
-            reason = line
-            for path in sorted(named, key=len, reverse=True):
-                reason = reason.replace(path, "")
+            named, reason = set(), line
+            for path in sorted(paths, key=len, reverse=True):
+                # Whole-path match only, so a path inside a longer path does not count.
+                pattern = r"(?<![\w./-])" + re.escape(path) + r"(?![\w/]|[.-]\w)"
+                reason, count = re.subn(pattern, " ", reason)
+                if count:
+                    named.add(path)
             reason = re.sub(r"^\s*(?:[-+*]|\d+[.)])\s*(?:\[[ xX]\]\s*)?", "", reason)
             words = re.findall(r"[^\W_]+", reason)
             if sum(len(word) for word in words if word.casefold() != "none") >= 3:
