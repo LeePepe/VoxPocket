@@ -9,9 +9,12 @@ Against the merge base (VERIFY_BASE, default origin/main), with no netting:
 - every added skip marker is a loss; a deleted test file loses all its assertions and tests.
 
 On a pull request (PR_BODY, or the body in $GITHUB_EVENT_PATH) the "Removed or weakened
-tests or policy" section must name each affected test file; with no losses it may say "none".
-Without a PR body, findings are notices only, reminding the author to name the files in
-the PR body. This is an automatic declaration check, not an approval requirement.
+tests or policy" section must name each affected test file with a reason on the same line,
+after stripping HTML comments. Several files may share a reason: removing their paths,
+list markers, backticks and punctuation must leave at least three alphanumeric characters
+of free text, excluding "none". With no losses the section may say "none".
+Without a PR body, findings are notices only, reminding the author to name each file with
+a reason in the PR body. This is an automatic declaration check, not an approval requirement.
 """
 from collections import Counter
 import json
@@ -148,9 +151,20 @@ def problems_for(findings, body):
     problems = []
     if body is not None:
         section = body_section(body) or ""
-        unnamed = [path for path in paths if path not in section]
+        declared = set()
+        for line in section.splitlines():
+            named = {path for path in paths if path in line}
+            reason = line
+            for path in sorted(named, key=len, reverse=True):
+                reason = reason.replace(path, "")
+            reason = re.sub(r"^\s*(?:[-+*]|\d+[.)])\s*(?:\[[ xX]\]\s*)?", "", reason)
+            words = re.findall(r"[^\W_]+", reason)
+            if sum(len(word) for word in words if word.casefold() != "none") >= 3:
+                declared.update(named)
+        unnamed = [path for path in paths if path not in declared]
         if unnamed:
-            problems.append(f'PR body section "{SECTION[3:]}" does not name: ' + ", ".join(unnamed))
+            problems.append(f'PR body section "{SECTION[3:]}" does not name each file with a reason: '
+                            + ", ".join(unnamed))
     return problems
 
 
@@ -169,7 +183,8 @@ def main():
         return
     if not problems:
         if body is None:
-            print(f'Notice: no PR body available; name each affected test file in the PR body section "{SECTION[3:]}".')
+            print(f'Notice: no PR body available; name each affected test file with a reason on the same line '
+                  f'in the PR body section "{SECTION[3:]}".')
         print("Test weakening declaration check: " + ("notice" if body is None else "declared") + " -> "
               + "; ".join(f"{path}: {finding}" for path, finding in findings))
         return
@@ -178,7 +193,8 @@ def main():
         print(f"  - {path}: {finding}", file=sys.stderr)
     for problem in problems:
         print(f"  ! {problem}", file=sys.stderr)
-    print(f'Name each affected test file in the PR body section "{SECTION[3:]}".', file=sys.stderr)
+    print(f'Name each affected test file with a reason on the same line in the PR body section "{SECTION[3:]}".',
+          file=sys.stderr)
     sys.exit(1)
 
 

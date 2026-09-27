@@ -37,8 +37,12 @@ CI; local checks cannot replace server-side gates. Internal AI Reviewer approval
 statements (including multiline arguments), removed test names, added skip markers and deleted
 test files. Verbatim assertion moves between test files and re-indents are not losses. With a
 PR body available, its "Removed or weakened tests or policy" section must name each affected
-test file. Without a PR body (local verify/pre-push), findings are notices and the check passes,
-reminding the author to declare the files in the PR body. No Owner approval or ledger is required.
+test file with a reason on the same line, after HTML comments are stripped. Several files may
+share one line and reason. Removing the paths, list markers, backticks and punctuation must
+leave at least three alphanumeric characters of free text, excluding "none"; bare filenames
+and reasons on a different line do not count. With no losses, the section may say "none".
+Without a PR body (local verify/pre-push), findings are notices and the check passes, reminding
+the author to name each file with a reason in the PR body. No Owner approval or ledger is required.
 
 ## Retirement record
 

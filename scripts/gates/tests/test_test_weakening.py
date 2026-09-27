@@ -266,28 +266,69 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.assert_blocked("does not name", PR_BODY="no template at all")
         self.assert_blocked("does not name", PR_BODY="")
 
-    def test_pr_body_naming_file_is_sufficient(self):
+    def test_pr_body_bare_file_name_fails(self):
+        self.remove_assertions()
+        for declaration in (TEST_FILE, f"- {TEST_FILE}", f"{TEST_FILE}:",
+                            f"- `{TEST_FILE}`: ...", f"123. `{TEST_FILE}`:",
+                            f"- [x] `{TEST_FILE}`: __", f"- `{TEST_FILE}`: ab",
+                            f"- `{TEST_FILE}`: none", f"- `{TEST_FILE}`: **NONE**"):
+            with self.subTest(declaration=declaration):
+                self.assert_blocked("with a reason", PR_BODY=TEMPLATE.format(declaration=declaration))
+
+    def test_pr_body_file_name_with_reason_passes(self):
         self.remove_assertions()
         named = self.run_guard(PR_BODY=TEMPLATE.format(declaration=f"- `{TEST_FILE}`: validator removed"))
         self.assertEqual(named.returncode, 0, named.stderr)
         self.assertIn("declared", named.stdout)
 
+    def test_pr_body_reason_on_different_line_fails(self):
+        self.remove_assertions()
+        for declaration in (f"- {TEST_FILE}\n  assertion moved into helper",
+                            f"assertion moved into helper\n- {TEST_FILE}"):
+            with self.subTest(declaration=declaration):
+                self.assert_blocked("with a reason", PR_BODY=TEMPLATE.format(declaration=declaration))
+
+    def test_pr_body_reason_in_comment_fails(self):
+        self.remove_assertions()
+        declaration = f"- {TEST_FILE}: <!-- assertion moved into helper -->"
+        self.assert_blocked("with a reason", PR_BODY=TEMPLATE.format(declaration=declaration))
+
+    def test_pr_body_three_character_reason_passes(self):
+        self.remove_assertions()
+        result = self.run_guard(PR_BODY=TEMPLATE.format(declaration=f"- {TEST_FILE}: abc"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("declared", result.stdout)
+
     def test_pr_body_must_name_each_affected_file(self):
-        self.write(OTHER_FILE, ORIGINAL)
+        other_original = ORIGINAL.replace("valid(", "otherValid(")
+        self.write(OTHER_FILE, other_original)
         self.commit("test: second file baseline")
         self.git("update-ref", "refs/remotes/origin/main", "HEAD")
         self.remove_assertions()
-        self.write(OTHER_FILE, ORIGINAL.replace('#expect(valid("a"))', '#expect(true)'))
+        self.write(OTHER_FILE, other_original.replace('#expect(otherValid("a"))', '#expect(true)'))
         self.commit("test: weaken second file")
-        self.assert_blocked(f"does not name: {OTHER_FILE}",
-                            PR_BODY=TEMPLATE.format(declaration=f"- {TEST_FILE}"))
-        result = self.run_guard(PR_BODY=TEMPLATE.format(declaration=f"- {TEST_FILE}\n- {OTHER_FILE}"))
-        self.assertEqual(result.returncode, 0, result.stderr)
+        declaration = f"- {TEST_FILE}: assertion moved into helper"
+        self.assert_blocked(f"does not name each file with a reason: {OTHER_FILE}",
+                            PR_BODY=TEMPLATE.format(declaration=declaration))
+        self.assert_blocked(f"does not name each file with a reason: {OTHER_FILE}",
+                            PR_BODY=TEMPLATE.format(declaration=f"{declaration}\n- {OTHER_FILE}"))
+        for incomplete in (f"- {TEST_FILE}, {OTHER_FILE}",
+                           f"- {TEST_FILE}, {OTHER_FILE}: none"):
+            with self.subTest(declaration=incomplete):
+                self.assert_blocked(f"with a reason: {TEST_FILE}, {OTHER_FILE}",
+                                    PR_BODY=TEMPLATE.format(declaration=incomplete))
+        for complete in (f"{declaration}\n- {OTHER_FILE}: duplicate coverage removed",
+                         f"- `{TEST_FILE}`, `{OTHER_FILE}`: assertion moved into helper"):
+            with self.subTest(declaration=complete):
+                result = self.run_guard(PR_BODY=TEMPLATE.format(declaration=complete))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("declared", result.stdout)
 
     def test_file_names_in_comments_or_other_sections_do_not_declare_loss(self):
         self.remove_assertions()
-        body = TEMPLATE.format(declaration=f"<!-- {TEST_FILE} -->\nnone")
-        self.assert_blocked("does not name", PR_BODY=body + f"\n- {TEST_FILE}\n")
+        declaration = f"- {TEST_FILE}: assertion moved into helper"
+        body = TEMPLATE.format(declaration=f"<!-- {declaration} -->\nnone")
+        self.assert_blocked("does not name", PR_BODY=body + f"\n{declaration}\n")
 
     def test_no_pr_body_passes_with_notice(self):
         self.remove_assertions()
@@ -298,6 +339,7 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.assertIn(TEST_FILE, result.stdout)
         self.assertIn("assertion removed or changed", result.stdout)
         self.assertIn('PR body section "Removed or weakened tests or policy"', result.stdout)
+        self.assertIn("with a reason", result.stdout)
 
     def test_actions_event_payload_body_is_checked(self):
         self.remove_assertions()
@@ -306,6 +348,10 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.assert_blocked("does not name", PR_BODY=None,
                             GITHUB_EVENT_NAME="pull_request", GITHUB_EVENT_PATH=str(event))
         body = TEMPLATE.format(declaration=TEST_FILE)
+        event.write_text(json.dumps({"pull_request": {"body": body}}))
+        self.assert_blocked("with a reason", PR_BODY=None,
+                            GITHUB_EVENT_NAME="pull_request", GITHUB_EVENT_PATH=str(event))
+        body = TEMPLATE.format(declaration=f"{TEST_FILE}: assertion moved into helper")
         event.write_text(json.dumps({"pull_request": {"body": body}}))
         result = self.run_guard(PR_BODY=None, GITHUB_EVENT_NAME="pull_request", GITHUB_EVENT_PATH=str(event))
         self.assertEqual(result.returncode, 0, result.stderr)
