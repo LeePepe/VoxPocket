@@ -26,13 +26,15 @@ import sys
 TEST_PATH = re.compile(r"(^|/)Tests/.*\.swift$|Tests\.swift$|(^|/)tests?/.*\.py$|(^|/)test_[^/]*\.py$")
 ASSERTION = re.compile(
     r"#expect\b|#require\b|\bXCTAssert\w*\s*\(|\bXCTFail\s*\(|\bXCTUnwrap\s*\(|"
-    r"\bself\.assert\w+\s*\(|^\s*assert\s|\bpytest\.raises\s*\(")
+    r"\bself\.assert\w+\s*\(|^\s*assert(?=\s|\()|\bpytest\.raises\s*\(")
 # Test declarations are tracked by name (TEST_NAME), not as assertion statements.
 SKIP = re.compile(r"\.disabled\b|\.enabled\s*\(\s*if:|\bXCTSkip\w*\s*\(|withKnownIssue\s*\(|@unittest\.skip|\bpytest\.mark\.skip|"
                   r"\bself\.skipTest\s*\(")
 TEST_NAME = re.compile(r"@Test\b[\s\S]{0,600}?\bfunc\s+(\w+)|\bfunc\s+(test\w*)\s*\(|\bdef\s+(test\w*)\s*\(")
 SECTION = "## Removed or weakened tests or policy"
 SIMPLE_STRING = re.compile(r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*' ''', re.VERBOSE)
+LINE_STRING = re.compile(r'"""(?:\\.|[^\\])*?"""|' + r"'''(?:\\.|[^\\])*?'''|" + SIMPLE_STRING.pattern,
+                         re.VERBOSE)
 
 
 def git(*args):
@@ -94,6 +96,40 @@ def assertion_losses(base, rows):
     return findings
 
 
+def code_lines(text, path):
+    """Strip line-local strings/comments, retaining Swift block-comment state."""
+    swift = path.endswith(".swift")
+    comment = "//" if swift else "#"
+    block_depth = 0
+    for line in text.splitlines():
+        code, index = [], 0
+        while index < len(line):
+            if block_depth:
+                if line.startswith("/*", index):
+                    block_depth += 1
+                    index += 2
+                elif line.startswith("*/", index):
+                    block_depth -= 1
+                    index += 2
+                else:
+                    index += 1
+                continue
+            string = LINE_STRING.match(line, index)
+            if string:
+                code.append(" ")
+                index = string.end()
+            elif line.startswith(comment, index):
+                break
+            elif swift and line.startswith("/*", index):
+                code.append(" ")
+                block_depth = 1
+                index += 2
+            else:
+                code.append(line[index])
+                index += 1
+        yield "".join(code)
+
+
 def skip_marker_additions(base):
     diff = git("diff", "--unified=0", "--no-color", "-M", base, "HEAD")
     findings = []
@@ -101,9 +137,16 @@ def skip_marker_additions(base):
     for line in diff.splitlines():
         if line.startswith("+++ "):
             new_path = line[6:] if line.startswith("+++ b/") and TEST_PATH.search(line[6:]) else None
+            if new_path:
+                lines = list(code_lines(git("show", f"HEAD:{new_path}"), new_path))
+        elif line.startswith("@@ ") and new_path:
+            new_line = int(re.search(r"\+(\d+)", line).group(1)) - 1
         elif line.startswith("+") and new_path:
-            if SKIP.search(line[1:]):
+            if SKIP.search(lines[new_line]):
                 findings.append((new_path, f"skip marker added: {line[1:].strip()[:120]}"))
+            new_line += 1
+        elif line.startswith(" ") and new_path:
+            new_line += 1
     return findings
 
 

@@ -39,6 +39,8 @@ x
 # Built from pieces so this fixture file does not itself add a skip marker.
 DISABLED = "." + 'disabled("slow")'
 ENABLED_IF_FALSE = "." + "enabled(if: false)"
+XCT_SKIP = "XCT" + "Skip"
+PYTHON_SKIP = "self." + "skipTest"
 
 
 class TestWeakeningGuardTests(unittest.TestCase):
@@ -192,6 +194,30 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.commit("test: change bracketed assertion")
         self.assert_blocked("assertion removed or changed: assert values == [ 1, 2, ]")
 
+    def test_python_parenthesized_assert_removed_blocks(self):
+        path = "tests/test_fixture.py"
+        self.seed_multiline("def test_value():\n    assert(value)\n", path)
+        self.write(path, "def test_value():\n    pass\n")
+        self.commit("test: remove parenthesized Python assertion")
+        self.assert_blocked("assertion removed or changed: assert(value)")
+
+    def test_python_parenthesized_assert_weakened_blocks(self):
+        path = "tests/test_fixture.py"
+        self.seed_multiline("def test_value():\n    assert(value)\n", path)
+        self.write(path, "def test_value():\n    assert(True)\n")
+        self.commit("test: weaken parenthesized Python assertion")
+        self.assert_blocked("assertion removed or changed: assert(value)")
+
+    def test_python_assert_prefix_identifiers_are_not_assertions(self):
+        path = "tests/test_fixture.py"
+        statement = "def test_value():\n    assertion = 1\n    assertion_count = 1\n    asserted = 1\n"
+        self.seed_multiline(statement, path)
+        self.write(path, "def test_value():\n    pass\n")
+        self.commit("test: remove assertion metadata")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+
     def test_simple_string_delimiters_do_not_extend_assertions(self):
         path = "tests/test_fixture.py"
         statement = 'self.assertEqual(\n    actual,\n    "(\\\"[",\n)\n'
@@ -232,6 +258,74 @@ class TestWeakeningGuardTests(unittest.TestCase):
     def test_added_skip_marker_blocks(self):
         self.write(TEST_FILE, ORIGINAL.replace("@Test func rejects", f"@Test({DISABLED}) func rejects"))
         self.commit("test: skip")
+        self.assert_blocked("skip marker")
+
+    def test_swift_skip_markers_in_comments_and_strings_pass(self):
+        lines = (
+            f"// {DISABLED.split('(')[0]} is not used here",
+            f'let message = "{XCT_SKIP}"',
+            f'let message = "{XCT_SKIP}If(true)"',
+            f'let message = "escaped \\"{XCT_SKIP}If(true)\\""',
+            f'let message = """text "{XCT_SKIP}If(true)" text"""',
+            f"/* {XCT_SKIP}If(true) */",
+            f"/* documentation\n * {XCT_SKIP}If(true)\n */",
+            f"/* documentation\n{XCT_SKIP}If(true)\n*/",
+        )
+        for line in lines:
+            with self.subTest(line=line):
+                self.write(TEST_FILE, ORIGINAL + line + "\n")
+                self.commit("test: document Swift skip markers")
+                result = self.run_guard()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("passed", result.stdout)
+
+    def test_python_skip_markers_in_comments_and_strings_pass(self):
+        path = "tests/test_fixture.py"
+        lines = (
+            f"# {PYTHON_SKIP} later",
+            f"# {PYTHON_SKIP}('x') later",
+            f'message = "{PYTHON_SKIP}(\'x\')"',
+            f"message = '{PYTHON_SKIP}(\"x\")'",
+            f'message = """text "{PYTHON_SKIP}(\'x\')" text"""',
+            f"message = '''text '{PYTHON_SKIP}(\"x\")' text'''",
+        )
+        for line in lines:
+            with self.subTest(line=line):
+                self.write(path, line + "\n")
+                self.commit("test: document Python skip markers")
+                result = self.run_guard()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("passed", result.stdout)
+
+    def test_swift_skip_in_existing_block_comment_passes(self):
+        statement = ORIGINAL + "/* documentation\nplaceholder\n*/\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("placeholder", f"{XCT_SKIP}If(true)"))
+        self.commit("test: edit existing block comment")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+
+    def test_added_swift_conditional_skip_blocks(self):
+        self.write(TEST_FILE, ORIGINAL + f"try {XCT_SKIP}If(true)\n")
+        self.commit("test: conditionally skip")
+        self.assert_blocked("skip marker")
+
+    def test_added_python_skip_call_blocks(self):
+        self.write("tests/test_fixture.py", f'{PYTHON_SKIP}("x")\n')
+        self.commit("test: skip Python test")
+        self.assert_blocked("skip marker")
+
+    def test_swift_comment_delimiters_in_strings_preserve_real_skips(self):
+        for delimiter in ("//", "/*", "*/"):
+            with self.subTest(delimiter=delimiter):
+                self.write(TEST_FILE, ORIGINAL + f'let text = "{delimiter}"; try {XCT_SKIP}If(true)\n')
+                self.commit("test: add Swift skip after string")
+                self.assert_blocked("skip marker")
+
+    def test_python_comment_delimiter_in_string_preserves_real_skip(self):
+        self.write("tests/test_fixture.py", f'message = "#"; {PYTHON_SKIP}("x")\n')
+        self.commit("test: add Python skip after string")
         self.assert_blocked("skip marker")
 
     def test_multiline_enabled_if_false_trait_blocks(self):
