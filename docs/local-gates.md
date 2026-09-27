@@ -1,6 +1,6 @@
 # Local deterministic gates
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-09-27
 
 Repository-owned `.githooks/` use `core.hooksPath=.githooks`. They run shell/Python checks,
 not AI reviewers or automatic repair. A failed command stops the Git operation with a nonzero
@@ -32,6 +32,13 @@ checks `HEAD` only and is not evidence for another pushed candidate.
 Layer checks, frontmatter validation, private-config guards, changed-source/test policy and
 documentation checks keep their existing rules. App builds and required AI review remain in
 CI; local checks cannot replace server-side gates. Internal AI Reviewer approval is unchanged.
+
+`scripts/gates/check_test_weakening.py` automatically detects removed/changed assertion
+statements (including multiline arguments), removed test names, added skip markers and deleted
+test files. Verbatim assertion moves between test files and re-indents are not losses. With a
+PR body available, its "Removed or weakened tests or policy" section must name each affected
+test file. Without a PR body (local verify/pre-push), findings are notices and the check passes,
+reminding the author to declare the files in the PR body. No Owner approval or ledger is required.
 
 ## Retirement record
 

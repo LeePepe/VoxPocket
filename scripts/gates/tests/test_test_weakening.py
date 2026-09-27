@@ -12,7 +12,6 @@ import unittest
 SCRIPT = Path(__file__).resolve().parents[1] / "check_test_weakening.py"
 TEST_FILE = "Packages/Fixture/Tests/FixtureTests/FixtureTests.swift"
 OTHER_FILE = "Packages/Fixture/Tests/FixtureTests/OtherTests.swift"
-LEDGER = ".github/test-weakening.md"
 ORIGINAL = """import Testing
 
 @Test func accepts() {
@@ -56,8 +55,6 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.git("config", "user.name", "Guard Test")
         self.git("config", "user.email", "guard@example.invalid")
         self.write(TEST_FILE, ORIGINAL)
-        self.write(".github/CODEOWNERS", "/.github/  @owner\n")
-        self.write(LEDGER, "# Test weakening ledger\n\n## Entries\n")
         self.commit("seed")
         self.git("update-ref", "refs/remotes/origin/main", "HEAD")
         self.git("checkout", "-q", "-b", "task")
@@ -76,7 +73,11 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.git("commit", "-q", "-m", message)
 
     def run_guard(self, **env):
-        return subprocess.run([sys.executable, str(SCRIPT)], cwd=self.repo, env=dict(self.env, **env),
+        environment = dict(self.env, PR_BODY=TEMPLATE.format(declaration="none"))
+        environment.update(env)
+        if environment["PR_BODY"] is None:
+            del environment["PR_BODY"]
+        return subprocess.run([sys.executable, str(SCRIPT)], cwd=self.repo, env=environment,
                               capture_output=True, text=True)
 
     def assert_blocked(self, needle, **env):
@@ -89,11 +90,6 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.write(TEST_FILE, ORIGINAL.replace('    #expect(!valid("../secret"))\n', "")
                                         .replace('    #expect(!valid("bad\\n"))\n', ""))
         self.commit(message)
-
-    def declare(self, *paths, line="- {path}: validator removed in #99 (approved: @owner)\n"):
-        text = (self.repo / LEDGER).read_text()
-        self.write(LEDGER, text + "".join(line.format(path=path) for path in (paths or (TEST_FILE,))))
-        self.commit("docs: declare test weakening")
 
     # ---- losses ----------------------------------------------------------------
 
@@ -120,6 +116,92 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.write(TEST_FILE, ORIGINAL.replace('#expect(!valid("../secret"))', "#expect(true)"))
         self.commit("test: weaken")
         self.assert_blocked("assertion removed or changed")
+
+    def seed_multiline(self, statement, path=TEST_FILE):
+        self.write(path, statement)
+        self.commit("test: multiline baseline")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+
+    def test_multiline_expect_argument_weakened_blocks(self):
+        statement = "#expect(\n    a == b\n)\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("a == b", "true"))
+        self.commit("test: weaken multiline expectation")
+        self.assert_blocked("assertion removed or changed: #expect( a == b )",
+                            PR_BODY=TEMPLATE.format(declaration="none"))
+
+    def test_multiline_xctassert_argument_changed_blocks(self):
+        statement = "XCTAssertEqual(\n    actual,\n    expected\n)\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("expected", "actual"))
+        self.commit("test: weaken multiline XCTest assertion")
+        self.assert_blocked("assertion removed or changed: XCTAssertEqual( actual, expected )",
+                            PR_BODY=TEMPLATE.format(declaration="none"))
+
+    def test_multiline_python_assert_argument_changed_blocks(self):
+        path = "tests/test_fixture.py"
+        statement = "self.assertEqual(\n    actual,\n    expected\n)\n"
+        self.seed_multiline(statement, path)
+        self.write(path, statement.replace("expected", "actual"))
+        self.commit("test: weaken multiline Python assertion")
+        result = self.assert_blocked("assertion removed or changed: self.assertEqual( actual, expected )",
+                                     PR_BODY=TEMPLATE.format(declaration="none"))
+        self.assertIn(path, result.stderr)
+
+    def test_multiline_assertion_moved_verbatim_passes(self):
+        statement = "#expect(\n    a == b\n)\n"
+        self.seed_multiline(ORIGINAL + statement)
+        self.write(TEST_FILE, ORIGINAL)
+        self.write(OTHER_FILE, statement)
+        self.commit("test: move multiline assertion")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+
+    def test_reindented_multiline_assertion_passes(self):
+        statement = "#expect(\n    a == b\n)\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, "\n".join("\t  " + line for line in statement.splitlines()) + "\n")
+        self.commit("test: reindent multiline assertion")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+
+    def test_multiline_unrelated_addition_does_not_offset_loss(self):
+        statement = "#expect(\n    a == b\n)\n"
+        self.seed_multiline(ORIGINAL + statement)
+        self.write(TEST_FILE, ORIGINAL)
+        self.write(OTHER_FILE, statement.replace("a == b", "c == d"))
+        self.commit("test: replace multiline assertion with unrelated check")
+        result = self.assert_blocked("assertion removed or changed: #expect( a == b )")
+        self.assertIn(TEST_FILE, result.stderr)
+
+    def test_duplicate_assertion_removal_is_not_offset_by_remaining_copy(self):
+        statement = "#expect(\n    a == b\n)\n"
+        self.seed_multiline(statement * 3)
+        self.write(TEST_FILE, statement)
+        self.commit("test: remove duplicate assertions")
+        result = self.assert_blocked("assertion removed or changed")
+        self.assertEqual(result.stderr.count("assertion removed or changed"), 2)
+
+    def test_python_multiline_bracket_argument_changed_blocks(self):
+        path = "tests/test_fixture.py"
+        statement = "assert values == [\n    1,\n    2,\n]\n"
+        self.seed_multiline(statement, path)
+        self.write(path, statement.replace("2,", "3,"))
+        self.commit("test: change bracketed assertion")
+        self.assert_blocked("assertion removed or changed: assert values == [ 1, 2, ]")
+
+    def test_simple_string_delimiters_do_not_extend_assertions(self):
+        path = "tests/test_fixture.py"
+        statement = 'self.assertEqual(\n    actual,\n    "(\\\"[",\n)\n'
+        statement += "self.assertEqual(\n    actual,\n    '[',\n)\n"
+        self.seed_multiline(statement + "metadata = 1\n", path)
+        self.write(path, statement + "metadata = 2\n")
+        self.commit("test: change code after assertions containing string delimiters")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
 
     def test_removed_test_function_blocks(self):
         self.write(TEST_FILE, ORIGINAL.replace('@Test func accepts() {\n    #expect(valid("a"))\n}\n', ""))
@@ -176,70 +258,75 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.commit("refactor")
         self.assertEqual(self.run_guard().returncode, 0)
 
-    # ---- Owner-gated ledger ----------------------------------------------------
-
-    def test_ledger_line_allows_removal(self):
-        self.remove_assertions()
-        self.declare()
-        result = self.run_guard()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Owner code-owner review required", result.stdout)
-
-    def test_commit_trailer_or_pr_body_alone_is_not_a_declaration(self):
-        self.remove_assertions("test: drop\n\nTest-Weakening: approved by Owner")
-        self.assert_blocked(f"no line added to {LEDGER}")
-        self.assert_blocked(f"no line added to {LEDGER}", PR_BODY=TEMPLATE.format(declaration=f"- {TEST_FILE}"))
-
-    def test_ledger_must_cover_every_affected_file(self):
-        self.remove_assertions()
-        self.declare("Packages/Other/Tests/OtherTests.swift")
-        self.assert_blocked(TEST_FILE)
-
-    def test_ledger_line_needs_reason_and_approver(self):
-        self.remove_assertions()
-        self.declare(line="- {path}: because\n")
-        self.assert_blocked(f"no line added to {LEDGER}")
-
-    def test_preexisting_ledger_line_does_not_cover_a_new_loss(self):
-        self.write(LEDGER, (self.repo / LEDGER).read_text() + f"- {TEST_FILE}: old (approved: @owner)\n")
-        self.commit("old declaration")
-        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
-        self.remove_assertions()
-        self.assert_blocked(f"no line added to {LEDGER}")
-
-    def test_ledger_not_codeowned_fails_closed(self):
-        self.remove_assertions()
-        self.write(".github/CODEOWNERS", "/docs/  @owner\n")
-        self.commit("drop owner entry")
-        self.declare()
-        self.assert_blocked("does not cover")
-
-    def test_later_codeowners_rule_without_owner_fails_closed(self):
-        self.remove_assertions()
-        self.write(".github/CODEOWNERS", "/.github/  @owner\n/.github/test-weakening.md\n")
-        self.commit("unown ledger")
-        self.declare()
-        self.assert_blocked("does not cover")
-
     # ---- PR body (G6) ----------------------------------------------------------
 
-    def test_pr_body_must_name_each_affected_file(self):
+    def test_pr_body_none_blocks_undeclared_loss(self):
         self.remove_assertions()
-        self.declare()
         self.assert_blocked("does not name", PR_BODY=TEMPLATE.format(declaration="none"))
         self.assert_blocked("does not name", PR_BODY="no template at all")
+        self.assert_blocked("does not name", PR_BODY="")
+
+    def test_pr_body_naming_file_is_sufficient(self):
+        self.remove_assertions()
         named = self.run_guard(PR_BODY=TEMPLATE.format(declaration=f"- `{TEST_FILE}`: validator removed"))
         self.assertEqual(named.returncode, 0, named.stderr)
+        self.assertIn("declared", named.stdout)
 
-    def test_actions_event_payload_is_read_and_push_events_skip(self):
+    def test_pr_body_must_name_each_affected_file(self):
+        self.write(OTHER_FILE, ORIGINAL)
+        self.commit("test: second file baseline")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
         self.remove_assertions()
-        self.declare()
+        self.write(OTHER_FILE, ORIGINAL.replace('#expect(valid("a"))', '#expect(true)'))
+        self.commit("test: weaken second file")
+        self.assert_blocked(f"does not name: {OTHER_FILE}",
+                            PR_BODY=TEMPLATE.format(declaration=f"- {TEST_FILE}"))
+        result = self.run_guard(PR_BODY=TEMPLATE.format(declaration=f"- {TEST_FILE}\n- {OTHER_FILE}"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_file_names_in_comments_or_other_sections_do_not_declare_loss(self):
+        self.remove_assertions()
+        body = TEMPLATE.format(declaration=f"<!-- {TEST_FILE} -->\nnone")
+        self.assert_blocked("does not name", PR_BODY=body + f"\n- {TEST_FILE}\n")
+
+    def test_no_pr_body_passes_with_notice(self):
+        self.remove_assertions()
+        result = self.run_guard(PR_BODY=None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("Notice:", result.stdout)
+        self.assertIn(TEST_FILE, result.stdout)
+        self.assertIn("assertion removed or changed", result.stdout)
+        self.assertIn('PR body section "Removed or weakened tests or policy"', result.stdout)
+
+    def test_actions_event_payload_body_is_checked(self):
+        self.remove_assertions()
         event = Path(self.temporary.name) / "event.json"
         event.write_text(json.dumps({"pull_request": {"body": TEMPLATE.format(declaration="none")}}))
-        self.assert_blocked("does not name", GITHUB_EVENT_NAME="pull_request", GITHUB_EVENT_PATH=str(event))
-        skipped = self.run_guard(GITHUB_EVENT_NAME="push", GITHUB_EVENT_PATH=str(event))
-        self.assertEqual(skipped.returncode, 0)
-        self.assertIn("skipped", skipped.stdout)
+        self.assert_blocked("does not name", PR_BODY=None,
+                            GITHUB_EVENT_NAME="pull_request", GITHUB_EVENT_PATH=str(event))
+        body = TEMPLATE.format(declaration=TEST_FILE)
+        event.write_text(json.dumps({"pull_request": {"body": body}}))
+        result = self.run_guard(PR_BODY=None, GITHUB_EVENT_NAME="pull_request", GITHUB_EVENT_PATH=str(event))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("declared", result.stdout)
+        self.assert_blocked("does not name", GITHUB_EVENT_PATH=str(event))
+
+    def test_null_pull_request_body_needs_declaration(self):
+        self.remove_assertions()
+        event = Path(self.temporary.name) / "event.json"
+        event.write_text(json.dumps({"pull_request": {"body": None}}))
+        self.assert_blocked("does not name", PR_BODY=None, GITHUB_EVENT_PATH=str(event))
+
+    def test_push_event_without_pr_body_passes_with_notice(self):
+        self.remove_assertions()
+        event = Path(self.temporary.name) / "event.json"
+        event.write_text(json.dumps({"ref": "refs/heads/main"}))
+        result = self.run_guard(PR_BODY=None, GITHUB_EVENT_NAME="push", GITHUB_EVENT_PATH=str(event))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Notice:", result.stdout)
+        self.assertIn(TEST_FILE, result.stdout)
+        self.assert_blocked("does not name", GITHUB_EVENT_NAME="push", GITHUB_EVENT_PATH=str(event))
 
     def test_missing_base_fails_closed(self):
         self.git("update-ref", "-d", "refs/remotes/origin/main")

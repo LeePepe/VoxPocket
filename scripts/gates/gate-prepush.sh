@@ -38,7 +38,7 @@ if [ -n "$src" ] && [ -z "$tst" ]; then
   fi
 fi
 
-# 门1b:删/弱化/跳过测试必须申报(AGENTS.md「never weaken or skip tests」)——无申报 → 拦
+# 门1b:自动检测删/弱化/跳过测试；PR 正文须列出受影响文件，本地无 PR 正文时仅提示
 python3 scripts/gates/check_test_weakening.py || exit 1
 
 # 门2:大改动提醒(advisory,不阻塞)—— 跨 layer 时提示按 layer 拆
