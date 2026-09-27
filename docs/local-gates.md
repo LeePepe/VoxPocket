@@ -34,8 +34,8 @@ documentation checks keep their existing rules. App builds and required AI revie
 CI; local checks cannot replace server-side gates. Internal AI Reviewer approval is unchanged.
 
 `scripts/gates/check_test_weakening.py` automatically detects removed/changed assertion
-statements (including multiline arguments), removed test names, added skip markers and deleted
-test files. Skip detection includes Python `pytest.skip(...)`, `pytest.skip.Exception` and
+statements (including multiline arguments and trailing closures), removed test names, added skip
+markers and deleted test files. Skip detection includes Python `pytest.skip(...)`, `pytest.skip.Exception` and
 `pytest.mark.skip`/`skipif`, plus Swift Testing `.disabled` and every `.enabled(if:)` condition
 except literal `true` (allowing whitespace, multiline traits and trailing arguments).
 Nonliteral enablement is reported as conditional enablement requiring declaration if it can skip.
@@ -47,6 +47,20 @@ leave at least three alphanumeric characters of free text, excluding "none"; bar
 and reasons on a different line do not count. With no losses, the section may say "none".
 Without a PR body (local verify/pre-push), findings are notices and the check passes, reminding
 the author to name each file with a reason in the PR body. No Owner approval or ledger is required.
+
+### Known limitations (not detected)
+
+The gate is a heuristic declaration aid, not a sandbox: it cannot prove tests were not weakened.
+This list is the explicit contract of classes it does not detect:
+
+- Skips via helper functions, custom macros or custom traits other than those listed above.
+- Non-literal skip conditions beyond the flagged `.enabled(if:)` trait (for example, early
+  `return`/`guard` statements or environment checks inside test bodies).
+- Dynamically generated or parameterized tests (for example, changed `arguments:` lists).
+- Assertions wrapped in helper functions or custom macros.
+- Config-level exclusion (`Package.swift`, test plans, CI filters or pytest config).
+- Changes in non-assertion setup/fixture code that weaken tests.
+- Statements over 40 lines.
 
 ## Retirement record
 

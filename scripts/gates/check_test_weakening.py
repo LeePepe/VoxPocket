@@ -66,22 +66,32 @@ def changed_test_files(base):
 
 
 def assertion_statements(text):
-    """Collect assertions through balanced parentheses/brackets, at most 40 lines."""
+    """Collect balanced arguments and same-line trailing closures, at most 40 lines."""
     lines = text.splitlines()
     index = 0
     while index < len(lines):
         if not ASSERTION.search(lines[index]):
             index += 1
             continue
-        statement, depth = [], 0
+        statement, depth, brace_depth = [], 0, 0
+        trailing_closure = False
         for _ in range(40):
             line = lines[index]
             statement.append(line)
             delimiters = SIMPLE_STRING.sub("", line)
-            depth += sum(delimiters.count(char) for char in "([")
-            depth -= sum(delimiters.count(char) for char in ")]")
+            for position, char in enumerate(delimiters):
+                if char in "([":
+                    depth += 1
+                elif char in ")]":
+                    depth -= 1
+                    if depth == 0 and not trailing_closure:
+                        trailing_closure = delimiters[position + 1:].lstrip().startswith("{")
+                elif trailing_closure and char == "{":
+                    brace_depth += 1
+                elif trailing_closure and char == "}":
+                    brace_depth -= 1
             index += 1
-            if depth <= 0 or index == len(lines):
+            if (depth <= 0 and brace_depth <= 0) or index == len(lines):
                 break
         yield normalized(" ".join(statement))
 

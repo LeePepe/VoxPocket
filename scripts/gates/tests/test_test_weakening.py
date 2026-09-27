@@ -144,6 +144,112 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.assert_blocked("assertion removed or changed: XCTAssertEqual( actual, expected )",
                             PR_BODY=TEMPLATE.format(declaration="none"))
 
+    def test_multiline_expect_trailing_closure_body_changed_blocks(self):
+        for header in ("#expect(throws: SomeError.self)", "#expect(\n    throws: SomeError.self\n)"):
+            with self.subTest(header=header):
+                statement = header + " {\n    try operation()\n}\n"
+                self.seed_multiline(statement)
+                self.write(TEST_FILE, statement.replace("operation()", "otherOperation()"))
+                self.commit("test: change throwing expectation body")
+                expected = " ".join(statement.split())
+                result = self.assert_blocked(f"assertion removed or changed: {expected}")
+                self.assertEqual(result.stderr.count("assertion removed or changed"), 1)
+
+    def test_xctassert_throws_error_trailing_closure_body_changed_blocks(self):
+        statement = "XCTAssertThrowsError(try f()) { error in\n    XCTAssertEqual(error as? E, .x)\n}\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace(".x)", ".y)"))
+        self.commit("test: change XCTest error validation")
+        expected = " ".join(statement.split())
+        result = self.assert_blocked(f"assertion removed or changed: {expected}")
+        self.assertEqual(result.stderr.count("assertion removed or changed"), 1)
+
+    def test_trailing_closure_assertion_moved_verbatim_passes(self):
+        statements = (
+            "#expect(throws: SomeError.self) {\n    try operation()\n}\n",
+            "XCTAssertThrowsError(try f()) { error in\n    XCTAssertEqual(error as? E, .x)\n}\n",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement):
+                self.write(OTHER_FILE, "")
+                self.seed_multiline(ORIGINAL + statement)
+                self.write(TEST_FILE, ORIGINAL)
+                self.write(OTHER_FILE, statement)
+                self.commit("test: move trailing closure assertion")
+                result = self.run_guard()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("passed", result.stdout)
+
+    def test_single_line_trailing_closure_body_changed_blocks(self):
+        statement = "#expect(throws: SomeError.self) { try operation() }\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("operation()", "otherOperation()"))
+        self.commit("test: change single-line throwing expectation body")
+        self.assert_blocked(f"assertion removed or changed: {statement.strip()}")
+
+    def test_single_line_trailing_closures_do_not_swallow_following_code(self):
+        statement = "#expect(throws: SomeError.self) { try operation() }\n"
+        statement += "XCTAssertThrowsError(try f()) { error in XCTAssertEqual(error as? E, .x) }\n"
+        self.seed_multiline(statement + "metadata = 1\n")
+        self.write(TEST_FILE, statement + "metadata = 2\n")
+        self.commit("test: edit code after single-line trailing closures")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+
+    def test_nested_trailing_closure_body_changed_blocks(self):
+        statement = "#expect(throws: E.self) {\n    if x {\n        prepare()\n    }\n    try operation()\n}\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("operation()", "otherOperation()"))
+        self.commit("test: change closure body after nested block")
+        expected = " ".join(statement.split())
+        self.assert_blocked(f"assertion removed or changed: {expected}")
+
+    def test_simple_string_braces_do_not_change_trailing_closure_extent(self):
+        for literal in ('"{"', '"}"', r'"escaped \"{"', "'{'", "'}'"):
+            with self.subTest(literal=literal):
+                statement = f"#expect(throws: E.self) {{\n    log({literal})\n    try operation()\n}}\n"
+                self.seed_multiline(statement + "metadata = 1\n")
+                self.write(TEST_FILE, statement + "metadata = 2\n")
+                self.commit("test: edit code after closure with quoted brace")
+                result = self.run_guard()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("passed", result.stdout)
+                self.write(TEST_FILE, statement.replace("operation()", "otherOperation()") + "metadata = 2\n")
+                self.commit("test: edit closure body after quoted brace")
+                expected = " ".join(statement.split())
+                self.assert_blocked(f"assertion removed or changed: {expected}")
+
+    def test_unrelated_block_after_assertion_is_not_swallowed(self):
+        statement = "#expect(\n    ready\n)\n\nif x {\n    prepare()\n    #expect(valid)\n}\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("prepare()", "otherPreparation()"))
+        self.commit("test: edit unrelated block after assertion")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+
+    def test_assertion_inside_unrelated_later_block_is_still_checked(self):
+        statement = "#expect(ready)\n\nif x {\n    #expect(valid)\n}\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("#expect(valid)", "#expect(true)"))
+        self.commit("test: weaken assertion in unrelated block")
+        result = self.assert_blocked("assertion removed or changed: #expect(valid)")
+        self.assertEqual(result.stderr.count("assertion removed or changed"), 1)
+
+    def test_trailing_closure_collection_caps_total_lines_at_40(self):
+        prefix = "#expect(\n    throws: SomeError.self\n) {\n" + "    prepare()\n" * 36
+        statement = prefix + "    line40()\n    line41()\n}\n"
+        self.seed_multiline(statement)
+        self.write(TEST_FILE, statement.replace("line41()", "changed41()"))
+        self.commit("test: change closure beyond collection limit")
+        result = self.run_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("passed", result.stdout)
+        self.write(TEST_FILE, statement.replace("line40()", "changed40()"))
+        self.commit("test: change closure at collection limit")
+        self.assert_blocked("assertion removed or changed")
+
     def test_multiline_python_assert_argument_changed_blocks(self):
         path = "tests/test_fixture.py"
         statement = "self.assertEqual(\n    actual,\n    expected\n)\n"
