@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # VoxPocket 自动 code review（codex）—— 在 self-hosted runner 上用本地 `codex` CLI 跑。
 #
-# 与 claude-review.sh 并列的第二道独立门（不同模型交叉验证）。
-# 由 .github/workflows/codex-review.yml 的 codex-review job 调用。
+# 旧 VoxPocket 自有 review 入口；required gate 现由 shared-ci codex-review.yml 调用 review-raven.py。
+# 由 .github/workflows/codex-review-target.yml 的 trusted-base job 调用。
 # **安全边界在 workflow YAML 的 job-level `if`**(来自 base 分支、fork 改不到):
 # 只有同仓库分支 PR 才会到达这里;fork PR 由另一个 job 处理,PR 代码不在本机执行。
 # 本脚本不自行判 fork —— 那个判断放在被 PR 篡改的脚本里是不可信的。
@@ -12,19 +12,19 @@
 #   - 有 blocker(P0/严重) → 更新 sticky comment,exit 1(check 红 → 挡 auto-merge)
 #   - 任何工具异常          → exit 1(fail closed,宁可卡住也不放行未审的 diff)
 #
-# 依赖:git, gh(runner 环境自带 GITHUB_TOKEN), jq, codex(已订阅登录)。
+# 依赖:git, gh(runner 环境自带 GITHUB_TOKEN), jq, python3(3.11+), codex, 本地 Raven。
 # 需要的环境变量(workflow 注入):
 #   PR_NUMBER, BASE_SHA, HEAD_SHA, BASE_REPO, GH_TOKEN
 #
-# 认证:与 claude-review 对等——用 ChatGPT 订阅凭证(落磁盘),不依赖任何 API key。
-# 凭证放在独立的 CODEX_HOME(默认 ~/.codex-review),与 cmux 日常用的 ~/.codex 隔离,
-# 互不影响。该目录的 config.toml 已关 hooks / 清空 MCP / 只读沙箱。
+# 连接参数来自日常 ~/.codex/config.toml 的 Raven provider；凭据仅由已有环境提供。
+# 审查仍使用独立 CODEX_HOME(默认 ~/.codex-review)，不继承日常模型、hooks 或 MCP。
+# 缺少 Raven 配置/环境时失败关闭，不回退到直连 OpenAI，不读取或复制凭据文件。
 
 set -uo pipefail
 
 # 独立 CODEX_HOME:review 门专用,不碰用户日常的 ~/.codex(raven/cmux)。
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex-review}"
-# 用标准 codex 二进制(runner PATH 里可能有 cmux shim,显式指定避免走到 raven)。
+export CODEX_HOME="${CODEX_REVIEW_HOME:-$HOME/.codex-review}"
+# 保留标准 codex 二进制；下方 launcher 显式接入 Raven，不依赖 PATH 中的日常 shim。
 CODEX_BIN="${CODEX_BIN:-/opt/homebrew/bin/codex}"
 command -v "$CODEX_BIN" >/dev/null 2>&1 || CODEX_BIN="codex"
 
@@ -32,6 +32,12 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 : "${PR_NUMBER:?}"; : "${BASE_SHA:?}"; : "${HEAD_SHA:?}"; : "${BASE_REPO:?}"
+
+# 先验证 provider / 环境 / binary；不调用模型，也不把 setup PASS 当作 review PASS。
+if ! python3 "$REPO_ROOT/scripts/ci/review-raven.py" --check-setup "$CODEX_BIN"; then
+    echo "[codex-review] setup failed before review; prepare runner environment before retry" >&2
+    exit 1
+fi
 
 STICKY="<!-- voxpocket-codex-review -->"
 
@@ -112,7 +118,7 @@ cat > "$SCHEMA_FILE" <<'SCHEMA_EOF'
 SCHEMA_EOF
 
 # ---- review prompt ------------------------------------------------------
-# 维度与 claude-review.sh 保持一致（同一套仓库宪法），两个模型交叉验证。
+# 维度依据同一套仓库宪法。
 # Trusted Markdown is rendered as data: no shell evaluation or recursive substitution.
 if ! PROMPT="$(CHANGED="$CHANGED" TRUNCATED="$TRUNCATED" DIFF="$DIFF" \
     python3 "$REPO_ROOT/scripts/ci/render-review-prompt.py" "$REPO_ROOT/scripts/ci/review-prompt.md")"; then
@@ -126,7 +132,7 @@ echo "[codex-review] running codex on PR #$PR_NUMBER ($(printf '%s\n' "$CHANGED"
 # --skip-git-repo-check：checkout 目录是 detached HEAD，跳过 git 仓库信任检查。
 # hooks / MCP / 沙箱 / effort 均由独立 CODEX_HOME 的 config.toml 固定；这里只
 # 再显式钉一遍关键项，防 config 缺失时回退到危险默认。
-"$CODEX_BIN" exec \
+python3 "$REPO_ROOT/scripts/ci/review-raven.py" "$CODEX_BIN" \
     --output-schema "$SCHEMA_FILE" \
     -o "$OUT_FILE" \
     --skip-git-repo-check \

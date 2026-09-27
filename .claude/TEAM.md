@@ -57,7 +57,6 @@ when the orchestrator requests them. Execution only — no planning, no reviewin
 | **UI Expert** | `ui-expert.md` | SwiftUI views, ViewModels, ViewState, Theme |
 | **Platform Expert** | `platform-expert.md` | macOS/iOS adapters, hotkeys, accessibility |
 | **Designer** | `designer.md` | UI/UX decisions, Liquid Glass, design system |
-| **Local Reviewer Meta** | `local-reviewer-meta.md` | Review gate config, local-review-skill health (read-only auditor) |
 
 ---
 
@@ -167,13 +166,10 @@ Tests pass? → proceed. Fail? → fix → re-run.
 
 ---
 
-## Review Gate Requirements (enforced by `local-reviewer-meta`)
+## Local Deterministic Gates
 
-| Hook | Reviewers |
-|------|-----------|
-| `pre-commit` | `code-quality` + `performance` |
-| `pre-merge main` | `security` + `no-microsoft-info` |
-| `pre-push` | _(empty)_ |
+Repository-owned hooks run the checks documented in `docs/local-gates.md`.
+Internal AI review and PR Actions review remain separate from these hooks.
 
 ---
 
@@ -218,18 +214,3 @@ Team lead will spawn a `general-purpose` subagent with `.claude/codex-agents/<sp
 - Dispatch to specialists before Codex plan approval
 
 ---
-
-## Local Reviewer Meta — Triggered Tasks
-
-The `local-reviewer-meta` agent should be invoked:
-
-- **On startup** — audit `.local-review.yml` and hooks for compliance
-- **After `local-review-skill` upgrades** — check version drift and update hooks
-- **When a commit is blocked unexpectedly** — diagnose misconfiguration
-- **Before releases** — run smoke test of all review stages
-
-Audit command:
-```bash
-LOCAL_REVIEW_WARN_ONLY=1 bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh commit
-LOCAL_REVIEW_WARN_ONLY=1 bash $HOME/.claude/skills/local-review-skill/assets/repo-scripts/review.sh merge_to_main
-```

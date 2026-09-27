@@ -1,8 +1,9 @@
 ---
 layer: VoxInfrastructure
 role: 转写 · LLM · 持久化 · 平台适配 · 偏好 —— 对接外部系统与框架的适配层
+owns: [Packages/VoxInfrastructure/**]
 depends_on: [VoxDomain]
-depended_by: [VoxApplication, VoxPresentation]
+gate: {build: "swift build --package-path Packages/VoxInfrastructure", test: "swift test --package-path Packages/VoxInfrastructure"}
 red_lines:
   - 只能依赖 VoxDomain(+ 外部 LokiKit);禁止 import VoxApplication/VoxPresentation(宪法 II)
   - API key/secret 来自环境变量;Azure 可读取受保护的沙箱私密配置,不进源码/日志/安装包,启动校验(宪法 V)
@@ -15,7 +16,7 @@ roles:
   Repo:    [Persistence, PlatformAdapters, Providers]
   Service: [Services, Utilities, LLMKit, TranscriptionKit]
 test: swift test --package-path Packages/VoxInfrastructure
-owns: [TranscriptionKit, LLMKit, Persistence, PlatformAdapters, Preferences]
+targets: [TranscriptionKit, LLMKit, Persistence, PlatformAdapters, Preferences]
 ---
 
 # VoxInfrastructure Tech Context
@@ -46,4 +47,4 @@ owns: [TranscriptionKit, LLMKit, Persistence, PlatformAdapters, Preferences]
 
 ## 测试注意
 `swift test` 会一起编译本包所有 test target;某个 target 的既有失败会阻塞其他 target 运行
-(见 CLAUDE.md)。定位单类用 `--filter`。
+(见 `VoxPocket/tech-context.md` 的测试说明)。定位单类用 `--filter`。

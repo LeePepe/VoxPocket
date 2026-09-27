@@ -1,8 +1,9 @@
 ---
 layer: VoxApplication
 role: UseCases 业务编排 —— 把领域与基础设施组装成录音/转写/精炼/会话流程
+owns: [Packages/VoxApplication/**]
 depends_on: [VoxDomain, VoxInfrastructure]
-depended_by: [VoxPresentation]
+gate: {build: "swift build --package-path Packages/VoxApplication", test: "swift test --package-path Packages/VoxApplication"}
 red_lines:
   - 只能依赖 VoxDomain/VoxInfrastructure(+ 外部 LokiKit);禁止 import VoxPresentation(宪法 II)
   - 遥测事件只带指标(duration/count/source/session_id),严禁带转写/精炼文本内容(宪法 IV)
@@ -12,7 +13,7 @@ roles:
   Types:   [RecordingUseCase, TranscriptionUseCase, RefinementUseCase, SessionUseCase, EditingUseCase, HistoryUseCase, StreamingInputCoordinator, DeepLinkAction]
   Service: [DefaultRecordingUseCase, DefaultTranscriptionUseCase, DefaultRefinementUseCase, DefaultSessionUseCase, DefaultEditingUseCase, DefaultHistoryUseCase, DefaultStreamingInputCoordinator, InMemorySessionUseCase, DeepLinkRouter]
 test: swift test --package-path Packages/VoxApplication
-owns: [UseCases]
+targets: [UseCases]
 ---
 
 # VoxApplication Tech Context

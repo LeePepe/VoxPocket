@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 workspace_root="$(cd "$repo_root/.." && pwd -P)"
-local_deps_root="${LOCAL_DEPS_ROOT:-/Users/tianpli/Development}"
+local_deps_root="${LOCAL_DEPS_ROOT:-$HOME/Development}"
 
 link_dependency() {
   local name="$1"

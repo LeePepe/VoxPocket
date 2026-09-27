@@ -1,9 +1,8 @@
 name: kimi-review
 
-# Advisory-only Kimi review. This check is intentionally absent from the main ruleset.
-# pull_request_target evaluates trusted base YAML. The trusted base script embeds the
-# PR diff as data and launches a tool-less Kimi agent.
-
+# Advisory-only Kimi review via shared-ci's reusable workflow. Never required.
+# pull_request_target evaluates trusted base YAML; the PR diff is read as data.
+# The runner must have `kimi` on its PATH (otherwise the sticky comment says "unavailable").
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
@@ -19,27 +18,4 @@ concurrency:
 
 jobs:
   kimi-review:
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 12
-    steps:
-      - name: Checkout base (trusted script source)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.base.sha }}
-
-      - name: Run local Kimi advisory review
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_REPO: ${{ github.repository }}
-        run: scripts/ci/kimi-review.sh
-
-  kimi-review-fork:
-    if: github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Kimi advisory review is skipped for fork pull requests."
+    uses: LeePepe/shared-ci/.github/workflows/kimi-review.yml@761fe6b0b3ca5e2c57d244182d495ab8041851fa

@@ -96,7 +96,7 @@ private static func makeAzureWhisperConfig() -> AzureWhisperConfig? {
     }
     // audio/transcriptions 保留原始语言（如中文）
     // audio/translations 会强制将所有音频翻译为英文
-    let endpoint = URL(string: "https://tianp-mmd3pwyc-swedencentral.cognitiveservices.azure.com/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01")!
+    let endpoint = URL(string: "https://example-resource.cognitiveservices.azure.com/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01")!
     return AzureWhisperConfig(endpoint: endpoint, apiKey: apiKey)
 }
 ```
@@ -114,7 +114,7 @@ private static func makeAzureWhisperConfig() -> AzureWhisperConfig? {
     // (e.g. "https://resource.cognitiveservices.azure.com")
     // Path is constructed below; any existing path in the base URL is intentionally discarded.
     let baseURLString = env["AZURE_WHISPER_BASE_URL"]
-        ?? "https://tianp-mmd3pwyc-swedencentral.cognitiveservices.azure.com"
+        ?? "https://example-resource.cognitiveservices.azure.com"
     // Guard against malformed env var — fall back to nil so caller can degrade gracefully
     guard var comps = URLComponents(string: baseURLString) else {
         return nil

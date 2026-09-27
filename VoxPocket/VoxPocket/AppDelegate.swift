@@ -206,8 +206,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // 显示面板并开始录音
-        await windowManager.showQuickRecordingAndStart()
+        // 先创建面板；关闭回调必须在异步启动前就绪，避免快速松手的无结果回调丢失。
+        windowManager.showWindow(.quickRecording)
 
         // 设置完成回调：隐藏面板 + 清除录音状态
         if let viewModel = windowManager.getQuickRecordingViewModel() {
@@ -233,6 +233,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.serviceContainer.endRecording()
                 }
             }
+
+            await viewModel.startRecording()
         }
     }
 

@@ -1,8 +1,9 @@
 ---
 layer: VoxDomain
 role: 纯领域模型与文本历史,无外部依赖,不感知上层
+owns: [Packages/VoxDomain/**]
 depends_on: []
-depended_by: [VoxInfrastructure, VoxApplication, VoxPresentation]
+gate: {build: "swift build --package-path Packages/VoxDomain", test: "swift test --package-path Packages/VoxDomain"}
 red_lines:
   - 禁止引入任何外部依赖或其他本地 layer(宪法 II)—— 本层是依赖链最底端
   - 模型为值类型,更新返回副本,禁止原地可变(宪法 I)
@@ -11,7 +12,7 @@ roles:
   Types:   [CoreModels]
   Service: [TextHistory]
 test: swift test --package-path Packages/VoxDomain
-owns: [CoreModels, TextHistory, Checkpoint]
+targets: [CoreModels, TextHistory, Checkpoint]
 ---
 
 # VoxDomain Tech Context

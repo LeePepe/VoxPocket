@@ -26,7 +26,7 @@
 "apple-ui-tester": {
   "type": "stdio",
   "command": "node",
-  "args": ["/Users/tianpli/.claude/mcp-servers/apple-ui-tester/dist/index.js"],
+  "args": ["<absolute path to your home>/.claude/mcp-servers/apple-ui-tester/dist/index.js"],
   "env": { "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}" }
 }
 ```
@@ -75,7 +75,7 @@
 
 ### 3. AppleUITesting SPM Package ✅ 完成
 
-**位置**：`/Users/tianpli/Development/AppleUITesting/`
+**位置**：`../AppleUITesting/`
 **状态**：`swift build` ✅，`swift test` ✅（7 tests passed）
 **Git**：已初始化，已提交到 `main`
 
@@ -259,9 +259,9 @@ iOS/macOS App (集成 AppleUITesting SPM)
 ~/.claude/mcp-servers/apple-ui-tester/dist/index.js        # 编译产物（入口）
 ~/.claude/skills/apple-ui-testing.md                       # Skill 文件
 
-/Users/tianpli/Development/AppleUITesting/                 # 通用 SPM 包根目录
-/Users/tianpli/Development/AppleUITesting/Package.swift    # 包配置
-/Users/tianpli/Development/VoxPocket/                      # VoxPocket 项目根目录
+../AppleUITesting/                 # 通用 SPM 包根目录
+../AppleUITesting/Package.swift    # 包配置
+./ (VoxPocket repo root)                 # VoxPocket 项目根目录
 ```
 
 ---

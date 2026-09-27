@@ -2,11 +2,15 @@
 layer: _root
 role: 全局架构总览与 layer 划分;声明层内轴的类角色词表 canonical_roles
 canonical_roles: [Types, Config, Repo, Service, Runtime, UI]
+support:
+  - patterns: ["*.md", "LICENSE", "docs/**", "specs/**", "design/**", "artifacts/**", ".claude/**", ".codex/**", ".specify/**"]
+    reason: documentation, specs, design records and agent/tool configuration; checked by docs lints and the contract audit
+  - patterns: [".github/**", ".githooks/**", "scripts/**", "tests/**", "fastlane/**", "docker/**", ".gitignore", ".gitleaks.toml", "config.example.json"]
+    reason: CI, hooks, policy, release and local tooling; verified by scripts/verify --policy and CI
 red_lines:
   - 依赖方向永远向下,任何反向依赖(层间或层内)都是红线(宪法 II)
   - VoxDomain 不得引入任何外部依赖或其他本地 layer
   - 用户语音/转写/精炼文本严禁进入日志或遥测负载(宪法 IV)
-owns: [layer-map, canonical_roles, read-contract]
 ---
 
 # VoxPocket 顶层 Tech Context
@@ -34,14 +38,19 @@ VoxUITesting(standalone,不参与运行时依赖链)
 | VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, LokiKit(ext) |
 | VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, LokiKit(ext) |
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
+| VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, AppleUITesting(ext), LokiKit(ext) |
 
-> **LokiKit 是外部 layer**:位于 `~/Development/LokiKit`(`../../../LokiKit`),不在本仓库内,
-> 不受本仓库门禁约束。各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer;对 LokiKit
-> 的依赖在正文说明,不进 `depends_on`(否则防腐脚本会因找不到本地目录而误报)。
+> **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,本地放在仓库同级 `../LokiKit`
+> (`Packages/*` 以 `../../../LokiKit` 引用);CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA
+> 取出。不受本仓库门禁约束。各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer;
+> 外部依赖在正文与上表 `(ext)` 标注,不进 `depends_on`。
 
-> **顶层 app target 不是 layer**:`VoxPocket/VoxPocket/`(`ServiceContainer`、`AppDelegate` 等)
-> 是 Xcode 应用壳,通过 `xcodebuild` 全量构建(分钟级)。它不映射到任何快速 layer——其验证归
-> **CI required**,不进 pre-push(见门禁小节)。
+> **App 壳是 `VoxPocketApp` layer**:`VoxPocket/**`(`ServiceContainer`、`AppDelegate`、`project.yml`
+> 等)与 `VoxPocketWidget/**`。其 `xcodebuild` 全量构建(分钟级)只在 CI 执行,本地 pre-push 不跑
+> (`RUN_HEAVY=1` 可显式开启),见 `VoxPocket/tech-context.md`。
+
+每个受版本控制的路径恰好属于一个 layer 的 `owns`,或上方 frontmatter 的一个 `support` 排除项;
+`scripts/verify` 用 shared-ci resolver 按此选择 layer 并执行其 `gate`。
 
 ## 层内轴:canonical_roles(类角色的依赖顺序)
 

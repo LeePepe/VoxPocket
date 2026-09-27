@@ -8,6 +8,7 @@ KIMI_WORKFLOW="$ROOT/.github/workflows/kimi-review.yml"
 CODEX_TARGET_WORKFLOW="$ROOT/.github/workflows/codex-review-target.yml"
 CODEX_LEGACY_WORKFLOW="$ROOT/.github/workflows/codex-review.yml"
 CLAUDE_WORKFLOW="$ROOT/.github/workflows/claude-review.yml"
+SHARED_CI_PIN='LeePepe/shared-ci/.github/workflows/'
 
 grep -q '^tools: \[\]$' "$KIMI_AGENT"
 grep -q '^subagents: \[\]$' "$KIMI_AGENT"
@@ -20,27 +21,49 @@ begin_line="$(grep -n '===== BEGIN UNTRUSTED PR DIFF' "$KIMI_SH" | head -1 | cut
 paths_line="$(grep -n '^Changed paths:$' "$KIMI_SH" | head -1 | cut -d: -f1)"
 end_line="$(grep -n '===== END UNTRUSTED PR DIFF' "$KIMI_SH" | head -1 | cut -d: -f1)"
 [ "$begin_line" -lt "$paths_line" ] && [ "$paths_line" -lt "$end_line" ]
+# Kimi: advisory, trusted-base pull_request_target caller of shared-ci (full SHA, no PR head checkout).
 grep -q '^  pull_request_target:$' "$KIMI_WORKFLOW"
 grep -Fq '    branches: [main]' "$KIMI_WORKFLOW"
-grep -Fq 'ref: ${{ github.event.pull_request.base.sha }}' "$KIMI_WORKFLOW"
-! grep -Fq 'ref: ${{ github.event.pull_request.head.sha }}' "$KIMI_WORKFLOW"
+grep -Eq "uses: ${SHARED_CI_PIN}kimi-review\.yml@[0-9a-f]{40}$" "$KIMI_WORKFLOW"
+! grep -Fq 'github.event.pull_request.head.sha' "$KIMI_WORKFLOW"
+# Codex: required (`codex-review-target / codex-review`), trusted-base caller; its legacy-context job still emits `codex-review-target`.
 grep -q '^  pull_request_target:$' "$CODEX_TARGET_WORKFLOW"
 grep -q '^  codex-review-target:$' "$CODEX_TARGET_WORKFLOW"
+grep -q '^    name: codex-review-target$' "$CODEX_TARGET_WORKFLOW"
 grep -Fq '    branches: [main]' "$CODEX_TARGET_WORKFLOW"
-grep -Fq 'ref: ${{ github.event.pull_request.base.sha }}' "$CODEX_TARGET_WORKFLOW"
-! grep -Fq 'ref: ${{ github.event.pull_request.head.sha }}' "$CODEX_TARGET_WORKFLOW"
+grep -Eq "uses: ${SHARED_CI_PIN}codex-review\.yml@[0-9a-f]{40}$" "$CODEX_TARGET_WORKFLOW"
+grep -Fq 'codex-launcher: python3 scripts/ci/review-raven.py' "$CODEX_TARGET_WORKFLOW"
+! grep -Fq 'github.event.pull_request.head.sha' "$CODEX_TARGET_WORKFLOW"
 grep -q '^  workflow_dispatch:$' "$CODEX_LEGACY_WORKFLOW"
 ! grep -q '^  pull_request:$' "$CODEX_LEGACY_WORKFLOW"
-grep -q '^  workflow_dispatch:$' "$CLAUDE_WORKFLOW"
-! grep -q '^  pull_request:$' "$CLAUDE_WORKFLOW"
+# Claude review is removed (plan Q19).
+[ ! -e "$CLAUDE_WORKFLOW" ]
 
 if [ -f "$ROOT/scripts/rulesets/main-protection.json" ]; then
     ! jq -e '.rules[]? | select(.type=="required_status_checks")
       | .parameters.required_status_checks[]? | select(.context=="kimi-review" or .context=="claude-review")' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    # Codex review is required under the shared-ci reusable context; the legacy
+    # `codex-review-target` context is no longer required (R3, ruleset 19169340).
     jq -e '.rules[]? | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[]? | select(.context=="codex-review-target / codex-review")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    jq -e '.rules[]? | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[]? | select(.context=="quality / aggregate")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    ! jq -e '.rules[]? | select(.type=="required_status_checks")
       | .parameters.required_status_checks[]? | select(.context=="codex-review-target")' \
+      "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
+    # AGENTS.md "Required checks" lists exactly the mirror's required contexts.
+    agents_checks="$(sed -n '/^## Required checks$/,/^## /p' "$ROOT/AGENTS.md" | sed -n 's/^- `\(.*\)`$/\1/p' | sort)"
+    mirror_checks="$(jq -r '.rules[] | select(.type=="required_status_checks")
+      | .parameters.required_status_checks[].context' "$ROOT/scripts/rulesets/main-protection.json" | sort)"
+    [ -n "$agents_checks" ] && [ "$agents_checks" = "$mirror_checks" ] || {
+        echo "AGENTS.md required checks differ from scripts/rulesets/main-protection.json" >&2; exit 1; }
+    # CODEOWNERS gates important paths (G): code-owner review on, no extra approvals.
+    jq -e '.rules[]? | select(.type=="pull_request") | .parameters
+      | select(.require_code_owner_review == true and .required_approving_review_count == 0)' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
 fi
 
-echo "Kimi advisory / Claude pause contract passed."
+echo "Kimi advisory / Codex required / Claude removed contract passed."

@@ -129,9 +129,9 @@ zsh scripts/docs/lint_docs_map.sh
 zsh scripts/docs/lint_docs_freshness.sh
 ```
 
-## Local Code Review
+## Local Quality Gates
 
-This repo uses a local AI review gate on commits and merges. See [`docs/LOCAL_REVIEW.md`](docs/LOCAL_REVIEW.md).
+Repository-owned hooks run deterministic checks on commits and pushes. AI review remains in the development workflow and PR Actions. See [`docs/local-gates.md`](docs/local-gates.md).
 
 ## License
 

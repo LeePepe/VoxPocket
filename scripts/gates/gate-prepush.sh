@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # gate-prepush.sh — 只放【快 + 无副作用】门禁(目标 <60s)。docs-only 短路。
 # 重验证(app-target xcodebuild / 模拟器 / E2E)一律不在此 —— 由 CI required 把关。
-# 由 .local-review.yml 的 push.commands 调用;可被本地 --no-verify 绕过(CI 照样拦)。
+# 由 .githooks/pre-push 直接调用;可被本地 --no-verify 绕过(CI 照样拦)。
 set -uo pipefail
 REPO="$(git rev-parse --show-toplevel)"
 cd "$REPO"
 python3 scripts/gates/check_private_config.py || exit 1
 
-base="$(git merge-base @ origin/main 2>/dev/null || echo HEAD~1)"
-changed="$(git diff --name-only "$base"..@ 2>/dev/null)"
+base="$(git merge-base @ origin/main)" || {
+  echo "[pre-push] 无法确定 HEAD 与 origin/main 的共同基线；更新远端引用后重试" >&2
+  exit 1
+}
+changed="$(git diff --name-only "$base"..@)" || {
+  echo "[pre-push] 无法读取已提交改动；停止推送" >&2
+  exit 1
+}
 [ -z "$changed" ] && { echo "[pre-push] 无改动"; exit 0; }
 
 # docs-only 短路(纯文档 / hook / CI 配置 / spec)

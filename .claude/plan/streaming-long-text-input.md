@@ -1,6 +1,6 @@
 ---
 title: "Streaming Long-Text Voice Input"
-project: /Users/tianpli/Development/VoxPocket
+project: VoxPocket (repository root)
 branch: feat/azure-foundry-transcriber-model
 status: draft
 created: 2026-04-13
@@ -334,37 +334,37 @@ Instantiate `DefaultStreamingInputCoordinator` for main and quick stacks (macOS)
 ## T1
 **Files**: `Packages/VoxApplication/Sources/UseCases/EditingUseCase.swift`, `DefaultEditingUseCase.swift`
 **Steps**: implement all APIs from Architecture Design T1; throw explicit errors (no silent swallow)
-**Verification**: `swift build --package-path /Users/tianpli/Development/VoxPocket/Packages/VoxApplication`
+**Verification**: `swift build --package-path Packages/VoxApplication`
 
 ## T2
 **Files**: `Packages/VoxApplication/Sources/UseCases/TranscriptionUseCase.swift`, `DefaultTranscriptionUseCase.swift`
 **Steps**: implement snapshot gate as described; log (not swallow) replaceAll errors
-**Verification**: `swift build --package-path /Users/tianpli/Development/VoxPocket/Packages/VoxApplication`
+**Verification**: `swift build --package-path Packages/VoxApplication`
 
 ## T3
 **Files**: `Packages/VoxApplication/Sources/UseCases/RefinementUseCase.swift`, `DefaultRefinementUseCase.swift`
 **Steps**: add required `refineText` with NO default; implement in DefaultRefinementUseCase using explicit text
-**Verification**: `swift build --package-path /Users/tianpli/Development/VoxPocket/Packages/VoxApplication`
+**Verification**: `swift build --package-path Packages/VoxApplication`
 
 ## T4
 **Files (new)**: `Packages/VoxApplication/Sources/UseCases/StreamingInputCoordinator.swift`, `DefaultStreamingInputCoordinator.swift`
 **Steps**: implement exactly as described in Architecture Design T4
 **Verification**:
 ```bash
-swift build --package-path /Users/tianpli/Development/VoxPocket/Packages/VoxApplication
-swift test --package-path /Users/tianpli/Development/VoxPocket/Packages/VoxApplication
+swift build --package-path Packages/VoxApplication
+swift test --package-path Packages/VoxApplication
 ```
 All 7 acceptance criteria tests must pass.
 
 ## T5
 **Files**: `Packages/VoxPresentation/Sources/PlatformUI/QuickRecordingViewModel.swift`
-**Verification**: `swift build --package-path /Users/tianpli/Development/VoxPocket/Packages/VoxPresentation`
+**Verification**: `swift build --package-path Packages/VoxPresentation`
 
 ## T6
 **Files**: `Packages/VoxPresentation/Sources/UIShared/ViewModels/EditorViewModel.swift`, `ViewStates/EditorViewState.swift`
-**Verification**: `swift build --package-path /Users/tianpli/Development/VoxPocket/Packages/VoxPresentation`
+**Verification**: `swift build --package-path Packages/VoxPresentation`
 
 ## T7
 **Files**: `VoxPocket/VoxPocket/ServiceContainer.swift`
-**Verification**: `xcodebuild -project /Users/tianpli/Development/VoxPocket/VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket build 2>&1 | tail -20`
+**Verification**: `xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket build 2>&1 | tail -20`
 
