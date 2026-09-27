@@ -56,7 +56,8 @@ scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one 
 ```
 
 - External packages live next to the repository: `../LokiKit` (LeePepe/shared-telemetry) and
-  `../AppleUITesting`. `scripts/ci/fetch-external-deps.sh` checks out the pinned SHAs.
+  `../AppleUITesting`. `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks
+  out the pinned SHAs when missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
 - `pre-commit` keeps the fast staged-layer build/test plus docs map/freshness checks.
 - Local verification is SPM build/test plus deterministic scripts. The app-target
   `xcodebuild` runs in CI only (`RUN_HEAVY=1 scripts/verify` opts in locally).
