@@ -1,15 +1,14 @@
 # Telemetry Stack
 
-The Loki + Grafana stack has been extracted to a standalone repo at:
+The Loki + Grafana stack lives in the standalone [shared-telemetry repository](https://github.com/LeePepe/shared-telemetry/tree/v0.1.0).
 
-```
-~/Development/LokiKit
-```
+VoxPocket resolves LokiKit through SwiftPM at exact `0.1.0`; a separate checkout is only needed to run this stack, not to build the app.
 
 ## Quick Start
 
 ```bash
-cd ~/Development/LokiKit
+git clone --branch v0.1.0 https://github.com/LeePepe/shared-telemetry.git
+cd shared-telemetry
 docker compose -f stack/docker-compose.yml up -d
 ```
 

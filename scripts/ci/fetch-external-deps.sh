@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# Check out VoxPocket's external local packages at pinned full SHAs, next to the
-# repository root (Packages/* reference ../../../LokiKit; project.yml references
-# ../../AppleUITesting). Used by CI; locally it only fills missing directories.
+# Check out AppleUITesting at its pinned full SHA next to the repository root
+# (project.yml references ../../AppleUITesting). Used by CI; locally it only fills
+# missing directories. LokiKit is resolved by SwiftPM from shared-telemetry exact 0.1.0.
 #   scripts/ci/fetch-external-deps.sh [DEST]   (default: parent of the repository)
 set -euo pipefail
 
-# LokiKit is published by LeePepe/shared-telemetry (no tag yet; pin = main head).
-LOKIKIT_REPO="LeePepe/shared-telemetry"
-LOKIKIT_SHA="eff9c1712cd648ed0717e41183ad8bd7bf39cbea"
 APPLE_UI_TESTING_REPO="LeePepe/AppleUITesting"
 APPLE_UI_TESTING_SHA="e6be2fcdf83341a9f3000a4cc489237655461a07"
 
@@ -33,5 +30,4 @@ fetch() {
     echo "[deps] $3 <- $repo@$sha"
 }
 
-fetch "$LOKIKIT_REPO" "$LOKIKIT_SHA" LokiKit
 fetch "$APPLE_UI_TESTING_REPO" "$APPLE_UI_TESTING_SHA" AppleUITesting

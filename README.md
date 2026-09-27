@@ -29,7 +29,7 @@ cd VoxPocket
 open VoxPocket/VoxPocket.xcodeproj
 ```
 
-The project uses sibling external packages, including LokiKit; use the package manifests and `VoxPocket/project.yml` as the dependency source of truth. CI checks out the required sibling repositories and regenerates the Xcode project.
+The project resolves LokiKit through the SwiftPM remote dependency `LeePepe/shared-telemetry`, pinned to exact `0.1.0`; only AppleUITesting remains a sibling external package. Use the package manifests and `VoxPocket/project.yml` as the dependency source of truth. CI checks out AppleUITesting and regenerates the Xcode project.
 
 User-facing builds are delivered through TestFlight. See [AGENTS.md](AGENTS.md) for the build/install boundary and [the release workflow](.github/workflows/testflight.yml) for current dispatch options. Agents do not replace the installed App with a local archive.
 

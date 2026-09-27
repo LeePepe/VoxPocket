@@ -32,7 +32,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../VoxDomain"),
-        .package(path: "../../../LokiKit"),
+        .package(url: "https://github.com/LeePepe/shared-telemetry.git", exact: "0.1.0"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
         .package(url: "https://github.com/argmaxinc/WhisperKit", from: "0.12.0"),
     ],
@@ -41,7 +41,7 @@ let package = Package(
             name: "TranscriptionKit",
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "WhisperKit", package: "WhisperKit"),
             ]
         ),
@@ -50,7 +50,7 @@ let package = Package(
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
                 "TranscriptionKit",
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
             ]
         ),
@@ -65,7 +65,7 @@ let package = Package(
             name: "PlatformAdapters",
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
         .target(
@@ -74,21 +74,21 @@ let package = Package(
         ),
         .testTarget(
             name: "PrivateTranscriptionBenchmarkTests",
-            dependencies: ["TranscriptionKit", "LLMKit", "Preferences", .product(name: "LokiKit", package: "LokiKit")],
+            dependencies: ["TranscriptionKit", "LLMKit", "Preferences", .product(name: "LokiKit", package: "shared-telemetry")],
             exclude: ["README.md"]
         ),
         .testTarget(
             name: "TranscriptionKitTests",
             dependencies: [
                 "TranscriptionKit",
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
         .testTarget(
             name: "LLMKitTests",
             dependencies: [
                 "LLMKit",
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
         .testTarget(

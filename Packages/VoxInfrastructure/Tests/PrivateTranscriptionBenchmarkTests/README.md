@@ -45,4 +45,4 @@ Apple 只检查已有授权，不发起系统权限请求。不可用时记录�
 - 标点指标是标点序列编辑次数及参考数量，**不评价标点插入位置**；英文 `test` 按独立词元检查。
 - 单段音频只能支持个案结论；Apple 权限、缓存、版本、下载状态、热冷定义必须随结果披露。
 
-LokiKit 固定 `eff9c1712cd648ed0717e41183ad8bd7bf39cbea`；SPM 实际解析版本需随运行记录。
+LokiKit 由 SwiftPM 按 `shared-telemetry` exact `0.1.0` 解析（tag v0.1.0 = `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`）；SPM 实际解析版本需随运行记录。

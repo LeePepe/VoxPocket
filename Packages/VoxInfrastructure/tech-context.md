@@ -32,7 +32,7 @@ targets: [TranscriptionKit, LLMKit, Persistence, PlatformAdapters, Preferences]
 
 ## 依赖
 - **仓库内**:仅 `VoxDomain`(CoreModels/TextHistory)。
-- **外部**:`LokiKit`(`../../../LokiKit`,遥测/日志)+ `swift-async-algorithms` + `WhisperKit`。
+- **外部**:`LokiKit`(`LeePepe/shared-telemetry`,SwiftPM 远程依赖 `exact: "0.1.0"`,遥测/日志)+ `swift-async-algorithms` + `WhisperKit`。
   LokiKit 不进 `depends_on`(它不在本仓库,防腐脚本只校验本地 layer)。
 
 ## 约束 / 红线投影

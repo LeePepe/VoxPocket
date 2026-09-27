@@ -45,13 +45,8 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           path: repo
-      # 外部本地依赖（fastlane build 需要）：LokiKit 落在 repo 上两级、
-      # AppleUITesting 落在 repo/VoxPocket 上两级 = $GITHUB_WORKSPACE 同级。
-      - name: Checkout LokiKit (external local dependency)
-        uses: actions/checkout@v4
-        with:
-          repository: LeePepe/LokiKit
-          path: LokiKit
+      # 外部本地依赖（fastlane build 需要）：AppleUITesting 落在
+      # repo/VoxPocket 上两级 = $GITHUB_WORKSPACE 同级；LokiKit 由 SwiftPM 按 shared-telemetry 0.1.0 解析。
       - name: Checkout AppleUITesting (external local dependency)
         uses: actions/checkout@v4
         with:
