@@ -28,10 +28,9 @@ VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, del
 VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 
-A change that spans 2+ layers is too big: split it by layer. Fix a failure inside the
-failing layer while honouring that layer's `red_lines`; a root cause elsewhere is a new task.
-Package manifests and dependency resolution files (each layer's `Package.swift`, `Package.resolved`, and Xcode project package references) are
-dependency metadata, not layer code. Changing them across layers in one PR is not a cross-layer change; the layer-split rule applies to source and test code.
+Prefer small PRs focused on one goal, built from several focused commits. This is guidance,
+not a gate. Fix a failure inside the failing layer while honouring that layer's `red_lines`;
+a root cause elsewhere is a new task.
 
 ## Protocol
 
