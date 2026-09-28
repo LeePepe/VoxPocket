@@ -21,13 +21,16 @@ concurrency:
 
 jobs:
   codex-review-target:
-    # shared-ci pin (same SHA as the AGENTS.md protocol pointer): 5b42aa1 is the Owner-approved
-    # shared-ci v0.2.0 (tagged at 5b42aa1);
+    # shared-ci pin (same SHA as the AGENTS.md protocol pointer): c389366 is the Owner-approved
+    # shared-ci v0.3.0 (tagged at c389366);
     # the pin change merges only with Owner code-owner review (see AGENTS.md Delivery).
-    uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@5b42aa164692911799e927500b5684954f2e075f
+    uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@c389366a5c957c2442f5b7d5db40760acf3be43c
     with:
       codex-launcher: python3 scripts/ci/review-raven.py
       codex-bin: /opt/homebrew/bin/codex
+      # Human Owner account (never an App/bot): its unedited PR comments naming the
+      # full current head SHA are trusted review input (shared-ci docs/review-rules.md).
+      owner-user-id: "13819054"
 
   # Keeps the legacy check context `codex-review-target` (no longer required) green
   # only when the reusable review succeeded on this PR head; fails closed otherwise.

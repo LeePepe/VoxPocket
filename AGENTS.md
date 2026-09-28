@@ -33,8 +33,8 @@ failing layer while honouring that layer's `red_lines`; a root cause elsewhere i
 
 ## Protocol
 
-Follow `LeePepe/shared-ci@5b42aa164692911799e927500b5684954f2e075f/ai/agent-protocol.md`
-(https://github.com/LeePepe/shared-ci/blob/5b42aa164692911799e927500b5684954f2e075f/ai/agent-protocol.md).
+Follow `LeePepe/shared-ci@c389366a5c957c2442f5b7d5db40760acf3be43c/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
 Plan-Review Loop (mandatory for any implementation plan, spec or plan change; a test-only
@@ -117,7 +117,7 @@ Approved exceptions: none.
 
 ## Dependencies
 
-- `shared-ci` `5b42aa164692911799e927500b5684954f2e075f` — https://github.com/LeePepe/shared-ci/blob/5b42aa164692911799e927500b5684954f2e075f/ai/
+- `shared-ci` `c389366a5c957c2442f5b7d5db40760acf3be43c` — https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/
 - LokiKit from LeePepe/shared-telemetry at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` (no tag
   or `ai/` bundle yet; pinned in `scripts/ci/fetch-external-deps.sh`).
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (same script).
