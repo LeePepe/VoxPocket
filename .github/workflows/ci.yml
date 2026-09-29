@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: repo
-      - name: External packages at pinned SHAs (LokiKit from shared-telemetry)
+      - name: External packages at pinned SHAs (AppleUITesting)
         working-directory: repo
         run: scripts/ci/fetch-external-deps.sh
       - name: Select latest Xcode

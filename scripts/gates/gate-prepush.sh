@@ -52,7 +52,8 @@ while IFS= read -r L; do
   [ -d "$L" ] || continue
   name="$(basename "$L")"
   echo "🧪 fast test [$name]"
-  swift test --package-path "$L" >/tmp/pp-$name.log 2>&1 \
+  # The import check rejects imports of undeclared targets so declared layer direction holds.
+  swift test --package-path "$L" --explicit-target-dependency-import-check error >/tmp/pp-$name.log 2>&1 \
     || { echo "❌ [$name]"; tail -35 /tmp/pp-$name.log; exit 1; }
 done <<< "$layers"
 

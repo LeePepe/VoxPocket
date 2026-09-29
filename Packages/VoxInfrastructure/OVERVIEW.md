@@ -31,7 +31,7 @@ Recommended read order
 4) `Packages/VoxInfrastructure/Sources/Persistence/`
 5) `Packages/VoxInfrastructure/Sources/PlatformAdapters/`
 6) `Packages/VoxInfrastructure/Sources/Preferences/`
-7) `~/Development/LokiKit/`
+7) [LokiKit (shared-telemetry v0.1.0)](https://github.com/LeePepe/shared-telemetry/tree/v0.1.0)
 
 Notes for LLM context
 - Start with service boundaries and protocols, then implementations.

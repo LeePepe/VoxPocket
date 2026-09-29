@@ -29,8 +29,8 @@ red_lines:
 - **仓库内**:通过 `VoxPresentation` 的 `UIShared`/`PlatformUI`/`WidgetUI` 产品,并直接 import
   `VoxInfrastructure`(TranscriptionKit/LLMKit/Persistence/PlatformAdapters/Preferences)、
   `VoxApplication`(UseCases)与 `VoxDomain`(CoreModels)的模块。
-- **外部**:`LokiKit`(shared-telemetry,固定 SHA)与 `AppleUITesting`(`UITestingBridge`),
-  均放在仓库同级目录,CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA 取出。
+- **外部**:`LokiKit` 由 SwiftPM 按 shared-telemetry 远程依赖 `revision: "5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"`(v0.1.0) 解析；
+  `AppleUITesting`(`UITestingBridge`)放在仓库同级目录,CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA 取出。
 
 ## ServiceContainer 初始化顺序
 `ServiceContainer.init()` 在主线程同步执行:Logger + 遥测 → 转写器(`LLMAppConfig.defaultTranscriberProvider`)
