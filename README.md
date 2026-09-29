@@ -11,7 +11,7 @@ A macOS/iOS voice recording and transcription app built with SwiftUI. Supports A
 - **Configured cloud transcription** via Azure, including hybrid recognition paths
 - **Text refinement** via Apple Intelligence (on-device LLM, iOS/macOS 26+)
 - **Quick Recording** — global hotkey to record and inject text directly into any app
-- **Hybrid mode** — Apple Speech drives live UI + auto-stop, WhisperKit improves final result
+- **Hybrid mode** — Apple Speech provides live transcription and auto-stop, while WhisperKit improves the final transcript
 - **Auto-stop** after 2.5s of silence
 - **Patch-based undo/redo** for transcription history
 
