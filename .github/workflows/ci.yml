@@ -28,7 +28,10 @@ env:
 
 jobs:
   quality:
-    uses: LeePepe/shared-ci/.github/workflows/quality.yml@761fe6b0b3ca5e2c57d244182d495ab8041851fa
+    # shared-ci pin (same SHA as the AGENTS.md protocol pointer): c389366 is the Owner-approved
+    # shared-ci v0.3.0 (tagged at c389366);
+    # the pin change merges only with Owner code-owner review (see AGENTS.md Delivery).
+    uses: LeePepe/shared-ci/.github/workflows/quality.yml@c389366a5c957c2442f5b7d5db40760acf3be43c
     with:
       runs-on: macos-26
       setup-command: scripts/ci/fetch-external-deps.sh && brew install gitleaks
@@ -49,7 +52,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: repo
-      - name: External packages at pinned SHAs (LokiKit from shared-telemetry)
+      - name: External packages at pinned SHAs (AppleUITesting)
         working-directory: repo
         run: scripts/ci/fetch-external-deps.sh
       - name: Select latest Xcode
@@ -138,5 +141,9 @@ jobs:
           fetch-depth: 0
       - name: Install gitleaks
         run: brew install gitleaks
-      - name: Repository policy (contract audit, workflow-lint, frontmatter, privacy, secrets)
+      - name: Repository policy (contract audit, workflow-lint, frontmatter, test weakening, privacy, secrets)
+        env:
+          # Undeclared removed/weakened tests fail against the PR base; the guard reads the
+          # PR template from the event payload (ci.yml reruns on `edited`).
+          VERIFY_BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
         run: scripts/verify --policy

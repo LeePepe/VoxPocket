@@ -40,19 +40,13 @@ VoxUITesting(standalone,不参与运行时依赖链)
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
 | VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, AppleUITesting(ext), LokiKit(ext) |
 
-## External dependencies
-
-外部本地包的仓库与完整 SHA 以 [`fetch-external-deps.sh`](../../scripts/ci/fetch-external-deps.sh)
-为准：LokiKit 与 AppleUITesting 分别放在同级 `../LokiKit`、`../AppleUITesting`。
-LokiKit 尚无 tag 或 `ai/` bundle；其源码固定在脚本声明的 revision。
-包依赖以各层 `Package.swift` 为准，Xcode 工程以
-[`VoxPocket/project.yml`](../../VoxPocket/project.yml) 为真理之源。
-shared-ci 的协议版本入口在 [AGENTS.md](../../AGENTS.md#protocol)，完整 SHA 必须与
-[workflow 调用](../../.github/workflows/)一致；初始化与验证见 [local gates](../local-gates.md)。
-
-> **LokiKit 是外部包**:`Packages/*` 以 `../../../LokiKit` 引用，不受本仓库门禁约束。
-> 各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer；外部依赖在正文与上表
-> `(ext)` 标注，不进 `depends_on`。
+> **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `revision: "5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"`(v0.1.0)
+> 解析,不再使用仓库同级目录。不受本仓库门禁约束。各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer;
+> 外部依赖在正文与上表 `(ext)` 标注,不进 `depends_on`。
+> 包依赖以各层 `Package.swift` 为准，Xcode 工程以
+> [`VoxPocket/project.yml`](../../VoxPocket/project.yml) 为真理之源。
+> shared-ci 的协议版本入口在 [AGENTS.md](../../AGENTS.md#protocol)，完整 SHA 必须与
+> [workflow 调用](../../.github/workflows/)一致；初始化与验证见 [local gates](../local-gates.md)。
 
 > **App 壳是 `VoxPocketApp` layer**:`VoxPocket/**`(`ServiceContainer`、`AppDelegate`、`project.yml`
 > 等)与 `VoxPocketWidget/**`。其 `xcodebuild` 全量构建(分钟级)只在 CI 执行,本地 pre-push 不跑
@@ -83,6 +77,6 @@ import `Repo`/`Service`/`UI` 角色的类;反过来允许。
 
 ## Agent 工作方式
 
-改哪层先读哪层的 `tech-context.md`(渐进展开)。任务拆分与失败归属边界见
+改哪层先读哪层的 `tech-context.md`(渐进展开)。优先小 PR:每个 PR 专注一个目标,由多个聚焦的 commit 组成(指导,不是 gate)。任务拆分与失败归属边界见
 [repository policy](../repository-policy.md#scope-and-integrity)。
 读取契约与 layer 索引见根目录 [`AGENTS.md`](../../AGENTS.md)。

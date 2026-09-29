@@ -3,7 +3,7 @@ layer: VoxUITesting
 role: 独立测试工具包 —— 快照功能测试与 Claude Vision UI 评估,不参与运行时依赖链
 owns: [Packages/VoxUITesting/**]
 depends_on: []
-gate: {build: "swift build --package-path Packages/VoxUITesting", test: "swift test --package-path Packages/VoxUITesting"}
+gate: {build: "swift build --package-path Packages/VoxUITesting --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxUITesting --explicit-target-dependency-import-check error"}
 red_lines:
   - standalone 包,禁止依赖任何 Vox* 运行时 layer(保持测试工具与被测代码解耦)
   - CLAUDE_API_KEY/ANTHROPIC_API_KEY 来自环境变量,禁止硬编码(宪法 V)
@@ -11,7 +11,7 @@ red_lines:
 roles:
   Repo:    [ScreenCapture, SnapshotHelpers]
   Service: [AgentEvaluator, EvalReport, PerformanceHelpers, ViewInspectorHelpers]
-test: swift test --package-path Packages/VoxUITesting
+test: swift test --package-path Packages/VoxUITesting --explicit-target-dependency-import-check error
 targets: [VoxFunctionalTest, VoxAgentEval]
 ---
 

@@ -1,6 +1,6 @@
 # Local deterministic gates
 
-Last-Reviewed: 2026-09-25
+Last-Reviewed: 2026-09-27
 
 ## Bootstrap and commands
 
@@ -58,6 +58,40 @@ checks `HEAD` only and is not evidence for another pushed candidate.
 Layer checks, frontmatter validation, private-config guards, changed-source/test policy and
 documentation checks keep their existing rules. App builds and required AI review remain in
 CI; local checks cannot replace server-side gates. Internal AI Reviewer approval is unchanged.
+
+`scripts/gates/check_test_weakening.py` automatically detects removed/changed assertion
+statements (including multiline arguments and trailing closures; commented-out code is ignored), removed test names, added skip
+markers and deleted test files. Skip detection includes Python `pytest.skip(...)`, `pytest.skip.Exception` and
+`pytest.mark.skip`/`skipif`, plus Swift Testing `.disabled` and every `.enabled(if:)` condition
+except literal `true` (allowing whitespace, multiline traits and trailing arguments).
+Nonliteral enablement is reported as conditional enablement requiring declaration if it can skip.
+Verbatim assertion moves between test files and re-indents are not losses. With a
+PR body available, its "Removed or weakened tests or policy" section must name each affected
+test file with a reason on the same line, after HTML comments are stripped. Several files may
+share one line and reason. Removing the paths, list markers, backticks and punctuation must
+leave at least three alphanumeric characters of free text, excluding "none"; bare filenames
+and reasons on a different line do not count. With no losses, the section may say "none".
+Without a PR body (local verify/pre-push), findings are notices and the check passes, reminding
+the author to name each file with a reason in the PR body. No Owner approval or ledger is required.
+
+### Known limitations (not detected)
+
+The gate is a heuristic declaration aid, not a sandbox: it cannot prove tests were not weakened.
+This list is the explicit contract of classes it does not detect:
+
+- Skips via helper functions, custom macros or custom traits other than those listed above.
+- Non-literal skip conditions beyond the flagged `.enabled(if:)` trait (for example, early
+  `return`/`guard` statements or environment checks inside test bodies).
+- Edits to an existing multiline skip trait where the changed lines alone do not contain the
+  marker (for example, changing only the `false` line of a split `.enabled(if:)`); skip
+  detection inspects added lines only.
+- Skips hidden by comment-like text inside Swift multiline (`"""`) or raw strings; string
+  and comment stripping is line-local.
+- Dynamically generated or parameterized tests (for example, changed `arguments:` lists).
+- Assertions wrapped in helper functions or custom macros.
+- Config-level exclusion (`Package.swift`, test plans, CI filters or pytest config).
+- Changes in non-assertion setup/fixture code that weaken tests.
+- Statements over 40 lines.
 
 ## Testing and review policy
 

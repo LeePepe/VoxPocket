@@ -16,8 +16,6 @@
 # 项目结构差异（vs VitalStride）：project.yml 在 VoxPocket/ 子目录，不是 repo 根；
 # .xcodeproj 也在 VoxPocket/。fastlane 从 repo 根运行，故路径都带 VoxPocket/ 前缀。
 
-require "base64"
-
 default_platform(:ios)
 
 APP_IDENTIFIER = "com.leepepe.voxpocket".freeze
@@ -56,43 +54,7 @@ def next_build_number(api_key, platform: "ios")
   nb
 end
 
-# 上传后用 spaceship 显式把 build 加到 internal 群组（默认 "Internal"，可用
-# TESTFLIGHT_GROUPS 覆盖）。绕开 upload_to_testflight `groups:` 对 internal 无效的坑。
-# 容错：分发失败不让整个 lane 挂（binary 已上传），除非 TESTFLIGHT_STRICT_UPLOAD=1。
-def distribute_to_internal(next_build, platform_sym)
-  tf_group_names = ENV.fetch("TESTFLIGHT_GROUPS", "Internal")
-                      .split(",").map(&:strip).reject(&:empty?)
-  begin
-    require "spaceship"
-    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(
-      key_id: ENV.fetch("ASC_KEY_ID"),
-      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
-      key: Base64.decode64(ENV.fetch("ASC_KEY_P8_BASE64"))
-    )
-    asc_app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
-    build = Spaceship::ConnectAPI::Build.all(
-      app_id: asc_app.id,
-      version: MARKETING_VERSION,
-      build_number: next_build.to_s
-    ).first
-    UI.user_error!("Uploaded build #{MARKETING_VERSION}(#{next_build}) not found in ASC for distribution") if build.nil?
-
-    all_groups = asc_app.get_beta_groups
-    tf_group_names.each do |gname|
-      grp = all_groups.find { |g| g.name == gname }
-      if grp.nil?
-        UI.important("Beta group '#{gname}' not found in ASC — skipping (check exact name, case-sensitive).")
-        next
-      end
-      build.add_beta_groups(beta_groups: [grp])
-      UI.success("Distributed #{platform_sym} build #{MARKETING_VERSION}(#{next_build}) to group '#{gname}'.")
-    end
-  rescue => e
-    UI.error("Internal-group distribution failed: #{e.message}")
-    UI.important("Binary upload succeeded; the build is in TestFlight but not distributed — add it manually or re-run.")
-    raise e if ENV["TESTFLIGHT_STRICT_UPLOAD"] == "1"
-  end
-end
+# lane 只上传并等待 Apple 处理；测试组分发由 App Store Connect 的配置管理。
 
 platform :ios do
   desc "Build and upload an iOS build to TestFlight (internal testing)"
@@ -152,8 +114,6 @@ platform :ios do
       skip_submission: true,
       distribute_external: false
     )
-
-    distribute_to_internal(next_build, :ios)
   end
 end
 
@@ -216,7 +176,5 @@ platform :mac do
       skip_submission: true,
       distribute_external: false
     )
-
-    distribute_to_internal(next_build, :mac)
   end
 end

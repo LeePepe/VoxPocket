@@ -1,6 +1,6 @@
 # AGENTS.md — VoxPocket
 
-Last-Reviewed: 2026-09-25
+Last-Reviewed: 2026-09-27
 
 ## Read first
 
@@ -9,7 +9,7 @@ Last-Reviewed: 2026-09-25
 
 ## Protocol
 
-- Before implementation: [LeePepe/shared-ci@761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md](https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md).
+- Before implementation: [LeePepe/shared-ci@c389366a5c957c2442f5b7d5db40760acf3be43c/ai/agent-protocol.md](https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/agent-protocol.md).
 - Planning or changing specs: [Plan-Review Loop](docs/plans/README.md).
 - Changing tests or preparing review: [repository review policy](docs/repository-policy.md).
 

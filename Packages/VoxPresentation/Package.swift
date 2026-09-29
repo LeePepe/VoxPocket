@@ -27,7 +27,9 @@ let package = Package(
         .package(path: "../VoxDomain"),
         .package(path: "../VoxInfrastructure"),
         .package(path: "../VoxApplication"),
-        .package(path: "../../../LokiKit"),
+        // LokiKit from shared-telemetry v0.1.0, pinned by full commit SHA (immutable; tag v0.1.0 also cross-checked by scripts/ci/fetch-external-deps.sh).
+        // Dependency-source swap only, no API/behaviour change; all Packages/* must switch together because SwiftPM rejects a path and a remote LokiKit in one graph.
+        .package(url: "https://github.com/LeePepe/shared-telemetry.git", revision: "5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"),
     ],
     targets: [
         .target(
@@ -39,7 +41,7 @@ let package = Package(
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "Preferences", package: "VoxInfrastructure"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
         ),
@@ -52,7 +54,7 @@ let package = Package(
                 .product(name: "Preferences", package: "VoxInfrastructure"),
                 .product(name: "LLMKit", package: "VoxInfrastructure"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
         ),
@@ -71,7 +73,7 @@ let package = Package(
                 .product(name: "UseCases", package: "VoxApplication"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
         .testTarget(

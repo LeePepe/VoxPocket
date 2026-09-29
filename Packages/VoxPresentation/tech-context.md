@@ -3,7 +3,7 @@ layer: VoxPresentation
 role: SwiftUI 视图与 ViewModel —— 展示层,驱动录音/编辑/精炼的用户界面
 owns: [Packages/VoxPresentation/**]
 depends_on: [VoxDomain, VoxInfrastructure, VoxApplication]
-gate: {build: "swift build --package-path Packages/VoxPresentation", test: "swift test --package-path Packages/VoxPresentation"}
+gate: {build: "swift build --package-path Packages/VoxPresentation --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxPresentation --explicit-target-dependency-import-check error"}
 red_lines:
   - 可依赖下层三包(+ 外部 LokiKit);除 App 组装壳外不得被任何 layer 依赖(宪法 II)
   - 所有 ViewModel 与 UI 代码 @MainActor;禁止主线程阻塞调用(宪法 III)
@@ -13,7 +13,7 @@ roles:
   Types:   [ViewStates, Models, DesignSystem]
   Runtime: [ViewModels, Snackbar]
   UI:      [Views, Components]
-test: swift test --package-path Packages/VoxPresentation
+test: swift test --package-path Packages/VoxPresentation --explicit-target-dependency-import-check error
 targets: [UIShared, PlatformUI, WidgetUI]
 ---
 
