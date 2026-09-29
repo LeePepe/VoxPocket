@@ -47,13 +47,9 @@ Every implementation plan, spec or plan change still follows independent AI Plan
 
 This is not an exemption from the AI loop. Policy, gate, schema, ruleset, permission,
 credentials, privacy, data migration and other protected changes still need Owner review;
-ordinary test permission does not authorize changing those controls. Classify by actual
-responsibility: regression suites in `scripts/gates/tests/` and `scripts/ci/tests/` exercise
-implementations and are ordinary test code, even when the subject is policy. Directly
-invoked gate/CI/reviewer implementations remain protected by the
-[CODEOWNERS map](../.github/CODEOWNERS). For example, `scripts/ci/kimi-review.contract.test.sh`
-itself enforces required-check policy when invoked by verification; its test-like filename
-does not make it an ordinary regression suite.
+ordinary test permission does not authorize changing those controls. Directly invoked
+gate/CI/reviewer implementations and executed test files under `/scripts/gates/` and
+`/scripts/ci/` remain protected by the [CODEOWNERS map](../.github/CODEOWNERS).
 Workflows, hooks, `scripts/verify`, architecture contexts, AGENTS, the constitution
 and dependency pins are important changes; add `owner-review`.
 The ruleset enforces Owner approval (code-owner review required); AI review does not block

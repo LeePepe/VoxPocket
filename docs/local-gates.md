@@ -1,6 +1,6 @@
 # Local deterministic gates
 
-Last-Reviewed: 2026-09-25
+Last-Reviewed: 2026-09-27
 
 ## Bootstrap and commands
 
@@ -17,8 +17,8 @@ scripts/verify --layer VoxDomain  # one layer
 
 Layer-running modes bootstrap missing sibling packages with
 [`fetch-external-deps.sh`](../scripts/ci/fetch-external-deps.sh). Existing local checkouts
-are preserved; CI requires the pinned SHAs. See the
-[external dependency map](architecture/tech-context.md#external-dependencies).
+are preserved; CI requires the pinned SHAs. See
+[dependencies and pins](../AGENTS.md#dependencies).
 After the first verification run, resolve the reading route for a changed path with
 `python3 .shared-ci/scripts/context/_context.py contexts <path>`.
 
