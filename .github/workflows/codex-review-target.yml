@@ -24,7 +24,7 @@ jobs:
     # shared-ci pin (same SHA as the AGENTS.md protocol pointer): c389366 is the Owner-approved
     # shared-ci v0.3.0 (tagged at c389366);
     # the pin change merges only with Owner code-owner review (see AGENTS.md Delivery).
-    uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@c389366a5c957c2442f5b7d5db40760acf3be43c
+    uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@6e354f476bc53d68f0f09fc231d5cd938466af9c
     with:
       codex-launcher: python3 scripts/ci/review-raven.py
       codex-bin: /opt/homebrew/bin/codex
