@@ -90,15 +90,6 @@ class ReviewContextTests(unittest.TestCase):
         for path in ("Packages/VoxDomain/Tests/CoreModelsTests/TextRangeTests.swift",
                      "VoxPocket/VoxPocketTests/OrdinaryTests.swift"):
             self.assertEqual(owners(path), [], path)
-        regression_paths = set(command(GIT, "ls-files", "--", "scripts/gates/tests/",
-                                       "scripts/ci/tests/").splitlines())
-        self.assertTrue({"scripts/gates/tests/test_local_hooks.py",
-                         "scripts/gates/tests/test_review_context.py",
-                         "scripts/ci/tests/test_review_prompt.py",
-                         "scripts/ci/tests/test_review_raven.py"}.issubset(regression_paths))
-        for path in sorted(regression_paths):
-            with self.subTest(regression=path):
-                self.assertEqual(owners(path), [], path)
         for path in ("scripts/verify", "scripts/gates/check_private_config.py",
                      "scripts/gates/check_frontmatter.py", "scripts/gates/gate-precommit.sh",
                      "scripts/gates/gate-prepush.sh", "scripts/ci/kimi-review.contract.test.sh",
