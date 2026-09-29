@@ -115,7 +115,11 @@ class ReviewContextTests(unittest.TestCase):
                        "Every implementation plan, spec or plan change still follows independent AI Plan-Review",
                        "The reviewer re-reviews without waiting to be asked",
                        "Policy, gate, schema, ruleset, permission",
-                       "other protected changes still need Owner review"):
+                       "other protected changes still need Owner review",
+                       "The ruleset enforces Owner approval",
+                       "AI review does not block\nsolely for missing approval evidence",
+                       "Prefer small PRs focused on one goal",
+                       "unless stacked on an unmerged dependency branch"):
             self.assertIn(phrase, self.policy)
         self.assertNotIn("Only then present the plan to the Owner", (ROOT / "docs/plans/README.md").read_text())
         self.assertIn("repository-policy.md#review-and-execution-boundaries", (ROOT / "docs/plans/README.md").read_text())

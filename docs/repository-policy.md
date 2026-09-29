@@ -10,11 +10,16 @@ into the review boundary. Architecture ownership remains in the layer contexts.
 
 ## Scope and integrity
 
-- One task uses one dedicated branch/worktree and one PR based on the default branch,
-  with one writer. Preserve unrelated work and existing local artifacts.
+- One task uses one dedicated branch/worktree and one PR based on the default branch
+  (unless stacked on an unmerged dependency branch per the protocol), with one writer.
+  When the dependency merges, retarget/rebase only after the base is updated.
+  Preserve unrelated work and existing local artifacts.
 - Read the constitution, root architecture context and touched layer contexts before edits.
-  Split changes spanning two or more layers. Fix failures within the failing layer and its
-  red lines; a root cause in another layer is a new task. Dependencies point down only.
+  Prefer small PRs focused on one goal, built from several focused commits. This is guidance,
+  not a gate. Layers are review signals, not the scope unit; order multi-layer changes
+  interface-first (downward) and keep them independently verifiable. Fix failures within the
+  failing layer and its red lines; a root cause in another layer is a new task.
+  Dependencies point down only.
 - Existing product behaviour and UX stay unchanged without an approved spec.
   `VoxPocket/project.yml` is the Xcode project source of truth.
 - Run `scripts/verify` before push. Do not bypass hooks, skip or weaken tests/assertions to
@@ -50,7 +55,10 @@ invoked gate/CI/reviewer implementations remain protected by the
 itself enforces required-check policy when invoked by verification; its test-like filename
 does not make it an ordinary regression suite.
 Workflows, hooks, `scripts/verify`, architecture contexts, AGENTS, the constitution
-and dependency pins are important changes; add `owner-review`. Other approved exceptions: none.
+and dependency pins are important changes; add `owner-review`.
+The ruleset enforces Owner approval (code-owner review required); AI review does not block
+solely for missing approval evidence. It still reviews their content (e.g. pins stay full SHAs
+and consistent with the protocol pointer). Other approved exceptions: none.
 
 ## Privacy and configuration
 

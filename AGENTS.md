@@ -27,7 +27,10 @@ Last-Reviewed: 2026-09-27
 
 ## Dependencies
 
-- Changing dependencies: [external packages and authoritative pins](docs/architecture/tech-context.md#external-dependencies).
+These are the current pins; they change only through Owner-reviewed PRs.
+- `shared-ci` `c389366a5c957c2442f5b7d5db40760acf3be43c` — https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/
+- LokiKit from LeePepe/shared-telemetry `0.1.0` (tag v0.1.0 = `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`), SwiftPM full-SHA `revision` pin in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag→SHA guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.1.0/ai/
+- AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
 ## Delivery
 
