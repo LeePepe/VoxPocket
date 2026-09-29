@@ -28,7 +28,7 @@ python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' || {
     exit 1
 }
 
-# External local packages (../LokiKit, ../AppleUITesting) at their pinned SHAs. The script
+# External local package (../AppleUITesting) at its pinned SHA. The script
 # only fills missing directories, so a fresh clone or worktree needs no manual step.
 fetch_deps() {
     [ -x scripts/ci/fetch-external-deps.sh ] || return 0

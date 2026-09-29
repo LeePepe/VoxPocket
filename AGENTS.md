@@ -58,9 +58,10 @@ scripts/verify --all      # every layer gate + policy (what CI runs)
 scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one layer
 ```
 
-- External packages live next to the repository: `../LokiKit` (LeePepe/shared-telemetry) and
-  `../AppleUITesting`. `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks
-  out the pinned SHAs when missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
+- LokiKit is a SwiftPM remote dependency on https://github.com/LeePepe/shared-telemetry,
+  pinned to commit `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f` (v0.1.0). Only `../AppleUITesting` lives next to the repository.
+  `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks out AppleUITesting
+  at its pinned SHA when missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
 - `pre-commit` keeps the fast staged-layer build/test plus docs map/freshness checks.
 - Local verification is SPM build/test plus deterministic scripts. The app-target
   `xcodebuild` runs in CI only (`RUN_HEAVY=1 scripts/verify` opts in locally).
@@ -120,9 +121,8 @@ Approved exceptions: none.
 
 These are the current pins; they change only through Owner-reviewed PRs.
 - `shared-ci` `c389366a5c957c2442f5b7d5db40760acf3be43c` — https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/
-- LokiKit from LeePepe/shared-telemetry at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` (no tag
-  or `ai/` bundle yet; pinned in `scripts/ci/fetch-external-deps.sh`).
-- AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (same script).
+- LokiKit from LeePepe/shared-telemetry `0.1.0` (tag v0.1.0 = `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`), SwiftPM full-SHA `revision` pin in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag→SHA guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.1.0/ai/
+- AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
 ## Delivery
 

@@ -40,9 +40,8 @@ VoxUITesting(standalone,不参与运行时依赖链)
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
 | VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, AppleUITesting(ext), LokiKit(ext) |
 
-> **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,本地放在仓库同级 `../LokiKit`
-> (`Packages/*` 以 `../../../LokiKit` 引用);CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA
-> 取出。不受本仓库门禁约束。各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer;
+> **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `revision: "5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"`(v0.1.0)
+> 解析,不再使用仓库同级目录。不受本仓库门禁约束。各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer;
 > 外部依赖在正文与上表 `(ext)` 标注,不进 `depends_on`。
 
 > **App 壳是 `VoxPocketApp` layer**:`VoxPocket/**`(`ServiceContainer`、`AppDelegate`、`project.yml`
