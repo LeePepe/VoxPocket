@@ -136,3 +136,5 @@ Repository-owned hooks run deterministic checks on commits and pushes. AI review
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- gate-probe P4: no-op comment -->
