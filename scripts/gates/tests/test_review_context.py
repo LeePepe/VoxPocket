@@ -170,15 +170,19 @@ out = pathlib.Path(os.environ["CAPTURE_DIR"])
 with (out / "calls.jsonl").open("a") as log:
     log.write(json.dumps([name, *args]) + "\n")
 if name == "git":
-    if args[0] == "fetch":
-        assert args == ["fetch", "--no-tags", "--depth=200", "origin", os.environ["BASE_SHA"], os.environ["HEAD_SHA"]]
+    clean_args = args[1:] if args and args[0] == "--literal-pathspecs" else args
+    if clean_args[0] == "fetch":
+        assert clean_args == ["fetch", "--no-tags", "--depth=200", "origin", os.environ["BASE_SHA"], os.environ["HEAD_SHA"]]
         sys.exit(0)
-    assert args[0] in {"cat-file", "diff", "rev-parse", "ls-files", "check-ignore"}, args
+    assert clean_args[0] in {"cat-file", "diff", "rev-parse", "ls-files", "check-ignore", "ls-tree"}, clean_args
     os.execv(os.environ["REAL_GIT"], [os.environ["REAL_GIT"], *args])
 elif name == "gh":
     assert args[0] == "api", args
-    assert args[1].startswith("repos/example-owner/example-repo/") or args[1:3] == ["-X", "POST"], args
-    print("null")
+    assert any(arg.startswith("repos/example-owner/example-repo/") for arg in args) or args[1:3] == ["-X", "POST"], args
+    if any(".user.id" in arg for arg in args):
+        pass
+    else:
+        print("null")
 elif name == "offline-router":
     os.execv(args[0], [args[0], "exec", *args[1:]])
 elif name in {"codex", "kimi"}:
@@ -212,7 +216,7 @@ else:
             result = command("bash", str(SHARED / f"scripts/review/{tool}-review.sh"), cwd=repo, env=env)
             prompt = (fixture / f"{tool}-prompt.txt").read_text()
             rules = prompt.split("## Trusted repository rules\n\n", 1)[1].split("\n\n## Trusted architecture facts", 1)[0]
-            self.assertEqual(rules, self.policy.rstrip("\n"))
+            self.assertEqual(rules.rstrip("\n"), self.policy.rstrip("\n"))
             self.assertNotIn("HEAD_POLICY_CANARY", rules)
             self.assertNotIn("INDEX_ONLY_FALLBACK_CANARY", rules)
             diff = prompt.split("======== UNTRUSTED DATA BELOW", 1)[1]
