@@ -28,7 +28,10 @@ env:
 
 jobs:
   quality:
-    uses: LeePepe/shared-ci/.github/workflows/quality.yml@761fe6b0b3ca5e2c57d244182d495ab8041851fa
+    # shared-ci pin (same SHA as the AGENTS.md protocol pointer): c389366 is the Owner-approved
+    # shared-ci v0.3.0 (tagged at c389366);
+    # the pin change merges only with Owner code-owner review (see AGENTS.md Delivery).
+    uses: LeePepe/shared-ci/.github/workflows/quality.yml@c389366a5c957c2442f5b7d5db40760acf3be43c
     with:
       runs-on: macos-26
       setup-command: scripts/ci/fetch-external-deps.sh && brew install gitleaks
