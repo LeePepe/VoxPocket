@@ -3,7 +3,7 @@ layer: VoxInfrastructure
 role: 转写 · LLM · 持久化 · 平台适配 · 偏好 —— 对接外部系统与框架的适配层
 owns: [Packages/VoxInfrastructure/**]
 depends_on: [VoxDomain]
-gate: {build: "swift build --package-path Packages/VoxInfrastructure", test: "swift test --package-path Packages/VoxInfrastructure"}
+gate: {build: "swift build --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error"}
 red_lines:
   - 只能依赖 VoxDomain(+ 外部 LokiKit);禁止 import VoxApplication/VoxPresentation(宪法 II)
   - API key/secret 来自环境变量;Azure 可读取受保护的沙箱私密配置,不进源码/日志/安装包,启动校验(宪法 V)
@@ -15,7 +15,7 @@ roles:
   Config:  [Preferences]
   Repo:    [Persistence, PlatformAdapters, Providers]
   Service: [Services, Utilities, LLMKit, TranscriptionKit]
-test: swift test --package-path Packages/VoxInfrastructure
+test: swift test --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error
 targets: [TranscriptionKit, LLMKit, Persistence, PlatformAdapters, Preferences]
 ---
 
