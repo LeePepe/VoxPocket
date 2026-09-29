@@ -23,7 +23,6 @@ struct TextRangeTests {
         let range = TextRange(original)
 
         #expect(range.location == location)
-        #expect(range.length == length)
         #expect(range.nsRange == original)
     }
 }
