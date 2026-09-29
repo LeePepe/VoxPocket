@@ -74,5 +74,5 @@ import `Repo`/`Service`/`UI` 角色的类;反过来允许。
 
 ## Agent 工作方式
 
-改哪层先读哪层的 `tech-context.md`(渐进展开)。改动跨 2+ layer = 太大 = 按 layer 拆。
+改哪层先读哪层的 `tech-context.md`(渐进展开)。优先小 PR:每个 PR 专注一个目标,由多个聚焦的 commit 组成(指导,不是 gate)。
 读取契约与 layer 索引见根目录 [`AGENTS.md`](../../AGENTS.md)。

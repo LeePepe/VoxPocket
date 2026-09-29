@@ -28,8 +28,9 @@ VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, del
 VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 
-A change that spans 2+ layers is too big: split it by layer. Fix a failure inside the
-failing layer while honouring that layer's `red_lines`; a root cause elsewhere is a new task.
+Prefer small PRs focused on one goal, built from several focused commits. This is guidance,
+not a gate. Fix a failure inside the failing layer while honouring that layer's `red_lines`;
+a root cause elsewhere is a new task.
 
 ## Protocol
 
@@ -117,6 +118,7 @@ Approved exceptions: none.
 
 ## Dependencies
 
+These are the current pins; they change only through Owner-reviewed PRs.
 - `shared-ci` `c389366a5c957c2442f5b7d5db40760acf3be43c` — https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/
 - LokiKit from LeePepe/shared-telemetry at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` (no tag
   or `ai/` bundle yet; pinned in `scripts/ci/fetch-external-deps.sh`).
