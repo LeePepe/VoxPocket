@@ -7,7 +7,7 @@
 - `main`：稳定分支，只保留 stable 版本
 - `dev`：日常开发和集成分支
 - `feature/*`：从 `dev` 拉出，完成后合回 `dev`
-- `hotfix/*`：从 `main` 拉出，修复后合回 `main`，再回合到 `dev`
+- `hotfix/*`：从 `main` 拉出，修复后合回 `main`，再合并到 `dev`
 
 推荐节奏：
 
