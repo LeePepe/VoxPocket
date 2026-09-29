@@ -34,8 +34,8 @@ a root cause elsewhere is a new task.
 
 ## Protocol
 
-Follow `LeePepe/shared-ci@c389366a5c957c2442f5b7d5db40760acf3be43c/ai/agent-protocol.md`
-(https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/agent-protocol.md).
+Follow `LeePepe/shared-ci@6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
 Plan-Review Loop (mandatory for any implementation plan, spec or plan change; a test-only
@@ -120,7 +120,7 @@ Approved exceptions: none.
 ## Dependencies
 
 These are the current pins; they change only through Owner-reviewed PRs.
-- `shared-ci` `c389366a5c957c2442f5b7d5db40760acf3be43c` — https://github.com/LeePepe/shared-ci/blob/c389366a5c957c2442f5b7d5db40760acf3be43c/ai/
+- `shared-ci` `6e354f476bc53d68f0f09fc231d5cd938466af9c` — https://github.com/LeePepe/shared-ci/blob/6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/
 - LokiKit from LeePepe/shared-telemetry `0.1.0` (tag v0.1.0 = `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`), SwiftPM full-SHA `revision` pin in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag→SHA guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.1.0/ai/
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
