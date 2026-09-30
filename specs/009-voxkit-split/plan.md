@@ -392,9 +392,9 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
      --replace-message ../export-rules/replace-message.txt
    ```
    - **规则文件（Owner Q2）**：放在临时目录 `export-rules/`（与 clone 平级），**不提交**；只含通用正则，不写任何具体主机名或个人邮箱：
-     - `mailmap.txt`：导出历史中出现的**每个**作者/提交者身份（由 `git log --format='%an <%ae>%n%cn <%ce>' | sort -u` 生成，只在本机临时文件中）映射为 `LeePepe <13819054+LeePepe@users.noreply.github.com>`；个人邮箱从导出历史中删除。
+     - `mailmap.txt`：导出历史中出现的**每个**作者/提交者身份（由 `git log --format='%an <%ae>%n%cn <%ce>' | sort -u` 生成，只在本机临时文件中）映射为本机已获 Owner 批准的导出身份（遵循本地导出身份/no-reply 策略；未配置时停止并交 Owner，不自行选择身份）；个人邮箱从导出历史中删除。
      - `replace-text.txt`（blob 内容）：`regex:[a-z0-9-]+\.services\.ai\.azure\.com==>example.services.ai.azure.com`、`regex:[a-z0-9-]+\.openai\.azure\.com==>example.openai.azure.com`、`regex:[a-z0-9-]+\.cognitiveservices\.azure\.com==>example.cognitiveservices.azure.com`（`example` 主机保持不变）、`regex:\bMY-[0-9]+\b==>internal-issue`、GUID 形式的租户/订阅 ID → 全零 GUID。
-     - `replace-message.txt`（提交信息）：`(#NN)` → `(LeePepe/VoxPocket#NN)`；`\bMY-[0-9]+\b` → `internal-issue`；trailer（`Co-Authored-By`/`Signed-off-by`）中除 `users.noreply.github.com` 与 `noreply@anthropic.com` 外的邮箱 → `13819054+LeePepe@users.noreply.github.com`。
+     - `replace-message.txt`（提交信息）：`(#NN)` → `(LeePepe/VoxPocket#NN)`；`\bMY-[0-9]+\b` → `internal-issue`；trailer（`Co-Authored-By`/`Signed-off-by`）中除 `users.noreply.github.com` 与 `noreply@anthropic.com` 外的邮箱 → 本机已获 Owner 批准的导出 no-reply 邮箱（与 `mailmap.txt` 的目标身份相同，遵循同一本地策略）。
    - `Tests/GoldenTraceTests/` 的旧路径 rename：阶段 1 的 golden (a)(c) 在 `Packages/VoxInfrastructure/Tests/GoldenTraceTests/`，阶段 2 迁到 `Packages/VoxKit/Tests/GoldenTraceTests/`；加入 `--path` 才能保留其阶段 1 历史。前提是阶段 2 结束时旧目录为空（2.2），否则树一致性检查失败。
    - 旧路径 rename 只让迁移前历史落在合理位置；`TranscriptionKitCombine`（1.6 起的独立 target，2.4 迁到 `VoxKitBridge`）不在导出范围内，其 1.6 之前在 kit 路径下的历史会被带出，属预期。
    - 树一致性：`git fetch <VoxPocket-url> main:orig-main` 后 `git diff --stat HEAD^{tree} orig-main:Packages/VoxKit -- . ':!LICENSE'` 必须为空（`--replace-text` 在 `main` 上不应改动任何文件，因为 PR-0c/RB-6 已使当前树零命中；若不为空，说明树上仍有非公开信息，停下交 Owner）。
@@ -486,7 +486,7 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 - R4-M5 golden (b) iOS 行没有在未改代码上的基线 → 新增 1.0c（App 壳 `GoldenRoutingTests` + 提前加入 `App unit tests (iOS)` lane），闸门覆盖 (b) iOS 行与 (c)，T102a。
 - R4-M6 隐私模式漏 `*.cognitiveservices.azure.com`，树上 `.claude/plan/` 有真实主机 → R5、`replace-text`、预检、PR-0c/T004（仓库级 `git grep`）均加入该形式。
 - LOW 已修：iOS 非法/删除偏好保持当前 provider；逐协议 conformance（`WhisperKitTranscriber` 无 `ModelLoadingStartControlling`）；定义 `MergerConfigurable`；`TranscriptionKitCombine`/`VoxKitBridge` library product；例外 E4（1.0b/1.0c/1.10/1.11 连带 harness/仓根）；`module-map.py` 位置；tag ruleset 含 `creation`；`iOS SDK` lane checkout LokiKit；`authorizationStatus()` 进授权接缝；Combine 形状 kit 测试改写列入 PR 说明；关键路径含 T003。
-- LOW 未采纳：noreply 地址仍写在 plan 中（Owner 在 Q2 中明确指定，且为公开 noreply 地址）。
+- LOW（历史注记）：原文曾保留公开 noreply 地址；按当前仓库身份规则，PR-0c 将具体身份移至本机已批准的导出策略，映射目标不变。
 
 第 4c 轮定点修订（verified by coordinator）：
 - R4-M2（测试 import）：`import VoxCore` 预置与 `module-map.py` 只覆盖 Sources，而 `SelectableTranscriptionTests.swift:93-104`、`LoadingFallbackTranscriptionCoordinatorTests.swift:50` 仅 `@testable import TranscriptionKit` 就使用 VoxCore 映射类型，2.1 的 VoxCore mv commit 会使本层 `swift test` 失败 → 预置与检查扩展到 VoxInfrastructure `Tests/`（§2.1、2.1、T110、T201）。
@@ -509,7 +509,7 @@ Q1–Q10 均已由 Owner 决定（来源：Owner 的仓库治理计划 §18，�
 | # | 问题 | 决定 | 落实位置 |
 |---|---|---|---|
 | Q1 | 各阶段 PR 由谁执行 | **已定**：阶段 1 起交 Dev Team；Multica 不可达期间由 subagent 执行 | 文首「执行方」；tasks T003 |
-| Q2 | 导出历史中的个人信息与非公开项目信息（**Owner 修改了选项**） | **已定**：(1) 个人信息（作者/提交者邮箱、trailer 中的个人邮箱等）从导出历史中**删除**：filter-repo 用 `--mailmap` 统一改为 `13819054+LeePepe@users.noreply.github.com`；(2) 非公开项目信息（Azure 主机名、内部 endpoint/配置、`MY-` 内部 issue 号）**不进 git**：导出历史用 `--replace-text`（blob）与 `--replace-message`（提交信息）替换；当前树由 PR-0c 与 RB-6 清理；(3) VoxPocket 与 VoxKit 都采用 `config.private.json` 模式：真实值放 gitignore 的本地文件，仓内只提交 `.example` 模板；VK-1 增加 gitignore + example 步骤 | §8 Additional Constraints；§9 步骤 1、2、4；§10 PR-0c；tasks T00x、T401、T404 |
+| Q2 | 导出历史中的个人信息与非公开项目信息（**Owner 修改了选项**） | **已定**：(1) 个人信息（作者/提交者邮箱、trailer 中的个人邮箱等）从导出历史中**删除**：filter-repo 用 `--mailmap` 统一映射到本机已获 Owner 批准的导出身份（遵循本地导出身份/no-reply 策略，映射目标不变；具体账号、actor 编号与邮箱不写入仓库）；(2) 非公开项目信息（Azure 主机名、内部 endpoint/配置、`MY-` 内部 issue 号）**不进 git**：导出历史用 `--replace-text`（blob）与 `--replace-message`（提交信息）替换；当前树由 PR-0c 与 RB-6 清理；(3) VoxPocket 与 VoxKit 都采用 `config.private.json` 模式：真实值放 gitignore 的本地文件，仓内只提交 `.example` 模板；VK-1 增加 gitignore + example 步骤 | §8 Additional Constraints；§9 步骤 1、2、4；§10 PR-0c；tasks T00x、T401、T404 |
 | Q3 | WhisperKit 隔离级别 | **已定**：独立 product（`VoxSpeechWhisperKit`），不拆第二个包；SPM 仍解析 WhisperKit，如实写入 `ai/COMPATIBILITY.md` | §2.1；§4.3；US2-AC5 |
 | Q4 | 意图/语气分析今天不影响精炼输出 | **已定**：保留 intent/tone，阶段 3 同层并行（RB-12 的排序放宽） | §3.4 比较规则；§5.4；RB-12 |
 | Q5 | 阶段 3 是否拆 PR | **已定**：一个 PR（SDK 组在前，App 组在后）。阶段 PR 跨多层是 Owner 批准的「一层一 PR」例外，commit 仍一层一个 | §1.1；§5 |

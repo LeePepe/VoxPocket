@@ -111,7 +111,7 @@ private static func makeAzureWhisperConfig() -> AzureWhisperConfig? {
     }
     let model = LLMAppConfig.defaultAzureFoundryTranscriberModel
     // AZURE_WHISPER_BASE_URL must be a bare origin with no path
-    // (e.g. "https://resource.cognitiveservices.azure.com")
+    // (e.g. "https://example-resource.cognitiveservices.azure.com")
     // Path is constructed below; any existing path in the base URL is intentionally discarded.
     let baseURLString = env["AZURE_WHISPER_BASE_URL"]
         ?? "https://example-resource.cognitiveservices.azure.com"
