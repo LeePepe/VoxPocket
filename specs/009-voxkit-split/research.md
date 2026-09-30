@@ -66,4 +66,4 @@ SE-0226（部分实现于 Swift 5.2）：不被任何所用 product 涉及的依
 
 ## R-4 拆仓工具
 
-本机已装 `git-filter-repo`。VoxKit 暂存包在阶段 2 通过 `git mv` 从 `Packages/VoxInfrastructure/...` 迁入 `Packages/VoxKit/...`；filter-repo 需同时保留新旧路径并做 `--path-rename`，历史才能跨越 `git mv` 追溯（见 plan §9）。
+本机已装 `git-filter-repo`。VoxKit 暂存包在阶段 2 通过 `git mv` 从 `Packages/VoxInfrastructure/...` 迁入 `Packages/VoxKit/...`；filter-repo 同时保留新旧路径并做 `--path-rename`，导出 main 可达的迁移前后历史（见 plan §9）。Owner 后续撤销 Q9，接受 squash 后历史：逐层 mv/edit commit 仍用于 PR 审查，但不承诺出现在 main 或导出仓；squash 可能令 `git log --follow` 无法跨改名。按 spec US6-AC1 用来源 SHA、路径映射、阶段 PR 的 squash SHA 与 filter-repo commit-map 保留可核验关联，最终树一致性与全导出历史隐私预检仍必需。
