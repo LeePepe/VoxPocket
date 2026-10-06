@@ -15,3 +15,4 @@ public enum VoxPocketTelemetryEventName: String, Sendable {
     case sessionCreated = "session.created"
     case sessionDeleted = "session.deleted"
 }
+

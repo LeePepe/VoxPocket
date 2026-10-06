@@ -1,4 +1,5 @@
 import LokiKit
+import TranscriptionKit
 import XCTest
 
 final class LegacyTelemetryEventNameCompatibilityTests: XCTestCase {

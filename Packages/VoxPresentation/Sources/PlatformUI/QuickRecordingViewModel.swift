@@ -7,6 +7,7 @@ import UseCases
 import PlatformAdapters
 import UIShared
 import LokiKit
+import TranscriptionKit
 
 /// 快速录音 ViewModel
 ///

@@ -3,6 +3,7 @@ import Combine
 import CoreModels
 import LokiKit
 import Persistence
+import TranscriptionKit
 
 /// 持久化会话用例
 ///

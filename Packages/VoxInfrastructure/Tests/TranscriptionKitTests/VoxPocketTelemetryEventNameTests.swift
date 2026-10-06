@@ -1,5 +1,5 @@
-import CoreModels
 import Testing
+import TranscriptionKit
 
 struct VoxPocketTelemetryEventNameTests {
     @Test
