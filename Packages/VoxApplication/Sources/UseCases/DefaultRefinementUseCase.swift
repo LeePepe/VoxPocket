@@ -52,12 +52,12 @@ extension DefaultRefinementUseCase: RefinementUseCase {
             let response = try await llmService.refine(request)
             try editingUseCase.replaceAll(with: response.refinedText)
             stateSubject.send(.completed)
-            telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+            telemetry.track(name: VoxPocketTelemetryEventName.refinementCompleted.rawValue, properties: [
                 "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
             ])
         } catch {
             stateSubject.send(.error(error.localizedDescription))
-            telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+            telemetry.track(name: VoxPocketTelemetryEventName.refinementFailed.rawValue, properties: [
                 "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
                 "error": error.localizedDescription
             ])
@@ -131,7 +131,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                     if !Task.isCancelled {
                         stateSubject.send(.completed)
                         continuation.yield(.state(.completed))
-                        telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+                        telemetry.track(name: VoxPocketTelemetryEventName.refinementCompleted.rawValue, properties: [
                             "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
                         ])
                     }
@@ -141,7 +141,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                     if !Task.isCancelled {
                         let errorState = RefinementState.error(error.localizedDescription)
                         stateSubject.send(errorState)
-                        telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+                        telemetry.track(name: VoxPocketTelemetryEventName.refinementFailed.rawValue, properties: [
                             "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
                             "error": error.localizedDescription
                         ])
@@ -182,7 +182,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                     if !Task.isCancelled {
                         stateSubject.send(.completed)
                         continuation.yield(.state(.completed))
-                        telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+                        telemetry.track(name: VoxPocketTelemetryEventName.refinementCompleted.rawValue, properties: [
                             "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
                         ])
                     }
@@ -191,7 +191,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                     if !Task.isCancelled {
                         let errorState = RefinementState.error(error.localizedDescription)
                         stateSubject.send(errorState)
-                        telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+                        telemetry.track(name: VoxPocketTelemetryEventName.refinementFailed.rawValue, properties: [
                             "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
                             "error": error.localizedDescription
                         ])
@@ -240,12 +240,12 @@ extension DefaultRefinementUseCase: RefinementUseCase {
 
             try editingUseCase.replaceAll(with: response.refinedText)
             stateSubject.send(.completed)
-            telemetry.track(name: TelemetryEventName.refinementCompleted.rawValue, properties: [
+            telemetry.track(name: VoxPocketTelemetryEventName.refinementCompleted.rawValue, properties: [
                 "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
             ])
         } catch {
             stateSubject.send(.error(error.localizedDescription))
-            telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
+            telemetry.track(name: VoxPocketTelemetryEventName.refinementFailed.rawValue, properties: [
                 "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
                 "error": error.localizedDescription
             ])

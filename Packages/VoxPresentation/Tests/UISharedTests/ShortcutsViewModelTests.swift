@@ -6,15 +6,16 @@ import Preferences
 
 @MainActor
 final class ShortcutsViewModelTests: XCTestCase {
-    func testLoadDefaultsQuickRecordToFn() async {
-        let defaults = UserDefaults(suiteName: "ShortcutsViewModelTests.defaultFn")!
-        defaults.removePersistentDomain(forName: "ShortcutsViewModelTests.defaultFn")
-        let store = UserDefaultsPreferencesStore(defaults: defaults)
-        let viewModel = ShortcutsViewModel(preferences: store)
+    func testLoadDefaultsQuickRecordToFn() async throws {
+        try await PreferenceFixture.withFreshSuite { fixture in
+            let defaults = try fixture.defaults()
+            let store = UserDefaultsPreferencesStore(defaults: defaults)
+            let viewModel = ShortcutsViewModel(preferences: store)
 
-        await viewModel.load()
+            await viewModel.load()
 
-        XCTAssertEqual(viewModel.quickRecordKey, .fn)
+            XCTAssertEqual(viewModel.quickRecordKey, .fn)
+        }
     }
 
     func testFunctionKeyInitSupportsFn() {

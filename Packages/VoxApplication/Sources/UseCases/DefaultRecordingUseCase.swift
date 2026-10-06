@@ -66,7 +66,7 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
             guard let self else { return }
             let duration = self.recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
             self.recordingStartTime = nil
-            self.telemetry.track(name: TelemetryEventName.recordingStopped.rawValue, properties: [
+            self.telemetry.track(name: VoxPocketTelemetryEventName.recordingStopped.rawValue, properties: [
                 "duration_s": String(format: "%.1f", duration)
             ])
         }
