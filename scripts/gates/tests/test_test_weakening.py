@@ -603,6 +603,25 @@ class TestWeakeningGuardTests(unittest.TestCase):
         self.assertEqual(named.returncode, 0, named.stderr)
         self.assertIn("declared", named.stdout)
 
+    def test_pr_body_crlf_file_name_with_reason_passes(self):
+        self.remove_assertions()
+        body = TEMPLATE.format(declaration=f"- `{TEST_FILE}`: validator removed").replace("\n", "\r\n")
+        result = self.run_guard(PR_BODY=body)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("declared", result.stdout)
+
+    def test_pr_body_crlf_bare_file_name_fails(self):
+        self.remove_assertions()
+        body = TEMPLATE.format(declaration=TEST_FILE).replace("\n", "\r\n")
+        result = self.assert_blocked(f"does not name each file with a reason: {TEST_FILE}", PR_BODY=body)
+        self.assertEqual(result.stderr.count("assertion removed or changed"), 2)
+
+    def test_pr_body_crlf_none_blocks_undeclared_loss(self):
+        self.remove_assertions()
+        body = TEMPLATE.format(declaration="none").replace("\n", "\r\n")
+        result = self.assert_blocked(f"does not name each file with a reason: {TEST_FILE}", PR_BODY=body)
+        self.assertEqual(result.stderr.count("assertion removed or changed"), 2)
+
     def test_pr_body_path_inside_longer_path_does_not_declare(self):
         short, longer = "tests/test_a.py", "sub/tests/test_a.py"
         for path in (short, longer):
