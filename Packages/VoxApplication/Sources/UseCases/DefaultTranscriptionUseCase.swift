@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreModels
 import os
 import TranscriptionKit
 import LokiKit
@@ -104,7 +105,7 @@ public final class DefaultTranscriptionUseCase: TranscriptionUseCase, @unchecked
                         }
                         self.snapshotSubject.send(newText)
                     }
-                    self.telemetry.track(name: TelemetryEventName.transcriptionCompleted.rawValue, properties: [
+                    self.telemetry.track(name: VoxPocketTelemetryEventName.transcriptionCompleted.rawValue, properties: [
                         "word_count": String(wordCount),
                         "source": "apple_speech"
                     ])

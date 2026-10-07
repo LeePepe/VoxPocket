@@ -3,6 +3,7 @@ import Combine
 import CoreModels
 import LokiKit
 import Persistence
+import TranscriptionKit
 
 /// 持久化会话用例
 ///
@@ -41,7 +42,7 @@ public final class DefaultSessionUseCase: SessionUseCase, @unchecked Sendable {
         )
         try await repository.save(session)
         currentSessionSubject.send(session)
-        telemetry.track(name: TelemetryEventName.sessionCreated.rawValue, properties: ["session_id": session.id.uuidString])
+        telemetry.track(name: VoxPocketTelemetryEventName.sessionCreated.rawValue, properties: ["session_id": session.id.uuidString])
         return session
     }
 
@@ -64,7 +65,7 @@ public final class DefaultSessionUseCase: SessionUseCase, @unchecked Sendable {
 
     public func deleteSession(_ id: UUID) async throws {
         try await repository.delete(by: id)
-        telemetry.track(name: TelemetryEventName.sessionDeleted.rawValue, properties: ["session_id": id.uuidString])
+        telemetry.track(name: VoxPocketTelemetryEventName.sessionDeleted.rawValue, properties: ["session_id": id.uuidString])
         if currentSession?.id == id {
             currentSessionSubject.send(nil)
         }

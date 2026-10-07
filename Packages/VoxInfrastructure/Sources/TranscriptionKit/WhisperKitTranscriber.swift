@@ -120,7 +120,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 self.logger.info("WhisperKit model preloaded and ready")
                 let loadMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 self.telemetry.track(
-                    name: TelemetryEventName.whisperModelLoaded.rawValue,
+                    name: VoxPocketTelemetryEventName.whisperModelLoaded.rawValue,
                     properties: [
                         "model": self.config.model,
                         "load_ms": String(loadMs)
@@ -130,7 +130,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 self._modelLoadingStateSubject.send(.failed(error.localizedDescription))
                 self.logger.error("WhisperKit model preload failed: \(error.localizedDescription)")
                 self.telemetry.track(
-                    name: TelemetryEventName.whisperModelLoadFailed.rawValue,
+                    name: VoxPocketTelemetryEventName.whisperModelLoadFailed.rawValue,
                     properties: [
                         "model": self.config.model,
                         "reason": String(describing: error)
@@ -173,7 +173,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
     private func trackTranscriptionFailure(_ error: Error, phase: String) {
         telemetry.track(
-            name: TelemetryEventName.transcriptionFailed.rawValue,
+            name: VoxPocketTelemetryEventName.transcriptionFailed.rawValue,
             properties: [
                 "provider": "whisperkit",
                 "model": config.model,
@@ -370,7 +370,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         if let startedAt {
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             telemetry.track(
-                name: TelemetryEventName.transcriptionCompleted.rawValue,
+                name: VoxPocketTelemetryEventName.transcriptionCompleted.rawValue,
                 properties: [
                     "provider": "whisperkit",
                     "model": config.model,
