@@ -2,21 +2,21 @@
 
 - Spec：[`spec.md`](./spec.md) · 任务：[`tasks.md`](./tasks.md) · 调研：[`research.md`](./research.md)
 - 模式：`repo-kit split`（切接缝 → 搬迁 → 补齐能力 → 拆 repo → 新 repo `init` → 原 repo `adopt`）
-- 前置：Owner 执行顺序中 VoxKit 步骤（S6）排在「VoxPocket 按 shared-ci 合同改造（S3）」与「零知识测试（S5）」之后；PR-1 等 S3 合并后开工（§12 Q8）。
+- 前置：Owner 执行顺序中 VoxKit 步骤（S6）排在「VoxPocket 按 shared-ci 合同改造（S3）」与「零知识测试（S5）」之后；PR-1 等 S3 合并且 S5 缺口完成后开工（§12 Q8、tasks T003）。
 - 执行方：阶段 1 起的阶段 PR 由 Dev Team 执行；Multica 不可达期间由 subagent 执行（§12 Q1）。
-- 状态：§12 Q1–Q10 已由 Owner 决定（2026-09-24）；本修订经一轮独立复核（§11 第 4 轮）后，以 Owner 审阅为最终放行（Q10）。
+- 状态：基础 spec/plan 已在 #56 合并；本次同步 Owner 后续撤销 Q9 的决定（2026-09-24，§12）：沿用 squash auto-merge、接受 squash 后历史，删除 PR-0b。阶段 1 尚未开工；同步文档不代表 S5 完成或阶段 PR 获准执行。
 
 ## 1. 总则
 
 1. **一阶段一 PR，一层一 commit**。commit 的「层」= 一个 SPM package（`VoxKit`、`VoxInfrastructure`、`VoxApplication`、`VoxPresentation`）、App 壳 `VoxPocket/VoxPocket/**`（含 `VoxPocketTests`、`project.yml`）、`docs/**`+`.specify/**`、`scripts/**`、`.github/**`。每个 commit 都能独立 build/test（pre-commit 按层增量验证，不用 `--no-verify`）。
    - **Owner 批准的例外（§12 Q5）**：AGENTS.md 要求跨 2+ layer 的任务按 layer 拆成独立子任务。阶段 PR 一个 PR 跨多层，这是 Owner 批准的例外；每个 commit 仍只改一层（E1/E2 除外），阶段 3 也只开一个 PR（SDK 组 commit 在 App 组之前）。
-   - **构建规则**：每个 commit 必须能 build/test **本层及其所依赖的层**；下游层可以在同一 PR 内、直到其消费方 commit 之前暂时编译失败（例外 E3），**PR head 必须全绿**。pre-commit 只验证暂存的层，因此 E3 由 PR 的 CI 兜底；合并用 merge commit，这些中间 commit 会进入 `main`，`git bisect` 时用 `--first-parent`。
+   - **构建规则**：每个 commit 必须能 build/test **本层及其所依赖的层**；下游层可以在同一 PR 内、直到其消费方 commit 之前暂时编译失败（例外 E3），**PR head 必须全绿**。pre-commit 只验证暂存的层，因此 E3 由 PR 的 CI 兜底；squash 后 `main` 只保留全绿的阶段结果，中间逐层 commit 用于 PR 审查，不承诺进入导出历史。
    - **已知例外**（每处在 PR 描述中列出）：(E3) 1.5–1.10（kit 初始化参数由 `Logger` 改为 `VoxLogger`、1.6 把 `merger` 改为 init 参数，App 在 1.10 跟上）、2.1–2.7（模块改名无法 shim）、3.8–3.10（Application 在 3.9 改接口，App 壳在 3.10 跟上）；(E1) 阶段 2 的搬迁 commit 同时改 `Packages/VoxKit` 与 `Packages/VoxInfrastructure/Package.swift`，否则无法构建；(E2) 阶段 4 adopt 时所有 manifest 在同一 commit 从 path 切到 url（SwiftPM 不允许同一 package identity 既是 path 又是 url）；(E4) 测试 harness 与被测层同 commit：1.0b、1.0c、1.10 连带改 `scripts/tests/`，1.11 连带提交仓根 `VoxKitSDK.xcworkspace`/test plan 与 `scripts/verify`（CI lane 与其调用入口必须同时出现，否则该 commit 的 CI 无法运行）。
-2. **历史保留的合并方式**：`auto-merge.yml` 会对非 draft PR 挂 squash auto-merge；squash 会抹掉「一层一 commit」与阶段 2 的「纯 mv commit」，导致 filter-repo 后丢失跨目录历史。因此：**PR-0b** 先给 `auto-merge.yml` 增加「带 `preserve-history` 标签的 PR 不挂 auto-merge」，并监听 `labeled` 事件：打标签时执行 `gh pr merge --disable-auto`；同时更新 AGENTS.md 与 CLAUDE.md「Git Workflow」中「所有 PR squash auto-merge」的表述；阶段 PR 均打 `preserve-history` 与 `owner-review`，Owner approve 后用 **merge commit**（`gh pr merge --merge`，ruleset 已允许 `merge`）合并。`git log --follow` 证据在合并后于 `main` 上采集。这是 policy 变更，Owner 已批准（§12 Q9）。
+2. **合并与历史**：Owner 后续撤销 Q9，接受拆仓使用 squash 后的历史。沿用仓库的 **squash auto-merge**；PR-0b 已取消，不增加 `preserve-history` 例外，不改自动合并 workflow。阶段 PR 打 `owner-review`，重要路径由 required checks 与 CODEOWNERS required review 把关，auto-merge 保持开启。逐层 commit、纯 mv/edit 分离仍用于开发与审查；导出以合并后的 `main` 为来源，保留该来源可达的新旧路径历史，不承诺恢复被 squash 的中间 commit 或保证 `git log --follow` 跨改名。历史验收按 spec US6-AC1 与 §4.2、§9 执行。
 3. **行为不变到阶段 3 结束**：阶段 1、2 只做结构调整；阶段 3 用 workflow 替换写死的流程，由 golden 证明等价。spec §6 的 RB 项是唯一例外，每项单独 commit，并在 PR 的「Removed or weakened tests or policy」段逐条列出。
 4. **Golden 先行**：阶段 1 最先的三个 commit 是「注入接缝（零行为变化）」「golden 基线（SPM）」「golden 基线（App iOS 行）」（1.0a–1.0c，§3.4）。
 5. **不跨层混改**；每层带着该层 `red_lines` 修。
-6. 阶段 PR 以 Draft 开，required 全绿 + Owner approve 后转 ready 并 merge commit 合并。
+6. 阶段 PR 可在实现未完成时以 Draft 开；完成后转 ready 并开启 squash auto-merge，由 required checks 与 Owner CODEOWNERS approval 阻止提前合并。Draft 表示未完成，不替代审批，也不通过关闭 auto-merge 等待审批。
 
 ## 2. 目标结构
 
@@ -167,7 +167,7 @@ public protocol MultiRecognizerSpeechSource: SpeechSessionSource {   // merger �
 | 1.0a | VoxInfrastructure | **注入接缝（零行为变化）**：见 §3.1a。`HybridWhisperTranscriber`/`HybridLocalWhisperTranscriber`/`AppleSpeechTranscriber`/`MicrophoneRecorder` 新增 internal init，接收 §3.1a 的录音源、识别器、批量转写、realtime 会话工厂与**授权提供者**；公开 init 转调并传入与今天完全相同的默认实现（`SFSpeechRecognizer.requestAuthorization`、macOS `AVCaptureDevice.requestAccess`/iOS `AVAudioSession.requestRecordPermission` 等调用只搬进默认实现，不改）。审查标准：公开 init 行为逐字不变，只加参数 |
 | 1.0b | VoxInfrastructure/Tests + `scripts/tests`（E4） | **Golden 基线**（§3.4），在 1.0a 的代码上录制；`Package.swift` 新增 test target `GoldenTraceTests`，因此由现有 `SPM VoxInfrastructure` job 在 CI 上运行 |
 | 1.0c | VoxInfrastructure（只读访问器，单独 commit）+ App 壳（`VoxPocketTests`）+ `.github`（E4） | golden (b) 的 iOS 行：新增 `VoxPocketTests/GoldenRoutingTests`（在 1.0a 代码上录制 iOS fixture 到 `scripts/tests/golden/`），**App 壳测试接缝（零行为变化）**：今天 `ServiceContainer` 是 private init 的单例（`ServiceContainer.swift:36`、`:97`），读真实进程 env 与 `UserDefaultsPreferencesStore.shared`（`ServiceContainer.swift:31`、`LLMAppConfig.swift:24`），`configureLLMService`/`applyProviderPreferenceIfExists`/`applyAnalysisSettingsPreference` 为 private（`:324`、`:234`、`:226`），逐步路由是 `DefaultLLMService` 的 private 状态（`DefaultLLMService.swift:17`、`:146`），测试无法驱动。因此 1.0c 先加：(i) VoxInfrastructure commit：`DefaultLLMService` 新增只读 internal 访问器 `resolvedAnalysisRouting: [AnalysisStep: LLMProviderType]`（与 `analyzeContent` 同一计算 `analysisProviderOverrides[step] ?? defaultProviderType`，抽为一个私有函数供二者共用，只读），测试经 `@testable import LLMKit` 读取；(ii) App 壳 commit：`ServiceContainer` 新增 `internal init(environment: [String: String], preferences: any PreferencesStore, llmServiceFactory: …)`，**仅测试使用**，env 快照传给 `LLMAppConfig` 的解析入口、偏好存储替换 `preferencesStore`、工厂替换 `DefaultLLMService` 的构造（测试注入假 provider 并持有实例以读 `resolvedAnalysisRouting`）；`private init()` 与 `static let shared` 保持，`private init()` 改为以 `ProcessInfo.processInfo.environment`、`UserDefaultsPreferencesStore.shared` 与今天的 `DefaultLLMService` 构造转调新 init。**不改变任何生产调用路径**：生产只经 `shared`，参数值与今天读取的来源逐一相同，三个 private 方法与通知观察保持 private 不变，`GoldenRoutingTests` 通过新 init + 写入测试偏好存储 + 发送 `llmProviderDidChange`/`llmAnalysisSettingsDidChange` 通知驱动它们；审查标准同 1.0a（生产 init 行为逐字不变，只加参数与只读访问器）。有了该接缝，§3.4 golden (b) iOS 行可在 iOS Simulator 上录制；并**提前**加入非 required 的 `App unit tests (iOS)` lane（与 1.11 同一命令与目的地；1.11 只再加其余 lane）。**闸门**：1.0a–1.0c 先推送到 Draft PR-1，CI 在 1.0c commit 上跑通 golden (c)（`SPM VoxInfrastructure`）与 golden (b) iOS 行（`App unit tests (iOS)`），两个 run 链接写入 PR 描述，之后才推送 1.1 起的任何 commit |
-| 1.1 | docs/.specify | **修宪 1.2.0**（§8）+ 新增 `Packages/VoxKit/tech-context.md` 的 red_lines 投影 + 根 tech-context/AGENTS layer 表/dependency-graph 加 VoxKit + `scripts/gates/check_frontmatter.py` 识别 VoxKit 层（Governance：规则与 red_lines 同一变更，先于代码）。「iOS 暂停」表述由 S3 删除（Q8：PR-1 等 S3），本 commit 只核对 |
+| 1.1 | docs/.specify | **修宪至执行基线的下一个 minor 版本**（§8；当前 1.2.0 → 1.3.0）+ 新增 `Packages/VoxKit/tech-context.md` 的 red_lines 投影 + 根 tech-context/AGENTS layer 表/dependency-graph 加 VoxKit + `scripts/gates/check_frontmatter.py` 识别 VoxKit 层（Governance：规则与 red_lines 同一变更，先于代码）。「iOS 暂停」表述由 S3 删除（Q8：PR-1 等 S3），本 commit 只核对 |
 | 1.2 | VoxKit | 新包：VoxCore（§2.4，`VoxKitError.errorDescription` 与 `VoxError` 对应 case 逐字相同）、`VoxCoreTests`、Swift 6 语言模式、iOS 26/macOS 26 |
 | 1.3 | VoxKit | `scripts/redlines/`：R1–R5 检查 + 每条规则的负例 fixture + 正例 fixture + `--self-test`（§6，含编译型 fixture 的诊断文本匹配） |
 | 1.4 | VoxKit | 隐私金丝雀测试工具（`CanaryLogger`/`CanaryTelemetry`，供两个 kit 与后续 VoxWorkflow 使用） |
@@ -180,7 +180,7 @@ public protocol MultiRecognizerSpeechSource: SpeechSessionSource {   // merger �
 | 1.11 | .github + 仓根 | CI 新增（非 required）：`SPM VoxKit`（macOS）；`iOS SDK`：`xcodebuild test -workspace VoxKitSDK.xcworkspace -scheme VoxKitSDK -testPlan VoxKitSDK -destination "$VOXKIT_IOS_DESTINATION"`，其中 `VoxKitSDK.xcworkspace`（仓根，只引用 `Packages/VoxKit` 与 `Packages/VoxInfrastructure`）、共享 scheme `VoxKitSDK` 与 `VoxKitSDK.xctestplan` 在本 commit 提交，test plan 只包含 `Packages/VoxKit` 与 VoxInfrastructure 的 TranscriptionKit/TranscriptionKitCombine/LLMKit/VoxKitBridge/GoldenTraceTests test targets，排除基准与 PlatformAdapters；`App unit tests`（`xcodebuild test -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket -only-testing:VoxPocketTests -destination 'platform=macOS'`，无签名，覆盖 `TranscriberSelectionTests` 等今天 CI 未跑的测试）；`App unit tests (iOS)`（已在 1.0c 加入，本 commit 不重复；Owner Q6：App 与 VoxKit 都要 iOS build/test；产出 golden (b) 的 iOS 行，§3.4）；`iOS SDK` 与 `SPM VoxKit` job 与现有 `spm` job 一样 checkout LokiKit（VoxInfrastructure 依赖 `../../../LokiKit`）；`SDK red lines`（`Lint & policy` 内步骤，含 `--self-test`）。**Simulator 目的地固定**：`VOXKIT_IOS_DESTINATION='platform=iOS Simulator,name=iPhone 17,OS=26.0'` 写在 workflow 顶层 `env` 与 `scripts/verify` 中，不用 `generic/`、`latest` 或 `OS` 缺省；1.11 实施时先在 `macos-26` runner 上用 `xcrun simctl list runtimes devices` 核实该组合存在，不存在则改为 runner 上存在的最低 iOS 26.x 与对应机型并同步两处 |
 | 1.12 | scripts/rulesets | `main-protection.json` 加入 `SPM VoxKit`、`iOS SDK`、`App unit tests`、`App unit tests (iOS)`。**只改文件**；PR-1 合并后由 Owner 批准执行 `scripts/rulesets/apply`（先合并再 apply，避免其他 PR 等待 main 上尚不存在的 check） |
 
-> PR-1 在 S3 合并后开工（Q8），因此 1.11 的 lane 以 S3 之后的 CI 形状接入（shared-ci caller 的 `quality.yml` build/test 输入），check 名按 S3 的映射；以当时 ruleset 为准，required 不减少。
+> PR-1 在 S3 合并且 S5 缺口完成后开工（Q8、T003），因此 1.11 的 lane 以届时已合并的 CI 形状接入（shared-ci caller 的 `quality.yml` build/test 输入），check 名按当时映射；以当时 ruleset 为准，required 不减少。
 
 ### 3.1a 注入接缝（1.0a）的协议
 
@@ -243,7 +243,7 @@ public protocol MultiRecognizerSpeechSource: SpeechSessionSource {   // merger �
 
 ### 3.5 PR 边界
 
-PR-1 = 1.0a–1.12（含 1.0c）。**不移动文件**。合并条件：required 全绿，Owner approve（修宪、RB-1…RB-7、RB-11、ruleset 文件）后 merge commit 合并；合并后 apply ruleset 并回读。
+PR-1 = 1.0a–1.12（含 1.0c）。**不移动文件**。合并条件：required 全绿，Owner approve（修宪、RB-1…RB-7、RB-11、ruleset 文件）后由 squash auto-merge 合并；合并后 apply ruleset 并回读。
 
 ## 4. 阶段 2：搬迁（PR-2）
 
@@ -266,7 +266,7 @@ PR-1 = 1.0a–1.12（含 1.0c）。**不移动文件**。合并条件：required
 ### 4.2 验收
 
 - US1-AC1…AC7（golden 全组相等）；US2-AC1（fixture 以 path 依赖在 macOS 与 iOS Simulator 构建）；US2-AC4（R4 全量）、US2-AC5。
-- 合并（merge commit）后在 `main` 上抽查 3 个跨模块迁移文件的 `git log --follow`，能看到阶段 1 之前的提交；结果贴在 PR 评论（US6-AC1 前置）。
+- squash 合并后在 `main` 上抽查 3 个跨模块迁移文件：在 PR 评论记录各自旧路径、新路径、阶段 1 之前的来源 commit 与 PR-2 的 squash commit；分别用旧路径的 `git log` 和新路径的 `git log --follow` 展示实际可达历史（US6-AC1 前置）。`--follow` 未跨过 squash 改名时如实记录，并以路径映射与阶段 PR 关联证明来源，不把丢失的中间 commit 写成已保留。
 
 ### 4.3 风险
 
@@ -274,7 +274,7 @@ PR-1 = 1.0a–1.12（含 1.0c）。**不移动文件**。合并条件：required
 |---|---|
 | 跨模块暴露 internal 类型 | 先 mv 后改 access；只把真正跨模块使用的设为 `package`/`public` |
 | WhisperKit 仅 product 隔离，仍被解析 | Owner 已定独立 product（§12 Q3）；按 research R-3 如实写入 `ai/COMPATIBILITY.md` |
-| 合并方式不是 merge commit 导致历史丢失 | PR-0b + `preserve-history` 标签；合并前 checklist |
+| squash 后 rename 检测可能无法跨目录追溯，逐层中间 commit 不进入 main | Owner 已接受（§12 Q9）；保留新旧路径、来源 commit 与阶段 PR 的关联；§9 仅导出 main 可达历史，验证树一致性与实际历史映射 |
 
 ### 4.4 PR 边界
 
@@ -362,17 +362,18 @@ PR-3 = 3.1–3.12；SDK 组全部 commit 在 App 组之前。
 | V 凭据 | 增补：只有 App 壳读取 env 与 `config.private.json`；VoxKit 不读取任何 env/文件/偏好，凭据经 `CredentialProvider` 注入 | 边界清晰 | R1；`LLMAppConfig` 为唯一读取点 |
 | Additional Constraints | 「LokiKit is external」旁增「VoxKit：阶段 1–3 为本仓暂存包 `Packages/VoxKit`，阶段 4 起为远程 exact 版本依赖」；增「非公开项目配置（Azure 主机名、内部 endpoint/配置、内部 issue 号）不进 git：用 gitignore 的本地文件，仓内只提交 `.example` 模板（`config.private.json`/`config.example.json` 模式）」（Owner Q2） | Owner Q2 | 阶段 4 再改一次；PR-0c |
 | Quality Gates | 增：SDK red lines（R1–R5）、VoxKit iOS Simulator 测试与 App iOS Simulator 单元测试属于 CI required | — | ruleset 经 Owner 批准 |
-| 版本 | 1.1.1 → 1.2.0（增补，非破坏） | — | — |
+| 版本 | 当前基线已为 1.2.0；本次 SDK 治理增补计划为 1.2.0 → 1.3.0。执行前读取当时 main 的宪法版本；若已变化，先复核 intervening amendments，再在 PR-1 中说明新的下一个 minor 版本，不覆盖已生效的修订 | 增补，非破坏；避免复用 S3 已发布的版本号 | 本计划修订不修改宪法；版本、Amendment 与 red_lines 在 PR-1 同步 |
 
 tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depends_on: []`，roles：Types=`VoxCore`、`VoxRefine`；Repo=`VoxSpeech`、`VoxSpeechWhisperKit`、`VoxLLM`；Runtime=`VoxWorkflow`；red_lines = R1–R5 + III；test = `swift test --package-path Packages/VoxKit`）；VoxInfrastructure frontmatter 更新（阶段 1 `depends_on: [VoxDomain, VoxKit]`，阶段 2 `owns` 去掉两个 kit、加 VoxKitBridge）；Application/Presentation 的 `depends_on` 按实际 import 更新；`check_frontmatter.py` 识别 VoxKit 为本地 layer（阶段 1–3），阶段 4 改为与 LokiKit 相同的外部处理。
 
 ## 9. 拆 repo（阶段 4：VK-1 + PR-4）
 
-前置：PR-1、PR-2、PR-3 均以 merge commit 合并到 `main`；`iOS SDK` 已 required。
+前置：PR-1、PR-2、PR-3 均由 squash auto-merge 合并到 `main`；`iOS SDK` 已 required。固定此时的 `main` 完整 SHA 作为导出来源，并在 VK-1 PR 记录阶段 PR 与其 squash SHA；VoxPocket 自身历史不改写。
 
 1. **导出**（在临时目录的新 clone，不在任何工作 checkout 上）：
    ```sh
-   git clone --no-local --no-tags <VoxPocket-url> voxkit-export && cd voxkit-export
+   git clone --single-branch --branch main --no-local --no-tags <VoxPocket-url> voxkit-export
+   cd voxkit-export
    git filter-repo \
      --path Packages/VoxKit/ \
      --path Packages/VoxInfrastructure/Sources/TranscriptionKit/ \
@@ -395,9 +396,10 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
      - `mailmap.txt`：导出历史中出现的**每个**作者/提交者身份（由 `git log --format='%an <%ae>%n%cn <%ce>' | sort -u` 生成，只在本机临时文件中）映射为 `LeePepe <13819054+LeePepe@users.noreply.github.com>`；个人邮箱从导出历史中删除。
      - `replace-text.txt`（blob 内容）：`regex:[a-z0-9-]+\.services\.ai\.azure\.com==>example.services.ai.azure.com`、`regex:[a-z0-9-]+\.openai\.azure\.com==>example.openai.azure.com`、`regex:[a-z0-9-]+\.cognitiveservices\.azure\.com==>example.cognitiveservices.azure.com`（`example` 主机保持不变）、`regex:\bMY-[0-9]+\b==>internal-issue`、GUID 形式的租户/订阅 ID → 全零 GUID。
      - `replace-message.txt`（提交信息）：`(#NN)` → `(LeePepe/VoxPocket#NN)`；`\bMY-[0-9]+\b` → `internal-issue`；trailer（`Co-Authored-By`/`Signed-off-by`）中除 `users.noreply.github.com` 与 `noreply@anthropic.com` 外的邮箱 → `13819054+LeePepe@users.noreply.github.com`。
-   - `Tests/GoldenTraceTests/` 的旧路径 rename：阶段 1 的 golden (a)(c) 在 `Packages/VoxInfrastructure/Tests/GoldenTraceTests/`，阶段 2 迁到 `Packages/VoxKit/Tests/GoldenTraceTests/`；加入 `--path` 才能保留其阶段 1 历史。前提是阶段 2 结束时旧目录为空（2.2），否则树一致性检查失败。
+   - 过滤前验证 clone 的 `HEAD` 等于固定的来源 SHA，过滤与推送范围只含 `main`；不取回未合并的 PR 分支来恢复被 squash 的 commit。保留 filter-repo `commit-map`，在 VK-1 PR 给出阶段 squash SHA 与抽查来源 commit 对应的导出 SHA（被过滤为空的条目明确说明）；不把本地工具产物提交到源码。
+   - `Tests/GoldenTraceTests/` 的旧路径 rename：阶段 1 的 golden (a)(c) 在 `Packages/VoxInfrastructure/Tests/GoldenTraceTests/`，阶段 2 迁到 `Packages/VoxKit/Tests/GoldenTraceTests/`；加入 `--path` 才能保留 main 可达的阶段 1 squash 历史，不恢复其 PR 内的中间 commit。前提是阶段 2 结束时旧目录为空（2.2），否则树一致性检查失败。
    - 旧路径 rename 只让迁移前历史落在合理位置；`TranscriptionKitCombine`（1.6 起的独立 target，2.4 迁到 `VoxKitBridge`）不在导出范围内，其 1.6 之前在 kit 路径下的历史会被带出，属预期。
-   - 树一致性：`git fetch <VoxPocket-url> main:orig-main` 后 `git diff --stat HEAD^{tree} orig-main:Packages/VoxKit -- . ':!LICENSE'` 必须为空（`--replace-text` 在 `main` 上不应改动任何文件，因为 PR-0c/RB-6 已使当前树零命中；若不为空，说明树上仍有非公开信息，停下交 Owner）。
+   - 树一致性：在来源 clone 中读取 `git ls-tree -r <来源SHA>:Packages/VoxKit`，与导出 clone 的 `git ls-tree -r HEAD` 逐项比较路径、mode、blob SHA（仅排除根 `LICENSE`；`LICENSE` 单独与来源仓 MIT 文件比对），必须完全相等。使用两个 clone 的只读输出，不把未经隐私清理的来源 refs fetch 回导出 clone。`--replace-text` 在来源树上不应改动任何文件，因为 PR-0c/RB-6 已使当前树零命中；若不等，停止导出并核对映射或残留非公开信息，交 Owner。
    - `--no-tags` 且推送前 `git tag -l` 为空（不带 `testflight/*` 等 tag）。
 2. **隐私预检**（发现即停，交 Owner）：
    - `gitleaks detect --log-opts="--all"` 全历史；
@@ -422,16 +424,17 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 
 | PR | 阶段 | 仓 | 依赖 | Owner 批准点 |
 |---|---|---|---|---|
-| PR-0（本 PR） | spec/plan | VoxPocket | — | spec、plan、§12 问题 |
-| PR-0b | policy | VoxPocket | PR-0 | `auto-merge.yml` 的 `preserve-history` 例外（Q9 已批准，PR 上确认实现） |
+| PR-0（#56，已合并） | spec/plan | VoxPocket | — | spec、plan、§12 问题；Q9 以后续撤销决定为准 |
 | PR-0c | hygiene | VoxPocket | PR-0 | 非公开信息清理（Owner Q2）：一层一 commit 删除当前树中的内部 issue 号（今天 3 个文件：App 测试注释、`scripts/ci` 注释、基准测试 README）与 `.claude/plan/` 旧计划文档中的真实 Azure 资源主机名（`*.cognitiveservices.azure.com` 形式，换 `example`）；完成标准为仓库级 `git grep -E` 对 `MY-[0-9]+` 与三种 Azure 主机形式（非 `example`）零命中（`AzureFoundryProviderRequestTests` 由 RB-6 在 PR-1 处理，列为已知例外）；VoxPocket 自身历史不改写（Q2 只要求导出历史），如需改写另行请 Owner 决定；AGENTS/宪法写入「gitignore 本地文件 + `.example` 模板」规则（与 §8 同步可并入 1.1）；`.gitignore` 增加 `*.local.*`。只改树，不改 VoxPocket 历史 |
-| PR-1 | 1 接缝 | VoxPocket | PR-0b、PR-0c、S3（Q8）/S5 | 修宪 1.2.0、RB-1…RB-7、RB-11、ruleset |
+| PR-1 | 1 接缝 | VoxPocket | PR-0c、S3（Q8）合并且 S5 缺口完成 | 修宪、RB-1…RB-7、RB-11、ruleset |
 | PR-2 | 2 搬迁 | VoxPocket | PR-1 + ruleset apply | 依赖变更、E1 |
 | PR-3 | 3 引擎 + 替换 | VoxPocket | PR-2 | RB-8、RB-9、RB-12 |
 | VK-1 | 4 init | VoxKit | PR-3 + 隐私预检 | 预检结果、ruleset 与 tag 保护、tag |
 | PR-4 | 4 adopt | VoxPocket | VK-1 tag | 依赖 pin、E2、ruleset 映射 |
 
 ## 11. Plan-Review Loop 记录
+
+以下是 #56 的历史审查记录，不是当前执行指令。其中历史合并策略（C1、相关 LOW、Q9）已被 Owner 后续撤销，以 §1.2、§12 的 squash 策略为准；其余架构与验收修订继续有效。本次同步需按当前 AGENTS 的 Plan-Review Loop 独立复核，证据记录在对应 PR。
 
 | 轮 | 结论 | 发现 | 处理 |
 |---|---|---|---|
@@ -446,7 +449,7 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 | 4e（codex-review @199c7c8，最后一轮） | NEEDS_REVISION | 1 HIGH：tag ruleset 的 admin bypass 同时绕过 update/deletion，与「任何人不能移动或删除」矛盾；1 条非阻塞建议（VoxKit roles 中 Repo 与 Service 的划分） | 拆为 `tags-immutable`（update/deletion/non_fast_forward，无 bypass）与 `tags-create`（creation，仅 Owner bypass），§9 步骤 5、T405；建议留待 1.1 落地 tech-context 时处理 |
 
 第 1 轮要点与修订：
-- C1 squash 合并抹掉一层一 commit 与 mv 历史 → §1.2 `preserve-history` + merge commit，PR-0b，Q9；`--follow` 证据在合并后的 `main` 上采集。
+- C1 当时为保留逐层与 mv 历史提出 PR-0b；该方案后被 Owner 撤销，当前按 §1.2 接受 squash 后历史，旧方案不再执行。
 - C2 VoxLLM↔VoxRefine、VoxSpeech→VoxRefine 成环 → §2.1 重排模块图（共享值类型/协议入 VoxCore，prompt 与 refine 类型入 VoxRefine，provider 与 merger 入 VoxLLM）并给出文件映射。
 - C3 golden 无法在未改代码上驱动、够不到 App 路由 → §3.4 分三组（LLM 接缝 / 纯逻辑 + 脚本 harness / 注入接缝后的端到端），先做零行为变化的 1.0a，版本化 trace schema 加每阶段探针适配器，声明不覆盖范围。
 - C4 跨 provider 分析顺序今天就是随机的 → 比较规则从基线起就归一；spec EB-8 改写。
@@ -504,7 +507,7 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 
 ## 12. Owner 决策（已定，2026-09-24）
 
-Q1–Q10 均已由 Owner 决定（来源：Owner 的仓库治理计划 §18，未入库；以本表为准）。
+Q1–Q10 均已由 Owner 决定（来源：Owner 的仓库治理计划，未入库）；Q9 已按后续明确决定更新，最新决定覆盖早先方案。以下是当前执行依据。
 
 | # | 问题 | 决定 | 落实位置 |
 |---|---|---|---|
@@ -516,5 +519,5 @@ Q1–Q10 均已由 Owner 决定（来源：Owner 的仓库治理计划 §18，�
 | Q6 | 首个 tag | **已定**：`0.1.0`；`LeePepe/VoxKit` 设 tag 保护。另：App 与 VoxKit 都需要 iOS build/test（App 单元测试也跑 iOS Simulator） | §9 步骤 5、6；1.11 `App unit tests (iOS)` |
 | Q7 | RB-2 删除 `LocalWhisperRawOutputLogger` 及其测试 | **已定**：删除 `LocalWhisperRawOutputLoggerTests`，新增「日志不含转写」测试（金丝雀转写经 WhisperKit 路径后，日志与遥测中不出现） | 1.5；spec RB-2；tasks T108 |
 | Q8 | S3 未合并时 PR-1 怎么办 | **已定**：PR-1 等 S3 合并；PR-1 不自带 S3 的 lane 与「iOS 暂停」表述修改（原回退方案已删除） | 文首前置；§3.1 1.11 注；§7 I-1；§10 |
-| Q9 | 阶段 PR 用 merge commit 保留历史 | **已定**：同意 `preserve-history` 标签例外与 merge commit（PR-0b） | §1.2；§10 PR-0b；RB-13 |
+| Q9 | 阶段 PR 的合并方式与拆仓历史 | **原决定已撤销**（2026-09-24 后续决定）：接受 squash 后历史；删除 PR-0b，沿用 squash auto-merge，重要路径仍需 Owner CODEOWNERS approval | §1.2、§4.2、§9；spec US6-AC1、RB-13；tasks T002（取消）、T210、T401 |
 | Q10 | 本 plan 的放行条件 | **已定**：本修订后做**一轮**独立复核（§11 第 4 轮），之后以 Owner 审阅为最终结论 | §11 |
