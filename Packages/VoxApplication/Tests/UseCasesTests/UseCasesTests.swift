@@ -7,6 +7,137 @@ import LokiKit
 import Synchronization
 
 final class UseCasesTests: XCTestCase {
+    func testRecordingAndTranscriptionCompleteWhileFakeAsyncFlushIsDeferred() async throws {
+        let telemetry = FakeConsumerTelemetry()
+        let coordinator = LiveResultTranscriptionCoordinator()
+        let editing = FakeConsumerEditing(text: "")
+        let recording = DefaultRecordingUseCase(coordinator: coordinator, telemetry: telemetry)
+        let transcription = DefaultTranscriptionUseCase(
+            coordinator: coordinator, editing: editing,
+            logger: FakeTranscriptionLogger(), telemetry: telemetry
+        )
+        var snapshots: [String] = []
+        let subscription = transcription.snapshotPublisher.sink { snapshots.append($0) }
+        let flush = Task { await telemetry.flush() }
+        defer { subscription.cancel() }
+        await telemetry.flushStarted.wait()
+
+        do {
+            try await recording.startRecording()
+            try await recording.stopRecording()
+        } catch {
+            telemetry.releaseFlush.signal()
+            await flush.value
+            throw error
+        }
+        coordinator.sendFinalText(FakeConsumerContent.input)
+
+        XCTAssertEqual(editing.currentText, FakeConsumerContent.input)
+        XCTAssertEqual(snapshots, [FakeConsumerContent.input])
+        XCTAssertFalse(telemetry.flushCompleted)
+        XCTAssertEqual(telemetry.events.map(\.name), ["recording.stopped", "transcription.completed"])
+        assertConsumerMetric(
+            telemetry.events.filter { $0.name == "recording.stopped" },
+            name: "recording.stopped", key: "duration_s"
+        )
+        XCTAssertEqual(telemetry.events.last?.properties, ["word_count": "1", "source": "apple_speech"])
+        assertConsumerPrivacy(telemetry.events)
+        telemetry.releaseFlush.signal()
+        await flush.value
+        XCTAssertTrue(telemetry.flushCompleted)
+    }
+
+    func testRecordingStopEmitsOnlyDurationWithTelemetryEnabledOrDisabled() async throws {
+        for enabled in [true, false] {
+            let telemetry = FakeConsumerTelemetry(isEnabled: enabled)
+            let coordinator = NamedTranscriptionCoordinator(name: "synthetic")
+            let useCase = DefaultRecordingUseCase(coordinator: coordinator, telemetry: telemetry)
+            try await useCase.startRecording()
+            XCTAssertTrue(telemetry.events.isEmpty)
+            try await useCase.stopRecording()
+            let events = await coordinator.events()
+            XCTAssertEqual(events, ["start:zh-Hans", "stop"])
+            XCTAssertEqual(useCase.state, .idle)
+            if enabled {
+                assertConsumerMetric(telemetry.events, name: "recording.stopped", key: "duration_s")
+            } else {
+                XCTAssertTrue(telemetry.events.isEmpty)
+            }
+            assertConsumerPrivacy(telemetry.events)
+        }
+    }
+
+    func testRecordingCancellationStopsCoordinatorAndResetsStateWithoutStopTelemetry() async throws {
+        let telemetry = FakeConsumerTelemetry()
+        let coordinator = NamedTranscriptionCoordinator(name: "synthetic")
+        let useCase = DefaultRecordingUseCase(coordinator: coordinator, telemetry: telemetry)
+        try await useCase.startRecording()
+        let reset = expectation(description: "Cancellation publishes idle after stopping")
+        let subscription = useCase.statePublisher.dropFirst().sink {
+            if $0 == .idle { reset.fulfill() }
+        }
+        defer { subscription.cancel() }
+        useCase.cancelRecording()
+        await fulfillment(of: [reset], timeout: 2)
+        let events = await coordinator.events()
+        XCTAssertEqual(events, ["start:zh-Hans", "stop"])
+        XCTAssertEqual(useCase.state, .idle)
+        XCTAssertTrue(telemetry.events.isEmpty)
+        assertConsumerPrivacy(telemetry.events)
+    }
+
+    func testRecordingStartFailurePreservesErrorAndDoesNotEmitTelemetry() async {
+        let telemetry = FakeConsumerTelemetry()
+        let coordinator = ModelLoadingTranscriptionCoordinator(state: .failed(FakeConsumerError.sensitive.detail))
+        let useCase = DefaultRecordingUseCase(coordinator: coordinator, telemetry: telemetry)
+        do {
+            try await useCase.startRecording()
+            XCTFail("Expected the synthetic model-loading state to reject start")
+        } catch {
+            XCTAssertTrue(error is VoxError)
+            XCTAssertTrue(error.localizedDescription.contains(FakeConsumerContent.errorBody))
+        }
+        let events = await coordinator.events()
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertEqual(useCase.state, .idle)
+        XCTAssertTrue(telemetry.events.isEmpty)
+        assertConsumerPrivacy(telemetry.events)
+    }
+
+    func testFinalTranscriptionPreservesEditingAndSnapshotRoutingWithMetricsOnly() {
+        for enabled in [true, false] {
+            for snapshotGate in [true, false] {
+                let coordinator = LiveResultTranscriptionCoordinator()
+                let telemetry = FakeConsumerTelemetry(isEnabled: enabled)
+                let editing = FakeConsumerEditing(text: "")
+                let logger = FakeTranscriptionLogger()
+                let useCase = DefaultTranscriptionUseCase(
+                    coordinator: coordinator, editing: editing, logger: logger, telemetry: telemetry
+                )
+                useCase.snapshotGateActive = snapshotGate
+                var snapshots: [String] = []
+                let subscription = useCase.snapshotPublisher.sink { snapshots.append($0) }
+                defer { subscription.cancel() }
+                coordinator.sendLiveText(FakeConsumerContent.input)
+                coordinator.sendFinalText("")
+                XCTAssertTrue(telemetry.events.isEmpty)
+                XCTAssertTrue(snapshots.isEmpty)
+                XCTAssertEqual(editing.currentText, "")
+                let finalText = FakeConsumerContent.input + " " + FakeConsumerContent.output
+                coordinator.sendFinalText(finalText)
+                XCTAssertEqual(snapshots, [finalText])
+                XCTAssertEqual(editing.currentText, snapshotGate ? "" : finalText)
+                XCTAssertEqual(telemetry.events.count, enabled ? 1 : 0)
+                if enabled {
+                    XCTAssertEqual(telemetry.events.first?.name, "transcription.completed")
+                    XCTAssertEqual(telemetry.events.first?.properties, ["word_count": "2", "source": "apple_speech"])
+                }
+                assertConsumerPrivacy(telemetry.events)
+                XCTAssertFalse(logger.messages.contains { $0.contains(FakeConsumerContent.input) })
+            }
+        }
+    }
+
     func testLiveTranscriptionIsNotLoggedOrPublishedAsFinal() {
         let coordinator = LiveResultTranscriptionCoordinator()
         let logger = FakeTranscriptionLogger()

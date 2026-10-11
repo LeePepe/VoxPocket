@@ -58,8 +58,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
         } catch {
             stateSubject.send(.error(error.localizedDescription))
             telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
-                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
-                "error": error.localizedDescription
+                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
             ])
             throw error
         }
@@ -142,8 +141,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                         let errorState = RefinementState.error(error.localizedDescription)
                         stateSubject.send(errorState)
                         telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
-                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
-                            "error": error.localizedDescription
+                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
                         ])
                         continuation.finish(throwing: error)
                     }
@@ -192,8 +190,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                         let errorState = RefinementState.error(error.localizedDescription)
                         stateSubject.send(errorState)
                         telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
-                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
-                            "error": error.localizedDescription
+                            "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
                         ])
                         continuation.finish(throwing: error)
                     }
@@ -246,8 +243,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
         } catch {
             stateSubject.send(.error(error.localizedDescription))
             telemetry.track(name: TelemetryEventName.refinementFailed.rawValue, properties: [
-                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000)),
-                "error": error.localizedDescription
+                "duration_ms": String(Int(Date().timeIntervalSince(startTime) * 1000))
             ])
             throw error
         }

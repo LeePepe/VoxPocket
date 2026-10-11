@@ -1,6 +1,6 @@
 # Docs Records Index
 
-Last-Reviewed: 2026-09-12
+Last-Reviewed: 2026-09-22
 
 这是 VoxPocket 的文档总地图（system of record）。
 
@@ -29,6 +29,8 @@ Last-Reviewed: 2026-09-12
 - Tracker: `docs/records/tech-debt-tracker.md`
 
 ## Runbooks And Operations
+
+- Telemetry consumer pilot (candidate and holds): `docs/records/telemetry-consumer-pilot.md`
 - Local deterministic gates: `docs/local-gates.md`
 - Local CI/CD: `docs/local-cicd.md`
 - Harness notes: `docs/harness/README.md`

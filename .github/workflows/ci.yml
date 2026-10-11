@@ -32,13 +32,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: repo
-      # LokiKit 是外部本地依赖（../../../LokiKit）。从 Packages/<pkg>/ 解析 →
-      # 落在 $GITHUB_WORKSPACE/LokiKit。VoxInfrastructure/Application/Presentation 需要。
-      - name: Checkout LokiKit (external local dependency)
-        uses: actions/checkout@v4
-        with:
-          repository: LeePepe/LokiKit
-          path: LokiKit
       - name: Select latest Xcode
         run: |
           latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
@@ -61,10 +54,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: repo
-      - name: Checkout LokiKit (external local dependency)
+      # 仅供 test_app_logging.py 的 sibling-path fixture；运行时包仍由远程 URL 解析。
+      - name: Checkout shared telemetry (logging regression fixture)
         uses: actions/checkout@v4
         with:
-          repository: LeePepe/LokiKit
+          repository: LeePepe/shared-telemetry
+          ref: eff9c1712cd648ed0717e41183ad8bd7bf39cbea
           path: LokiKit
       # xcodeproj 通过 XCLocalSwiftPackageReference 引用 ../../AppleUITesting。
       - name: Checkout AppleUITesting (external local dependency)

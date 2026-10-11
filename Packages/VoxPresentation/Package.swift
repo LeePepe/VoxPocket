@@ -27,7 +27,10 @@ let package = Package(
         .package(path: "../VoxDomain"),
         .package(path: "../VoxInfrastructure"),
         .package(path: "../VoxApplication"),
-        .package(path: "../../../LokiKit"),
+        .package(
+            url: "https://github.com/LeePepe/shared-telemetry.git",
+            revision: "eff9c1712cd648ed0717e41183ad8bd7bf39cbea"
+        ),
     ],
     targets: [
         .target(
@@ -39,7 +42,7 @@ let package = Package(
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "Preferences", package: "VoxInfrastructure"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
         ),
@@ -52,7 +55,7 @@ let package = Package(
                 .product(name: "Preferences", package: "VoxInfrastructure"),
                 .product(name: "LLMKit", package: "VoxInfrastructure"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
         ),
@@ -71,7 +74,7 @@ let package = Package(
                 .product(name: "UseCases", package: "VoxApplication"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-                .product(name: "LokiKit", package: "LokiKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
         .testTarget(
