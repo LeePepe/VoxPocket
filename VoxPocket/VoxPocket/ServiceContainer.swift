@@ -533,7 +533,7 @@ public final class ServiceContainer: ObservableObject {
             "source": source.rawValue
         ])
         telemetryService.track(
-            name: TelemetryEventName.recordingStarted.rawValue,
+            name: VoxPocketTelemetryEventName.recordingStarted.rawValue,
             properties: ["source": source.rawValue]
         )
         return true

@@ -54,4 +54,3 @@ PY
 }
 
 link_dependency "AppleUITesting"
-link_dependency "LokiKit"

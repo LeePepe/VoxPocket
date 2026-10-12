@@ -248,6 +248,24 @@ class LocalHookTests(unittest.TestCase):
         self.assertFalse((Path(git_dir) / "shallow").exists())
         self.assertTrue((self.repo / ".shared-ci/.git").is_dir())
 
+    def test_old_python_fails_fast_with_guidance(self):
+        # S5: a login shell resolved python3 to the system 3.9 (no tomllib).
+        self.tool("python3", 'echo "python3:$*" >> "$HOOK_TEST_LOG"\nexit 1\n')
+        self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
+        result = self.hook("pre-push", self.push_input())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("3.11+ is required", result.stderr)
+        self.assertNotIn("push", self.calls().splitlines())
+
+    def test_changed_verify_fetches_external_packages_before_gates(self):
+        # S5: a fresh clone had no ../LokiKit, so the first swift test failed.
+        self.write("scripts/ci/fetch-external-deps.sh", 'echo "deps" >> "$HOOK_TEST_LOG"\n').chmod(0o755)
+        self.write("scripts/gates/gate-prepush.sh", 'echo "push" >> "$HOOK_TEST_LOG"\n')
+        self.commit("deps script")
+        result = self.hook("pre-push", self.push_input())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(self.calls().startswith("context:audit\ndeps\npush\n"), self.calls())
+
     def test_custom_shared_ci_directory_is_never_deleted(self):
         keep = Path(self.temporary.name) / "someone else's checkout"
         keep.mkdir()
