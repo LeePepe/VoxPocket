@@ -24,7 +24,11 @@ final class EditorAutoStopRaceTests: XCTestCase {
         transcription.emitLiveText("hello")
         recording.setState(.recording(duration: 0))
 
-        try? await Task.sleep(for: .seconds(3))
+        let clock = ContinuousClock()
+        let deadline = clock.now + .seconds(4)
+        while recording.stopCallCount == 0 && clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
 
         XCTAssertEqual(recording.stopCallCount, 1)
     }

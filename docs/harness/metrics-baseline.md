@@ -1,6 +1,6 @@
 # Harness Metrics Baseline
 
-Last-Reviewed: 2026-09-12
+Last-Reviewed: 2026-10-13
 Owner: VoxPocket Engineering
 Cadence: Weekly snapshot (every Tuesday)
 
@@ -23,6 +23,7 @@ Phase 0 只定义“可度量合同”，不追求一次性把所有指标数据
 - Name: `rerunRate`
 - Definition: `retried_suites / total_suites`
 - Source: `artifacts/reports/test-report.json` (`totals.retried`, `suites.length`)
+- Producer: 本地 `zsh scripts/test-executor/run_pr.sh` 与 `zsh scripts/test-executor/run_nightly.sh`（均经 `run_by_label.sh`）写入该报告；当前 CI 工作流不生成，报告缺失时 collector 返回 `null`（`no_test_report_found`）。
 - Target bands:
   - Good: `<= 0.10`
   - Warning: `> 0.10 && <= 0.25`
@@ -63,3 +64,11 @@ Phase 0 只定义“可度量合同”，不追求一次性把所有指标数据
 ## Review on 2026-09-12
 
 已对照 `scripts/docs/collect_harness_baseline.sh`、freshness lint 和快照模板复核合同。此次只更新文档，不生成新指标快照，也不将历史数值当作当前测量；无法采集的指标继续保留 `null` 与原因。
+
+## Review on 2026-09-27
+
+已对照 `scripts/docs/collect_harness_baseline.sh`（`--dry-run`）、`scripts/test-executor/run_by_label.sh`、`scripts/docs/lint_docs_freshness.sh`、快照模板与 `.github/workflows/` 复核。补充：`rerunRate` 的报告只由本地 test-executor 生成，CI 不产出。其余定义、来源与 `null` 原因与当前 collector 一致；此次不生成新快照，也不把 dry-run 数值当作正式测量。
+
+## Review on 2026-10-13
+
+已对照 `scripts/docs/collect_harness_baseline.sh`、`scripts/test-executor/{run_by_label.sh,run_pr.sh,run_nightly.sh}`、`scripts/docs/lint_docs_freshness.sh`、`docs/harness/templates/metric-snapshot-template.json`、根目录 `README.md` 执行器说明以及 `.github/workflows/{auto-merge.yml,ci.yml,codex-review-target.yml,codex-review.yml,kimi-review.yml,testflight.yml}` 逐项复核。更正 `rerunRate` 生产者表述，明确本地 `run_pr.sh` 与 `run_nightly.sh` 均通过 `run_by_label.sh` 写入共享报告 `artifacts/reports/test-report.json`，而当前 CI 工作流不产出该报告；确认其余三项指标定义、来源、目标区间和 `null` 原因（`prCycleHours` 未集成 GitHub API、`docFreshness` 对接 freshness lint 汇总、`archViolationCount` 结构 lint 尚未实现在 local scaffold）与当前脚本和工作流行为完全一致。本次仅更新文档记录，不生成新快照，不修改任何度量定义、目标、脚本逻辑或采集语义。

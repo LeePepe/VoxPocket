@@ -69,9 +69,9 @@ system boundary before use. Fail fast with a clear message. Never trust external
   test doubles are `Fake*` / `Mock*`. Depend on protocols, not concrete types.
 - **File organization**: many small focused files over few large ones. Functions < 50 lines,
   files < 800 lines, nesting ≤ 4 levels.
-- **LokiKit is external**: it is published by `LeePepe/shared-telemetry`, checked out next to this
-  repository (referenced as `../../../LokiKit`) at a pinned full SHA. Changes to LokiKit are out of
-  scope for this repo's gates.
+- **LokiKit is external**: it is published by `LeePepe/shared-telemetry` and resolved by SwiftPM
+  as a remote dependency pinned to exact `0.1.0`. Changes to LokiKit are out of scope for this
+  repo's gates.
 - **Platforms**: macOS and iOS are both in development scope; CI builds and tests both. App
   delivery is TestFlight-only; iOS TestFlight releases need separate Owner authorization.
 

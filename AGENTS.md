@@ -28,16 +28,19 @@ VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, del
 VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 
-A change that spans 2+ layers is too big: split it by layer. Fix a failure inside the
-failing layer while honouring that layer's `red_lines`; a root cause elsewhere is a new task.
+Prefer small PRs focused on one goal, built from several focused commits. This is guidance,
+not a gate. Fix a failure inside the failing layer while honouring that layer's `red_lines`;
+a root cause elsewhere is a new task.
 
 ## Protocol
 
-Follow `LeePepe/shared-ci@761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md`
-(https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/agent-protocol.md).
+Follow `LeePepe/shared-ci@6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
-Plan-Review Loop (mandatory for any implementation plan, spec or plan change):
+Plan-Review Loop (mandatory for any implementation plan, spec or plan change; a test-only
+change inside one layer with no production code change needs no plan, and its PR says so in
+`Intent`):
 
 1. Plan — a planner creates or updates the plan (`specs/` via Spec Kit, or `docs/plans/`).
 2. Review — an independent reviewer reviews it immediately.
@@ -55,8 +58,10 @@ scripts/verify --all      # every layer gate + policy (what CI runs)
 scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one layer
 ```
 
-- External packages live next to the repository: `../LokiKit` (LeePepe/shared-telemetry) and
-  `../AppleUITesting`. `scripts/ci/fetch-external-deps.sh` checks out the pinned SHAs.
+- LokiKit is a SwiftPM remote dependency on https://github.com/LeePepe/shared-telemetry,
+  pinned to commit `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f` (v0.1.0). Only `../AppleUITesting` lives next to the repository.
+  `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks out AppleUITesting
+  at its pinned SHA when missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
 - `pre-commit` keeps the fast staged-layer build/test plus docs map/freshness checks.
 - Local verification is SPM build/test plus deterministic scripts. The app-target
   `xcodebuild` runs in CI only (`RUN_HEAVY=1 scripts/verify` opts in locally).
@@ -114,10 +119,10 @@ Approved exceptions: none.
 
 ## Dependencies
 
-- `shared-ci` `761fe6b0b3ca5e2c57d244182d495ab8041851fa` — https://github.com/LeePepe/shared-ci/blob/761fe6b0b3ca5e2c57d244182d495ab8041851fa/ai/
-- LokiKit from LeePepe/shared-telemetry at `eff9c1712cd648ed0717e41183ad8bd7bf39cbea` (no tag
-  or `ai/` bundle yet; pinned in `scripts/ci/fetch-external-deps.sh`).
-- AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (same script).
+These are the current pins; they change only through Owner-reviewed PRs.
+- `shared-ci` `6e354f476bc53d68f0f09fc231d5cd938466af9c` — https://github.com/LeePepe/shared-ci/blob/6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/
+- LokiKit from LeePepe/shared-telemetry `0.1.0` (tag v0.1.0 = `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`), SwiftPM full-SHA `revision` pin in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag→SHA guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.1.0/ai/
+- AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
 ## Delivery
 
@@ -126,6 +131,9 @@ Approved exceptions: none.
 - Non-draft PRs get squash auto-merge (`auto-merge.yml`). CODEOWNERS paths (`.github/**`,
   policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval, which
   the ruleset enforces (code-owner review required); add the `owner-review` label to them.
+  AI review does not block these changes for missing approval evidence: approval is enforced
+  by the ruleset, not by the reviewer. It still reviews their content (e.g. pins stay full SHAs
+  and consistent with the protocol pointer).
 - Code tasks report the commit, verification and PR. For an authorized TestFlight run,
   report version/build number, run link and distribution warnings. Keep existing local
   artifacts; do not clean them up automatically.

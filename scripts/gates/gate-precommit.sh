@@ -24,9 +24,9 @@ while IFS= read -r L; do
   [ -d "$L" ] || continue
   name="$(basename "$L")"
   echo "[pre-commit] build+test [$name]"
-  swift build --package-path "$L" >/tmp/pc-$name.log 2>&1 \
+  swift build --package-path "$L" --explicit-target-dependency-import-check error >/tmp/pc-$name.log 2>&1 \
     || { echo "❌ build [$name]"; tail -25 /tmp/pc-$name.log; fail=1; continue; }
-  swift test --package-path "$L" >>/tmp/pc-$name.log 2>&1 \
+  swift test --package-path "$L" --explicit-target-dependency-import-check error >>/tmp/pc-$name.log 2>&1 \
     || { echo "❌ test [$name]"; tail -35 /tmp/pc-$name.log; fail=1; }
 done <<< "$layers"
 

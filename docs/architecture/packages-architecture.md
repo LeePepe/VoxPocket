@@ -2,7 +2,7 @@
 
 ## 概览
 
-VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Package Manager 将代码组织成 4 个核心包，并接入一个独立的本地依赖 `LokiKit`，实现清晰的依赖方向和职责分离。
+VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Package Manager 将代码组织成 4 个核心包，并接入独立的远程依赖 `LokiKit`（`LeePepe/shared-telemetry`，exact `0.1.0`），实现清晰的依赖方向和职责分离。
 
 ```
 ┌─────────────────────────────────────────┐

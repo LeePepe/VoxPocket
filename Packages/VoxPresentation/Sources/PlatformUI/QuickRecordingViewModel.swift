@@ -7,6 +7,7 @@ import UseCases
 import PlatformAdapters
 import UIShared
 import LokiKit
+import TranscriptionKit
 
 /// 快速录音 ViewModel
 ///
@@ -280,7 +281,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             if let start = sessionStartTime {
                 let durationMs = Int(now.timeIntervalSince(start) * 1000)
                 telemetryService?.track(
-                    name: TelemetryEventName.transcriptionCompleted.rawValue,
+                    name: VoxPocketTelemetryEventName.transcriptionCompleted.rawValue,
                     properties: [
                         "duration_ms": String(durationMs),
                         "char_count": String(rawTranscription.count),
@@ -469,7 +470,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                         "text_changed": outputText != self.rawTranscription
                     ])
                     self.telemetryService?.track(
-                        name: TelemetryEventName.refinementCompleted.rawValue,
+                        name: VoxPocketTelemetryEventName.refinementCompleted.rawValue,
                         properties: [
                             "duration_ms": String(refinementMs),
                             "raw_length": String(self.rawTranscription.count),
