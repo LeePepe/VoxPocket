@@ -1,10 +1,10 @@
 # VoxKit 拆分：语音 SDK 独立 + VoxPocket 只保留 App
 
-- 状态：Draft（Owner 审阅中，`owner-review`）；plan §12 Q1–Q10 已由 Owner 决定（2026-09-24）
+- 状态：基础 spec/plan 已在 #56 合并；本次同步 Owner 后续撤销 Q9 的决定（2026-09-24，plan §12），阶段 1 仍等待 S5 缺口完成
 - 日期：2026-09-24
 - 需求来源：Owner 的 VoxKit 拆分需求稿（未入库）；Owner 决策来自 Owner 的仓库治理计划（不在本仓），相关条目摘录在本文 §2，以本文为准
 - 配套：[`plan.md`](./plan.md)（分阶段计划与 Plan-Review 记录）· [`tasks.md`](./tasks.md)（依赖顺序任务）· [`research.md`](./research.md)（引擎选型与代码现状调研）
-- 本 PR 只含 spec/plan，不含产品代码。
+- 本组文档定义拆分要求，不代表实现已完成。
 
 ## 1. 目标
 
@@ -31,6 +31,7 @@ VoxPocket 只保留 UI、编辑器领域、持久化、平台适配，经 VoxKit
 | D7 | iOS build/test 先作非 required lane；阶段 1 修绿 SDK iOS 后改 required |
 | D8 | plan §12 Q1–Q10 已定；其中 Q2（Owner 修改）：个人信息从导出历史删除；非公开项目信息（Azure 主机名、内部 endpoint/配置、内部 issue 号）不进 git，用 gitignore 的本地文件 + 提交 `.example` 模板，VoxPocket 与 VoxKit 同样适用 |
 | D9 | App 与 VoxKit 都做 iOS build/test（App 单元测试也在 iOS Simulator 上运行，Q6） |
+| D10 | Owner 后续撤销 Q9：拆仓接受 squash 后历史；删除 PR-0b，沿用 squash auto-merge，重要路径由 required checks 与 CODEOWNERS required review 把关。逐层 commit 仍用于 PR 审查，不要求进入 main 或导出历史 |
 
 ## 3. 既有行为（Existing behaviour，基线 = `origin/main` @ `afec620`）
 
@@ -137,7 +138,7 @@ AC 编号稳定，plan/tasks/测试名引用它们；只可追加，不重编号
 
 ### US6 — 拆出独立 repo 并由 App 远程依赖（P1）
 
-- **US6-AC1**：新 repo 历史由 `git filter-repo` 从 VoxPocket 导出，包含 TranscriptionKit/LLMKit 迁入前后的提交；导出树与 `main:Packages/VoxKit` 一致；在 `main` 上与导出 repo 中抽查的文件 `git log --follow` 都能追溯到阶段 1 之前的提交。
+- **US6-AC1**：新 repo 历史由 `git filter-repo` 从 VoxPocket 已合并的 `main` 导出，包含其可达的 TranscriptionKit/LLMKit 迁入前历史与阶段 squash 提交；导出树与固定来源 SHA 的 `Packages/VoxKit` 一致。抽查 3 个跨模块迁移文件，记录旧/新路径、阶段 1 之前的来源 commit、阶段 PR 的 squash SHA 与 filter-repo `commit-map` 中对应的导出 SHA；展示实际可达历史。Owner 已接受 squash：不要求保留 PR 内逐层中间 commit，也不保证 `git log --follow` 穿过 squash 改名；路径映射、阶段 PR 和 commit-map 提供来源关联（plan §4.2、§9）。
 - **US6-AC2**：导出历史中不含个人信息（作者/提交者/trailer 邮箱统一为 noreply）与非公开项目信息（Azure 资源主机名、内部 endpoint/配置、内部 issue 号）：由 filter-repo 的 `--mailmap`/`--replace-text`/`--replace-message` 处置；推送前隐私预检（凭据、私有配置文件名、身份模式、Azure 资源标识、个人邮箱与内部 issue 号）在处置后的历史上结果为零发现（Owner Q2）。
 - **US6-AC3**：新 repo 满足 shared-ci repo 合同 v1 的 8 项（`audit` 零发现），`quality / aggregate` 与 `codex-review-target / codex-review` 为 required，含 macOS 与 iOS lane。
 - **US6-AC4**：首个版本 tag 随源码发布 `ai/`（README/USAGE/INTEGRATION/EXAMPLES/COMPATIBILITY/MIGRATION/registry.json）；外部消费者按 exact 版本验证通过。
@@ -180,10 +181,10 @@ AC 编号稳定，plan/tasks/测试名引用它们；只可追加，不重编号
 | RB-7 | SDK public API 移除 Combine publisher；App 经 `VoxKitBridge` 获得同形状 publisher | 1 | R4 | 桥接行为测试新增 |
 | RB-8 | `LLMProviderConfig.options` 的 `analysis.*.provider` 字符串路由、`setSkipContentAnalysis`、`MultiRecognizerTranscriber.merger` 可变注入被 workflow 定义替代 | 3 | 流程改由 workflow 表达 | 覆盖这些 API 的测试迁为 golden/preset 测试 |
 | RB-9 | App 中 `TranscriberProvider` 枚举与 `ServiceContainer.makeTranscriber` 分支 → preset id | 3 | 同上 | `TranscriberSelectionTests` 迁为 preset 选择测试，矩阵不缩小 |
-| RB-10 | `Packages/VoxKit` 从 VoxPocket 删除（历史保留） | 4 | 改为远程依赖 | SDK 测试在 VoxKit repo 运行 |
+| RB-10 | `Packages/VoxKit` 从 VoxPocket 删除（按 US6-AC1 导出 main 可达历史） | 4 | 改为远程依赖 | SDK 测试在 VoxKit repo 运行 |
 | RB-11 | iOS 录音：停止时释放 `AVAudioSession`（`setActive(false)`），收到中断/路由变化通知时停止录音并发 `interrupted` 状态；改用 `AVAudioApplication` 请求权限 | 1 | iOS 支持（D3）；今天中断时行为未定义 | 新增 iOS Simulator 测试；iOS App 未发布 |
 | RB-12 | 阶段 3 起同一层的意图/语气分析并发执行；golden 对同层调用按 (provider, 步骤) 排序比较 | 3 | workflow DAG 语义（需求稿「intent ∥ tone」） | golden 比较规则放宽（仅顺序） |
-| RB-13 | 阶段 PR 以 merge commit 合并，`auto-merge.yml` 对 `preserve-history` 标签不挂 squash | 0b | 保留逐层 commit 与 mv 历史供 filter-repo | policy 变更 |
+| RB-13（已取消，保留编号） | 原阶段 PR 历史合并例外取消，PR-0b 删除；沿用 squash auto-merge | — | Owner 后续撤销 Q9（D10） | 不改自动合并 workflow、required checks 或 Owner 审批要求 |
 
 ## 7. 非目标
 
