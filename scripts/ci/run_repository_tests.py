@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run repository test groups with fail-closed, sorted discovery."""
+"""Run repository test groups with fail-closed, sorted discovery and timeout enforcement."""
 import argparse
 import os
 from pathlib import Path
@@ -8,6 +8,7 @@ import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_TIMEOUT = 120.0
 
 
 def discover_paths(pattern: str, base_dir: Path) -> list[Path]:
@@ -18,7 +19,7 @@ def discover_paths(pattern: str, base_dir: Path) -> list[Path]:
     return [p for p in matches if p.is_file()]
 
 
-def run_app_python(repo_root: Path) -> int:
+def run_app_python(repo_root: Path, timeout: float = DEFAULT_TIMEOUT) -> int:
     """Execute every scripts/tests/test_*.py directly with sys.executable."""
     tests_dir = repo_root / "scripts" / "tests"
     paths = discover_paths("test_*.py", tests_dir)
@@ -40,15 +41,22 @@ def run_app_python(repo_root: Path) -> int:
         except ValueError:
             rel = path
         print(f"\n[run_repository_tests] Running {rel} ...")
-        proc = subprocess.run([sys.executable, str(path)], cwd=str(repo_root))
-        if proc.returncode != 0:
-            print(f"[run_repository_tests] Test failed with exit code {proc.returncode}: {rel}", file=sys.stderr)
-            return proc.returncode
+        try:
+            proc = subprocess.run([sys.executable, str(path)], cwd=str(repo_root), timeout=timeout)
+            if proc.returncode != 0:
+                print(f"[run_repository_tests] Test failed with exit code {proc.returncode}: {rel}", file=sys.stderr)
+                return proc.returncode
+        except subprocess.TimeoutExpired:
+            print(f"[run_repository_tests] Test timed out after {timeout}s: {rel}", file=sys.stderr)
+            return 124
+        except OSError as exc:
+            print(f"[run_repository_tests] Failed to spawn {rel}: {exc}", file=sys.stderr)
+            return 1
 
     return 0
 
 
-def run_packaging_ruby(repo_root: Path) -> int:
+def run_packaging_ruby(repo_root: Path, timeout: float = DEFAULT_TIMEOUT) -> int:
     """Execute every scripts/tests/test_*.rb with caller-provided Ruby environment."""
     tests_dir = repo_root / "scripts" / "tests"
     paths = discover_paths("test_*.rb", tests_dir)
@@ -72,15 +80,22 @@ def run_packaging_ruby(repo_root: Path) -> int:
         except ValueError:
             rel = path
         print(f"\n[run_repository_tests] Running {rel} ...")
-        proc = subprocess.run([ruby_bin, str(path)], cwd=str(repo_root))
-        if proc.returncode != 0:
-            print(f"[run_repository_tests] Test failed with exit code {proc.returncode}: {rel}", file=sys.stderr)
-            return proc.returncode
+        try:
+            proc = subprocess.run([ruby_bin, str(path)], cwd=str(repo_root), timeout=timeout)
+            if proc.returncode != 0:
+                print(f"[run_repository_tests] Test failed with exit code {proc.returncode}: {rel}", file=sys.stderr)
+                return proc.returncode
+        except subprocess.TimeoutExpired:
+            print(f"[run_repository_tests] Test timed out after {timeout}s: {rel}", file=sys.stderr)
+            return 124
+        except OSError as exc:
+            print(f"[run_repository_tests] Failed to spawn {rel}: {exc}", file=sys.stderr)
+            return 1
 
     return 0
 
 
-def run_icons_python(repo_root: Path) -> int:
+def run_icons_python(repo_root: Path, timeout: float = DEFAULT_TIMEOUT) -> int:
     """Execute icon unittest suite via python3 -m unittest discover."""
     icons_dir = repo_root / "scripts" / "icons"
     paths = discover_paths("test_*.py", icons_dir)
@@ -97,13 +112,21 @@ def run_icons_python(repo_root: Path) -> int:
         print(f"  - {rel}")
 
     print("\n[run_repository_tests] Running unittest discovery for scripts/icons ...")
-    proc = subprocess.run(
-        [sys.executable, "-m", "unittest", "discover", "-s", str(icons_dir), "-p", "test_*.py"],
-        cwd=str(icons_dir)
-    )
-    if proc.returncode != 0:
-        print(f"[run_repository_tests] Icon tests failed with exit code {proc.returncode}", file=sys.stderr)
-        return proc.returncode
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(icons_dir), "-p", "test_*.py"],
+            cwd=str(icons_dir),
+            timeout=timeout
+        )
+        if proc.returncode != 0:
+            print(f"[run_repository_tests] Icon tests failed with exit code {proc.returncode}", file=sys.stderr)
+            return proc.returncode
+    except subprocess.TimeoutExpired:
+        print(f"[run_repository_tests] Icon tests timed out after {timeout}s", file=sys.stderr)
+        return 124
+    except OSError as exc:
+        print(f"[run_repository_tests] Failed to spawn unittest discovery: {exc}", file=sys.stderr)
+        return 1
 
     return 0
 
@@ -115,15 +138,21 @@ def main(argv: list[str] | None = None) -> int:
         choices=["app-python", "packaging-ruby", "icons-python"],
         help="Test group to run"
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT,
+        help=f"Per-test timeout in seconds (default: {DEFAULT_TIMEOUT})"
+    )
 
     args = parser.parse_args(argv)
 
     if args.group == "app-python":
-        return run_app_python(REPO_ROOT)
+        return run_app_python(REPO_ROOT, timeout=args.timeout)
     elif args.group == "packaging-ruby":
-        return run_packaging_ruby(REPO_ROOT)
+        return run_packaging_ruby(REPO_ROOT, timeout=args.timeout)
     elif args.group == "icons-python":
-        return run_icons_python(REPO_ROOT)
+        return run_icons_python(REPO_ROOT, timeout=args.timeout)
     else:
         print(f"Unknown group: {args.group}", file=sys.stderr)
         return 2
