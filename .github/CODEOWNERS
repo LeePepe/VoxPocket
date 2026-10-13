@@ -5,6 +5,8 @@
 /CLAUDE.md                        @LeePepe
 /.specify/memory/constitution.md  @LeePepe
 /docs/architecture/               @LeePepe
+/docs/architecture/dependency-graph.md
+/docs/architecture/packages-architecture.md
 **/tech-context.md                @LeePepe
 /scripts/verify                   @LeePepe
 /policy/                          @LeePepe
