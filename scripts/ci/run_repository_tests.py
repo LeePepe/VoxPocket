@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run repository test groups with fail-closed, sorted discovery and timeout enforcement."""
 import argparse
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -9,6 +10,19 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TIMEOUT = 120.0
+
+
+def parse_positive_timeout(value: str) -> float:
+    """Validate and convert timeout argument to a finite positive float."""
+    try:
+        val = float(value)
+    except (ValueError, TypeError) as exc:
+        raise argparse.ArgumentTypeError(f"Timeout must be a positive finite number, got {value!r}") from exc
+
+    if not math.isfinite(val) or val <= 0:
+        raise argparse.ArgumentTypeError(f"Timeout must be a finite positive number (> 0), got {value!r}")
+
+    return val
 
 
 def discover_paths(pattern: str, base_dir: Path) -> list[Path]:
@@ -140,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--timeout",
-        type=float,
+        type=parse_positive_timeout,
         default=DEFAULT_TIMEOUT,
         help=f"Per-test timeout in seconds (default: {DEFAULT_TIMEOUT})"
     )

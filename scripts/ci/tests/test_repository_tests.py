@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Unit tests for repository test discovery CLI."""
+import argparse
 import importlib.util
 import io
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -23,6 +25,30 @@ class RepositoryTestsDiscoveryTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
+
+    def test_parse_positive_timeout_valid_values(self):
+        self.assertEqual(runner.parse_positive_timeout("120"), 120.0)
+        self.assertEqual(runner.parse_positive_timeout("0.5"), 0.5)
+        self.assertEqual(runner.parse_positive_timeout("1e2"), 100.0)
+
+    def test_parse_positive_timeout_invalid_boundary_values(self):
+        invalid_inputs = ["0", "0.0", "-1", "-0.01", "nan", "NaN", "inf", "-inf", "Infinity", "-Infinity", "abc", ""]
+        for val in invalid_inputs:
+            with self.subTest(val=val):
+                with self.assertRaises(argparse.ArgumentTypeError):
+                    runner.parse_positive_timeout(val)
+
+    def test_cli_timeout_argument_boundary_rejection(self):
+        invalid_values = ["0", "-5", "nan", "NaN", "inf", "-inf", "Infinity", "-Infinity", "invalid"]
+        for val in invalid_values:
+            with self.subTest(val=val):
+                proc = subprocess.run(
+                    [sys.executable, str(CLI), "app-python", "--timeout", val],
+                    capture_output=True,
+                    text=True
+                )
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn("error: argument --timeout:", proc.stderr)
 
     def test_discover_paths_returns_sorted_files(self):
         scripts_tests = self.root / "scripts" / "tests"
