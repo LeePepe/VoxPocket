@@ -6,6 +6,6 @@ Claude-specific: run the Plan-Review Loop from AGENTS.md yourself with planner a
 subagents; never wait for the Owner to ask for a re-review.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+For additional context about technologies, project structure, shell commands,
+and other implementation constraints, read `specs/010-ci-test-coverage/plan.md`.
 <!-- SPECKIT END -->
