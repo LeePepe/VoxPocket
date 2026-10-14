@@ -4,12 +4,7 @@ role: Xcode App 壳 —— 入口、ServiceContainer 组装、平台场景、Wid
 owns: [VoxPocket/**, VoxPocketWidget/**]
 depends_on: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation]
 gate:
-  startup: python3 scripts/tests/test_app_startup.py
-  interaction: python3 scripts/tests/test_startup_interaction.py
-  menu-bar: python3 scripts/tests/test_menu_bar_launch.py
-  quick-record: python3 scripts/tests/test_quick_record_release.py
-  realtime-config: python3 scripts/tests/test_realtime_config.py
-  logging: python3 scripts/tests/test_app_logging.py
+  app-python: python3 scripts/ci/run_repository_tests.py app-python
 red_lines:
   - 只做组装与平台接线;业务逻辑放进对应 Packages layer(宪法 II)
   - 私密模型配置只在沙箱运行时读取,不进 Git、日志或安装包;只提交凭据为空的模板(宪法 V)
@@ -39,7 +34,7 @@ red_lines:
 `SwiftDataSessionUseCase` → macOS 独立的快捷录音栈(与主编辑器隔离,防状态串扰)。
 
 ## 门禁
-- 本地/CI `gate`:上表 Python 回归(不构建签名 App)。
+- 本地/CI `gate`:通过 root discovery CLI `app-python` (`python3 scripts/ci/run_repository_tests.py app-python`) 执行门禁。该 runner 对 `scripts/tests/test_*.py` 执行确定性排序与自动发现，直接运行每一个匹配的 Python 回归测试文件（包含既有的全部 8 个 baseline 回归脚本与未来新增脚本），且在未发现任何测试文件或任一测试失败/超时时 fail-closed 退出非 0，防止空跑或静默遗漏，替代原先逐项手工注册的 6 项单文件命令。
 - CI 额外执行 `xcodebuild` 全量构建:macOS 与 iOS generic(`App target`,required),
   以及 iOS 模拟器 build/test(`iOS simulator`,non-required)。本地不跑 xcodebuild
   (`RUN_HEAVY=1 scripts/verify` 可显式开启 macOS 构建)。
