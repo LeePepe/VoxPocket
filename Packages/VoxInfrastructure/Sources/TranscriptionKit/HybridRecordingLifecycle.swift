@@ -10,7 +10,7 @@ final class HybridRecordingLifecycle: Sendable {
         var cloudText = ""
         var realtime: RealtimeAudioPipeline?
 
-        var shouldFinalize: Bool { realtime != nil || !appleText.isEmpty || !cloudText.isEmpty }
+        var shouldFinalize: Bool { realtime?.hasMinimumAudio == true || !appleText.isEmpty || !cloudText.isEmpty }
     }
     enum StopAction: Sendable {
         case none

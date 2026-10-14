@@ -1,6 +1,7 @@
 #if os(macOS)
 import XCTest
 import Combine
+import Synchronization
 import PlatformAdapters
 import LLMKit
 import TranscriptionKit
@@ -278,6 +279,104 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertEqual(recording.stopCallCount, 1)
     }
 
+    func testImmediateReleaseCleansUpNeverCompletingTranscriptionAndCanRestart() async {
+        let recording = FakeRecordingUseCase(startDelayNanoseconds: 50_000_000)
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: clipboard,
+                                               streamingCoordinator: coordinator)
+        var dismissals = 0
+        viewModel.onNoResult = { dismissals += 1 }
+        let stopped = expectation(description: "Quick release finishes without waiting for final")
+        let start = Task {
+            await viewModel.startRecording()
+            stopped.fulfill()
+        }
+        await Task.yield()
+        await viewModel.stopRecording()
+        await fulfillment(of: [stopped], timeout: 1)
+        start.cancel()
+        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(dismissals, 1)
+        XCTAssertEqual(viewModel.recorderStatus, .idle)
+        XCTAssertEqual(coordinator.cancelCallCount, 1)
+        XCTAssertFalse(coordinator.isStreaming)
+        XCTAssertEqual(transcription.finalCancellationCount, 1)
+        XCTAssertNil(clipboard.copiedText)
+        await viewModel.startRecording()
+        XCTAssertTrue(coordinator.isStreaming)
+        XCTAssertEqual(viewModel.recorderStatus, .listening)
+        await viewModel.stopRecording()
+        XCTAssertEqual(dismissals, 2)
+        XCTAssertEqual(coordinator.cancelCallCount, 2)
+    }
+
+    func testReleaseDuringStreamingStartupWaitsForInitializationBeforeStopping() async {
+        let recording = FakeRecordingUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let entered = expectation(description: "Streaming startup is suspended")
+        let gate = AsyncStream<Void>.makeStream()
+        coordinator.onStart = {
+            entered.fulfill()
+            for await _ in gate.stream { break }
+        }
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: FakeTranscriptionUseCase(),
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: FakeClipboardService(),
+                                               streamingCoordinator: coordinator)
+        var dismissals = 0
+        viewModel.onNoResult = { dismissals += 1 }
+        let finished = expectation(description: "Startup and deferred release finish")
+        let start = Task { await viewModel.startRecording(); finished.fulfill() }
+        await fulfillment(of: [entered], timeout: 1)
+        XCTAssertTrue(viewModel.isStartingRecording)
+        await viewModel.stopRecording()
+        XCTAssertEqual(recording.stopCallCount, 0)
+        gate.continuation.finish()
+        await fulfillment(of: [finished], timeout: 1)
+        start.cancel()
+        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(dismissals, 1)
+        XCTAssertFalse(coordinator.isStreaming)
+        XCTAssertFalse(viewModel.isStartingRecording)
+    }
+
+    func testSynchronousFinalWithoutPartialIsPreservedOnRelease() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let clipboard = FakeClipboardService()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: clipboard,
+                                               streamingCoordinator: coordinator)
+        recording.onStop = { transcription.sendFinalText("有效音频的终稿") }
+        var dismissals = 0
+        viewModel.onNoResult = { dismissals += 1 }
+        await viewModel.startRecording()
+        await viewModel.stopRecording()
+        XCTAssertEqual(viewModel.rawTranscription, "有效音频的终稿")
+        XCTAssertEqual(viewModel.recorderStatus, .done)
+        XCTAssertEqual(clipboard.copiedText, "有效音频的终稿。")
+        XCTAssertEqual(dismissals, 0)
+    }
+
+    func testStopFailureCancelsStreamingAndReleasesFinalSubscription() async {
+        let recording = FakeRecordingUseCase()
+        recording.stopError = CancellationError()
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let viewModel = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                               refinementUseCase: FakeRefinementUseCase(), clipboardService: FakeClipboardService(),
+                                               streamingCoordinator: coordinator)
+        await viewModel.startRecording()
+        await viewModel.stopRecording()
+        XCTAssertEqual(viewModel.recorderStatus, .error)
+        XCTAssertFalse(coordinator.isStreaming)
+        XCTAssertEqual(coordinator.cancelCallCount, 1)
+        XCTAssertEqual(transcription.finalCancellationCount, 1)
+    }
+
     func testErrorRetainsOriginalTextAndCopiesIt() {
         let clipboard = FakeClipboardService()
         let viewModel = QuickRecordingViewModel(recordingUseCase: FakeRecordingUseCase(),
@@ -350,7 +449,8 @@ private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable 
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
     private let startDelayNanoseconds: UInt64
     private(set) var stopCallCount = 0
-    var onStop: (() -> Void)?
+    var onStop: (@Sendable () -> Void)?
+    var stopError: Error?
 
     init(startDelayNanoseconds: UInt64 = 0) {
         self.startDelayNanoseconds = startDelayNanoseconds
@@ -371,6 +471,7 @@ private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable 
         stopCallCount += 1
         onStop?()
         stateSubject.send(.idle)
+        if let stopError { throw stopError }
     }
 
     func pauseRecording() { stateSubject.send(.paused(duration: 0)) }
@@ -383,10 +484,16 @@ private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable 
 private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked Sendable {
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    private let finalCancellations = Mutex(0)
     private var _currentLanguage = Locale(identifier: "zh-Hans")
 
     var liveTextPublisher: AnyPublisher<String, Never> { liveTextSubject.eraseToAnyPublisher() }
-    var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> { finalResultSubject.eraseToAnyPublisher() }
+    var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
+        finalResultSubject.handleEvents(receiveCancel: { [weak self] in
+            self?.finalCancellations.withLock { $0 += 1 }
+        }).eraseToAnyPublisher()
+    }
+    var finalCancellationCount: Int { finalCancellations.withLock { $0 } }
     var currentLanguage: Locale { _currentLanguage }
     var supportedLanguages: [Locale] { [_currentLanguage] }
 
@@ -470,10 +577,26 @@ private final class FakeClipboardService: ClipboardService, @unchecked Sendable 
 /// 测试仅从 MainActor 发送；unchecked 仅桥接 Combine subject 的 Sendable 缺失。
 private final class FakeQuickStreamingCoordinator: StreamingInputCoordinator, @unchecked Sendable {
     private let subject = CurrentValueSubject<String, Never>("")
+    private struct State {
+        var isStreaming = false
+        var cancelCallCount = 0
+        var onStart: (@Sendable () async -> Void)?
+    }
+    private let state = Mutex(State())
+    var onStart: (@Sendable () async -> Void)? {
+        get { state.withLock { $0.onStart } }
+        set { state.withLock { $0.onStart = newValue } }
+    }
+    var isStreaming: Bool { state.withLock { $0.isStreaming } }
+    var cancelCallCount: Int { state.withLock { $0.cancelCallCount } }
     var refinedVoiceTextPublisher: AnyPublisher<String, Never> { subject.eraseToAnyPublisher() }
     func send(_ text: String) { subject.send(text) }
-    func startStreaming() async {}
-    func stopStreaming() async {}
-    func cancel() {}
+    func startStreaming() async {
+        let onStart = state.withLock { $0.onStart }
+        await onStart?()
+        state.withLock { $0.isStreaming = true }
+    }
+    func stopStreaming() async { state.withLock { $0.isStreaming = false } }
+    func cancel() { state.withLock { $0.isStreaming = false; $0.cancelCallCount += 1 } }
 }
 #endif
