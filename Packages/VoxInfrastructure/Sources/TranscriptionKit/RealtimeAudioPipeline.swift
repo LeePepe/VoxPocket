@@ -85,8 +85,14 @@ final class RealtimeAudioPipeline: Sendable {
     private struct WorkerState {
         var task: Task<String, Error>?
         var cancelled = false
+        var capturedPCMBytes: Double = 0
     }
     private let worker = Mutex(WorkerState())
+
+    /// 按帧数折算 24kHz 单声道 PCM16；不等待连接或识别 partial 来判断快速松手。
+    var hasMinimumAudio: Bool {
+        worker.withLock { $0.capturedPCMBytes >= Double(DefaultRealtimeTranscriptionSession.minimumAudioBytes) }
+    }
 
     init(session: DefaultRealtimeTranscriptionSession, capacity: Int = 128,
          onFailure: @escaping @Sendable () -> Void = {}) {
@@ -99,7 +105,12 @@ final class RealtimeAudioPipeline: Sendable {
 
     func append(_ buffer: AVAudioPCMBuffer) {
         do {
-            if case .dropped = continuation.yield(try RealtimeAudioSnapshot(buffer)) {
+            let snapshot = try RealtimeAudioSnapshot(buffer)
+            worker.withLock {
+                $0.capturedPCMBytes = min(Double(DefaultRealtimeTranscriptionSession.minimumAudioBytes),
+                                         $0.capturedPCMBytes + Double(snapshot.frames) * 48_000 / snapshot.sampleRate)
+            }
+            if case .dropped = continuation.yield(snapshot) {
                 continuation.finish(throwing: RealtimeTranscriptionError.audioOverflow)
             }
         } catch { continuation.finish(throwing: RealtimeTranscriptionError.unsupportedAudio) }

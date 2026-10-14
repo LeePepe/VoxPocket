@@ -2,6 +2,7 @@ import Foundation
 
 /// 一次录音一个 session。调用方串行提供 PCM；服务器文本仅经回调/返回值传出，不进入日志。
 actor DefaultRealtimeTranscriptionSession {
+    static let minimumAudioBytes = 4800
     private enum Phase { case idle, configuring, streaming, finishing, completed, failed }
     private let config: AzureRealtimeTranscriptionConfig
     private let transport: any RealtimeTranscriptionTransport
@@ -64,7 +65,7 @@ actor DefaultRealtimeTranscriptionSession {
         if let failure { throw failure }
         guard phase == .streaming || phase == .finishing else { throw RealtimeTranscriptionError.protocolRejected }
         if phase == .streaming {
-            guard audioBytes >= 4800 else { await fail(.emptyTranscript); throw RealtimeTranscriptionError.emptyTranscript }
+            guard audioBytes >= Self.minimumAudioBytes else { await fail(.emptyTranscript); throw RealtimeTranscriptionError.emptyTranscript }
             phase = .finishing
             armDeadline()
             do { try await send(["type": "input_audio_buffer.commit"]) }

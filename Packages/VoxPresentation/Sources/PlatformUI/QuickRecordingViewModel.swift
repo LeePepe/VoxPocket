@@ -206,7 +206,6 @@ public final class QuickRecordingViewModel: ObservableObject {
 
         do {
             try await recordingUseCase.startRecording()
-            isStartingRecordingInternal = false
             recorderStatus = .listening
             sessionStartTime = Date()
             logger.debug("Recording started")
@@ -215,6 +214,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             if let coordinator = streamingCoordinator {
                 await coordinator.startStreaming()
             }
+            isStartingRecordingInternal = false
 
             if shouldStopAfterStart {
                 shouldStopAfterStart = false
@@ -222,6 +222,7 @@ public final class QuickRecordingViewModel: ObservableObject {
             }
         } catch {
             isStartingRecordingInternal = false
+            shouldStopAfterStart = false
             errorMessage = error.localizedDescription
             recorderStatus = .error
             logger.warning("Start recording failed: \(error.localizedDescription)")
@@ -256,14 +257,16 @@ public final class QuickRecordingViewModel: ObservableObject {
         // 导致误判为无内容、触发 onNoResult、提前关窗、丢弃 Whisper 结果。
         let hadSpeechBeforeStop = !liveTranscription.isEmpty
         let liveTranscriptionSnapshot = liveTranscription
-        let finalResultTask = makeFinalResultWaitTask(timeout: 15.0)
+        let finalResult = QuickRecordingFinalResultWaiter(publisher: transcriptionUseCase.finalResultPublisher)
+        defer { finalResult.cancel() }
 
         do {
             try await recordingUseCase.stopRecording()
 
-            // 如果停止前完全没有文字，立刻触发 onNoResult，无需等待识别收敛
-            if !hadSpeechBeforeStop {
-                finalResultTask.cancel()
+            // 无 partial 时仅接纳底层 stop 期间已返回的终稿，不额外等待空会话。
+            let capturedFinal = finalResult.capturedText ?? ""
+            if !hadSpeechBeforeStop && capturedFinal.isEmpty {
+                streamingCoordinator?.cancel()
                 recorderStatus = .idle
                 isProcessing = false
                 logger.debug("stopRecording: no speech content before stop → calling onNoResult")
@@ -271,7 +274,9 @@ public final class QuickRecordingViewModel: ObservableObject {
                 return
             }
 
-            rawTranscription = await waitForCompletedTranscription(finalResultTask: finalResultTask, liveSnapshot: liveTranscriptionSnapshot)
+            rawTranscription = capturedFinal.isEmpty
+                ? await waitForCompletedTranscription(finalResultTask: finalResult.task, liveSnapshot: liveTranscriptionSnapshot)
+                : capturedFinal
             let now = Date()
             transcriptionEndTime = now
             liveTranscription = rawTranscription
@@ -313,7 +318,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                 await performRefinement()
             }
         } catch {
-            finalResultTask.cancel()
+            streamingCoordinator?.cancel()
             errorMessage = error.localizedDescription
             recorderStatus = .error
             isProcessing = false
@@ -359,53 +364,6 @@ public final class QuickRecordingViewModel: ObservableObject {
             logger.debug("waitForCompletedTranscription: settled empty, using liveSnapshot (length=\(liveSnapshot.count))")
         }
         return liveSnapshot
-    }
-
-    /// 超时时间需覆盖完整的 WhisperKit 解码 + LLM 合并耗时（实测可达 ~2.6s）。
-    /// stopRecording() 本身已 await 完整管道，因此 finalResultSubject.send() 必然在
-    /// stopRecording() 返回前触发——只要本 Task 未超时即可收到。
-    private func makeFinalResultWaitTask(timeout: TimeInterval = 15.0) -> Task<String?, Never> {
-        let startTime = Date()
-        return Task { [transcriptionUseCase, logger] in
-            await withTaskGroup(of: String?.self) { group in
-                group.addTask {
-                    do {
-                        for try await result in transcriptionUseCase.finalResultPublisher.values {
-                            let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !text.isEmpty {
-                                let elapsed = Date().timeIntervalSince(startTime)
-                                logger.debug("finalResultTask: received result after \(String(format: "%.2f", elapsed))s — length=\(text.count)")
-                                return text
-                            }
-                        }
-                    } catch {
-                        return nil
-                    }
-
-                    return nil
-                }
-
-                group.addTask {
-                    do {
-                        try await Task.sleep(for: .seconds(timeout))
-                    } catch {
-                        logger.debug("finalResultTask: cancelled before timeout")
-                        return nil
-                    }
-                    guard !Task.isCancelled else {
-                        logger.debug("finalResultTask: cancelled before timeout")
-                        return nil
-                    }
-                    let elapsed = Date().timeIntervalSince(startTime)
-                    logger.debug("finalResultTask: timed out after \(String(format: "%.2f", elapsed))s (limit=\(timeout)s)")
-                    return nil
-                }
-
-                let value = await group.next() ?? nil
-                group.cancelAll()
-                return value
-            }
-        }
     }
 
     private func waitForTranscriptionToSettle(
