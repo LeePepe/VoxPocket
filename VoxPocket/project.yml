@@ -114,7 +114,7 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Apple Distribution
           "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": VoxPocket App Store
-          "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": VoxPocket Mac App Store
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": $(VOXPOCKET_MAC_PROFILE_SPECIFIER)
 
   # ── Widget 扩展：仅 iOS ──
   VoxPocketWidgetExtension:

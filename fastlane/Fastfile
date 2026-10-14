@@ -11,10 +11,12 @@
 # 阶段给每个 target 解析 Development 证书，但付费 team 4Z8GG667QD 只有 Distribution、
 # 无 Development → automatic 回退误挑别账号的 Development 证书 → errSecInternalComponent。
 # 改 manual：用 get_provisioning_profile 拉 bundleID 的 App Store profile，
-# build_app 显式映射（profile 名在 project.yml 的 Release config 里指定）。
+# build_app 显式映射（macOS 通过 VOXPOCKET_MAC_PROFILE_SPECIFIER 在当前运行动态注入）。
 #
 # 项目结构差异（vs VitalStride）：project.yml 在 VoxPocket/ 子目录，不是 repo 根；
 # .xcodeproj 也在 VoxPocket/。fastlane 从 repo 根运行，故路径都带 VoxPocket/ 前缀。
+
+require "shellwords"
 
 default_platform(:ios)
 
@@ -124,16 +126,23 @@ platform :mac do
     regenerate_project
     next_build = next_build_number(api_key, platform: "osx")
 
-    # macOS 只有主 app（无 widget，widget 仅 iOS）。拉 macOS App Store profile。
-    # provisioning_name 与 project.yml 的 macosx specifier 一致。
-    app_profile = get_provisioning_profile(
+    # macOS 只有主 app（无 widget，widget 仅 iOS）。拉取/创建并安装当前运行适用的 macOS App Store profile。
+    # force: true 确保拉取最新可用 profile，不指定固定 provisioning_name。
+    get_provisioning_profile(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
       team_id: TEAM_ID,
       platform: "macos",
-      provisioning_name: "VoxPocket Mac App Store",
+      force: true,
       skip_install: false
     )
+
+    profile_name = ENV["sigh_#{APP_IDENTIFIER}_appstore_profile-name"]
+    if profile_name.to_s.strip.empty?
+      UI.user_error!("macOS provisioning profile name for #{APP_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
+    end
+
+    escaped_profile = Shellwords.escape(profile_name)
 
     pkg_path = build_app(
       project: XCODEPROJ,
@@ -144,19 +153,15 @@ platform :mac do
       sdk: "macosx",
       export_method: "app-store",
       export_team_id: TEAM_ID,
-      xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID}",
+      xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID} VOXPOCKET_MAC_PROFILE_SPECIFIER=#{escaped_profile}",
       export_options: {
         manageAppVersionAndBuildNumber: false,
         signingStyle: "manual",
         teamID: TEAM_ID,
-        # macOS App Store 的 .pkg 用 installer 证书签名。不显式指定时 xcodebuild
-        # 会去 provisioning profile 里找 installer 证书、找不到就报
-        # "Provisioning profile ... doesn't include signing certificate
-        # '3rd Party Mac Developer Installer'" → export 失败(IPA invalid)。
-        # 显式指定钥匙串里的 installer 证书即可(profile 本不含 installer 证书)。
-        installerSigningCertificate: "3rd Party Mac Developer Installer: Tianpei Li (4Z8GG667QD)",
+        # macOS App Store 的 .pkg 用 installer 证书签名。使用通用选择器 Mac Installer Distribution。
+        installerSigningCertificate: "Mac Installer Distribution",
         provisioningProfiles: {
-          APP_IDENTIFIER => ENV.fetch("sigh_#{APP_IDENTIFIER}_appstore_profile-name", app_profile)
+          APP_IDENTIFIER => profile_name
         }
       },
       output_directory: ENV.fetch("RUNNER_TEMP", "/tmp"),
