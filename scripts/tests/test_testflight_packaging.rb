@@ -227,7 +227,7 @@ class TestFlightPackagingTests < Minitest::Test
         assert_includes File.read(output_path), "latest="
       else
         refute status.success?
-        assert_includes output, "iOS releases are paused"
+        assert_includes output, "iOS TestFlight releases need separate Owner authorization; only macos is allowed."
         assert_empty File.read(output_path)
       end
     end
