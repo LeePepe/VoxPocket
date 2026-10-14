@@ -22,6 +22,24 @@ final class QuickRecordingFinalResultWaiterTests: XCTestCase {
         await assertResult("终稿", from: waiter)
     }
 
+    func testBackgroundPublisherDeliversFinalWithoutMainActorAssertion() async {
+        let source = BackgroundSource()
+        let waiter = QuickRecordingFinalResultWaiter(publisher: source.publisher)
+        let final = result("后台终稿")
+        await Task.detached { source.send(final) }.value
+        XCTAssertEqual(waiter.capturedText, "后台终稿")
+        await assertResult("后台终稿", from: waiter)
+    }
+
+    func testBackgroundPublisherCompletionAndFailureEndWithoutMainActorAssertion() async {
+        for fails in [false, true] {
+            let source = BackgroundSource()
+            let waiter = QuickRecordingFinalResultWaiter(publisher: source.publisher)
+            await Task.detached { source.complete(fails: fails) }.value
+            await assertResult(nil, from: waiter)
+        }
+    }
+
     func testEmptyFinalEndsWaitingWithoutTimeout() async {
         let subject = PassthroughSubject<TranscriptionResult, Error>()
         let waiter = QuickRecordingFinalResultWaiter(publisher: subject.eraseToAnyPublisher())
@@ -81,6 +99,14 @@ final class QuickRecordingFinalResultWaiterTests: XCTestCase {
         private let count = Mutex(0)
         var value: Int { count.withLock { $0 } }
         func increment() { count.withLock { $0 += 1 } }
+    }
+
+    /// 仅桥接 Combine 非 Sendable subject；引用不可变，send 与订阅使用 Combine 自身同步。
+    private final class BackgroundSource: @unchecked Sendable {
+        private let subject = PassthroughSubject<TranscriptionResult, Error>()
+        var publisher: AnyPublisher<TranscriptionResult, Error> { subject.eraseToAnyPublisher() }
+        func send(_ result: TranscriptionResult) { subject.send(result) }
+        func complete(fails: Bool) { subject.send(completion: fails ? .failure(CancellationError()) : .finished) }
     }
 }
 #endif
