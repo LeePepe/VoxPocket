@@ -81,8 +81,16 @@ jobs:
           latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
           if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
           xcodebuild -version
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Ensure fastlane + xcodegen
+        run: |
+          brew list fastlane >/dev/null 2>&1 || brew install fastlane
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Test release packaging (fastlane Ruby)
+        working-directory: repo
+        run: |
+          GEM_PATH="$(brew --prefix fastlane)/libexec" \
+          RUBY="$(brew --prefix ruby)/bin/ruby" \
+            python3 scripts/ci/run_repository_tests.py packaging-ruby
       - name: Regenerate xcodeproj from project.yml
         working-directory: repo/VoxPocket
         run: xcodegen generate --spec project.yml
