@@ -34,7 +34,7 @@ red_lines:
 `SwiftDataSessionUseCase` → macOS 独立的快捷录音栈(与主编辑器隔离,防状态串扰)。
 
 ## 门禁
-- 本地/CI `gate`:通过 root discovery CLI `app-python` 自动发现并执行 `scripts/tests/test_*.py` 回归(不构建签名 App)。
+- 本地/CI `gate`:通过 root discovery CLI `app-python` (`python3 scripts/ci/run_repository_tests.py app-python`) 执行门禁。该 runner 对 `scripts/tests/test_*.py` 执行确定性排序与自动发现，直接运行每一个匹配的 Python 回归测试文件（包含既有的全部 8 个 baseline 回归脚本与未来新增脚本），且在未发现任何测试文件或任一测试失败/超时时 fail-closed 退出非 0，防止空跑或静默遗漏，替代原先逐项手工注册的 6 项单文件命令。
 - CI 额外执行 `xcodebuild` 全量构建:macOS 与 iOS generic(`App target`,required),
   以及 iOS 模拟器 build/test(`iOS simulator`,non-required)。本地不跑 xcodebuild
   (`RUN_HEAVY=1 scripts/verify` 可显式开启 macOS 构建)。
