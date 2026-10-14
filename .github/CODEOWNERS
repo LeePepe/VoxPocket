@@ -5,6 +5,9 @@
 /CLAUDE.md                        @LeePepe
 /.specify/memory/constitution.md  @LeePepe
 /docs/architecture/               @LeePepe
+# Tier B: reviewed prose-only architecture narratives (MY-1676/spec/codeowners-tiering/v6 Decision A)
+/docs/architecture/dependency-graph.md
+/docs/architecture/packages-architecture.md
 **/tech-context.md                @LeePepe
 /scripts/verify                   @LeePepe
 /policy/                          @LeePepe
