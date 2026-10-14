@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 """Run production log configuration tests without the signed App test host."""
 import argparse
-import json
 from pathlib import Path
 import subprocess
 import tempfile
-
-
-LOKIKIT_URL = "https://github.com/LeePepe/shared-telemetry.git"
-LOKIKIT_SHA = "5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"
 
 
 def main():
@@ -18,18 +13,43 @@ def main():
     root = Path(__file__).resolve().parents[2]
     with tempfile.TemporaryDirectory(prefix="vox-logging-unit-") as temporary:
         package = Path(temporary)
+        lokikit_sources = package / "Sources/LokiKit"
         sources = package / "Sources/VoxPocket"
         tests = package / "Tests/VoxPocketTests"
+        lokikit_sources.mkdir(parents=True)
         sources.mkdir(parents=True)
         tests.mkdir(parents=True)
-        (package / "Package.swift").write_text(f'''// swift-tools-version: 6.2
+        (package / "Package.swift").write_text('''// swift-tools-version: 6.2
 import PackageDescription
 let package = Package(name: "LoggingRegression", platforms: [.macOS(.v26)],
-    dependencies: [.package(url: {json.dumps(LOKIKIT_URL)}, revision: {json.dumps(LOKIKIT_SHA)})],
     targets: [
-        .target(name: "VoxPocket", dependencies: [.product(name: "LokiKit", package: "shared-telemetry")]),
+        .target(name: "LokiKit"),
+        .target(name: "VoxPocket", dependencies: ["LokiKit"]),
         .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket"])
     ])
+''')
+        (lokikit_sources / "LokiKitStub.swift").write_text('''import Foundation
+
+public final class LokiLogSink: Sendable {
+    public init(
+        endpoint: URL,
+        labels: [String: String],
+        allowedMessages: Set<String>,
+        allowedContextKeys: Set<String>,
+        persistenceURL: URL?,
+        token: String?
+    ) {}
+
+    public func start() -> Task<Void, Never> {
+        Task { }
+    }
+}
+
+public struct PrintLogger: Sendable {
+    public init(subsystem: String) {}
+    public static func configureRemoteSink(_ sink: LokiLogSink) {}
+    public func info(_ message: String) {}
+}
 ''')
         (sources / "VoxPocketLogging.swift").symlink_to(root / "VoxPocket/VoxPocket/VoxPocketLogging.swift")
         (tests / "VoxPocketLoggingTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/VoxPocketLoggingTests.swift")
@@ -37,7 +57,7 @@ let package = Package(name: "LoggingRegression", platforms: [.macOS(.v26)],
         for configuration in configurations:
             subprocess.run(
                 ["swift", "test", "--package-path", str(package), "--configuration", configuration],
-                check=True, timeout=240
+                check=True, timeout=60
             )
 
 
