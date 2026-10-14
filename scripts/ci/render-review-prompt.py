@@ -3,8 +3,8 @@
 
 为什么用 python 而不是 shell:模板里含大量反引号(`swift test`、`project.yml`、
 `cloudKitDatabase: .none` …)。历史上 prompt 内联在 shell 双引号字符串里,未转义的
-反引号被 bash 当成命令替换执行掉,规则文本在运行时**从 prompt 里消失**(MY-1355
-repair round 1)。这里做的是纯文本单次替换,模板内容永不被 shell 求值,该类
+反引号被 bash 当成命令替换执行掉,规则文本在运行时**从 prompt 里消失**。
+这里做的是纯文本单次替换,模板内容永不被 shell 求值,该类
 quoting 事故在结构上不可能再发生 —— 因此模板里的反引号写正常反引号,不需转义。
 
 用法(占位符取值一律走环境变量,避免出现在命令行/被 shell 二次求值):
@@ -58,7 +58,7 @@ def main() -> int:
         rendered,
     )
 
-    # Defense-in-depth (MY-1430): if upstream somehow passes surrogate characters
+    # Defense-in-depth: if upstream somehow passes surrogate characters
     # (e.g. from surrogateescape os.environ decoding of truncated UTF-8 bytes),
     # encode→decode with 'replace' to eliminate lone surrogates before writing.
     # This prevents UnicodeEncodeError on sys.stdout.write without masking real
