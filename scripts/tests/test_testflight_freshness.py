@@ -115,9 +115,45 @@ class TestFlightFreshnessTests(unittest.TestCase):
 
     def test_workflow_preserves_manual_and_platform_guards(self):
         self.assertIn("workflow_dispatch:", self.workflow_text)
-        self.assertIn("ref: main", self.workflow_text)
+        self.assertIn(
+            "ref: ${{ github.event.workflow_run.head_sha || github.sha }}",
+            self.workflow_text,
+        )
+        self.assertIn(
+            "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+            self.workflow_text,
+        )
+        self.assertIn("cancel-in-progress: false", self.workflow_text)
         self.assertIn("steps.gate.outputs.release == 'true'", self.workflow_text)
         self.assertIn("refs/tags/testflight/macos-last-released", self.workflow_text)
+        self.assertNotRegex(
+            self.workflow_text,
+            r"security lock-keychain [^\n]+\|\| true",
+        )
+        self.assertRegex(
+            self.workflow_text,
+            r"(?m)^  advance_marker:\n(?:    .*\n)*?    permissions:\n      contents: write$",
+        )
+        self.assertNotRegex(
+            self.workflow_text,
+            r"(?m)^permissions:\n  contents: write",
+        )
+        self.assertRegex(
+            self.workflow_text,
+            r"(?m)^  release:\n(?:    .*\n)*?    permissions:\n      contents: read$",
+        )
+        self.assertIn(
+            'echo "Source CI run ID: ${{ github.event.workflow_run.id }}"',
+            self.workflow_text,
+        )
+        self.assertIn(
+            'echo "Source CI run URL: ${{ github.event.workflow_run.html_url }}"',
+            self.workflow_text,
+        )
+        marker_index = self.workflow_text.index("- name: Move last-released tag")
+        self.assertNotIn("- name:", self.workflow_text[marker_index + 1:])
+        marker_job = self.workflow_text[self.workflow_text.index("  advance_marker:"):]
+        self.assertNotIn("uses:", marker_job)
 
 
 if __name__ == "__main__":
