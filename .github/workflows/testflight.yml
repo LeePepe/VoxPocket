@@ -33,12 +33,11 @@ concurrency:
   group: testflight
   cancel-in-progress: false # 不打断进行中的上传
 
-permissions:
-  contents: write # 移动 macOS 发布标记
-
 jobs:
   release:
     name: Build & upload to TestFlight
+    permissions:
+      contents: write # 移动 macOS 发布标记
     # Fork guard form required by shared-ci workflow-lint for self-hosted jobs.
     if: >-
       ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)) &&
@@ -65,6 +64,10 @@ jobs:
             exit 1
           fi
           echo "Candidate SHA: $ACTUAL_SHA"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "Source CI run ID: ${{ github.event.workflow_run.id }}"
+            echo "Source CI run URL: ${{ github.event.workflow_run.html_url }}"
+          fi
 
       # 外部本地依赖（fastlane build 需要）：AppleUITesting 落在
       # repo/VoxPocket 上两级 = $GITHUB_WORKSPACE 同级；LokiKit 由 SwiftPM 按 shared-telemetry commit 5f4b4d9（v0.1.0）固定解析。
@@ -268,8 +271,3 @@ jobs:
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "${SHA}:refs/tags/testflight/macos-last-released"
           echo "✅ testflight/macos-last-released → $SHA"
-
-      - name: Post-release reporting
-        if: always() && steps.gate.outputs.release == 'true'
-        run: |
-          echo "TestFlight release execution finished."

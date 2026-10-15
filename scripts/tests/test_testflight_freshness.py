@@ -130,6 +130,24 @@ class TestFlightFreshnessTests(unittest.TestCase):
             self.workflow_text,
             r"security lock-keychain [^\n]+\|\| true",
         )
+        self.assertRegex(
+            self.workflow_text,
+            r"jobs:\n  release:\n(?:    .*\n)*?    permissions:\n      contents: write",
+        )
+        self.assertNotRegex(
+            self.workflow_text,
+            r"(?m)^permissions:\n  contents: write",
+        )
+        self.assertIn(
+            'echo "Source CI run ID: ${{ github.event.workflow_run.id }}"',
+            self.workflow_text,
+        )
+        self.assertIn(
+            'echo "Source CI run URL: ${{ github.event.workflow_run.html_url }}"',
+            self.workflow_text,
+        )
+        marker_index = self.workflow_text.index("- name: Move last-released tag")
+        self.assertNotIn("- name:", self.workflow_text[marker_index + 1:])
 
 
 if __name__ == "__main__":
