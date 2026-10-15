@@ -128,7 +128,8 @@ These are the current pins; they change only through Owner-reviewed PRs.
 
 - One task → one branch + worktree → one PR using `.github/pull_request_template.md`.
 - Done = required checks green on the PR head SHA; a new push invalidates old evidence.
-- Non-draft PRs get squash auto-merge (`auto-merge.yml`). CODEOWNERS paths (`.github/**`,
+- PR Manager merges with the GitHub App identity once required checks and approvals pass;
+  no GITHUB_TOKEN auto-merge. CODEOWNERS paths (`.github/**`,
   policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval, which
   the ruleset enforces (code-owner review required); add the `owner-review` label to them.
   AI review does not block these changes for missing approval evidence: approval is enforced

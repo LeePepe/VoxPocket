@@ -9,7 +9,7 @@
 #
 # 设计成确定性门:
 #   - 无 blocker           → 贴一条 sticky comment,exit 0(check 绿)
-#   - 有 blocker(P0/严重) → 更新 sticky comment,exit 1(check 红 → 挡 auto-merge)
+#   - 有 blocker(P0/严重) → 更新 sticky comment,exit 1(check 红 → 挡 PR Manager 合并)
 #   - 任何工具异常          → exit 1(fail closed,宁可卡住也不放行未审的 diff)
 #
 # 依赖:git, gh(runner 环境自带 GITHUB_TOKEN), jq, python3(3.11+), codex, 本地 Raven。
