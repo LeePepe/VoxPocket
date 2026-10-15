@@ -33,7 +33,7 @@
 
 - [x] CHK014 Loki event/log paths and stores remain separate from Blob routing and storage.
 - [x] CHK015 Host construction/product `track`/lifecycle `flush` are confined to one serialized non-`@MainActor` coordinator; Decision 2A exempts only SDK-owned internally synchronized off-main heartbeat work.
-- [x] CHK016 Dependency tag-to-full-SHA resolution, full-SHA-only manifest/guard pins, the complete active authority/projection set, deliberate constitution amendment, historical-evidence exclusion, and recheck timing are explicit.
+- [x] CHK016 Dependency tag/SHA selection, the complete active authority/projection set, deliberate constitution amendment, historical-evidence exclusion, and recheck timing are explicit.
 - [x] CHK017 XcodeGen truth, CODEOWNERS/Owner gates, manual release semantics, and exact-head publication rules are preserved per single-goal PR.
 - [x] CHK018 Each acceptance/requirement has a planned task and evidence surface; external Owner work is separately blocked.
 - [x] CHK023 Dependency, privacy, dormant runtime, app adoption, synthetic CI, and TestFlight governance are independently working PR slices with no aggregate publication task.

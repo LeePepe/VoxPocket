@@ -16,7 +16,7 @@ Adopt the immutable shared-telemetry Azure Blob adapter as a second, explicitly 
 
 **Language/version**: Swift 6.2 packages/app; Python 3.11+ repository tests; Ruby/Fastlane; YAML/GitHub Actions; XcodeGen
 
-**Primary dependencies**: shared-telemetry/LokiKit (reviewed Blob API at full SHA `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, or the reviewed 40-character commit resolved from `v0.2.0` if published before implementation publication); existing SwiftUI/AppKit app shell; shared-ci `6e354f476bc53d68f0f09fc231d5cd938466af9c`
+**Primary dependencies**: shared-telemetry/LokiKit exact `0.2.0` (annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5`, peeled commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`); existing SwiftUI/AppKit app shell; shared-ci `6e354f476bc53d68f0f09fc231d5cd938466af9c`
 
 **Storage**: dedicated Application Support Blob adapter catalog/event/sidecar/capacity files; existing Loki event/log stores remain separate and untouched
 
@@ -41,7 +41,7 @@ Adopt the immutable shared-telemetry Azure Blob adapter as a second, explicitly 
 | III Concurrency safety | PASS | Host construction/product `track`/lifecycle `flush` are isolated in a non-`@MainActor` actor. Main-actor callers submit asynchronously; flushes serialize/join. Decision 2A exempts only SDK-owned internally synchronized off-main heartbeat work. |
 | IV Privacy of voice/text | PASS | Exact allowlists and sentinel tests reject voice/text/prompt/error/credential content before accepted state; existing unsafe error fields are removed. |
 | V Secrets/vendor hygiene | PASS | No real endpoint/SAS/resource identifier is committed or used in PR tests. Real values enter only through a runner-temp untracked `0600` xcconfig during an authorized TestFlight archive; only its path is printable, cleanup is unconditional, and raw/escaped sentinel absence is tested. |
-| VI Boundary validation | PASS | Plist, adapter policy, labels, numeric bounds, dependency revision, and processed Release output are validated fail-closed. |
+| VI Boundary validation | PASS | Plist, adapter policy, labels, numeric bounds, exact dependency version/tag integrity, and processed Release output are validated fail-closed. |
 | XcodeGen source of truth | PASS | `VoxPocket/project.yml` owns build settings/file membership; generated project changes are produced only by the pinned generator and checked for idempotency. |
 | TestFlight-only production delivery | PASS | Local/PR verification is unsigned, synthetic, and non-networked. Production evidence remains post-merge and Owner-authorized. |
 | Existing behavior preserved | PASS | Loki services/stores/routing and release semantics remain, except the explicitly authorized removal of arbitrary error strings. |
@@ -53,7 +53,7 @@ No constitutional exception is requested.
 
 The evidence and alternatives are in [`research.md`](./research.md). Binding decisions:
 
-1. **R-001 — Immutable repository-wide dependency**: every manifest and guard pins one full reviewed SHA. Use `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95` while `v0.2.0` is absent; if the immutable tag appears before implementation publication, resolve and review its 40-character commit SHA, then move every consumer/guard together to that SHA. Never pin the version tag.
+1. **R-001 — Immutable repository-wide dependency**: move every consumer, guard, current authority, and current projection together to SwiftPM exact `0.2.0`; record the annotated tag object and peeled commit as integrity evidence only, with no branch or revision fallback.
 2. **R-002 — Separate transports and stores**: Blob neither decorates nor mirrors Loki; it owns a dedicated store and must not migrate/delete Loki data.
 3. **R-003 — Closed event vocabulary**: typed constructors expose only `product.user_action` and `product.performance`; heartbeat is SDK-owned.
 4. **R-004 — Off-main serialized host lifecycle**: one non-`@MainActor` actor is the sole host entry for the exact bundle initializer, product `track`, and lifecycle `flush`; Decision 2A exempts only SDK-owned internally synchronized off-main heartbeat work.
@@ -146,15 +146,15 @@ Land only the exact AI-Reviewer-PASS planning artifacts and Spec Kit pointers be
 
 ### PR01 — Dependency-only immutable selection
 
-Resolve the immutable full SHA at implementation publication, using the reviewed baseline SHA or the reviewed 40-character commit resolved from `v0.2.0`, validate the provider consumer fixture, then atomically move all three manifests, guards, active authorities/projections, protected constitution amendment, and stale dependency-only workflow comment. The version tag is never itself a dependency pin. The observable goal is one repository-wide Blob-capable immutable selection with no runtime behavior change. This PR is cross-layer but single-goal; every package and repository gate passes at its head.
+Validate annotated `v0.2.0` and its peeled commit, run the provider consumer fixture in version mode, then atomically move all three manifests, guards, active authorities/projections, protected constitution amendment, and stale dependency-only workflow comment to exact `0.2.0`. The observable goal is one repository-wide Blob-capable exact selection with no runtime behavior change. This PR is cross-layer but single-goal; every package and repository gate passes at its head.
 
 ### PR02 / PR03 — Independent privacy repairs
 
-PR02 removes arbitrary stringified transcription-error telemetry in VoxInfrastructure; PR03 removes localized refinement-error telemetry in VoxApplication. Each contains its own red/green sentinel regression, preserves safe Loki metrics and runtime/UI error behavior, and depends only on merged PR01. The two PRs may proceed in parallel.
+PR02 removes arbitrary stringified transcription-error telemetry in VoxInfrastructure; PR03 removes localized refinement-error telemetry in VoxApplication. Each contains its own red/green sentinel regression and preserves safe Loki metrics and runtime/UI error behavior. PR01, PR02, and PR03 each depend only on merged PR00 (or an explicitly approved base containing byte-identical reviewed planning artifacts); their owned paths and outputs are independent, so the three PRs may proceed in parallel.
 
 ### PR04 — Dormant Blob deep module
 
-After PR02 and PR03 merge, add the typed policy/configuration/store/coordinator plus source plist/XcodeGen settings and focused tests, but no production call site. Missing/unexpanded source settings keep it unused and disabled. The exact initializer, Decision 2A heartbeat boundary, Decision 1A query fixture, actor ordering, privacy, and disabled/invalid states are independently testable without credentials.
+After PR01, PR02, and PR03 merge, add the typed policy/configuration/store/coordinator plus source plist/XcodeGen settings and focused tests, but no production call site. Missing/unexpanded source settings keep it unused and disabled. The exact initializer, Decision 2A heartbeat boundary, Decision 1A query fixture, actor ordering, privacy, and disabled/invalid states are independently testable without credentials.
 
 ### PR05 — App adoption and instrumentation
 
@@ -182,7 +182,7 @@ After PR01–PR07 merge, Owner policy/secret provisioning, and fresh Owner relea
 | US2/AC2; FR-008, FR-009; RB-001 | PR02/PR03 | T006, T007 | red/green localized/stringified-error tests and closed/omitted replacement fields |
 | US2/AC3, US2/AC4; FR-010, FR-011 | PR04 | T008 | missing/empty/unexpanded zero-state and present-invalid fixed-diagnostic fixtures |
 | US2/AC5; FR-014, FR-015, FR-016, FR-018, FR-019 | PR04/PR06/PR07 | T008, T010, T011 | SAS fixture; synthetic Release; temp-xcconfig/raw+escaped log absence; preserved gates |
-| US3/AC1; FR-001 | PR01 | T001–T005 | provider consumer check; tag-to-full-SHA resolution record; matching full-SHA manifests, guards, authorities/projections; constitution amendment |
+| US3/AC1; FR-001 | PR01 | T001–T005 | provider version-mode consumer check; exact `0.2.0`; annotated-tag object/peeled-commit integrity record; matching manifests, guards, authorities/projections; constitution amendment |
 | US3/AC2; FR-002, FR-003, FR-008, FR-009 | PR02/PR03/PR05 | T006, T007, T009 | Loki construction/routing/store regressions and privacy-only removals |
 | US3/AC3; FR-013, FR-015–FR-017 | PR04/PR06 | T008, T010 | XcodeGen/plist contract and processed synthetic Release app |
 | US3/AC4; FR-014, FR-015, FR-016, FR-017, FR-018 | PR07 | T011 | path-only `-xcconfig`; mode/cleanup; raw+escaped absence; unchanged release invariants |
@@ -198,9 +198,9 @@ Every stable acceptance criterion and functional requirement maps to an owned ta
 
 [`quickstart.md`](./quickstart.md) is the executable verification contract. Required implementation evidence:
 
-1. PR01 rechecks `v0.2.0`, records the selected 40-character provider revision, passes the provider external-consumer fixture, updates the full current-truth path list atomically, and proves the old selection absent from that list while preserving explicitly historical feature evidence;
-2. PR02 and PR03 each demonstrate their privacy test red against the unsafe baseline, then green without assertion weakening, and pass their own package layer plus `scripts/verify`;
-3. PR04 proves the representative stored-policy query accepted and `sp=cw`/user-delegation/unknown-name forms rejected; it tests the exact bundle initializer, SDK heartbeat exemption, coordinator-only host construction/`track`/`flush`, privacy allowlists, disabled/invalid config, actor ordering, joined flush, and retry retention;
+1. After PR00, PR01 validates annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peeling to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, runs `external_consumer.py --version 0.2.0`, updates the full current-truth path list atomically to exact `0.2.0`, and proves the old selection and every revision selector absent from that list while preserving explicitly historical feature evidence;
+2. Independently after PR00 and in parallel with PR01 and each other, PR02 and PR03 each demonstrate their privacy test red against the unsafe baseline, then green without assertion weakening, and pass their own package layer plus `scripts/verify`;
+3. Only after PR01, PR02, and PR03 merge, PR04 proves the representative stored-policy query accepted and `sp=cw`/user-delegation/unknown-name forms rejected; it tests the exact bundle initializer, SDK heartbeat exemption, coordinator-only host construction/`track`/`flush`, privacy allowlists, disabled/invalid config, actor ordering, joined flush, and retry retention;
 4. PR05 proves app-shell action/lifecycle instrumentation and unchanged Loki behavior while unconfigured builds remain disabled;
 5. PR06 generates from `VoxPocket/project.yml`, proves zero generated drift, and inspects an unsigned synthetic Release app's processed plist;
 6. PR07 proves the xcconfig is runner-temp/untracked/`0600`, only its path reaches `-xcconfig`, cleanup runs on every terminal path, both raw and escaped sentinels are absent from captured Release logs, and existing manual release invariants remain;
@@ -280,7 +280,7 @@ docs/testflight-release.md
 docker/telemetry/README.md
 ```
 
-**Structure decision**: PR01 is one atomic cross-layer dependency-selection goal whose layer-scoped tasks update all consumers and current truth/projections; PR02/PR03 own privacy behavior separately; VoxPocketApp splits dormant contract (PR04) from adoption (PR05); root support splits synthetic CI (PR06) from TestFlight secret governance (PR07). Generated Xcode project files are outputs, never hand-edited sources.
+**Structure decision**: PR01 is one atomic cross-layer dependency-selection goal whose layer-scoped tasks update all consumers and current truth/projections; PR02/PR03 own privacy behavior separately. PR01, PR02, and PR03 are independent siblings after PR00 and may run concurrently; PR04 waits for all three. VoxPocketApp splits dormant contract (PR04) from adoption (PR05); root support splits synthetic CI (PR06) from TestFlight secret governance (PR07). Generated Xcode project files are outputs, never hand-edited sources.
 
 ## Constitution Check — After Design
 
@@ -290,7 +290,7 @@ PASS with no constitutional exception. PR01 deliberately amends only the immutab
 
 - Repository base: VoxPocket `9fddff22af2c9f693e0a90155b224a5fb41dbf06`.
 - Repo contract: shared-ci `6e354f476bc53d68f0f09fc231d5cd938466af9c`.
-- Provider dependency: reviewed shared-telemetry full SHA `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, superseded only by the reviewed 40-character commit resolved from `v0.2.0` if that immutable tag exists before implementation publication; the tag itself is never pinned.
+- Provider dependency: shared-telemetry exact `0.2.0`; annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peels to reviewed commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`. Those OIDs are integrity evidence, not revision selectors.
 - Planning gate: AI Reviewer exact-revision PASS before Team Lead implementation dispatch.
 - Per-PR candidate gate: AI Reviewer exact frozen-tree PASS plus explicit publication permission before each commit/push/PR; a changed or rebased SHA is reviewed again.
 - Important-path gate: applicable Owner approval and required checks on each exact non-Draft PR head.
@@ -300,7 +300,7 @@ PASS with no constitutional exception. PR01 deliberately amends only the immutab
 
 | Risk | Mitigation / escalation |
 |---|---|
-| `v0.2.0` appears or resolves differently | Recheck once immediately before publication, review its resolved 40-character commit, move all manifests and guards atomically to that full SHA, record it, and rerun dependency/provider checks. A tag pin or mixed state blocks. |
+| `v0.2.0` is missing, moved, not annotated, or peels to a commit other than `903f4b9bc01cfcfeba3ce96e13519d841781b40a` | Block PR01 and escalate the exact tag evidence. Do not fall back to a branch or revision selector; ordinary later movement of provider `main` is irrelevant. |
 | SDK API differs from reviewed docs | Stop and return exact compiler/provider-contract evidence; do not invent an adapter wrapper or widen shared-telemetry scope. |
 | Stored-policy SAS query differs | Compare the synthetic query-name fixture against the pinned validator. Reject user-delegation keys or `sp=cw`; do not broaden the provider or generate a real token. |
 | Synchronous host I/O leaks onto `@MainActor` | Structural typed coordinator seam plus actor/order tests. Any direct host construction/product `track`/lifecycle `flush` from UI/lifecycle code blocks review; SDK heartbeat remains only the Decision 2A exemption. |

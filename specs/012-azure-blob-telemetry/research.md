@@ -9,10 +9,10 @@
 ## Dependency evidence
 
 - VoxInfrastructure, VoxApplication, and VoxPresentation all pin shared-telemetry `v0.1.0` at `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`; the same revision is guarded by `scripts/ci/fetch-external-deps.sh` and `scripts/tests/test_app_logging.py`.
-- The reviewed shared-telemetry `main` revision is `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`. It contains the public Swift Azure Blob adapter and its integration, usage, migration, and compatibility contracts.
-- The remote does not publish `v0.2.0` at planning time. Implementation must therefore use the full reviewed revision unless the immutable tag exists before publication, in which case its resolved 40-character commit is reviewed and every consumer and guard moves together to that full SHA. The version tag is never itself pinned.
+- The original planning snapshot predated `v0.2.0` publication. Current remote evidence supersedes that dependency-selection assumption: annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peels to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, which was also provider `main` when verified.
+- PR01 must use SwiftPM `exact: "0.2.0"` everywhere. The tag object and peeled commit are integrity evidence only; neither a branch nor a revision selector is an allowed fallback.
 - The adapter performs synchronous event admission/local persistence, owns a retryable file store, validates create-only SAS intent, emits an SDK-owned content-free heartbeat, and leaves upload explicit through `flush()`.
-- At provider revision `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, the transport accepts only `sv`, `sr`, `si`, `sp`, `st`, `se`, `spr`, `sip`, and `sig`; requires `sr=c`; and rejects an explicit `sp` other than `c`. The prior `--permissions cw --auth-mode login --as-user` command emits both `sp=cw` and unsupported user-delegation keys, so it cannot initialize this adapter.
+- At released provider commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, the transport accepts only `sv`, `sr`, `si`, `sp`, `st`, `se`, `spr`, `sip`, and `sig`; requires `sr=c`; and rejects an explicit `sp` other than `c`. The prior `--permissions cw --auth-mode login --as-user` command emits both `sp=cw` and unsupported user-delegation keys, so it cannot initialize this adapter.
 - The exact bundle initializer immediately records/schedules the SDK heartbeat under the SDK's own synchronization, with later ticks originating off-main. That internal work cannot traverse a host actor and is the narrow Decision 2A exemption.
 
 ## Repository evidence
@@ -29,9 +29,9 @@
 
 ### R-001 — Use an immutable, repository-wide shared-telemetry selection
 
-All three Swift consumer manifests and both dependency guards use one full-SHA selection. Until `v0.2.0` exists, the selection is the reviewed full SHA `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`; a later tag-derived switch is allowed only before implementation publication, after its resolved 40-character commit is reviewed and recorded, and only when all consumers and guards move atomically to that SHA.
+All three Swift consumer manifests, both dependency guards, and every current authority/projection use SwiftPM exact `0.2.0`. PR01 validates the annotated tag object and peeled commit, records them as integrity evidence, and moves the entire selection atomically; tag-integrity failure blocks and escalates instead of selecting a revision.
 
-**Rejected**: a branch pin, version-tag pin, short SHA, mixed manifest/guard revisions, or assuming the documented release tag exists.
+**Rejected**: a branch or revision pin, revision fallback, semver range, short SHA, mixed selections, or an unverified/moved tag.
 
 ### R-002 — Keep Loki and Blob as separate products and stores
 
@@ -75,7 +75,7 @@ Debug/local builds and credential-free Release builds run with Blob disabled. Th
 
 ### R-009 — Treat CODEOWNERS changes as Owner-gated
 
-Package manifests, `project.yml`, `.github/**`, `fastlane/**`, `scripts/ci/**`, AGENTS, the constitution, architecture, and layer context paths remain under their existing Owner/review contracts. Dependency, product/privacy adaptation, synthetic CI, and TestFlight governance are separate single-goal PRs. Every PR independently leaves `main` working, runs `scripts/verify`, receives exact-tree review/publication permission, and binds evidence to its own head; applicable important PRs cannot merge without Owner approval and required checks.
+Package manifests, `project.yml`, `.github/**`, `fastlane/**`, `scripts/ci/**`, AGENTS, the constitution, architecture, and layer context paths remain under their existing Owner/review contracts. Dependency, product/privacy adaptation, synthetic CI, and TestFlight governance are separate single-goal PRs. PR01 dependency selection, PR02 Infrastructure privacy, and PR03 Application privacy have disjoint paths/outputs, share PR00 as their sole prerequisite, and may run concurrently; PR04 waits for all three. Every PR independently leaves `main` working, runs `scripts/verify`, receives exact-tree review/publication permission, and binds evidence to its own head; applicable important PRs cannot merge without Owner approval and required checks.
 
 ### R-010 — Separate repository delivery from production proof
 
@@ -97,7 +97,7 @@ Decision 1A supersedes the issue's incompatible user-delegation example. The Own
 
 ## Open external gates
 
-1. `v0.2.0` tag availability must be rechecked immediately before implementation publication; if present, its resolved 40-character commit must be reviewed and selected rather than the tag itself.
+1. Immediately before PR01 publication, annotated `v0.2.0` must still peel to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`; a missing/moved/mismatched tag blocks and escalates without a revision fallback.
 2. Package-manifest, XcodeGen, workflow, Fastlane, and CI edits require existing CODEOWNERS/Owner review.
 3. Real endpoint/SAS provisioning and the TestFlight dispatch require explicit Owner action after merge.
 4. Final production evidence is limited to run/revision, build number, and blob name; payload and credentials are excluded.

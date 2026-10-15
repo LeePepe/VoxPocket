@@ -4,19 +4,21 @@ Run from the repository root on the exact candidate. No command in this document
 
 ## 1. Freeze the dependency selection
 
-Immediately before implementation publication, check whether immutable `v0.2.0` exists. If absent, use the reviewed full revision:
+PR01 uses SwiftPM exact version selection everywhere:
 
 ```text
-0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95
+exact: "0.2.0"
 ```
 
-If the tag exists, resolve it to a 40-character commit and review that commit before selection. PR01 always pins the selected full SHA—not the version tag—and atomically updates all three package manifests, both guards, and every current authority/projection enumerated in `tasks.md` T001–T005. Record the selected 40-character revision in the PR. The old-selection search is scoped to that current-truth list; `spec.md` and `research.md` retain explicitly historical baseline evidence.
+Immediately before publication, verify annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` still peels to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`. Record both OIDs as integrity evidence only, never as a manifest revision selector or fallback. PR01 atomically updates all three package manifests, both guards, and every current authority/projection enumerated in `tasks.md` T001–T005. The old-selection search is scoped to that current-truth list; `spec.md` and `research.md` retain explicitly historical baseline evidence.
 
 From the exact shared-telemetry checkout, validate the public consumer contract:
 
 ```sh
-python3 sdks/swift/scripts/external_consumer.py --revision <approved-40-character-revision>
+python3 sdks/swift/scripts/external_consumer.py --version 0.2.0
 ```
+
+After reviewed PR00 lands, PR01 dependency selection, PR02 Infrastructure privacy, and PR03 Application privacy may start independently and run in parallel. This document's section order organizes verification only; it does not add dependencies. PR04 starts only after all three merge.
 
 ## 2. Red/green privacy and lifecycle tests
 

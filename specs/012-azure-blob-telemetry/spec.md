@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-15
 
-**Status**: Ready for Round 2 spec-gate review
+**Status**: Ready for fresh spec-gate review
 
 **Input**: MY-1818 issue revision 1, Team Lead planning handoff, and VoxPocket `main` at `9fddff22af2c9f693e0a90155b224a5fb41dbf06`
 
@@ -53,15 +53,15 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 
 **Why this priority**: The Blob API is absent from the current dependency, and the release build is the only authorized place where real credentials may enter build settings.
 
-**Independent Test**: Exact dependency-pin checks, existing package/app tests, privacy regressions, TestFlight packaging fixtures, and a synthetic Release build prove the selected shared-telemetry revision, unchanged Loki construction/flush behavior, expanded plist keys, and secret-only release injection.
+**Independent Test**: Exact dependency-version and annotated-tag integrity checks, existing package/app tests, privacy regressions, TestFlight packaging fixtures, and a synthetic Release build prove shared-telemetry exact `0.2.0`, unchanged Loki construction/flush behavior, expanded plist keys, and secret-only release injection.
 
 **Acceptance Scenarios**:
 
-1. **US3/AC1** — **Given** the `v0.2.0` release tag is absent, **when** dependency adoption is frozen, **then** every consumer uses the same full reviewed revision containing the Blob API; if the immutable tag exists before implementation publication, its reviewed 40-character commit SHA becomes the shared selection. Manifests and guards always pin that full SHA, never the version tag.
+1. **US3/AC1** — **Given** annotated tag `v0.2.0` is verified to peel to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, **when** dependency adoption is frozen, **then** every consumer, guard, current authority, and current projection uses SwiftPM `exact: "0.2.0"`; the tag object and peeled commit are recorded only as integrity evidence, and no branch or revision selector is an allowed fallback.
 2. **US3/AC2** — **Given** the new Blob path exists, **when** existing application use cases and local log collection run, **then** their Loki endpoint/token selection, store, event routing, log-sink filtering, and session-end flush behavior remain unchanged except for the privacy-authorized removal of arbitrary error text.
 3. **US3/AC3** — **Given** a synthetic Release build, **when** its processed app plist is inspected, **then** both Blob keys are present, fully expanded from the required build settings, contain only synthetic values, and contain no unresolved build reference.
 4. **US3/AC4** — **Given** an authorized macOS TestFlight run, **when** the archive starts, **then** CI writes both real GitHub Actions secret values to one untracked runner-temp xcconfig with mode `0600`, passes only that file's path through `-xcconfig`, deletes it in an `always`/`ensure` path, and exposes neither raw nor escaped sentinel/value forms in Release logs, xcargs, command-line environment assignments, or other printable arguments.
-5. **US3/AC5** — **Given** the implementation is split into dependency, privacy, app-runtime, app-adoption, synthetic-Release, and TestFlight-injection changes, **when** each single-goal PR is delivered, **then** it independently leaves `main` working, is non-Draft, carries its own exact-SHA verification/review/publication evidence, and waits for applicable CODEOWNERS/Owner approval without bypass; only the TestFlight-injection PR lists the exact Owner provisioning and secret commands.
+5. **US3/AC5** — **Given** the implementation is split into dependency, privacy, app-runtime, app-adoption, synthetic-Release, and TestFlight-injection changes, **when** each single-goal PR is delivered, **then** it independently leaves `main` working, is non-Draft, carries its own exact-SHA verification/review/publication evidence, and waits for applicable CODEOWNERS/Owner approval without bypass; PR01, PR02, and PR03 each depend directly on PR00 and may run concurrently, PR04 waits for all three, and only the TestFlight-injection PR lists the exact Owner provisioning and secret commands.
 
 ### Edge Cases
 
@@ -70,7 +70,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 - An event has a safe name but an unknown key, unsafe label, non-finite duration, or sensitive sentinel embedded in an otherwise plausible field.
 - The app is terminated or disabled during a flush; no unconfirmed file may be erased and no next request may start on the cancelled generation.
 - Several UI/lifecycle signals arrive while admission or flush is active; the host coordinator preserves admission order, joins rather than duplicates the active flush, and performs no synchronous file I/O on `@MainActor`. SDK-owned heartbeat ticks remain internally synchronized and off-main without becoming a host/product event bypass.
-- The dependency tag appears after planning but before the implementation candidate is published.
+- The `v0.2.0` tag is missing, moved, no longer annotated, or no longer peels to the reviewed commit; PR01 blocks and escalates instead of falling back to a revision selector.
 - A Release build is produced without real secrets for CI proof; it must use synthetic values and never contact Azure.
 - The Owner has not added secrets or has not explicitly authorized a TestFlight run; implementation may be merged, but production delivery evidence remains pending.
 - A rollback encounters pending Blob catalog, queue, sidecar, or capacity-ledger files; they must be retained rather than opened by the older adapter or deleted.
@@ -79,7 +79,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 
 ### Functional Requirements
 
-- **FR-001**: VoxPocket MUST use one immutable shared-telemetry selection containing the public Azure Blob adapter across every Swift consumer manifest, dependency guard, current authority, and current projection. The protected constitution change MUST be a deliberate amendment naming the rule, reason, and migration impact; historical baseline evidence remains explicitly historical.
+- **FR-001**: VoxPocket MUST use SwiftPM `exact: "0.2.0"` for shared-telemetry across every Swift consumer manifest, dependency guard, current authority, and current projection. A branch, revision selector, or revision fallback is forbidden; the annotated tag object and its peeled commit are integrity evidence only. The protected constitution change MUST be a deliberate amendment naming the rule, reason, and migration impact; historical baseline evidence remains explicitly historical.
 - **FR-002**: The existing Loki event service and local Loki log sink MUST remain separate from the Blob service; legacy events MUST NOT be fanned out to Blob implicitly.
 - **FR-003**: The Blob service MUST use one dedicated Blob-only application-support store with one live owner and MUST NOT reuse, migrate, or delete Loki queue/log files.
 - **FR-004**: Trusted app, build, and version metadata MUST be allowlisted from the built application; install identity MUST be a non-personal UUID supplied only for initial creation/reset.
@@ -120,7 +120,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 ## Compatibility
 
 - Loki endpoint/token selection, Noop fallback, local log mirroring, Loki store ownership, legacy safe event names/metrics, and existing flush timing remain in place; Blob is a second explicitly routed service.
-- The public Swift module/product remains `LokiKit`; the upgrade is additive. All consumer manifests move together so SwiftPM never resolves mixed copies.
+- The public Swift module/product remains `LokiKit`; the upgrade is additive. All consumer manifests move together to exact `0.2.0` so SwiftPM never resolves mixed copies.
 - Debug and credential-free Release builds remain usable with Blob disabled. iOS continues to compile/test but receives no newly authorized TestFlight release.
 - No legacy queue is migrated. Rollback restores the prior dependency/config only after stopping the Blob owner and retaining all unconfirmed Blob files; reverting code does not retract transmitted events.
 - Source/project/CI/dependency paths covered by CODEOWNERS remain important and require Owner approval in their own single-goal PRs. No admin merge, force push, or protection bypass is authorized, and no review/check evidence is reused across PR heads.
@@ -165,7 +165,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 ## Assumptions
 
 - The accepted Owner intent authorizes product telemetry for the macOS TestFlight build; no separate end-user consent UI is part of this version.
-- At planning time `v0.2.0` is not published and reviewed shared-telemetry `main` is `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`; the issue's tag-resolution-if-available rule remains binding at implementation publication, but selection remains a reviewed full SHA.
+- The original planning snapshot predated `v0.2.0` publication. That dependency-selection assumption is superseded: annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` now peels to reviewed commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, and the binding selector is exact `0.2.0` with no revision fallback.
 - Decision 1A selects an Owner-created, key-authenticated stored access policy with permission `c` and explicit expiry, then an HTTPS-only container service SAS bound by `si`; the policy form omits `sp`, and the provider rule remains “if `sp` is present, it is exactly `c`.”
 - Decision 2A selects the exact bundle initializer and narrowly exempts only its SDK-owned, internally synchronized, content-free off-main heartbeat from the host coordinator.
 - GitHub Actions masking is defense in depth, not permission to interpolate or print a secret; production build wiring passes only a runner-temp xcconfig path through printable archive arguments and proves raw/escaped sentinel absence.
