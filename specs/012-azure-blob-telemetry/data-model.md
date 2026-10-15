@@ -57,7 +57,7 @@ State transitions:
 
 ```text
 never-opted-in/off (no UUID) --explicit opt-in--> on (create UUID)
-on (UUID active) --disable--> disabled-after-opt-in/off (retain UUID + pending files; no active use)
+on (UUID active) --disable--> disabled-after-opt-in/off (retain UUID + non-evicted pending files; no host deletion or active use)
 disabled-after-opt-in/off --later explicit opt-in--> on (reuse retained UUID)
 ```
 
@@ -74,37 +74,43 @@ Valid configuration never implies consent. An excluded CLI/headless/test host re
 ## BlobTelemetryStore
 
 - Dedicated Application Support directory owned by one Blob runtime.
-- Contains adapter catalog, pending event files, sidecars, and capacity/loss ledger as defined by the pinned shared-telemetry contract.
+- Contains adapter catalog, pending event files, sidecars, and capacity/loss ledger as defined by the pinned shared-telemetry contract. VoxPocket omits `maxDiskBytes`, accepting the provider's 50 MiB persisted-data default shared across Blob epochs.
 - Never aliases the existing Loki event store or `VoxPocketLogging` queue.
-- Confirmed uploads may be removed by the adapter; unconfirmed, failed, cancelled, rollback, or shutdown-pending files remain.
+- Confirmed uploads may be removed by the adapter. Capacity may evict whole oldest batches or reject an oversized event and records durable loss; failed/cancelled/shutdown-pending files remain only when not already evicted.
 
-## BlobTelemetryLifecycleCoordinator
+## TelemetryLifecycleCoordinator
 
-Non-`@MainActor` actor that owns at most one live service generation while consent is on.
+App-lifetime coordinator backed by one dedicated serial non-main executor. PR02 introduces it on the old dependency version, lazily constructs the selected legacy provider off-main, and exposes only a `TelemetryService` facade to existing callers; PR03 then changes the provider pin without changing that seam. PR06 extends the same coordinator to own at most one live Blob service generation while consent is on; no second coordinator/executor is created.
 
 State:
 
 ```text
-disabled | invalid | ready
-ready + admitted commands -> pending local files
-ready + flush requested   -> flushing(active task)
+legacy-uninitialized -> legacy-ready
+legacy-ready + track -> serialized atomic persistence
+legacy-ready + flush -> barrier after prior track commands
+
+Blob: disabled | invalid | ready
+ready + admitted commands  -> pending local files
+ready + flush requested    -> flushing(active task)
 flushing + flush requested -> join active task
 flushing + success         -> ready (confirmed files retired)
-flushing + failure/cancel  -> ready (unconfirmed files retained)
+flushing + failure/cancel  -> ready (no host deletion; non-evicted unconfirmed files retained)
 ```
 
 Invariants:
 
-1. The actor is the sole owner of the Blob service and store lease.
-2. The actor invokes the exact bundle initializer and is the sole host entry for product `track` and lifecycle `flush`.
-3. Host admission order is serialized and host `track`/local persistence never executes on `@MainActor`.
-4. Enabled-service/store construction occurs during actor-isolated asynchronous bootstrap, not in caller-side initialization.
-5. Flush begins only after earlier actor admission commands.
-6. A concurrent flush request joins the active flush; it does not create a second sender.
-7. UI/lifecycle callers schedule work asynchronously and never wait on synchronous file I/O.
-8. Decision 2A exempts only SDK-owned `telemetry.heartbeat` startup/daily work performed under the SDK's own synchronization; product callers cannot emit heartbeat, create another owner, or bypass the host actor.
-9. Never-opted-in/off creates no identity/service/store. Disabling after opt-in stops new admission/upload while retaining unconfirmed files, store state, and the persisted UUID without active-service identity use; every later explicit opt-in and eligible app launch reuses that same UUID for the app installation's lifetime.
-10. CLI, headless, and test composition roots never create the Blob service; CLI/headless are negative host-kind fixtures because this repository has no production CLI target.
+1. The coordinator is the sole owner/caller of the raw legacy provider and the Blob service/store lease.
+2. Legacy provider construction plus every underlying legacy `track`/`flush` executes on the dedicated serial non-main executor; an awaited flush barriers every earlier track submission and joins an active flush.
+3. The coordinator invokes the Blob bundle initializer without a `maxDiskBytes` argument and is the sole host entry for product `track` and lifecycle `flush`.
+4. Host admission order is serialized and no provider construction, `track`, local persistence, or `flush` executes on `@MainActor`.
+5. Enabled-service/store construction occurs during isolated asynchronous bootstrap, not in caller-side initialization.
+6. Blob flush begins only after earlier admission commands.
+7. A concurrent flush request joins the active flush; it does not create a second sender.
+8. UI/lifecycle callers schedule work asynchronously and never wait on synchronous file I/O.
+9. Decision 2A exempts only SDK-owned `telemetry.heartbeat` startup/daily work performed under the SDK's own synchronization; product callers cannot emit heartbeat, create another owner, or bypass the host coordinator.
+10. Never-opted-in/off creates no Blob identity/service/store. Disabling after opt-in stops new admission/upload while retaining non-evicted unconfirmed files, capacity ledger state, and the persisted UUID without active-service identity use; every later explicit opt-in and eligible app launch reuses that same UUID for the app installation's lifetime.
+11. CLI, headless, and test composition roots never create the Blob service; CLI/headless are negative host-kind fixtures because this repository has no production CLI target.
+12. Neither legacy nor Blob construction passes `maxDiskBytes`; both accept the provider-default 50 MiB capacity and loss accounting.
 
 ## StoredPolicySASShape
 
@@ -134,4 +140,6 @@ Payloads, endpoint/account/container identifiers, SAS values, logs containing th
 
 ## Migration and rollback
 
-There is no Loki-data migration. Enabling Blob creates only the dedicated store. Rollback disables/stops the Blob owner, retains every unconfirmed Blob file, restores the prior dependency/configuration, and leaves Loki data untouched. Re-enabling must use a compatible adapter and the same dedicated-store contract.
+There is no host-written Loki-data conversion or Loki→Blob migration. Exact `0.2.0` changes legacy admission from caller-side asynchronous enqueue to synchronous atomic persistence performed by the shared non-main coordinator, and applies the accepted provider-default 50 MiB cap to persisted source JSON/Blob sidecars without a consumer override. Whole oldest batches may be evicted, an oversized event may be rejected, and durable loss tombstones remain; already evicted events are unrecoverable.
+
+Rollback stops legacy and Blob producers/active work, prevents old/new writer overlap, makes storage writable, and lets the `0.2.0` capacity-aware reader finish pending paired eviction cleanup before any separately reviewed older reader opens the store. Preserve the loss ledger and retained files so an older reader cannot replay logically dropped batches. Restoring the prior dependency/configuration does not retract transmitted events or recover evicted ones. Re-enabling must use a compatible adapter and the same separate-store contract.
