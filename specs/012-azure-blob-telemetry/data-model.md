@@ -45,12 +45,29 @@ raw plist
   └─ both valid                            -> enabled
 ```
 
-`disabled` and `invalid` construct no usable network receiver. `disabled` requests no identity and opens no store. Diagnostics are fixed categories only.
+`disabled` and `invalid` construct no usable network receiver. `disabled` requests no identity and opens no store. A valid configuration remains unconstructed until persisted product-telemetry consent is on. Diagnostics are fixed categories only.
+
+## ProductTelemetryConsent
+
+| Field | Source | Rule |
+|---|---|---|
+| `sendUsageData` | `UserDefaults` through `UserDefaultsPreferencesStore` | Defaults `false`; only an explicit Settings action sets it `true` |
+
+State transitions:
+
+```text
+never-opted-in/off (no UUID) --explicit opt-in--> on (create UUID)
+on (UUID active) --disable--> disabled-after-opt-in/off (retain UUID + pending files; no active use)
+disabled-after-opt-in/off --later explicit opt-in--> on (reuse retained UUID)
+```
+
+Valid configuration never implies consent. An excluded CLI/headless/test host remains unconstructed in either state.
 
 ## BlobInstallIdentity
 
 - Random non-personal UUID.
-- Created only when valid enabled configuration initializes a new store or when an explicit reset is performed.
+- Created/requested only on the first explicit opt-in; persisted across disable and reused by every later explicit opt-in and eligible app launch for the app installation's lifetime. While consent is off, the UUID remains stored but is not requested or used by an active service.
+- V1 exposes no install-ID Reset or rotation surface, changes no shared-telemetry API for identity lifecycle, and does not parse adapter-private storage or catalog state.
 - Never derived from Apple ID, device name, username, audio, transcript, session data, or other account/user content.
 - Not accepted as a product-event property.
 
@@ -63,7 +80,7 @@ raw plist
 
 ## BlobTelemetryLifecycleCoordinator
 
-Non-`@MainActor` actor retained for the app lifetime.
+Non-`@MainActor` actor that owns at most one live service generation while consent is on.
 
 State:
 
@@ -86,6 +103,8 @@ Invariants:
 6. A concurrent flush request joins the active flush; it does not create a second sender.
 7. UI/lifecycle callers schedule work asynchronously and never wait on synchronous file I/O.
 8. Decision 2A exempts only SDK-owned `telemetry.heartbeat` startup/daily work performed under the SDK's own synchronization; product callers cannot emit heartbeat, create another owner, or bypass the host actor.
+9. Never-opted-in/off creates no identity/service/store. Disabling after opt-in stops new admission/upload while retaining unconfirmed files, store state, and the persisted UUID without active-service identity use; every later explicit opt-in and eligible app launch reuses that same UUID for the app installation's lifetime.
+10. CLI, headless, and test composition roots never create the Blob service; CLI/headless are negative host-kind fixtures because this repository has no production CLI target.
 
 ## StoredPolicySASShape
 
