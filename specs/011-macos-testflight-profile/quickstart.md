@@ -19,7 +19,7 @@ After adding only the new freshness assertions and before production repair, run
 python3 -B scripts/tests/test_testflight_freshness.py
 ```
 
-Expected: failure cites the fixed macOS profile-name/handoff or personal installer-subject contract. Record the command and concise failing assertion; do not weaken it.
+Expected on current `main`: failure cites the fabricated Fastlane profile-name environment-key contract. Record the command and concise failing assertion; do not weaken it.
 
 ## 2. Focused credential-free checks
 
@@ -31,9 +31,15 @@ RUBY="$(brew --prefix ruby)/bin/ruby" \
   python3 scripts/ci/run_repository_tests.py packaging-ruby
 
 ruby -c fastlane/Fastfile
+
+git diff --exit-code 20f9c36e9c60e2c2dcee2514d83138826caa91f6 -- \
+  .github/workflows/testflight.yml \
+  docs/testflight-release.md \
+  VoxPocket/project.yml \
+  VoxPocket/VoxPocket.xcodeproj/project.pbxproj
 ```
 
-Expected: freshness and Ruby packaging tests pass; Fastfile reports `Syntax OK`; no credential, signing, network, upload, or keychain operation occurs.
+Expected: freshness and Ruby packaging tests pass; Fastfile reports `Syntax OK`; the four preservation paths produce zero diff from the approved base; no credential, signing, network, upload, or keychain operation occurs. The Python/Ruby contracts retain the exact `Mac Installer Distribution` selector and personal-subject absence. The Ruby fixture must invoke the real Fastlane 2.241.0 `GetProvisioningProfileAction`, stub only `Sigh::Manager.start`, publish the display name through `SharedValues::SIGH_NAME` in actual lane context, return a distinct UUID, and clear/restore lane context. A stubbed action, a fabricated per-app environment key, or an action return used as the display name fails this contract.
 
 ## 3. Regenerate and check the project source of truth
 
@@ -41,13 +47,19 @@ From `VoxPocket/`:
 
 ```sh
 xcodegen generate --spec project.yml
+git diff --exit-code 20f9c36e9c60e2c2dcee2514d83138826caa91f6 -- \
+  project.yml \
+  VoxPocket.xcodeproj/project.pbxproj
 git diff --check
 git hash-object VoxPocket.xcodeproj/project.pbxproj
 xcodegen generate --spec project.yml
+git diff --exit-code 20f9c36e9c60e2c2dcee2514d83138826caa91f6 -- \
+  project.yml \
+  VoxPocket.xcodeproj/project.pbxproj
 git hash-object VoxPocket.xcodeproj/project.pbxproj
 ```
 
-Expected: the two generated-project hashes match for the same executable, and the diff contains only the planned Release signing handoff plus membership for `AppPersistenceStartup.swift`, `DefaultStageTextModelService.swift`, `MacOSAppScenes.swift`, `SettingsView.swift`, `StageModelRouting.swift`, `AppPersistenceStartupTests.swift`, and `RealtimeTranscriberConfigurationTests.swift`. Those seven files are already tracked and selected by the baseline directory-source declarations. No Swift source or generated project is hand-edited. If any additional membership or semantic build-setting drift appears, stop and return it to Team Lead.
+Expected: the two generated-project hashes match for the same executable and regeneration produces no diff from the current baseline. The accepted baseline already contains the Release signing handoff plus membership for `AppPersistenceStartup.swift`, `DefaultStageTextModelService.swift`, `MacOSAppScenes.swift`, `SettingsView.swift`, `StageModelRouting.swift`, `AppPersistenceStartupTests.swift`, and `RealtimeTranscriberConfigurationTests.swift`. No project or Swift source is edited. If any generated diff appears, stop and return it to Team Lead.
 
 ## 4. Repository gates
 

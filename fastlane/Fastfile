@@ -137,7 +137,7 @@ platform :mac do
       skip_install: false
     )
 
-    profile_name = ENV["sigh_#{APP_IDENTIFIER}_appstore_profile-name"]
+    profile_name = lane_context[SharedValues::SIGH_NAME]
     if profile_name.to_s.strip.empty?
       UI.user_error!("macOS provisioning profile name for #{APP_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
     end

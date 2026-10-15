@@ -10,7 +10,7 @@ The mac lane MUST:
 
 1. authenticate through the existing App Store Connect API-key contract;
 2. acquire and install the VoxPocket app's App Store profile for `platform: "macos"` with `force: true` and no `provisioning_name`;
-3. read the canonical `sigh_#{APP_IDENTIFIER}_appstore_profile-name` output;
+3. read the canonical display name from `lane_context[SharedValues::SIGH_NAME]`, as published by Fastlane 2.241.0's real `GetProvisioningProfileAction`;
 4. reject nil or blank output before `build_app` without interpolating the value into logs/errors;
 5. shell-escape the opaque value and bind it to `VOXPOCKET_MAC_PROFILE_SPECIFIER` in archive arguments;
 6. reuse the exact validated variable for `export_options.provisioningProfiles[APP_IDENTIFIER]`;
@@ -19,7 +19,8 @@ The mac lane MUST:
 The producer MUST NOT:
 
 - pass the fixed name `VoxPocket Mac App Store` as `provisioning_name`;
-- use the provisioning action return as a fallback source;
+- read `ENV["sigh_#{APP_IDENTIFIER}_appstore_profile-name"]` or another fabricated per-app environment key;
+- use the provisioning action return, which is the profile UUID, as a display-name fallback source;
 - add a global `PROVISIONING_PROFILE_SPECIFIER` archive override;
 - log provisioning-profile contents, certificate contents or identifiers, private-key material, App Store Connect API-key material, keychain passwords, or other secret material (a provisioning-profile display name may appear in authorized release logs);
 - import, replace, unlock differently, or otherwise mutate keychain/certificate state beyond the existing workflow preparation;
@@ -36,7 +37,7 @@ The producer MUST NOT:
 
 Its `PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]` MUST consume `$(VOXPOCKET_MAC_PROFILE_SPECIFIER)` and MUST NOT contain a fixed display name.
 
-`VoxPocket/VoxPocket.xcodeproj/project.pbxproj` MUST be regenerated from that source and MUST NOT be hand-edited.
+The current `VoxPocket/VoxPocket.xcodeproj/project.pbxproj` MUST remain synchronized from that source, and neither project file may be edited by this repair.
 
 ## Workflow invariants
 
@@ -52,7 +53,7 @@ The executable `.github/workflows/testflight.yml` contract remains:
 - packaging regression runs before credentials are used for the lane;
 - successful lane completion precedes release-tag movement.
 
-Only signing-description comments may change in this workflow for this version.
+No workflow executable line or comment may change in this repair.
 
 ## Regression contract
 
@@ -60,7 +61,9 @@ Credential-free tests MUST prove:
 
 - the historical fixed-name configuration fails;
 - the mac profile request is forced, installed, macOS-specific, and has no requested display name;
-- missing/blank canonical output fails before build;
+- the real `GetProvisioningProfileAction` class publishes the fixture display name through `SharedValues::SIGH_NAME` in actual lane context while returning a distinct fixture UUID;
+- the fixture stubs only `Sigh::Manager.start` at the external acquisition boundary, clears/restores lane context, and does not stub the action or fabricate its return as the name;
+- missing/blank `SharedValues::SIGH_NAME` fails before build;
 - opaque values with whitespace/metacharacters survive as one archive assignment;
 - archive and export reuse the same value;
 - the macOS XcodeGen setting consumes only the custom macOS key;

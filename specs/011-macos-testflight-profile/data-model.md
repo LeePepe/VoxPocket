@@ -22,11 +22,13 @@ Opaque profile display name published by Fastlane after successful acquisition a
 
 | Rule | Constraint |
 |---|---|
-| source | canonical `sigh_<app-id>_appstore_profile-name` output |
+| source | `lane_context[SharedValues::SIGH_NAME]`, published by Fastlane 2.241.0's real `GetProvisioningProfileAction` |
 | validation | non-nil and non-blank before archive |
 | confidentiality | never printed in failure messages or retained as evidence |
 | transport | shell-escaped as one value |
 | consumers | macOS archive setting and export provisioning map |
+
+The provisioning action return is the profile UUID and MUST NOT be treated as this display name. No fabricated per-app environment key is a valid source.
 
 ## ArchiveSigningHandoff
 

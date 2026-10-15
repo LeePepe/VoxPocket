@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: MY-1768 revision 3 and Team Lead handoff on VoxPocket `main` at `ef1420234d2b56fddcf2a388eaabf97ec54126d4`
+**Input**: MY-1768 revision 4 and Team Lead repair handoff on VoxPocket `main` at `20f9c36e9c60e2c2dcee2514d83138826caa91f6`
 
 ## User Scenarios & Testing
 
@@ -82,18 +82,18 @@ As the Owner, after the reviewed change reaches `main`, I can explicitly authori
 - **FR-007**: The repair MUST use only the existing `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, and `KEYCHAIN_PASSWORD` secrets and MUST NOT modify host keychain state beyond the existing unlock/access preparation.
 - **FR-008**: The workflow MUST remain explicit manual dispatch on `main`, macOS-only, non-cancelling, and guarded against redundant releases unless forced; iOS TestFlight MUST remain disabled.
 - **FR-009**: Build-number selection, `.pkg` validation, upload/processing behavior, and release-tag movement MUST remain unchanged.
-- **FR-010**: Credential-free regressions MUST fail on the historical fixed-name state and cover profile acquisition, canonical-name validation, archive/export reuse, shell-safe transport, project signing configuration, installer selector portability, and preserved workflow guards.
-- **FR-011**: The repaired generated Xcode project MUST be synchronized from its declared source of truth and remain compatible with unsigned local/CI builds.
+- **FR-010**: Credential-free regressions MUST fail on both the historical fixed-name state and the current fabricated environment-key consumer, and cover profile acquisition through the real Fastlane class contract, canonical-name validation, archive/export reuse, shell-safe transport, project signing configuration, installer selector portability, and preserved workflow guards.
+- **FR-011**: The generated Xcode project already repaired on the current baseline MUST remain synchronized from its declared source of truth and compatible with unsigned local/CI builds; this repair MUST NOT mutate it.
 - **FR-012**: The implementation MUST pass the repository's existing policy, app-layer, and complete verification contracts without deleting, skipping, or weakening a test.
 - **FR-013**: A real TestFlight run MUST occur only after reviewed merge and explicit Owner authorization, and its non-sensitive run URL, head SHA, build number, and terminal result MUST be recorded.
 
 ## Existing Behaviour
 
 - The release is a manual, macOS-only workflow that checks out `main`, unlocks the existing login keychain, runs credential-free packaging tests, and invokes the macOS Fastlane lane.
-- Release signing is Manual with Apple Distribution. The app project and lane currently depend on the fixed profile display name `VoxPocket Mac App Store`; the failed run at `main` `ef14202` could not find a matching profile.
+- Release signing is Manual with Apple Distribution. The current app project accepts the runtime macOS profile input, but the lane reads a fabricated per-app environment key instead of Fastlane 2.241.0's `SharedValues::SIGH_NAME` lane-context output; run `38678678083` therefore stopped before archive even though acquisition produced `SIGH_NAME`.
 - The lane already authenticates with the existing App Store Connect API key, exports a `.pkg`, validates that artifact, uploads it as platform `osx`, waits for processing, and advances the macOS release tag.
-- The lane names a personal installer certificate subject even though repository policy forbids committed personal account names.
-- Existing tests cover package routing, macOS upload, build-number selection, invalid artifacts, iOS pause, manual workflow guards, and widget platform separation, but do not guard current-run profile reuse.
+- The lane already uses the portable `Mac Installer Distribution` selector and the repository contains no committed personal installer subject in this path.
+- Existing tests cover package routing, macOS upload, build-number selection, invalid artifacts, iOS pause, manual workflow guards, widget platform separation, and current-run reuse, but they stub the profile action and reproduce the same invalid environment-key assumption instead of exercising the real Fastlane producer class.
 
 ## Compatibility
 
@@ -101,24 +101,22 @@ As the Owner, after the reviewed change reaches `main`, I can explicitly authori
 - iOS TestFlight remains disabled and its existing profile settings are not migrated by this version.
 - Existing secret names and the runner's installed signing private keys are reused. No new secret, profile file, keychain entry, certificate import, or host setup step is introduced.
 - Unsigned local and CI builds remain credential-free; no local archive, signing, upload, or app installation is permitted.
-- The change is an important PR because it touches CODEOWNERS-protected release, Fastlane, and project-signing surfaces; Owner approval remains mandatory.
+- The repair is an important PR because it touches the CODEOWNERS-protected Fastlane release surface; Owner approval remains mandatory.
 
 ## Removed Behaviour
 
-- **RB-001**: Remove archive-time and export-time dependence on the fixed macOS profile display name. **Authority**: MY-1768 Goal and US1/AC2.
-- **RB-002**: Remove fallback to a provisioning action return value when the canonical current-run profile name is missing. **Authority**: FR-002 through FR-004 and incident fail-closed requirements.
-- **RB-003**: Remove the committed personal installer certificate subject while preserving Mac Installer Distribution signing through a team-agnostic selector. **Authority**: repository agent protocol §8 and FR-006.
+- **RB-001**: Preserve the accepted removal of archive-time and export-time dependence on the fixed macOS profile display name. **Authority**: MY-1768 Goal and US1/AC2.
+- **RB-002**: Remove the fabricated per-app environment-key consumer and continue to forbid fallback to the provisioning action return value when the canonical current-run profile name is missing. **Authority**: FR-002 through FR-004 and incident fail-closed requirements.
+- **RB-003**: Preserve the accepted absence of the committed personal installer certificate subject and retain the already-landed team-agnostic `Mac Installer Distribution` selector unchanged. **Authority**: repository agent protocol §8 and FR-006.
 - **RB-004**: Remove no test, assertion, workflow gate, release guard, secret validation, upload step, or platform restriction. Any such removal is outside this specification and requires a new decision.
 
 ## Scope Boundaries
 
 ### In scope
 
-- The macOS provisioning-profile handoff from current-run acquisition through archive and export.
-- The XcodeGen Release configuration needed to consume the runtime macOS profile value, including generated-project synchronization.
-- The existing Mac Installer Distribution selector's repository portability.
-- Credential-free regression coverage through existing repository discovery and gates.
-- Accurate release documentation and comment-only workflow description of the repaired signing path.
+- The macOS provisioning-profile handoff from the real Fastlane 2.241.0 action output through archive and export.
+- Credential-free regression repair through existing repository discovery and gates, including the real Fastlane action class boundary.
+- Read-only verification that the accepted XcodeGen, workflow, installer-selector, documentation, and release-orchestration behavior remains unchanged.
 - Reviewed non-Draft PR delivery and the separately Owner-controlled production validation.
 
 ### Non-goals
@@ -128,6 +126,7 @@ As the Owner, after the reviewed change reaches `main`, I can explicitly authori
 - Adding secrets, importing/replacing certificates, creating a new keychain, or changing runner configuration.
 - Dispatching a real release before reviewed merge and explicit Owner authorization.
 - Modifying Developer Portal profiles or certificates outside the lane's existing fetch/create behavior.
+- Editing `VoxPocket/project.yml`, the generated Xcode project, `.github/workflows/testflight.yml`, release documentation, or any product source in this repair.
 - Repairing the pre-existing unpinned AppleUITesting checkout in the release workflow.
 - Copying VitalStride implementation details or treating VitalStride #441 as authority for VoxPocket.
 
@@ -135,7 +134,7 @@ As the Owner, after the reviewed change reaches `main`, I can explicitly authori
 
 ### Measurable Outcomes
 
-- **SC-001**: Credential-free regression evidence detects the historical fixed-name state and passes only when one current-run macOS profile value drives both archive and export.
+- **SC-001**: Credential-free regression evidence detects the historical fixed-name state and the current fabricated environment-key consumer, and passes only when the real Fastlane action's one current-run macOS profile value drives both archive and export.
 - **SC-002**: All repository planning and implementation verification commands required by the reviewed plan finish with zero failures on the exact candidate revision.
 - **SC-003**: The implementation adds zero secrets and zero host keychain mutation steps, and no committed personal account name remains in the touched signing path.
 - **SC-004**: The important non-Draft PR is approved by the Owner and all required checks are green on its exact head SHA.
@@ -143,7 +142,7 @@ As the Owner, after the reviewed change reaches `main`, I can explicitly authori
 
 ## Assumptions
 
-- App Store Connect continues to publish the canonical installed App Store profile name through Fastlane's existing profile-name output for the VoxPocket bundle identifier.
+- Fastlane 2.241.0 continues to publish the canonical installed App Store profile name through its existing action lane-context output for the VoxPocket bundle identifier.
 - The self-hosted runner retains valid Apple Distribution and Mac Installer Distribution private keys for team `4Z8GG667QD`; this feature does not provision or rotate them.
 - A generic Mac Installer Distribution automatic selector is the repository-safe way to select the existing valid installer identity without committing a personal certificate subject.
 - VitalStride PR #441 is comparative evidence for the incident class only; VoxPocket paths, one-target macOS topology, tests, and authority remain repository-specific.

@@ -3,10 +3,15 @@
 # 使用已安装的 fastlane/gym；只替换 Xcode 构建、签名和网络，不构建 App。
 require "minitest/autorun"
 require "tmpdir"
+require "fastlane"
 require "gym"
 require "yaml"
 require "rexml/document"
 require "open3"
+require "sigh"
+require "sigh/manager"
+
+Fastlane.load_actions
 
 ROOT = File.expand_path("../..", __dir__)
 UI = FastlaneCore::UI
@@ -45,16 +50,13 @@ class FixtureRunner < Gym::Runner
   def move_appstore_info; true; end
 end
 
-class FixtureLane
-  attr_reader :build_options, :upload_options, :distributed, :build_number_options, :requested_build_platform, :profile_options
-  attr_accessor :suppress_profile_env
+class FixtureLane < Fastlane::FastFile
+  attr_reader :build_options, :upload_options, :distributed, :build_number_options, :requested_build_platform
 
   def initialize(artifact, stub_build_number: true)
+    super(File.join(ROOT, "fastlane/Fastfile"))
     @artifact = artifact
-    @lanes = {}
-    @suppress_profile_env = false
-    instance_eval(File.read(File.join(ROOT, "fastlane/Fastfile")), "Fastfile")
-    define_singleton_method(:asc_api_key) { :fixture_key }
+    define_singleton_method(:asc_api_key) { { key_id: "test", issuer_id: "test", key: "test" } }
     define_singleton_method(:regenerate_project) {}
     if stub_build_number
       define_singleton_method(:next_build_number) do |_, platform: "ios"|
@@ -65,49 +67,56 @@ class FixtureLane
     define_singleton_method(:distribute_to_internal) { |*args| @distributed = args }
   end
 
-  def default_platform(*); end
-  def desc(*); end
-  def platform(name)
-    @platform = name
-    yield
-  end
-  def lane(name, &block)
-    @lanes[[@platform, name]] = block
-  end
-  def get_provisioning_profile(**options)
-    @profile_options = options
-    app_id = options[:app_identifier] || "com.leepepe.voxpocket"
-    ENV["sigh_#{app_id}_appstore_profile-name"] ||= "fixture-profile" unless @suppress_profile_env
-    "fixture-profile"
-  end
   def build_app(**options)
     @build_options = options
     @artifact
   end
+
   def upload_to_testflight(**options)
     @upload_options = options
   end
+
   def latest_testflight_build_number(**options)
     @build_number_options = options
     40
   end
+
   def run(platform)
-    instance_exec(&@lanes.fetch([platform, :beta]))
+    runner.execute(:beta, platform)
   end
 end
 
 class TestFlightPackagingTests < Minitest::Test
   def setup
     @directory = Dir.mktmpdir("voxpocket-package-test-")
-    @orig_profile_env = ENV["sigh_com.leepepe.voxpocket_appstore_profile-name"]
+    @orig_sigh_name = ENV["SIGH_NAME"]
+    @orig_sigh_uuid = ENV["SIGH_UUID"]
+    @orig_lane_context = Fastlane::Actions.lane_context.dup
+    Fastlane::Actions.lane_context.clear
+    ENV.delete("SIGH_NAME")
+    ENV.delete("SIGH_UUID")
+
+    # Default Sigh::Manager.start stub publishes standard fixture values
+    Sigh::Manager.define_singleton_method(:start) do
+      ENV["SIGH_NAME"] = "fixture-profile"
+      ENV["SIGH_UUID"] = "fixture-uuid-12345"
+      "path/to/profile"
+    end
   end
 
   def teardown
     FileUtils.remove_entry(@directory)
-    if @orig_profile_env.nil?
-      ENV.delete("sigh_com.leepepe.voxpocket_appstore_profile-name")
+    Fastlane::Actions.lane_context.clear
+    Fastlane::Actions.lane_context.merge!(@orig_lane_context)
+    if @orig_sigh_name.nil?
+      ENV.delete("SIGH_NAME")
     else
-      ENV["sigh_com.leepepe.voxpocket_appstore_profile-name"] = @orig_profile_env
+      ENV["SIGH_NAME"] = @orig_sigh_name
+    end
+    if @orig_sigh_uuid.nil?
+      ENV.delete("SIGH_UUID")
+    else
+      ENV["SIGH_UUID"] = @orig_sigh_uuid
     end
   end
 
@@ -257,58 +266,62 @@ class TestFlightPackagingTests < Minitest::Test
   end
 
   def test_mac_lane_fetches_forced_installed_profile_without_fixed_name
-    lane = FixtureLane.new(artifact("VoxPocket.pkg"))
-    env_key = "sigh_com.leepepe.voxpocket_appstore_profile-name"
-    orig_env = ENV[env_key]
-    begin
-      ENV[env_key] = "VoxPocket Mac App Store Fetched"
-      lane.run(:mac)
-      assert_equal true, lane.profile_options[:force]
-      assert_equal false, lane.profile_options[:skip_install]
-      assert_equal "macos", lane.profile_options[:platform]
-      refute lane.profile_options.key?(:provisioning_name)
-    ensure
-      if orig_env.nil?
-        ENV.delete(env_key)
-      else
-        ENV[env_key] = orig_env
-      end
+    captured_options = nil
+    Sigh::Manager.define_singleton_method(:start) do
+      captured_options = Sigh.config
+      ENV["SIGH_NAME"] = "VoxPocket Mac App Store Fetched"
+      ENV["SIGH_UUID"] = "uuid-fetched"
+      "path/to/profile"
     end
+
+    lane = FixtureLane.new(artifact("VoxPocket.pkg"))
+    lane.run(:mac)
+
+    assert_equal true, captured_options[:force]
+    assert_equal false, captured_options[:skip_install]
+    assert_equal "macos", captured_options[:platform]
+    assert_nil captured_options[:provisioning_name]
+    assert_equal "com.leepepe.voxpocket", captured_options[:app_identifier]
   end
 
-  def test_mac_lane_fails_closed_when_profile_name_env_is_missing_or_blank
-    env_key = "sigh_com.leepepe.voxpocket_appstore_profile-name"
-    ENV.delete(env_key)
+  def test_mac_lane_fails_closed_when_profile_name_is_missing_or_blank
+    Sigh::Manager.define_singleton_method(:start) do
+      ENV.delete("SIGH_NAME")
+      ENV["SIGH_UUID"] = "uuid-missing-name"
+      "path/to/profile"
+    end
+
     lane = FixtureLane.new(artifact("VoxPocket.pkg"))
-    lane.suppress_profile_env = true
     assert_raises(FastlaneCore::Interface::FastlaneError) { lane.run(:mac) }
     assert_nil lane.build_options, "build_app must not be called when profile name is missing"
     assert_nil lane.upload_options, "upload_to_testflight must not be called when profile name is missing"
 
-    ENV[env_key] = "   "
+    Sigh::Manager.define_singleton_method(:start) do
+      ENV["SIGH_NAME"] = "   "
+      ENV["SIGH_UUID"] = "uuid-blank-name"
+      "path/to/profile"
+    end
+
     lane = FixtureLane.new(artifact("VoxPocket.pkg"))
-    lane.suppress_profile_env = true
     assert_raises(FastlaneCore::Interface::FastlaneError) { lane.run(:mac) }
     assert_nil lane.build_options, "build_app must not be called when profile name is blank"
     assert_nil lane.upload_options, "upload_to_testflight must not be called when profile name is blank"
   end
 
   def test_mac_lane_passes_shell_escaped_profile_specifier_and_generic_installer
-    env_key = "sigh_com.leepepe.voxpocket_appstore_profile-name"
-    orig_env = ENV[env_key]
-    begin
-      ENV[env_key] = "VoxPocket App Store 2026 (Special)"
-      lane = FixtureLane.new(artifact("VoxPocket.pkg"))
-      lane.run(:mac)
-      assert_includes lane.build_options[:xcargs], "VOXPOCKET_MAC_PROFILE_SPECIFIER=VoxPocket\\ App\\ Store\\ 2026\\ \\(Special\\)"
-      assert_equal "Mac Installer Distribution", lane.build_options.dig(:export_options, :installerSigningCertificate)
-      assert_equal "VoxPocket App Store 2026 (Special)", lane.build_options.dig(:export_options, :provisioningProfiles, "com.leepepe.voxpocket")
-    ensure
-      if orig_env.nil?
-        ENV.delete(env_key)
-      else
-        ENV[env_key] = orig_env
-      end
+    Sigh::Manager.define_singleton_method(:start) do
+      ENV["SIGH_NAME"] = "VoxPocket App Store 2026 (Special)"
+      ENV["SIGH_UUID"] = "uuid-distinct-1234"
+      "path/to/profile"
     end
+
+    lane = FixtureLane.new(artifact("VoxPocket.pkg"))
+    lane.run(:mac)
+
+    assert_includes lane.build_options[:xcargs], "VOXPOCKET_MAC_PROFILE_SPECIFIER=VoxPocket\\ App\\ Store\\ 2026\\ \\(Special\\)"
+    assert_equal "Mac Installer Distribution", lane.build_options.dig(:export_options, :installerSigningCertificate)
+    assert_equal "VoxPocket App Store 2026 (Special)", lane.build_options.dig(:export_options, :provisioningProfiles, "com.leepepe.voxpocket")
+    # Verify that the action return value (UUID) is distinct and was not mistakenly used as the profile display name
+    refute_includes lane.build_options[:xcargs], "uuid-distinct-1234"
   end
 end

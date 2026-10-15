@@ -2,18 +2,20 @@
 
 ## Evidence
 
-- Planning base and `origin/main`: `ef1420234d2b56fddcf2a388eaabf97ec54126d4`.
-- Failed manual run: `https://github.com/LeePepe/VoxPocket/actions/runs/38598643529`, failing with no team `4Z8GG667QD` profile matching `VoxPocket Mac App Store`.
-- `VoxPocket/project.yml` keeps base signing Automatic and Release Manual + Apple Distribution; its macOS Release profile specifier is the fixed display name `VoxPocket Mac App Store`.
-- `fastlane/Fastfile` requests the macOS profile using that same `provisioning_name`, accepts the action return as fallback, and maps it into export. Archive receives no current-run macOS profile variable.
+- Planning base and `origin/main`: `20f9c36e9c60e2c2dcee2514d83138826caa91f6`.
+- Historical manual run `38598643529` failed because the old fixed macOS profile display name was unavailable; the accepted repair removed that fixed-name dependency.
+- Post-merge manual run `38678678083` on `main` `20f9c36e9c60e2c2dcee2514d83138826caa91f6` successfully produced Fastlane's `SIGH_NAME`, but the lane read `ENV["sigh_#{APP_IDENTIFIER}_appstore_profile-name"]`; the fail-closed guard therefore stopped before archive.
+- `VoxPocket/project.yml` now carries the accepted target-specific macOS Release profile input while preserving base signing Automatic and Release Manual + Apple Distribution.
+- `fastlane/Fastfile` force-refreshes and installs the macOS profile, but consumes a fabricated environment key rather than Fastlane 2.241.0's lane-context shared value. Archive therefore receives no current-run macOS profile variable.
 - The mac lane already uses the existing App Store Connect API key, platform `macos` profile acquisition, platform `osx` build numbering/upload, `.pkg` validation, and the existing runner keychain.
-- `fastlane/Fastfile` commits a full personal installer certificate subject, conflicting with shared protocol §8 and `AGENTS.md`'s personal-account-name ban.
-- `scripts/tests/test_testflight_packaging.rb` stubs build, upload, and profile acquisition; it currently checks package routing, upload, build numbers, missing artifacts, workflow platform guards, and widget platform separation but not signing-profile reuse.
+- `fastlane/Fastfile` already uses the accepted generic `Mac Installer Distribution` selector; that selector and all certificate/keychain behavior are read-only in this repair.
+- `scripts/tests/test_testflight_packaging.rb` stubs the `GetProvisioningProfileAction` itself and fabricates the same invalid environment key, so it cannot detect drift from the real Fastlane class contract.
 - `scripts/ci/run_repository_tests.py` auto-discovers both `scripts/tests/test_*.py` and `scripts/tests/test_*.rb`; existing PR CI runs Ruby packaging discovery and app-layer discovery without credentials.
 - `.github/workflows/testflight.yml` is manual-only, checks out `main`, accepts only macOS, does not cancel active uploads, validates the existing secrets, unlocks the existing login keychain, runs packaging tests, calls `fastlane mac beta`, and moves the release tag only after success.
 - VitalStride PR #441 / merge `9cfebd9e6ad5a3f3367753c9d0c09cad9e831e7e` is comparative evidence: it replaced fixed target profile names with canonical current-run values and added a credential-free freshness regression. VoxPocket differs by being a macOS `.pkg` path with one macOS app target and an installer certificate selector; no VitalStride path or decision is authoritative here.
 - At baseline `ef1420234d2b56fddcf2a388eaabf97ec54126d4`, `project.yml` already declares recursive `VoxPocket` and `VoxPocketTests` source directories. `AppPersistenceStartup.swift`, `DefaultStageTextModelService.swift`, `MacOSAppScenes.swift`, `SettingsView.swift`, `StageModelRouting.swift`, `AppPersistenceStartupTests.swift`, and `RealtimeTranscriberConfigurationTests.swift` are tracked inside those directories but absent from the older committed generated project. CI and Fastlane regenerate from `project.yml` before app builds, so those seven files are already selected by the repository's runtime source of truth.
 - Team Lead authorization comment `01a13bd0-6db3-72c8-8da5-b1bc102dcead` confirms that those seven memberships are current-version T002 source-of-truth synchronization in the already owned generated path, with no authorization to edit the files, dependencies, iOS behavior, or any other accepted boundary.
+- Fastlane 2.241.0 defines `SharedValues::SIGH_NAME` in `fastlane/lib/fastlane/actions/get_provisioning_profile.rb`. `Sigh::Manager.install_profile` writes temporary `ENV["SIGH_NAME"]`; the real `GetProvisioningProfileAction.run` copies it into `Fastlane::Actions.lane_context[SharedValues::SIGH_NAME]` and returns the profile UUID. `fastlane/lib/fastlane/fast_file.rb` exposes `lane_context` and `SharedValues` to a Fastfile. The platform changes profile selection, not this shared-value key.
 
 ## Decision R-001: One macOS target-specific XcodeGen input
 
@@ -29,21 +31,22 @@
 
 ## Decision R-002: Forced current-run acquisition and one canonical source
 
-**Decision**: Fetch/create and install the macOS App Store profile with `force: true`, no `provisioning_name`, then resolve `sigh_#{APP_IDENTIFIER}_appstore_profile-name`, require it to be non-empty before archive, shell-escape it for the custom XcodeGen setting, and reuse the same variable for export.
+**Decision**: Fetch/create and install the macOS App Store profile with `force: true`, no `provisioning_name`, then read `lane_context[SharedValues::SIGH_NAME]`, require it to be non-empty before archive, shell-escape it for the custom XcodeGen setting, and reuse the same variable for export.
 
 **Rationale**: A forced current-run profile reflects current capabilities and signing certificates. One canonical value makes archive and export agree and exposes a missing integration output before expensive build/upload work.
 
 **Alternatives considered**:
 
-- Retain the action-return fallback. Rejected because it creates a second source that may not be the canonical installed display name.
+- Retain the action-return fallback. Rejected because Fastlane 2.241.0 returns the profile UUID, not the installed display name.
+- Read `ENV["sigh_#{APP_IDENTIFIER}_appstore_profile-name"]`. Rejected because Fastlane 2.241.0 does not publish that key; its temporary internal environment key is `SIGH_NAME`, and the supported Fastfile consumer boundary after the action is the shared-value lane context.
 - Look up installed profiles independently after fetch. Rejected because it adds parsing and ambiguity after Fastlane has already published the target output.
 - Log the resolved name for diagnosis. Rejected because failure can identify the missing contract without disclosing profile values.
 
-## Decision R-003: Use the generic Mac Installer Distribution selector
+## Decision R-003: Preserve the generic Mac Installer Distribution selector
 
-**Decision**: Set export's installer certificate selector to `Mac Installer Distribution` instead of a full personal certificate subject.
+**Decision**: Retain the already-landed `Mac Installer Distribution` export selector and personal-subject absence byte-for-byte. Neither the selector nor certificate/keychain behavior is an implementation path in this repair.
 
-**Rationale**: Xcode export accepts the automatic certificate-class selector and chooses an existing valid installer identity for the export team. This preserves the existing keychain dependency while complying with the prohibition on committed personal account names.
+**Rationale**: The accepted selector already lets Xcode choose an existing valid installer identity for the export team while complying with the prohibition on committed personal account names. Rewriting it would widen the Fastfile repair beyond the failed profile-name consumer.
 
 **Alternatives considered**:
 
@@ -53,19 +56,20 @@
 
 ## Decision R-004: Static freshness plus behavior fixture
 
-**Decision**: Add `scripts/tests/test_testflight_freshness.py` for cross-file static invariants and extend `scripts/tests/test_testflight_packaging.rb` for lane behavior/options.
+**Decision**: Use `scripts/tests/test_testflight_freshness.py` for cross-file static invariants and make `scripts/tests/test_testflight_packaging.rb` exercise the real `GetProvisioningProfileAction` class. The Ruby fixture stubs only `Sigh::Manager.start`, clears/restores actual lane context, publishes through `SharedValues::SIGH_NAME`, and returns a distinct UUID so a name/return-value mix-up fails.
 
-**Rationale**: The Python file matches repository auto-discovery and the comparative incident guard; the existing Ruby fixture can prove fail-before-build behavior and exact runtime option reuse without Apple access. Together they are red-capable against the historical state and avoid duplicating a release lane in tests.
+**Rationale**: The Python file matches repository auto-discovery and the comparative incident guard; the Ruby fixture proves the pinned Fastlane producer/consumer boundary, fail-before-build behavior, and exact runtime option reuse without Apple access. Together they fail on both the historical fixed-name state and the post-merge fabricated-key regression without duplicating the release lane.
 
 **Alternatives considered**:
 
 - Use only static text assertions. Rejected because they cannot prove the lane fails before build or reuses the runtime value.
+- Stub `GetProvisioningProfileAction` or make its return equal the display name. Rejected because either approach bypasses the class contract that regressed and can make a UUID/display-name mix-up pass.
 - Use only Ruby fixtures. Rejected because the requested freshness guard spans project/workflow/Fastfile files and benefits from the repository's Python discovery.
 - Run the real lane in CI. Rejected because it needs secrets, signs, mutates external state, uploads, and violates the Owner gate.
 
 ## Decision R-005: Preserve executable workflow behavior
 
-**Decision**: Limit `.github/workflows/testflight.yml` to an accurate comment-only signing description if needed; keep every executable line unchanged.
+**Decision**: Do not edit `.github/workflows/testflight.yml`; keep every executable line and comment unchanged.
 
 **Rationale**: The workflow already passes the required secrets and calls the repaired lane. The defect is the project/Fastlane handoff, not trigger, runner, keychain, upload, or tag orchestration.
 
@@ -88,10 +92,10 @@
 
 ## Decision R-008: Reconcile the stale generated source membership
 
-**Decision**: T002 regeneration must add membership for exactly the seven baseline-tracked files identified above in addition to the planned macOS signing-setting substitution. No Swift source edit, additional source membership, or other semantic build-setting drift is authorized; any such output returns to Team Lead.
+**Decision**: The current baseline already contains the signing-setting substitution and exactly the seven reconciled memberships identified above. The repair performs read-only/idempotency verification and authorizes no XcodeGen source change, generated-project change, Swift edit, additional membership, or other semantic build-setting drift; any diff returns to Team Lead.
 
-**Rationale**: The existing recursive source declarations, CI regeneration, and Fastlane regeneration already select these files. Committing their generated membership reconciles the stale checked-in project with the repository's established XcodeGen source of truth; it does not add product source, a dependency, a writer, or a new runtime behavior.
+**Rationale**: The accepted implementation already reconciled the checked-in project with the repository's established XcodeGen source of truth. Reopening that owned surface is unnecessary for the Fastlane consumer repair and would violate the Team Lead's unrelated-path boundary.
 
 ## No Open Clarification
 
-MY-1768, the Team Lead handoff, VoxPocket repository rules, current release code, the failed run, and comparative VitalStride evidence settle the current version's outcome, scope, compatibility, removed behavior, test shape, review path, and production authorization boundary. Runtime certificate/profile availability remains a post-merge operational fact, not a planning ambiguity.
+MY-1768, the Team Lead repair handoff, VoxPocket repository rules, current release code, run `38678678083`, pinned Fastlane 2.241.0 source, and comparative VitalStride evidence settle the current version's outcome, scope, compatibility, removed behavior, test shape, review path, and production authorization boundary. Runtime certificate/profile availability remains a post-merge operational fact, not a planning ambiguity.
