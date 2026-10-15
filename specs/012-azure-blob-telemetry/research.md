@@ -10,16 +10,18 @@
 
 - VoxInfrastructure, VoxApplication, and VoxPresentation all pin shared-telemetry `v0.1.0` at `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`; the same revision is guarded by `scripts/ci/fetch-external-deps.sh` and `scripts/tests/test_app_logging.py`.
 - The original planning snapshot predated `v0.2.0` publication. Current remote evidence supersedes that dependency-selection assumption: annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peels to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, which was also provider `main` when verified.
-- PR01 must use SwiftPM `exact: "0.2.0"` everywhere. The tag object and peeled commit are integrity evidence only; neither a branch nor a revision selector is an allowed fallback.
-- The adapter performs synchronous event admission/local persistence, owns a retryable file store, validates create-only SAS intent, emits an SDK-owned content-free heartbeat, and leaves upload explicit through `flush()`.
+- PR03 must use SwiftPM `exact: "0.2.0"` everywhere. The tag object and peeled commit are integrity evidence only; neither a branch nor a revision selector is an allowed fallback.
+- In `v0.1.0`, legacy `track` scheduled queue admission asynchronously. In exact `0.2.0`, `LokiTelemetryService.track` calls `TelemetryQueue.enqueue` synchronously and atomic persistence completes before return; queue construction also reads the capacity ledger synchronously. PR02 therefore moves provider construction, `track`, and `flush` behind an off-main execution boundary on the old provider before PR03 may publish the pin.
+- Both legacy Loki and Blob construction default `maxDiskBytes` to 50 MiB. The provider evicts whole oldest batches, rejects a single oversized event, and records durable loss tombstones/`droppedEventCount`; pending paired eviction cleanup must finish with the capacity-aware reader before rollback, and already evicted events are unrecoverable.
+- The Blob adapter performs synchronous event admission/local persistence, owns a retryable file store, validates create-only SAS intent, emits an SDK-owned content-free heartbeat, and leaves upload explicit through `flush()`.
 - At released provider commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, the transport accepts only `sv`, `sr`, `si`, `sp`, `st`, `se`, `spr`, `sip`, and `sig`; requires `sr=c`; and rejects an explicit `sp` other than `c`. The prior `--permissions cw --auth-mode login --as-user` command emits both `sp=cw` and unsupported user-delegation keys, so it cannot initialize this adapter.
 - The exact bundle initializer immediately records/schedules the SDK heartbeat under the SDK's own synchronization, with later ticks originating off-main. That internal work cannot traverse a host actor and is the narrow Decision 2A exemption.
 
 ## Repository evidence
 
-- `ServiceContainer.makeTelemetryService()` owns the existing Loki event service. Debug selects localhost; Release without `LOKI_ENDPOINT` selects `NoopTelemetryService`.
+- `ServiceContainer` is `@MainActor`; `makeTelemetryService()` constructs the existing raw Loki event service there. Debug selects localhost; Release without `LOKI_ENDPOINT` selects `NoopTelemetryService`. The same service is injected across App, Presentation, Application, and active Infrastructure callers, so one composition-boundary facade can cover every active legacy call without editing their event vocabulary.
 - `VoxPocketLogging` independently owns the local-log-to-Loki sink and persisted log queue. It is not the product-event integration seam.
-- App lifecycle and user-action seams already exist in `AppDelegate.swift`, `MacOSAppScenes.swift`, and `ServiceContainer.swift`. They run on `@MainActor`; the shared adapter's synchronous admission must not run there.
+- App lifecycle and user-action seams already exist in `AppDelegate.swift`, `MacOSAppScenes.swift`, and `ServiceContainer.swift`. They run on `@MainActor`; neither legacy provider construction/persistence nor Blob admission may run there. A generic non-`@MainActor` actor does not prove an OS-thread hop, so the selected seam needs a dedicated serial non-main executor and `Thread.isMainThread` evidence.
 - Preferences already persists typed values through `UserDefaultsPreferencesStore`; `MacOSSettingsView` is the macOS Settings surface and `MeRootView` contains the cross-platform privacy surface. `AppDelegate` already detects test-host execution before app composition, providing a fail-closed host-classification seam; there is no production CLI target or accepted headless composition path that may create product telemetry.
 - `DefaultRefinementUseCase.swift` forwards `error.localizedDescription`; `WhisperKitTranscriber.swift` forwards a stringified error as `reason`. Existing tests do not mechanically prove those payloads content-free.
 - The app has no Blob plist keys, Blob-only store, Blob identity, Blob lifecycle owner, or Release expansion proof.
@@ -30,13 +32,13 @@
 
 ### R-001 — Use an immutable, repository-wide shared-telemetry selection
 
-All three Swift consumer manifests, both dependency guards, and every current authority/projection use SwiftPM exact `0.2.0`. PR01 validates the annotated tag object and peeled commit, records them as integrity evidence, and moves the entire selection atomically; tag-integrity failure blocks and escalates instead of selecting a revision.
+All three Swift consumer manifests, both dependency guards, and every current authority/projection use SwiftPM exact `0.2.0`. PR03 validates the annotated tag object and peeled commit, records them as integrity evidence, and moves the entire selection atomically after PR02's off-main adaptation; tag-integrity failure blocks and escalates instead of selecting a revision.
 
 **Rejected**: a branch or revision pin, revision fallback, semver range, short SHA, mixed selections, or an unverified/moved tag.
 
 ### R-002 — Keep Loki and Blob as separate products and stores
 
-The existing Loki event service and `VoxPocketLogging` remain unchanged in ownership and routing. A new Blob-only app runtime accepts only the two product event types and uses a dedicated Application Support directory. No Loki event is mirrored into Blob, and no Loki queue/log file is opened, migrated, or deleted.
+Legacy Loki endpoint/Noop selection, event routing, and `VoxPocketLogging` remain separate from Blob. Provider construction and calls move behind a shared lifecycle coordinator, but no Loki event is mirrored into Blob and no store lease is shared. A new Blob-only app runtime accepts only the two product event types and uses a dedicated Application Support directory. VoxPocket manually opens/migrates/deletes no Loki queue/log file; provider-owned capacity eviction is the explicit exception.
 
 **Rejected**: decorating the existing telemetry service with implicit dual-write, sharing a queue, or treating Loki logs as product analytics.
 
@@ -46,9 +48,9 @@ The product contract contains exactly `product.user_action` and `product.perform
 
 **Rejected**: a generic `[String: Any]` event helper, arbitrary error descriptions, session/user identifiers, model names, transcripts, or URLs.
 
-### R-004 — Serialize synchronous adapter work off `@MainActor`
+### R-004 — Serialize all synchronous provider work off `@MainActor`
 
-One non-`@MainActor` coordinator is retained by the interactive app and owns at most one live Blob service generation while consent is on; it is the sole host entry for the exact bundle initializer, product `track`, and lifecycle `flush`. UI and app-lifecycle code submits typed commands asynchronously. The actor serializes host admission/local persistence, drains prior admission before flush, and joins an in-flight flush rather than starting a competing request. Disable stops the live generation without admitting later work under stale state; resign-active schedules a best-effort non-blocking flush only while enabled; failed, cancelled, or consent-disabled pending files remain retryable. Decision 2A narrowly exempts only SDK-owned, internally synchronized, content-free startup/daily heartbeat work; it creates no host/product bypass.
+PR02 adds one app-lifetime lifecycle coordinator backed by a dedicated serial non-main executor while the old dependency is still selected. It lazily constructs the selected legacy provider, exposes only a `TelemetryService` facade to existing callers, and is the sole underlying entry for every legacy `track` and `flush`; awaited flush barriers all earlier synchronous submissions and joins an active flush. A main-actor-originating spy must record construction, `track A`, `track B`, then `flush`, with maximum underlying concurrency one and every operation off the main thread. PR06 extends that same coordinator to own at most one live Blob service generation while consent is on; it is the sole host entry for bundle construction, product `track`, and lifecycle `flush`. Disable stops the live generation without admitting later work under stale state; resign-active schedules a best-effort non-blocking flush only while enabled; failed, cancelled, or consent-disabled non-evicted pending files remain retryable. Decision 2A narrowly exempts only SDK-owned, internally synchronized, content-free startup/daily heartbeat work; it creates no host/product bypass.
 
 **Rejected**: direct `track` calls from `ServiceContainer`, view models, SwiftUI scenes, or `AppDelegate`; product-emitted heartbeat; a second store owner; forcing SDK heartbeat through a host scheduler; and unretained competing flush tasks.
 
@@ -76,7 +78,7 @@ Debug/local builds and credential-free Release builds run with Blob disabled. Th
 
 ### R-009 — Treat CODEOWNERS changes as Owner-gated
 
-Package manifests, `project.yml`, `.github/**`, `fastlane/**`, `scripts/ci/**`, AGENTS, the constitution, architecture, and layer context paths remain under their existing Owner/review contracts. Dependency, product/privacy adaptation, synthetic CI, and TestFlight governance are separate single-goal PRs. PR01 dependency selection, PR02 Infrastructure privacy, and PR03 Application privacy have disjoint paths/outputs, share PR00 as their sole prerequisite, and may run concurrently; PR04 waits for all three. Every PR independently leaves `main` working, runs `scripts/verify`, receives exact-tree review/publication permission, and binds evidence to its own head; applicable important PRs cannot merge without Owner approval and required checks.
+Package manifests, `project.yml`, `.github/**`, `fastlane/**`, `scripts/ci/**`, AGENTS, the constitution, architecture, and layer context paths remain under their existing Owner/review contracts. Required-CI governance (PR01), non-trivial runtime adaptation (PR02), and dependency/current-truth migration (PR03) are separate ordered single-goal PRs. Infrastructure privacy (PR04) and Application privacy (PR05) have disjoint paths/outputs and may proceed after PR00 in parallel with that chain; PR06 waits for PR03–PR05. Every PR independently leaves `main` working, runs `scripts/verify`, receives exact-tree review/publication permission, and binds evidence to its own head; applicable important PRs cannot merge without Owner approval and required checks.
 
 ### R-010 — Separate repository delivery from production proof
 
@@ -90,22 +92,28 @@ Decision 1A supersedes the issue's incompatible user-delegation example. The Own
 
 ### R-012 — Apply the common explicit-consent and host-composition contract
 
-Persist “Send usage data” in `UserDefaults`, default it off, and gate service construction, admission, and upload on its current value. Before first opt-in, create/request no identity. First opt-in creates and locally persists one random install UUID. Disabling immediately stops admission/upload, retains pending files and the UUID, and permits no active-service identity request/use; every later explicit opt-in and eligible launch reuses that same UUID for the app installation's lifetime. CLI, headless, and test hosts fail closed before service construction regardless of configuration or fixture state. Because the repository has no production CLI target, a negative host-kind fixture proves that contract without adding an executable.
+Persist “Send usage data” in `UserDefaults`, default it off, and gate service construction, admission, and upload on its current value. Before first opt-in, create/request no identity. First opt-in creates and locally persists one random install UUID. Disabling immediately stops admission/upload without host/manual deletion, retains non-evicted pending files plus the UUID, and permits no active-service identity request/use; every later explicit opt-in and eligible launch reuses that same UUID for the app installation's lifetime. CLI, headless, and test hosts fail closed before service construction regardless of configuration or fixture state. Because the repository has no production CLI target, a negative host-kind fixture proves that contract without adding an executable.
 
-**Rejected**: implied consent from valid configuration, eager identity creation, deleting pending files or the persisted UUID on disable, automatic re-enable, stable device/account-derived identity, any v1 install-ID Reset or rotation surface, a shared-telemetry API change for identity lifecycle, host parsing of adapter-private storage/catalog state, inventing a CLI target, or constructing a disabled service in an excluded host. Reset may be reconsidered only as a separate future SDK feature backed by a real need.
+**Rejected**: implied consent from valid configuration, eager identity creation, host/manual deletion of pending files or deletion of the persisted UUID on disable, automatic re-enable, stable device/account-derived identity, any v1 install-ID Reset or rotation surface, a shared-telemetry API change for identity lifecycle, host parsing of adapter-private storage/catalog state, inventing a CLI target, or constructing a disabled service in an excluded host. Provider-owned eviction under the accepted capacity policy remains allowed. Reset may be reconsidered only as a separate future SDK feature backed by a real need.
+
+### R-013 — Accept the provider-default capacity and migration behavior
+
+VoxPocket supplies no `maxDiskBytes` override to either legacy Loki or Blob. The pinned `v0.2.0` provider default is 50 MiB for persisted source JSON plus Blob sidecars; it may evict whole oldest batches, reject an oversized event, and record durable dropped-event/loss-ledger state. Rollback stops producers and active work, prevents old/new writer overlap, makes storage writable, and lets the `0.2.0` capacity-aware reader finish pending paired eviction cleanup before any separately reviewed older reader opens the store. Retained files and the loss ledger remain; already evicted events cannot be recovered.
+
+**Rejected**: choosing a product-specific capacity without evidence, passing an override merely to preserve an unbounded-retention assumption, deleting the loss ledger, mixing old/new writers, allowing an older reader to replay logically dropped files, or claiming rollback restores already evicted events.
 
 ## Compatibility and removed behavior
 
 - Shared-telemetry adoption is additive at the module/product level; all consumers move together to avoid mixed resolution.
-- Existing Loki endpoint/token selection, Noop fallback, event routing, log-sink filtering, stores, and safe metrics remain.
-- The only intentional runtime-payload removal is arbitrary localized/stringified error text. Closed failure categories may replace it; UI error display is unaffected.
-- The new consent section is additive to existing Settings. Product telemetry remains absent until opt-in; disabling removes admission/upload behavior but does not delete pending local Blob files.
-- Rollback stops the Blob owner and retains Blob catalog/queue/sidecar/capacity-ledger files. The older adapter must not open them. Already transmitted events cannot be retracted.
+- Existing Loki endpoint/token selection, Noop fallback, event routing, log-sink filtering, and safe metrics remain. Raw provider ownership moves into the shared coordinator; caller-thread execution and direct invocation do not remain.
+- Intentional runtime changes are: serialized non-main legacy provider construction/`track`/`flush`; the provider-default 50 MiB cap with whole-oldest-batch eviction/oversized-event rejection/durable loss accounting; and removal of arbitrary localized/stringified error text. Closed failure categories may replace unsafe text; UI error display is unaffected.
+- The new consent section is additive to existing Settings. Product telemetry remains absent until opt-in; disabling removes admission/upload behavior without host/manual deletion, while provider-owned capacity eviction remains possible and non-evicted pending files remain retryable.
+- Rollback stops every producer/owner, retains the loss ledger and non-evicted files, and uses the `0.2.0` reader to complete pending paired eviction cleanup before any older reader. Already evicted events cannot be recovered, and already transmitted events cannot be retracted.
 - No test, assertion, policy check, release guard, signing step, upload step, or platform restriction may be removed or weakened.
 
 ## Open external gates
 
-1. Immediately before PR01 publication, annotated `v0.2.0` must still peel to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`; a missing/moved/mismatched tag blocks and escalates without a revision fallback.
+1. Immediately before PR03 publication, annotated `v0.2.0` must still peel to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`; a missing/moved/mismatched tag blocks and escalates without a revision fallback.
 2. Package-manifest, XcodeGen, workflow, Fastlane, and CI edits require existing CODEOWNERS/Owner review.
 3. Real endpoint/SAS provisioning and the TestFlight dispatch require explicit Owner action after merge.
 4. Final production evidence is limited to run/revision, build number, and blob name; payload and credentials are excluded.
