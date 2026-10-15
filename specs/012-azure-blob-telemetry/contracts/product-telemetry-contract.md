@@ -1,6 +1,6 @@
 # Contract: VoxPocket Blob product telemetry
 
-**Contract version**: 1
+**Contract version**: 2
 
 **Authority**: MY-1818 issue revision 1, Constitution IV, and `spec.md` FR-002–FR-016/FR-021
 
@@ -62,12 +62,21 @@ LokiKitBlobSAS = $(TELEMETRY_BLOB_SAS)
 - Present-invalid values select a Blob-only fail-closed state and fixed diagnostic.
 - Debug, pull-request, and local credential-free paths do not receive real values.
 - Synthetic Release validation supplies only fake non-routable test values, does not send, and inspects the processed plist.
-- Real values enter only the explicitly Owner-authorized macOS TestFlight archive from GitHub Actions secrets and are never printed.
+- Real values enter only the explicitly Owner-authorized macOS TestFlight archive from GitHub Actions secrets. CI writes one untracked xcconfig in the runner temporary directory, sets mode `0600`, passes only its path via `-xcconfig`, and removes it through `always`/`ensure`; values never enter xcargs, command-line environment assignments, printable arguments, or logs.
+- Release-path tests use synthetic raw and shell/percent-escaped sentinels and require both forms to be absent from captured workflow/Fastlane/xcodebuild logs.
+
+### Production SAS shape
+
+- Decision 1A requires an Owner-created stored access policy using key-based authentication, permission `c`, and an explicit UTC expiry.
+- The Owner generates an HTTPS-only container service SAS referencing that policy. The accepted query-name set is the pinned adapter's set; the stored-policy form contains `sr=c`, non-empty `si` and `sig`, optional `sv`, and `spr=https`, and contains no user-delegation fields.
+- Permission is carried by the stored access policy, so the emitted stored-policy token normally omits `sp`; if `sp` is present in any accepted non-policy form, it must equal `c`. `sp=cw`, `--as-user`, and user-delegation keys are rejected.
+- Representative fixture: `sv=2023-11-03&sr=c&si=synthetic-create-only&spr=https&sig=fake%2Bonly%2F%3D`. The fixture is synthetic and never contacts Azure.
 
 ## Concurrency and lifecycle contract
 
-- One non-`@MainActor` actor owns the adapter and dedicated store for app lifetime. Enabled-service/store construction occurs in actor-isolated asynchronous bootstrap, not synchronously in an initializer invoked by `@MainActor`.
-- `@MainActor` code submits a typed event/flush command asynchronously; it never calls synchronous adapter persistence directly.
+- One non-`@MainActor` actor owns the adapter and dedicated store for app lifetime. It invokes the exact `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)` initializer during actor-isolated asynchronous bootstrap.
+- The host actor is the sole host entry for construction, product `track`, and lifecycle `flush`. `@MainActor` code submits typed commands asynchronously and never calls synchronous adapter persistence directly.
+- Decision 2A exempts only SDK-owned, internally synchronized, content-free `telemetry.heartbeat` startup/daily work initiated by that bundle initializer. The exemption does not permit product-emitted heartbeat, another store owner, host bypass, or synchronous persistence on `@MainActor`.
 - Startup records `product.performance(operation: app_launch, duration_ms: ...)`, then requests flush.
 - Settings/full-panel/quick-record start/quick-record stop emit only their closed action.
 - Recording/session completion requests flush after prior admission has drained.
@@ -87,6 +96,7 @@ Tests must prove:
 3. transcript, refined-text, audio, prompt, error, endpoint, SAS, UUID, and credential sentinels are absent from persisted bytes, request fixtures, and diagnostics;
 4. missing/empty/unexpanded configuration causes zero identity, store, enqueue, and network calls;
 5. invalid present configuration fails only Blob closed without value disclosure;
-6. direct `@MainActor` persistence is structurally unavailable and actor tests prove ordered admission, joined flush, and retained failure/cancellation state;
+6. direct `@MainActor` persistence is structurally unavailable; actor tests prove coordinator-only host construction/`track`/`flush`, ordered admission, joined flush, and retained failure/cancellation state; heartbeat fixtures prove bundle startup heartbeat exists, later ticks remain SDK-owned/off-main, and product callers cannot emit it;
 7. existing Loki construction/routing/log-sink behavior remains, with arbitrary error text removed;
-8. synthetic processed Release plist contains both fully expanded fake values and no unresolved build-setting reference.
+8. the representative stored-policy query is accepted while `sp=cw`, user-delegation keys, unsupported names, and invalid `sr` are rejected;
+9. synthetic processed Release plist contains both fully expanded fake values and no unresolved build-setting reference; TestFlight packaging logs contain neither raw nor escaped sentinels and expose no value-bearing argument.

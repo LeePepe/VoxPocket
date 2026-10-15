@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-15
 
-**Status**: Ready for spec-gate review
+**Status**: Ready for Round 2 spec-gate review
 
 **Input**: MY-1818 issue revision 1, Team Lead planning handoff, and VoxPocket `main` at `9fddff22af2c9f693e0a90155b224a5fb41dbf06`
 
@@ -25,7 +25,7 @@ As the product owner, I can use a configured macOS TestFlight build once and fin
 3. **US1/AC3** — **Given** the shared adapter emits its owned operational heartbeat, **when** product-event inventory is assessed, **then** that documented content-free heartbeat is treated as adapter diagnostics rather than a third product event type.
 4. **US1/AC4** — **Given** an accepted product event is pending, **when** startup completes, a recording/session ends, or the app resigns active, **then** a non-blocking flush is requested while pending files remain available for retry after failure or cancellation.
 5. **US1/AC5** — **Given** the reviewed change is merged, the Owner has added both secrets, and the Owner explicitly authorizes the existing macOS release workflow, **when** that TestFlight build is used once, **then** the Team Lead can record the build number and blob name using a read-only listing without recording payload or credential contents.
-6. **US1/AC6** — **Given** an approved event is scheduled from app-lifecycle or UI code, **when** the shared adapter performs synchronous admission and local persistence, **then** that work runs only through one serialized non-`@MainActor` lifecycle coordinator and the UI/lifecycle caller is not synchronously blocked by file I/O.
+6. **US1/AC6** — **Given** the standard bundle initializer is used, **when** the host constructs the service, admits a product event through `track`, or requests `flush`, **then** those host calls run only through one serialized non-`@MainActor` lifecycle coordinator and no UI/lifecycle caller is synchronously blocked by file I/O; only the SDK-owned, internally synchronized, content-free startup/daily heartbeat is exempt from traversing the host coordinator.
 
 ---
 
@@ -60,16 +60,16 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 1. **US3/AC1** — **Given** the `v0.2.0` release tag is absent, **when** dependency adoption is frozen, **then** every consumer uses the same full reviewed revision containing the Blob API; if the immutable tag exists before implementation publication, every consumer instead uses exact `0.2.0` and records its resolved revision.
 2. **US3/AC2** — **Given** the new Blob path exists, **when** existing application use cases and local log collection run, **then** their Loki endpoint/token selection, store, event routing, log-sink filtering, and session-end flush behavior remain unchanged except for the privacy-authorized removal of arbitrary error text.
 3. **US3/AC3** — **Given** a synthetic Release build, **when** its processed app plist is inspected, **then** both Blob keys are present, fully expanded from the required build settings, contain only synthetic values, and contain no unresolved build reference.
-4. **US3/AC4** — **Given** an authorized macOS TestFlight run, **when** the archive starts, **then** both real values come only from GitHub Actions secrets at build time, are validated as present without value disclosure, and are unavailable to pull-request or local credential-free paths.
-5. **US3/AC5** — **Given** the implementation changes dependency pins, CI/release configuration, or other CODEOWNERS paths, **when** the PR is delivered, **then** it is non-Draft, labeled/routed as important, lists the two Owner actions and exact commands, and waits for Owner approval without bypass.
+4. **US3/AC4** — **Given** an authorized macOS TestFlight run, **when** the archive starts, **then** CI writes both real GitHub Actions secret values to one untracked runner-temp xcconfig with mode `0600`, passes only that file's path through `-xcconfig`, deletes it in an `always`/`ensure` path, and exposes neither raw nor escaped sentinel/value forms in Release logs, xcargs, command-line environment assignments, or other printable arguments.
+5. **US3/AC5** — **Given** the implementation is split into dependency, privacy, app-runtime, app-adoption, synthetic-Release, and TestFlight-injection changes, **when** each single-goal PR is delivered, **then** it independently leaves `main` working, is non-Draft, carries its own exact-SHA verification/review/publication evidence, and waits for applicable CODEOWNERS/Owner approval without bypass; only the TestFlight-injection PR lists the exact Owner provisioning and secret commands.
 
 ### Edge Cases
 
 - Only one of the two Blob settings is present, or a setting still contains `$(...)`.
-- The endpoint is non-HTTPS, the SAS has broader than create/write intent, metadata is not allowlisted, or the store is already leased by another instance.
+- The endpoint is non-HTTPS; the SAS is a user-delegation token, contains an unsupported query name, has `sr` other than `c`, or has an explicit `sp` other than `c`; the stored-policy token lacks `si`/`sig`; metadata is not allowlisted; or the store is already leased by another instance.
 - An event has a safe name but an unknown key, unsafe label, non-finite duration, or sensitive sentinel embedded in an otherwise plausible field.
 - The app is terminated or disabled during a flush; no unconfirmed file may be erased and no next request may start on the cancelled generation.
-- Several UI/lifecycle signals arrive while admission or flush is active; the coordinator preserves admission order, joins rather than duplicates the active flush, and performs no synchronous file I/O on `@MainActor`.
+- Several UI/lifecycle signals arrive while admission or flush is active; the host coordinator preserves admission order, joins rather than duplicates the active flush, and performs no synchronous file I/O on `@MainActor`. SDK-owned heartbeat ticks remain internally synchronized and off-main without becoming a host/product event bypass.
 - The dependency tag appears after planning but before the implementation candidate is published.
 - A Release build is produced without real secrets for CI proof; it must use synthetic values and never contact Azure.
 - The Owner has not added secrets or has not explicitly authorized a TestFlight run; implementation may be merged, but production delivery evidence remains pending.
@@ -79,12 +79,12 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 
 ### Functional Requirements
 
-- **FR-001**: VoxPocket MUST use one immutable shared-telemetry selection containing the public Azure Blob adapter across every Swift consumer manifest and dependency guard.
+- **FR-001**: VoxPocket MUST use one immutable shared-telemetry selection containing the public Azure Blob adapter across every Swift consumer manifest, dependency guard, current authority, and current projection. The protected constitution change MUST be a deliberate amendment naming the rule, reason, and migration impact; historical baseline evidence remains explicitly historical.
 - **FR-002**: The existing Loki event service and local Loki log sink MUST remain separate from the Blob service; legacy events MUST NOT be fanned out to Blob implicitly.
 - **FR-003**: The Blob service MUST use one dedicated Blob-only application-support store with one live owner and MUST NOT reuse, migrate, or delete Loki queue/log files.
 - **FR-004**: Trusted app, build, and version metadata MUST be allowlisted from the built application; install identity MUST be a non-personal UUID supplied only for initial creation/reset.
 - **FR-005**: The product event vocabulary MUST contain exactly `product.user_action` and `product.performance`; allowed keys and closed labels are defined in the telemetry contract, and no generic free-text property is allowed.
-- **FR-006**: The SDK-owned `telemetry.heartbeat` MAY carry only its documented content-free operational fields and MUST NOT be emitted by product callers.
+- **FR-006**: The SDK-owned `telemetry.heartbeat` MAY carry only its documented content-free operational fields and MUST NOT be emitted by product callers. Decision 2A exempts only the initializer-owned, internally synchronized, off-main startup/daily heartbeat from the host coordinator; it does not permit a second host/store owner, a product `track` bypass, or main-thread synchronous persistence.
 - **FR-007**: Blob admission MUST reject an entire event before accepted memory/storage/network state when its name, key, label, number, timestamp, or provenance violates the allowlist.
 - **FR-008**: Audio, live/final transcripts, refined text, prompts, arbitrary error descriptions, credentials, endpoints, SAS values, and other user-derived text MUST never enter either Blob or Loki telemetry payloads.
 - **FR-009**: Existing arbitrary error-description/reason telemetry fields MUST be replaced with closed content-free categories or removed, with sentinel regressions for the affected application and infrastructure boundaries.
@@ -92,14 +92,14 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 - **FR-011**: Present but invalid Blob configuration MUST fail only the Blob path closed, with fixed content-free diagnostics and no fallback receiver.
 - **FR-012**: The app MUST retain one Blob service for the app lifetime and request non-blocking flushes after startup telemetry, at recording/session end, and when macOS resigns active; failed/cancelled work remains retryable.
 - **FR-013**: The source plist MUST contain `LokiKitBlobEndpoint = $(TELEMETRY_BLOB_ENDPOINT)` and `LokiKitBlobSAS = $(TELEMETRY_BLOB_SAS)`, and both build settings MUST be required for an enabled Release transport.
-- **FR-014**: Real Blob endpoint and SAS values MUST come only from GitHub Actions secrets during the authorized macOS TestFlight archive; no real value may be committed, logged, attached, or used by pull-request tests.
-- **FR-015**: Credential-free tests MUST cover disabled-without-configuration, exact privacy allowlists, two product event shapes, no transcription/refined/audio/error/credential sentinel persistence or transport, flush lifecycle, and unchanged Loki behavior.
-- **FR-016**: A required CI path MUST build a Release app with synthetic settings and inspect the processed plist for exact expansion; the test MUST NOT sign, upload, or contact a live telemetry receiver.
+- **FR-014**: Real Blob endpoint and SAS values MUST come only from GitHub Actions secrets during the authorized macOS TestFlight archive. CI MUST write them to one untracked runner-temp xcconfig with mode `0600`, pass only its path via `-xcconfig`, and delete it in an `always`/`ensure` path; values MUST NOT appear in source, attachments, xcargs, command-line environment assignments, printable arguments, or logs.
+- **FR-015**: Credential-free tests MUST cover disabled-without-configuration, exact privacy allowlists, the two product event shapes, SDK-owned heartbeat ownership, coordinator-only host construction/`track`/`flush`, stored-policy SAS query compatibility, no transcription/refined/audio/error/credential sentinel persistence or transport, flush lifecycle, and unchanged Loki behavior.
+- **FR-016**: A required CI path MUST build a Release app with synthetic settings and inspect the processed plist for exact expansion; TestFlight packaging tests MUST prove both raw and shell/percent-escaped synthetic sentinel forms are absent from Release-path logs. Neither path may sign, upload, contact a live telemetry receiver, or expose a value-bearing argument.
 - **FR-017**: Existing Debug/local development, macOS manual TestFlight trigger semantics, iOS development builds, iOS TestFlight disablement, signing, build numbering, upload, and release-tag behavior MUST remain compatible.
-- **FR-018**: The PR body MUST list the Owner's write-only SAS command and both GitHub secret-add commands exactly as accepted in MY-1818, but repository planning/source artifacts MUST use placeholders instead of real cloud resource identifiers.
+- **FR-018**: The TestFlight-injection PR body MUST list the exact Owner-only Decision 1A commands: create a stored access policy with key-based auth, permission `c`, and explicit UTC expiry; generate an HTTPS-only container service SAS with `--policy-name` and key-based auth; and set both GitHub Actions secrets. Committed artifacts MUST use placeholders instead of real cloud identifiers. The stored-policy token MUST use only supported query names with `sr=c`, non-empty `si`/`sig`, optional `sv`, and `spr=https`; policy authorization means explicit `sp` is normally absent, while any explicit `sp` MUST equal `c`. User-delegation fields and `--as-user` are forbidden, and agents MUST NOT execute, inspect, or persist the real token.
 - **FR-019**: No existing test, assertion, privacy gate, release guard, or policy may be removed, skipped, or weakened to deliver this feature.
 - **FR-020**: After merge, Owner secret provisioning, and explicit release authorization, one used TestFlight build MUST produce a blob that the Team Lead verifies read-only by recording the build number and blob name only.
-- **FR-021**: Every Blob admission, local-store mutation, and flush coordination operation MUST execute through one serialized non-`@MainActor` app-lifetime coordinator; `@MainActor` callers MAY only schedule asynchronous work and MUST NOT invoke the adapter's synchronous persistence API directly.
+- **FR-021**: The exact `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)` construction plus every host product `track` and lifecycle `flush` call MUST execute through one serialized non-`@MainActor` app-lifetime coordinator; `@MainActor` callers MAY only schedule asynchronous work. Decision 2A exempts only SDK-owned, internally synchronized, off-main heartbeat work performed after that construction.
 
 ### Key Entities
 
@@ -123,7 +123,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 - The public Swift module/product remains `LokiKit`; the upgrade is additive. All consumer manifests move together so SwiftPM never resolves mixed copies.
 - Debug and credential-free Release builds remain usable with Blob disabled. iOS continues to compile/test but receives no newly authorized TestFlight release.
 - No legacy queue is migrated. Rollback restores the prior dependency/config only after stopping the Blob owner and retaining all unconfirmed Blob files; reverting code does not retract transmitted events.
-- Source/project/CI/dependency paths covered by CODEOWNERS remain important and require Owner approval. No admin merge, force push, or protection bypass is authorized.
+- Source/project/CI/dependency paths covered by CODEOWNERS remain important and require Owner approval in their own single-goal PRs. No admin merge, force push, or protection bypass is authorized, and no review/check evidence is reused across PR heads.
 - Real resource identifiers appear only in the Owner-command section of the PR body required by MY-1818, not in committed source, tests, fixtures, specs, or docs.
 
 ## Removed Behaviour
@@ -139,7 +139,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 - Immutable shared-telemetry adoption in existing consumers and its repository dependency guard.
 - A separate Blob-only app service, typed two-event product vocabulary, privacy policy, app-lifetime retention, dedicated store, and flush wiring.
 - Privacy hardening and sentinel tests for current arbitrary error telemetry in VoxApplication and VoxInfrastructure.
-- Host plist/build-setting wiring, synthetic Release expansion proof, TestFlight secret injection, credential-free packaging tests, and PR Owner-action instructions.
+- Host plist/build-setting wiring, synthetic Release expansion proof, temporary-`0600`-xcconfig TestFlight secret injection, raw/escaped log-absence tests, credential-free packaging tests, and exact placeholder-only Owner-action instructions.
 - Existing PR delivery followed by separately authorized post-merge TestFlight/read-only evidence.
 
 ### Non-goals
@@ -157,15 +157,16 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 
 - **SC-001**: Credential-free privacy tests admit only the two approved product event shapes and detect 100% of the supplied transcript, refined-text, audio, error, credential, unknown-key, unsafe-label, and non-finite sentinels before persistence or transport.
 - **SC-002**: Missing-configuration tests observe zero crashes, identity-provider calls, store creations, enqueued events, and network requests in both Debug and Release fixtures.
-- **SC-003**: Synthetic Release evidence finds both processed plist values fully expanded and zero real credential/resource values in repository or test output.
+- **SC-003**: Synthetic Release evidence finds both processed plist values fully expanded, and TestFlight packaging evidence finds zero raw or escaped sentinel forms and zero real credential/resource values in repository, arguments, or Release-path logs.
 - **SC-004**: Existing Loki regression suites and all affected layer/repository gates finish with zero failures on the exact implementation candidate, with no removed or weakened test.
-- **SC-005**: The important non-Draft PR receives Owner approval and all required checks pass on its exact head without bypass.
+- **SC-005**: Every implementation PR independently leaves `main` working, receives applicable Owner approval, and passes its focused verification plus `scripts/verify` and required checks on its own exact head without bypass.
 - **SC-006**: After Owner provisioning and explicit release authorization, one used macOS TestFlight build yields at least one blob; the evidence record contains exactly the build number, blob name, run/revision reference, and no payload or credential content.
 
 ## Assumptions
 
 - The accepted Owner intent authorizes product telemetry for the macOS TestFlight build; no separate end-user consent UI is part of this version.
 - At planning time `v0.2.0` is not published and reviewed shared-telemetry `main` is `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`; the issue's tag-if-available rule remains binding at implementation publication.
-- The adapter's documented create-only SAS validation, privacy allowlist, dedicated store lease, disabled missing-config behavior, heartbeat, and retry semantics are used without modification.
-- GitHub Actions masking is defense in depth, not permission to interpolate or print a secret; production build wiring passes secret names/references rather than values through logged configuration.
+- Decision 1A selects an Owner-created, key-authenticated stored access policy with permission `c` and explicit expiry, then an HTTPS-only container service SAS bound by `si`; the policy form omits `sp`, and the provider rule remains “if `sp` is present, it is exactly `c`.”
+- Decision 2A selects the exact bundle initializer and narrowly exempts only its SDK-owned, internally synchronized, content-free off-main heartbeat from the host coordinator.
+- GitHub Actions masking is defense in depth, not permission to interpolate or print a secret; production build wiring passes only a runner-temp xcconfig path through printable archive arguments and proves raw/escaped sentinel absence.
 - The existing manual macOS TestFlight workflow remains the only release path and requires an explicit Owner request even after secrets are provisioned.

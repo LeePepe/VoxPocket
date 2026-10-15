@@ -10,7 +10,7 @@ Immediately before implementation publication, check whether immutable `v0.2.0` 
 0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95
 ```
 
-All three package manifests, `scripts/ci/fetch-external-deps.sh`, and `scripts/tests/test_app_logging.py` must resolve the same selection. Record the resolved 40-character revision in the PR.
+PR01 atomically updates all three package manifests, both guards, and every current authority/projection enumerated in `tasks.md` T001–T005. Record the resolved 40-character revision in the PR. The old-selection search is scoped to that current-truth list; `spec.md` and `research.md` retain explicitly historical baseline evidence.
 
 From the exact shared-telemetry checkout, validate the public consumer contract:
 
@@ -33,7 +33,15 @@ python3 scripts/ci/run_repository_tests.py app-python
 scripts/verify --layer VoxPocketApp
 ```
 
-The app-layer run must include disabled/invalid configuration, privacy sentinels, two typed event shapes, actor ordering, joined flush, retry retention, unchanged Loki routing, action instrumentation, and processed-plist tests.
+The dormant app-layer run must include disabled/invalid configuration, privacy sentinels, two typed event shapes, the exact bundle initializer, coordinator-only host construction/product `track`/lifecycle `flush`, SDK-owned startup/daily heartbeat ownership, actor ordering, joined flush, retry retention, and the stored-policy SAS fixture. The adoption run adds unchanged Loki routing, action instrumentation, and lifecycle flushes.
+
+The representative credential-free SAS fixture is:
+
+```text
+sv=2023-11-03&sr=c&si=synthetic-create-only&spr=https&sig=fake%2Bonly%2F%3D
+```
+
+Assert exactly the accepted query names, `sr=c`, non-empty `si`/`sig`, `spr=https`, and no `sp`; reject `sp=cw`, user-delegation keys, unknown names, and invalid `sr`. A static command test proves the stored policy is created with permission `c`; no test or agent generates a real token.
 
 ## 3. Synthetic Release proof
 
@@ -48,7 +56,18 @@ Use the implementation's credential-free CI helper/lane with fake values only. I
 
 Then regenerate with the repository-pinned XcodeGen command and require zero uncommitted generated-project diff.
 
-## 4. Release and repository gates
+## 4. TestFlight credential-path proof
+
+Credential-free packaging fixtures must prove the production path contract without archiving or using a secret:
+
+1. one xcconfig is created under the runner temporary directory and verified `0600`;
+2. only that file path is passed via `-xcconfig`;
+3. neither value appears in xcargs, command-line environment assignments, printable arguments, messages, or captured logs;
+4. cleanup executes through both workflow `always` and Fastlane `ensure` on success, failure, and cancellation;
+5. both raw and shell/percent-escaped synthetic sentinel forms are absent from Release-path logs;
+6. manual trigger, checkout, signing, numbering, upload, tag behavior, macOS-only release, and iOS disablement remain unchanged.
+
+## 5. Release and repository gates
 
 ```sh
 GEM_PATH="$(brew --prefix fastlane)/libexec" \
@@ -61,11 +80,11 @@ scripts/verify --all
 git diff --check
 ```
 
-No local signed archive, TestFlight upload, Azure request, Owner secret mutation, or workflow dispatch is part of candidate verification.
+No local signed archive, TestFlight upload, Azure request, Owner secret mutation, or workflow dispatch is part of candidate verification. Run the applicable focused commands plus `scripts/verify` for every PR head; forced-full-selection PRs also require the full CI lanes and should run `scripts/verify --all` locally when practical.
 
-## 5. Publication evidence
+## 6. Per-PR publication evidence
 
-Freeze one uncommitted candidate for independent content review. After exact content PASS and publication permission, commit/push/create the non-Draft important PR without changing the reviewed tree. Capture and compare:
+Freeze each PR's uncommitted candidate for independent content review. After exact content PASS and publication permission, commit/push/create that non-Draft PR without changing the reviewed tree. Capture and compare:
 
 ```sh
 git rev-parse HEAD
@@ -73,11 +92,11 @@ git ls-remote origin refs/heads/<task-branch>
 gh pr view <pr> --json headRefOid
 ```
 
-All three SHAs must match. The PR must retain the accepted Owner commands, Owner-review routing, compatibility/removed-behavior statement, dependency resolution, and the full local evidence map.
+All three SHAs must match for every PR. Each PR must retain its one goal, Owner-review routing where applicable, compatibility/removed-behavior statement, and task-local evidence. PR07 alone carries the exact placeholder Owner provisioning/secret commands from `plan.md`. After any stacked rebase/retarget, rerun verification and obtain a new exact-revision review; earlier SHA evidence is invalid.
 
-## 6. Post-merge production proof
+## 7. Post-merge production proof
 
-Only after merge, Owner secret provisioning, and a fresh explicit Owner authorization may the existing manual macOS TestFlight workflow run. Team Lead records only:
+Only after PR01–PR07 merge, Owner creation of the permission-`c` stored access policy and compatible container service SAS, both secret writes, and a fresh explicit Owner authorization may the existing manual macOS TestFlight workflow run. Team Lead records only:
 
 - exact merged/workflow revision and run reference;
 - TestFlight build number;

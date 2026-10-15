@@ -25,20 +25,25 @@
 - [x] CHK010 Prohibited voice/text/error/credential data and whole-event rejection are explicit.
 - [x] CHK011 Existing arbitrary error telemetry has authority, owning boundaries, regressions, and removed-behavior analysis.
 - [x] CHK012 Missing config performs no identity/store/network work; invalid present config fails only Blob closed.
-- [x] CHK013 Real values enter only the authorized TestFlight archive; synthetic Release proof is credential-free and non-networked.
+- [x] CHK013 Real values enter only the authorized TestFlight archive through a runner-temp untracked `0600` xcconfig; only its path reaches `-xcconfig`, cleanup is unconditional, and synthetic Release proof is credential-free/non-networked.
+- [x] CHK021 Raw and shell/percent-escaped synthetic sentinel forms are both required absent from Release-path logs, arguments, and messages.
+- [x] CHK022 Decision 1A is exact: key-auth stored policy with permission `c`/explicit expiry, HTTPS-only `--policy-name` service SAS, supported query names, stored-policy `sp` omission, and no user-delegation fields.
 
 ## Architecture and delivery
 
 - [x] CHK014 Loki event/log paths and stores remain separate from Blob routing and storage.
-- [x] CHK015 Synchronous adapter I/O is confined to one serialized non-`@MainActor` coordinator.
-- [x] CHK016 Dependency tag/SHA selection, repository-wide consistency, and recheck timing are explicit.
-- [x] CHK017 XcodeGen truth, CODEOWNERS/Owner gates, manual release semantics, and exact-head publication rules are preserved.
+- [x] CHK015 Host construction/product `track`/lifecycle `flush` are confined to one serialized non-`@MainActor` coordinator; Decision 2A exempts only SDK-owned internally synchronized off-main heartbeat work.
+- [x] CHK016 Dependency tag/SHA selection, the complete active authority/projection set, deliberate constitution amendment, historical-evidence exclusion, and recheck timing are explicit.
+- [x] CHK017 XcodeGen truth, CODEOWNERS/Owner gates, manual release semantics, and exact-head publication rules are preserved per single-goal PR.
 - [x] CHK018 Each acceptance/requirement has a planned task and evidence surface; external Owner work is separately blocked.
+- [x] CHK023 Dependency, privacy, dormant runtime, app adoption, synthetic CI, and TestFlight governance are independently working PR slices with no aggregate publication task.
+- [x] CHK024 Every PR has focused verification plus `scripts/verify`, exact-tree review/publication evidence, local/remote/PR SHA equality, stacking/rebase rules, and applicable Owner gates.
 
 ## Review readiness
 
 - [x] CHK019 No unresolved `[placeholder]`, `NEEDS CLARIFICATION`, or invented credential/resource value remains.
-- [x] CHK020 `plan.md`, `research.md`, `data-model.md`, contract, quickstart, and layer-scoped `tasks.md` form one consistent design.
+- [x] CHK020 `spec.md`, `plan.md`, `research.md`, `data-model.md`, contract, quickstart, checklist, and layer-scoped `tasks.md` form one consistent design.
+- [x] CHK025 All 16 stable AC IDs, FR-001–FR-021, SC-001–SC-006, RB-001–RB-003, and T000–T012 are covered without a placeholder, stale singular-PR contract, or unresolved Round-1 finding.
 
 ## Notes
 
