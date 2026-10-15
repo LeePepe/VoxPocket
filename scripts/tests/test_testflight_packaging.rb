@@ -46,11 +46,13 @@ class FixtureRunner < Gym::Runner
 end
 
 class FixtureLane
-  attr_reader :build_options, :upload_options, :distributed, :build_number_options, :requested_build_platform
+  attr_reader :build_options, :upload_options, :distributed, :build_number_options, :requested_build_platform, :profile_options
+  attr_accessor :suppress_profile_env
 
   def initialize(artifact, stub_build_number: true)
     @artifact = artifact
     @lanes = {}
+    @suppress_profile_env = false
     instance_eval(File.read(File.join(ROOT, "fastlane/Fastfile")), "Fastfile")
     define_singleton_method(:asc_api_key) { :fixture_key }
     define_singleton_method(:regenerate_project) {}
@@ -72,7 +74,12 @@ class FixtureLane
   def lane(name, &block)
     @lanes[[@platform, name]] = block
   end
-  def get_provisioning_profile(**); "fixture-profile"; end
+  def get_provisioning_profile(**options)
+    @profile_options = options
+    app_id = options[:app_identifier] || "com.leepepe.voxpocket"
+    ENV["sigh_#{app_id}_appstore_profile-name"] ||= "fixture-profile" unless @suppress_profile_env
+    "fixture-profile"
+  end
   def build_app(**options)
     @build_options = options
     @artifact
@@ -92,10 +99,16 @@ end
 class TestFlightPackagingTests < Minitest::Test
   def setup
     @directory = Dir.mktmpdir("voxpocket-package-test-")
+    @orig_profile_env = ENV["sigh_com.leepepe.voxpocket_appstore_profile-name"]
   end
 
   def teardown
     FileUtils.remove_entry(@directory)
+    if @orig_profile_env.nil?
+      ENV.delete("sigh_com.leepepe.voxpocket_appstore_profile-name")
+    else
+      ENV["sigh_com.leepepe.voxpocket_appstore_profile-name"] = @orig_profile_env
+    end
   end
 
   def artifact(name)
@@ -241,5 +254,61 @@ class TestFlightPackagingTests < Minitest::Test
     assert_equal "iOS", dependency.fetch("platformFilter")
     assert_equal "iOS", spec.fetch("targets").fetch("VoxPocketWidgetExtension").fetch("platform")
     assert_equal ["VoxPocket"], spec.fetch("schemes").fetch("VoxPocket").fetch("build").fetch("targets").keys
+  end
+
+  def test_mac_lane_fetches_forced_installed_profile_without_fixed_name
+    lane = FixtureLane.new(artifact("VoxPocket.pkg"))
+    env_key = "sigh_com.leepepe.voxpocket_appstore_profile-name"
+    orig_env = ENV[env_key]
+    begin
+      ENV[env_key] = "VoxPocket Mac App Store Fetched"
+      lane.run(:mac)
+      assert_equal true, lane.profile_options[:force]
+      assert_equal false, lane.profile_options[:skip_install]
+      assert_equal "macos", lane.profile_options[:platform]
+      refute lane.profile_options.key?(:provisioning_name)
+    ensure
+      if orig_env.nil?
+        ENV.delete(env_key)
+      else
+        ENV[env_key] = orig_env
+      end
+    end
+  end
+
+  def test_mac_lane_fails_closed_when_profile_name_env_is_missing_or_blank
+    env_key = "sigh_com.leepepe.voxpocket_appstore_profile-name"
+    ENV.delete(env_key)
+    lane = FixtureLane.new(artifact("VoxPocket.pkg"))
+    lane.suppress_profile_env = true
+    assert_raises(FastlaneCore::Interface::FastlaneError) { lane.run(:mac) }
+    assert_nil lane.build_options, "build_app must not be called when profile name is missing"
+    assert_nil lane.upload_options, "upload_to_testflight must not be called when profile name is missing"
+
+    ENV[env_key] = "   "
+    lane = FixtureLane.new(artifact("VoxPocket.pkg"))
+    lane.suppress_profile_env = true
+    assert_raises(FastlaneCore::Interface::FastlaneError) { lane.run(:mac) }
+    assert_nil lane.build_options, "build_app must not be called when profile name is blank"
+    assert_nil lane.upload_options, "upload_to_testflight must not be called when profile name is blank"
+  end
+
+  def test_mac_lane_passes_shell_escaped_profile_specifier_and_generic_installer
+    env_key = "sigh_com.leepepe.voxpocket_appstore_profile-name"
+    orig_env = ENV[env_key]
+    begin
+      ENV[env_key] = "VoxPocket App Store 2026 (Special)"
+      lane = FixtureLane.new(artifact("VoxPocket.pkg"))
+      lane.run(:mac)
+      assert_includes lane.build_options[:xcargs], "VOXPOCKET_MAC_PROFILE_SPECIFIER=VoxPocket\\ App\\ Store\\ 2026\\ \\(Special\\)"
+      assert_equal "Mac Installer Distribution", lane.build_options.dig(:export_options, :installerSigningCertificate)
+      assert_equal "VoxPocket App Store 2026 (Special)", lane.build_options.dig(:export_options, :provisioningProfiles, "com.leepepe.voxpocket")
+    ensure
+      if orig_env.nil?
+        ENV.delete(env_key)
+      else
+        ENV[env_key] = orig_env
+      end
+    end
   end
 end
