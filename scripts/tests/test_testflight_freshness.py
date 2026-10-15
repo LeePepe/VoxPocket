@@ -72,8 +72,8 @@ class TestFlightFreshnessTests(unittest.TestCase):
         self.assertTrue(mac_lane_match, "mac beta lane must exist")
         mac_lane_body = mac_lane_match.group(1)
 
-        # Must read sigh_#{APP_IDENTIFIER}_appstore_profile-name
-        self.assertIn('sigh_#{APP_IDENTIFIER}_appstore_profile-name', mac_lane_body)
+        # Must read lane_context[SharedValues::SIGH_NAME]
+        self.assertIn("lane_context[SharedValues::SIGH_NAME]", mac_lane_body)
 
         # Must reject empty/blank before build_app (UI.user_error! or raise)
         self.assertRegex(
@@ -82,7 +82,12 @@ class TestFlightFreshnessTests(unittest.TestCase):
             "mac lane must validate canonical profile name is non-empty before build_app",
         )
 
-        # Must not fallback to app_profile return from get_provisioning_profile
+        # Must not fallback to app_profile return or fabricated environment keys
+        self.assertNotRegex(
+            mac_lane_body,
+            r"sigh_.*_appstore_profile-name",
+            "mac lane must not use fabricated environment key",
+        )
         self.assertNotRegex(
             mac_lane_body,
             r"ENV\.fetch\(.*?, app_profile\)",
