@@ -37,7 +37,10 @@ jobs:
   release:
     name: Build & upload to TestFlight
     permissions:
-      contents: write # 移动 macOS 发布标记
+      contents: read
+    outputs:
+      candidate: ${{ steps.gate.outputs.latest }}
+      should_release: ${{ steps.gate.outputs.release }}
     # Fork guard form required by shared-ci workflow-lint for self-hosted jobs.
     if: >-
       ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)) &&
@@ -45,6 +48,12 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 60
     steps:
+      - name: Record source CI authorization
+        if: github.event_name == 'workflow_run'
+        run: |
+          echo "Source CI run ID: ${{ github.event.workflow_run.id }}"
+          echo "Source CI run URL: ${{ github.event.workflow_run.html_url }}"
+
       - name: Checkout VoxPocket
         uses: actions/checkout@v4
         with:
@@ -64,10 +73,6 @@ jobs:
             exit 1
           fi
           echo "Candidate SHA: $ACTUAL_SHA"
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "Source CI run ID: ${{ github.event.workflow_run.id }}"
-            echo "Source CI run URL: ${{ github.event.workflow_run.html_url }}"
-          fi
 
       # 外部本地依赖（fastlane build 需要）：AppleUITesting 落在
       # repo/VoxPocket 上两级 = $GITHUB_WORKSPACE 同级；LokiKit 由 SwiftPM 按 shared-telemetry commit 5f4b4d9（v0.1.0）固定解析。
@@ -260,14 +265,23 @@ jobs:
           fi
           rm -f /tmp/kc-unlock.err
 
+  advance_marker:
+    name: Advance last-released marker
+    needs: release
+    if: needs.release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       - name: Move last-released tag
-        if: steps.gate.outputs.release == 'true' && steps.fastlane_mac.outcome == 'success'
-        working-directory: repo
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ needs.release.outputs.candidate }}
         run: |
           set -euo pipefail
-          SHA="${{ steps.gate.outputs.latest }}"
+          git init marker-update
+          cd marker-update
+          git fetch --no-tags \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$SHA"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "${SHA}:refs/tags/testflight/macos-last-released"
-          echo "✅ testflight/macos-last-released → $SHA"
+            "FETCH_HEAD:refs/tags/testflight/macos-last-released"

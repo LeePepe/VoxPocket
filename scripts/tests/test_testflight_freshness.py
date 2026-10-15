@@ -132,11 +132,15 @@ class TestFlightFreshnessTests(unittest.TestCase):
         )
         self.assertRegex(
             self.workflow_text,
-            r"jobs:\n  release:\n(?:    .*\n)*?    permissions:\n      contents: write",
+            r"(?m)^  advance_marker:\n(?:    .*\n)*?    permissions:\n      contents: write$",
         )
         self.assertNotRegex(
             self.workflow_text,
             r"(?m)^permissions:\n  contents: write",
+        )
+        self.assertRegex(
+            self.workflow_text,
+            r"(?m)^  release:\n(?:    .*\n)*?    permissions:\n      contents: read$",
         )
         self.assertIn(
             'echo "Source CI run ID: ${{ github.event.workflow_run.id }}"',
@@ -148,6 +152,8 @@ class TestFlightFreshnessTests(unittest.TestCase):
         )
         marker_index = self.workflow_text.index("- name: Move last-released tag")
         self.assertNotIn("- name:", self.workflow_text[marker_index + 1:])
+        marker_job = self.workflow_text[self.workflow_text.index("  advance_marker:"):]
+        self.assertNotIn("uses:", marker_job)
 
 
 if __name__ == "__main__":
