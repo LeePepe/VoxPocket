@@ -64,7 +64,7 @@ The evidence and alternatives are in [`research.md`](./research.md). Binding dec
 9. **R-009 — Owner-gated single-goal PRs**: separate planning, dependency, behavioral/privacy, app, synthetic-CI, and TestFlight-governance changes; do not bypass package/project/workflow/Fastlane/script/constitution/context ownership.
 10. **R-010 — External production slice**: Owner provisioning/dispatch and Team Lead read-only blob evidence are separate from implementation completion.
 11. **R-011 — Stored-policy service SAS**: Decision 1A uses key-authenticated policy permission `c` plus explicit expiry and an HTTPS-only container service SAS bound with `si`; stored-policy form omits `sp`, while any explicit `sp` must equal `c`.
-12. **R-012 — Explicit consent, resettable identity, and excluded hosts**: persist “Send usage data” in `UserDefaults` defaulting off; disable admission/upload without deleting pending files; create/reuse/reset the random install UUID only at the consent boundary; never construct Blob telemetry in CLI/headless/test hosts.
+12. **R-012 — Explicit consent, resettable identity, and excluded hosts**: persist “Send usage data” in `UserDefaults` defaulting off; disable admission/upload without deleting pending files or the persisted UUID; create the random install UUID only on first opt-in, keep pre-opt-in Reset a no-op, retain the UUID inactive while off, reuse it after later opt-in unless Reset replaces it, and keep Reset consent-neutral; never construct Blob telemetry in CLI/headless/test hosts.
 
 ## Design and Interfaces
 
@@ -96,13 +96,13 @@ No package or app caller may expose arbitrary event names/property dictionaries 
 
 ### VoxInfrastructure consent preferences
 
-- In PR04, extend `PreferencesKey`/`UserDefaultsPreferencesStore` with the persisted consent and install-identity records plus focused isolated-suite tests. Consent absence reads as `false`; identity absence remains absence until first opt-in.
+- In PR04, extend `PreferencesKey`/`UserDefaultsPreferencesStore` with the persisted consent and install-identity records plus focused isolated-suite coverage in `Packages/VoxInfrastructure/Tests/PreferencesTests/ProductTelemetryPreferencesTests.swift`. Consent absence reads as `false`; identity absence remains absence until first opt-in; a created identity persists across disable and remains inactive until later opt-in reuses it or consent-neutral Reset replaces it.
 - The preference layer stores values only. It does not import Presentation or the app, construct telemetry, interpret Blob configuration, or perform admission/upload.
 
 ### VoxPocketApp Blob runtime
 
-- Add `VoxPocketBlobTelemetry.swift`, `BlobTelemetryConfiguration.swift`, and `BlobTelemetryLifecycleCoordinator.swift` under `VoxPocket/VoxPocket/`; add `BlobTelemetryPolicyTests.swift`, `BlobTelemetryConfigurationTests.swift`, `BlobTelemetryLifecycleCoordinatorTests.swift`, and `BlobTelemetryInstrumentationTests.swift` under `VoxPocket/VoxPocketTests/`; register them only through `VoxPocket/project.yml`.
-- The runtime reads exact plist keys and validates disabled/invalid/enabled state, but the interactive app constructs it only after persisted consent is on. First opt-in creates a non-personal install UUID; eligible launches reuse it; Settings Reset replaces it without changing consent. Consent off constructs no service/store; disabling a live generation stops admission/upload, retains pending files, and resumes only after later explicit opt-in.
+- Add `VoxPocketBlobTelemetry.swift`, `BlobTelemetryConfiguration.swift`, `BlobTelemetryHostEligibility.swift`, and `BlobTelemetryLifecycleCoordinator.swift` under `VoxPocket/VoxPocket/`; add `BlobTelemetryPolicyTests.swift`, `BlobTelemetryConfigurationTests.swift`, `BlobTelemetryConsentTests.swift`, `BlobTelemetryLifecycleCoordinatorTests.swift`, and `BlobTelemetryInstrumentationTests.swift` under `VoxPocket/VoxPocketTests/`; register them only through `VoxPocket/project.yml`.
+- The runtime reads exact plist keys and validates disabled/invalid/enabled state, but the interactive app constructs it only after persisted consent is on. Never-opted-in/off creates no service/store or identity and makes no identity-provider request; Reset is a no-op in that state. First opt-in creates a non-personal install UUID. Disabling after opt-in stops the live generation's admission/upload while retaining its pending files, store state, and persisted UUID without active-service identity request/use; a later explicit opt-in and eligible launches reuse that UUID unless Reset replaced it. Reset with an existing UUID while off or on replaces it without enabling or otherwise changing consent and rotates a live generation only while on.
 - A non-`@MainActor` actor is the sole host caller of `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)`, product `track`, and lifecycle `flush`, and performs enabled-service/store construction through actor-isolated asynchronous bootstrap. `ServiceContainer`, `AppDelegate`, and `MacOSAppScenes` schedule typed commands; they never construct an enabled store or call adapter synchronously. Tests admit only the SDK-owned internally synchronized heartbeat exemption.
 - The composition boundary classifies the interactive app before service bootstrap. CLI, headless, and test hosts never create the Blob service even when synthetic configuration and preferences are present. The repository has no production CLI target, so CLI/headless behavior is proven by a negative host-kind fixture instead of inventing an executable.
 - Record `app_launch` duration and the four accepted actions at successful semantic boundaries. Request flush after startup telemetry, recording/session completion, and macOS resign-active. Join the active flush and retain failed/cancelled pending files.
@@ -195,9 +195,9 @@ After PR01–PR07 merge, Owner policy/secret provisioning, and fresh Owner relea
 | US3/AC3; FR-013, FR-015–FR-017 | PR04/PR06 | T008, T010 | XcodeGen/plist contract and processed synthetic Release app |
 | US3/AC4; FR-014, FR-015, FR-016, FR-017, FR-018 | PR07 | T011 | path-only `-xcconfig`; mode/cleanup; raw+escaped absence; unchanged release invariants |
 | US3/AC5; FR-018, FR-019; SC-005 | PR00–PR07 | T000–T011 | per-PR one-goal/exact-head evidence and applicable Owner gates; exact commands only in PR07 |
-| US1/AC7, US1/AC8, US2/AC6; FR-022–FR-024; SC-007 | PR04/PR05 | T008, T009 | isolated `UserDefaults` consent/identity fixtures; macOS/cross-platform Settings toggle/reset tests; disable/re-enable pending-file proof; excluded-host zero-construction fixtures |
+| US1/AC7, US1/AC8, US2/AC6; FR-022–FR-024; SC-007 | PR04/PR05 | T008, T009 | isolated `UserDefaults` consent/identity fixtures; macOS/cross-platform Settings toggle/reset tests; pre-opt-in Reset no-op; disable→off pending-file/UUID retention→later-opt-in UUID reuse; consent-neutral Reset with an existing UUID while off/on; excluded-host zero-construction fixtures |
 | SC-001 | PR02–PR05 | T006–T009 | all supplied prohibited sentinels rejected before persistence/transport |
-| SC-002 | PR04 | T008 | zero identity/store/enqueue/network counts for disabled Debug/Release fixtures |
+| SC-002 | PR04 | T008 | zero identity-provider/store/enqueue/network calls for disabled Debug/Release fixtures |
 | SC-003 | PR06/PR07 | T010, T011 | expanded synthetic plist plus zero raw/escaped sentinels or value-bearing arguments/logs |
 | SC-004 | PR01–PR07 | T001–T011 | each PR's focused verification, `scripts/verify`, exact-tree review, and no weakened test |
 
@@ -209,7 +209,7 @@ Every stable acceptance criterion and functional requirement maps to an owned ta
 
 1. After PR00, PR01 validates annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peeling to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, runs `external_consumer.py --version 0.2.0`, updates the full current-truth path list atomically to exact `0.2.0`, and proves the old selection and every revision selector absent from that list while preserving explicitly historical feature evidence;
 2. Independently after PR00 and in parallel with PR01 and each other, PR02 and PR03 each demonstrate their privacy test red against the unsafe baseline, then green without assertion weakening, and pass their own package layer plus `scripts/verify`;
-3. Only after PR01, PR02, and PR03 merge, PR04 proves the representative stored-policy query accepted and `sp=cw`/user-delegation/unknown-name forms rejected; it tests the exact bundle initializer, SDK heartbeat exemption, coordinator-only host construction/`track`/`flush`, privacy allowlists, disabled/invalid config, default-off consent, first-opt-in UUID creation/reuse/reset, disable/re-enable pending-file retention, excluded-host policy, actor ordering, joined flush, and retry retention;
+3. Only after PR01, PR02, and PR03 merge, PR04 proves the representative stored-policy query accepted and `sp=cw`/user-delegation/unknown-name forms rejected; it tests the exact bundle initializer, SDK heartbeat exemption, coordinator-only host construction/`track`/`flush`, privacy allowlists, disabled/invalid config, default-off consent, pre-opt-in Reset no-op, first-opt-in UUID creation, disable→off pending-file/UUID retention, later-opt-in UUID reuse unless Reset replaced it, consent-neutral Reset with an existing UUID while off/on, excluded-host policy, actor ordering, joined flush, and retry retention;
 4. PR05 proves macOS/cross-platform Settings UI wiring, excluded-host composition, interactive-app consent adoption, app-shell action/lifecycle instrumentation, and unchanged Loki behavior while unconfigured or non-consented builds remain disabled;
 5. PR06 generates from `VoxPocket/project.yml`, proves zero generated drift, and inspects an unsigned synthetic Release app's processed plist;
 6. PR07 proves the xcconfig is runner-temp/untracked/`0600`, only its path reaches `-xcconfig`, cleanup runs on every terminal path, both raw and escaped sentinels are absent from captured Release logs, and existing manual release invariants remain;
@@ -250,6 +250,7 @@ Packages/VoxInfrastructure/
 ├── Sources/TranscriptionKit/
 │   ├── VoxPocketTelemetryEventName.swift
 │   └── WhisperKitTranscriber.swift
+├── Tests/PreferencesTests/ProductTelemetryPreferencesTests.swift
 └── Tests/TranscriptionKitTests/
 
 Packages/VoxApplication/
@@ -276,10 +277,12 @@ VoxPocket/
 │   ├── MacOSAppScenes.swift
 │   ├── VoxPocketBlobTelemetry.swift
 │   ├── BlobTelemetryConfiguration.swift
+│   ├── BlobTelemetryHostEligibility.swift
 │   └── BlobTelemetryLifecycleCoordinator.swift
 └── VoxPocketTests/
     ├── BlobTelemetryPolicyTests.swift
     ├── BlobTelemetryConfigurationTests.swift
+    ├── BlobTelemetryConsentTests.swift
     ├── BlobTelemetryLifecycleCoordinatorTests.swift
     ├── BlobTelemetryConsentCompositionTests.swift
     └── BlobTelemetryInstrumentationTests.swift

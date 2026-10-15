@@ -28,8 +28,8 @@
 - [x] CHK013 Real values enter only the authorized TestFlight archive through a runner-temp untracked `0600` xcconfig; only its path reaches `-xcconfig`, cleanup is unconditional, and synthetic Release proof is credential-free/non-networked.
 - [x] CHK021 Raw and shell/percent-escaped synthetic sentinel forms are both required absent from Release-path logs, arguments, and messages.
 - [x] CHK022 Decision 1A is exact: key-auth stored policy with permission `c`/explicit expiry, HTTPS-only `--policy-name` service SAS, supported query names, stored-policy `sp` omission, and no user-delegation fields.
-- [x] CHK026 The common consent contract is exact: persisted “Send usage data” defaults off, disable stops admission/upload while retaining pending files, and only a later explicit opt-in resumes.
-- [x] CHK027 Install identity is random, created on first opt-in, persisted/reused, resettable from Settings, and never exposed as a product property or evidence value.
+- [x] CHK026 The common consent contract is exact: persisted “Send usage data” defaults off, disable stops admission/upload while retaining pending files and any persisted UUID, and only a later explicit opt-in resumes.
+- [x] CHK027 Install identity is random, created/requested only on first opt-in, retained across disable without active-service use, reused after later opt-in unless Reset replaced it, resettable when present while off/on without changing consent, absent after pre-opt-in Reset, and never exposed as a product property or evidence value.
 
 ## Architecture and delivery
 

@@ -90,9 +90,9 @@ Decision 1A supersedes the issue's incompatible user-delegation example. The Own
 
 ### R-012 — Apply the common explicit-consent and host-composition contract
 
-Persist “Send usage data” in `UserDefaults`, default it off, and gate service construction, admission, and upload on its current value. Disabling immediately stops admission/upload and retains pending files under SDK disable semantics; only a later explicit opt-in may resume. Create the random install UUID on first opt-in, reuse it across eligible launches, and replace it through a Settings Reset action. CLI, headless, and test hosts fail closed before service construction regardless of configuration or fixture state. Because the repository has no production CLI target, a negative host-kind fixture proves that contract without adding an executable.
+Persist “Send usage data” in `UserDefaults`, default it off, and gate service construction, admission, and upload on its current value. Before first opt-in, create/request no identity. Disabling immediately stops admission/upload, retains pending files and any persisted install UUID, and permits no active-service identity request/use; only a later explicit opt-in may resume and it reuses that UUID unless Reset replaced it. Create the random install UUID on first opt-in. Reset while off or on replaces it without enabling or otherwise changing consent and rotates a live generation only while on. CLI, headless, and test hosts fail closed before service construction regardless of configuration or fixture state. Because the repository has no production CLI target, a negative host-kind fixture proves that contract without adding an executable.
 
-**Rejected**: implied consent from valid configuration, eager identity creation, deleting pending files on disable, automatic re-enable, stable device/account-derived identity, reset-by-delete without replacement, inventing a CLI target, or constructing a disabled service in an excluded host.
+**Rejected**: implied consent from valid configuration, eager identity creation, identity creation by Reset before first opt-in, deleting pending files or the persisted UUID on disable, automatic re-enable, stable device/account-derived identity, reset-by-delete without replacement, inventing a CLI target, or constructing a disabled service in an excluded host.
 
 ## Compatibility and removed behavior
 

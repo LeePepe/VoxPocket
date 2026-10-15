@@ -56,9 +56,11 @@ raw plist
 State transitions:
 
 ```text
-off (default) --explicit opt-in--> on
-on --disable--> off + stop admission/upload + retain pending files
-off --later explicit opt-in--> on + resume eligible work
+never-opted-in/off (no UUID) --explicit opt-in--> on (create UUID)
+on (UUID active) --disable--> disabled-after-opt-in/off (retain UUID + pending files; no active use)
+disabled-after-opt-in/off --later explicit opt-in--> on (reuse retained UUID)
+never-opted-in/off --Reset--> never-opted-in/off (no UUID created)
+disabled-after-opt-in/off or on --Reset--> same consent state (replace UUID; rotate live generation only when on)
 ```
 
 Valid configuration never implies consent. An excluded CLI/headless/test host remains unconstructed in either state.
@@ -66,8 +68,8 @@ Valid configuration never implies consent. An excluded CLI/headless/test host re
 ## BlobInstallIdentity
 
 - Random non-personal UUID.
-- Created only on the first explicit opt-in; persisted and reused by later eligible app launches.
-- Replaced with a new random UUID by the explicit Settings Reset action; reset never enables consent by itself, rotates any live service generation, and affects newly admitted events.
+- Created/requested only on the first explicit opt-in; persisted across disable and reused by a later explicit opt-in and later eligible app launches unless Reset replaced it. While consent is off, an existing UUID remains stored but is not requested or used by an active service.
+- When present, replaced with a new random UUID by the explicit Settings Reset action while consent is either off or on; Reset before first opt-in is a no-op, never enables or otherwise changes consent, rotates a live service generation only when on, and affects newly admitted events.
 - Never derived from Apple ID, device name, username, audio, transcript, session data, or other account/user content.
 - Not accepted as a product-event property.
 
@@ -103,7 +105,7 @@ Invariants:
 6. A concurrent flush request joins the active flush; it does not create a second sender.
 7. UI/lifecycle callers schedule work asynchronously and never wait on synchronous file I/O.
 8. Decision 2A exempts only SDK-owned `telemetry.heartbeat` startup/daily work performed under the SDK's own synchronization; product callers cannot emit heartbeat, create another owner, or bypass the host actor.
-9. Consent off prevents construction when no service exists; disabling a live service stops new admission/upload, retains unconfirmed files, and requires a later explicit opt-in to resume.
+9. Never-opted-in/off creates no identity/service/store and pre-opt-in Reset is a no-op. Disabling after opt-in stops new admission/upload while retaining unconfirmed files, store state, and the persisted UUID without active-service identity use; a later explicit opt-in reuses that UUID unless Reset replaced it. Reset with an existing UUID preserves the off/on consent state and rotates a live generation only when on.
 10. CLI, headless, and test composition roots never create the Blob service; CLI/headless are negative host-kind fixtures because this repository has no production CLI target.
 
 ## StoredPolicySASShape

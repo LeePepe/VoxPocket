@@ -87,8 +87,8 @@ LokiKitBlobSAS = $(TELEMETRY_BLOB_SAS)
 
 - Settings exposes “Send usage data” through `UserDefaultsPreferencesStore`; absence decodes as `false`, and only an explicit user action changes it to `true`.
 - Valid endpoint/SAS configuration is necessary but never sufficient: consent off means zero Blob service construction, admission, or upload.
-- Disabling immediately closes admission/upload for the active generation and retains pending local files under SDK disable semantics. Re-enable occurs only after a later explicit opt-in.
-- First opt-in creates and persists one random non-personal install UUID. Eligible launches reuse it; the Settings Reset action atomically replaces it without altering consent, rotates the enabled service generation, and ensures newly admitted events use only the replacement.
+- Before first opt-in, the host creates/requests no identity. Disabling immediately closes admission/upload for the active generation and retains pending local files plus any persisted install UUID under SDK disable semantics; while off, no active service requests or uses that UUID. Re-enable occurs only after a later explicit opt-in and reuses the retained UUID unless Reset replaced it.
+- First opt-in creates and persists one random non-personal install UUID. Eligible launches reuse it. Reset before first opt-in is a no-op. When the UUID exists, the Settings Reset action atomically replaces it while consent is off or on without enabling or otherwise altering consent, rotates a live service generation only in the on case, and ensures newly admitted events use only the replacement.
 - CLI, headless, and test hosts never construct the Blob service, regardless of configuration or persisted test values. Only the interactive app composition root may construct after valid configuration and consent. The repository has no production CLI target, so a negative host-kind fixture covers CLI/headless without adding one.
 
 ## Existing Loki privacy hardening
@@ -102,12 +102,12 @@ Tests must prove:
 1. the two valid product shapes are admitted;
 2. every unknown event/key/label and non-finite/out-of-range number is rejected as a whole;
 3. transcript, refined-text, audio, prompt, error, endpoint, SAS, UUID, and credential sentinels are absent from persisted bytes, request fixtures, and diagnostics;
-4. missing/empty/unexpanded configuration causes zero identity, store, enqueue, and network calls;
+4. missing/empty/unexpanded configuration causes zero identity-provider, store, enqueue, and network calls;
 5. invalid present configuration fails only Blob closed without value disclosure;
 6. direct `@MainActor` persistence is structurally unavailable; actor tests prove coordinator-only host construction/`track`/`flush`, ordered admission, joined flush, and retained failure/cancellation state; heartbeat fixtures prove bundle startup heartbeat exists, later ticks remain SDK-owned/off-main, and product callers cannot emit it;
 7. existing Loki construction/routing/log-sink behavior remains, with arbitrary error text removed;
 8. the representative stored-policy query is accepted while `sp=cw`, user-delegation keys, unsupported names, and invalid `sr` are rejected;
 9. synthetic processed Release plist contains both fully expanded fake values and no unresolved build-setting reference; TestFlight packaging logs contain neither raw nor escaped sentinels and expose no value-bearing argument.
-10. a fresh preference suite defaults consent off and observes zero construction/admission/upload; disable retains pending files and stops work; only a later explicit opt-in resumes;
-11. first opt-in creates one UUID, eligible relaunch reuses it, Reset replaces it, and no identity value appears in a product property, diagnostic, or evidence fixture;
+10. a fresh preference suite defaults consent off and observes zero construction/admission/upload plus zero identity creation/provider request before first opt-in; disable retains pending files and the persisted UUID while preventing active-service identity use; only a later explicit opt-in resumes and reuses that UUID unless Reset replaced it;
+11. Reset before first opt-in creates no identity; first opt-in creates one UUID, eligible relaunch reuses it, and Reset fixtures with that UUID present while off and on replace it without enabling or otherwise changing consent and rotate a live generation only while on; no identity value appears in a product property, diagnostic, or evidence fixture;
 12. CLI, headless, and test host fixtures record zero Blob-service construction even with valid synthetic configuration and consent set true.
