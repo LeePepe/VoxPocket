@@ -83,10 +83,10 @@ Merging to `main` requires (must match the live ruleset `main protection`, mirro
 - `Lint & policy`
 
 The ruleset also requires CODEOWNERS review (0 extra approvals) and dismisses stale reviews on
-push. It does not require the branch to be up to date (`strict` off). Owner-approved R3
-(2026-09-24) made that trade: `quality / aggregate` fails unless every lane passed on the PR
-head SHA (and the PR body is complete), and stale reviews are dismissed on push, so evidence
-is always for the head being merged.
+push. It requires the branch to be up to date before merging (`strict` on, Owner decision
+2026-10-15), so PR CI tests exactly what lands on `main`; after merge is CD. `quality / aggregate`
+fails unless every lane passed on the PR head SHA (and the PR body is complete), and stale
+reviews are dismissed on push, so evidence is always for the head being merged.
 `codex-review-target / codex-review` replaced the legacy `codex-review-target` context,
 which the workflow still emits but is not required. `iOS simulator` and `kimi-review` run on
 every PR and are never required.
