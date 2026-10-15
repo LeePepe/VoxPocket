@@ -20,6 +20,7 @@
 - `ServiceContainer.makeTelemetryService()` owns the existing Loki event service. Debug selects localhost; Release without `LOKI_ENDPOINT` selects `NoopTelemetryService`.
 - `VoxPocketLogging` independently owns the local-log-to-Loki sink and persisted log queue. It is not the product-event integration seam.
 - App lifecycle and user-action seams already exist in `AppDelegate.swift`, `MacOSAppScenes.swift`, and `ServiceContainer.swift`. They run on `@MainActor`; the shared adapter's synchronous admission must not run there.
+- Preferences already persists typed values through `UserDefaultsPreferencesStore`; `MacOSSettingsView` is the macOS Settings surface and `MeRootView` contains the cross-platform privacy surface. `AppDelegate` already detects test-host execution before app composition, providing a fail-closed host-classification seam; there is no production CLI target or accepted headless composition path that may create product telemetry.
 - `DefaultRefinementUseCase.swift` forwards `error.localizedDescription`; `WhisperKitTranscriber.swift` forwards a stringified error as `reason`. Existing tests do not mechanically prove those payloads content-free.
 - The app has no Blob plist keys, Blob-only store, Blob identity, Blob lifecycle owner, or Release expansion proof.
 - The TestFlight workflow is manual `workflow_dispatch`, checks out `main`, publishes macOS only, and delegates archive/upload to Fastlane. iOS TestFlight remains disabled.
@@ -47,15 +48,15 @@ The product contract contains exactly `product.user_action` and `product.perform
 
 ### R-004 — Serialize synchronous adapter work off `@MainActor`
 
-One non-`@MainActor` actor owns the Blob service for the app lifetime and is the sole host entry for the exact bundle initializer, product `track`, and lifecycle `flush`. UI and app-lifecycle code submits typed commands asynchronously. The actor serializes host admission/local persistence, drains prior admission before flush, and joins an in-flight flush rather than starting a competing request. Resign-active schedules a best-effort non-blocking flush; failed or cancelled pending files remain retryable. Decision 2A narrowly exempts only SDK-owned, internally synchronized, content-free startup/daily heartbeat work; it creates no host/product bypass.
+One non-`@MainActor` coordinator is retained by the interactive app and owns at most one live Blob service generation while consent is on; it is the sole host entry for the exact bundle initializer, product `track`, and lifecycle `flush`. UI and app-lifecycle code submits typed commands asynchronously. The actor serializes host admission/local persistence, drains prior admission before flush, and joins an in-flight flush rather than starting a competing request. Disable/reset stops or rotates the live generation without admitting later work under stale state; resign-active schedules a best-effort non-blocking flush only while enabled; failed, cancelled, or consent-disabled pending files remain retryable. Decision 2A narrowly exempts only SDK-owned, internally synchronized, content-free startup/daily heartbeat work; it creates no host/product bypass.
 
 **Rejected**: direct `track` calls from `ServiceContainer`, view models, SwiftUI scenes, or `AppDelegate`; product-emitted heartbeat; a second store owner; forcing SDK heartbeat through a host scheduler; and unretained competing flush tasks.
 
 ### R-005 — Disable before constructing state
 
-The host reads `LokiKitBlobEndpoint` and `LokiKitBlobSAS`. Missing, empty, or unexpanded values select the SDK-disabled path before identity, store, or network construction. Present-invalid values fail only Blob closed and produce one fixed diagnostic with no supplied value. The install identity is a non-personal UUID requested only for a first valid store or explicit reset.
+The host reads `LokiKitBlobEndpoint` and `LokiKitBlobSAS`. Missing, empty, or unexpanded values select the SDK-disabled path before identity, store, or network construction. Present-invalid values fail only Blob closed and produce one fixed diagnostic with no supplied value. Even valid configuration constructs nothing until the persisted “Send usage data” preference is explicitly enabled; the default is off.
 
-**Rejected**: environment fallback, partial enablement, implicit development receiver, or logging the rejected value.
+**Rejected**: environment fallback, partial enablement, implicit development receiver, configuration-as-consent, or logging the rejected value.
 
 ### R-006 — Inject real values only into the authorized TestFlight archive
 
@@ -87,11 +88,18 @@ Decision 1A supersedes the issue's incompatible user-delegation example. The Own
 
 **Rejected**: `--auth-mode login --as-user`; direct `cw`; adding provider support for user-delegation fields; agents generating/inspecting/storing the real token; or placing real resource identifiers in committed artifacts.
 
+### R-012 — Apply the common explicit-consent and host-composition contract
+
+Persist “Send usage data” in `UserDefaults`, default it off, and gate service construction, admission, and upload on its current value. Disabling immediately stops admission/upload and retains pending files under SDK disable semantics; only a later explicit opt-in may resume. Create the random install UUID on first opt-in, reuse it across eligible launches, and replace it through a Settings Reset action. CLI, headless, and test hosts fail closed before service construction regardless of configuration or fixture state. Because the repository has no production CLI target, a negative host-kind fixture proves that contract without adding an executable.
+
+**Rejected**: implied consent from valid configuration, eager identity creation, deleting pending files on disable, automatic re-enable, stable device/account-derived identity, reset-by-delete without replacement, inventing a CLI target, or constructing a disabled service in an excluded host.
+
 ## Compatibility and removed behavior
 
 - Shared-telemetry adoption is additive at the module/product level; all consumers move together to avoid mixed resolution.
 - Existing Loki endpoint/token selection, Noop fallback, event routing, log-sink filtering, stores, and safe metrics remain.
 - The only intentional runtime-payload removal is arbitrary localized/stringified error text. Closed failure categories may replace it; UI error display is unaffected.
+- The new consent section is additive to existing Settings. Product telemetry remains absent until opt-in; disabling removes admission/upload behavior but does not delete pending local Blob files.
 - Rollback stops the Blob owner and retains Blob catalog/queue/sidecar/capacity-ledger files. The older adapter must not open them. Already transmitted events cannot be retracted.
 - No test, assertion, policy check, release guard, signing step, upload step, or platform restriction may be removed or weakened.
 

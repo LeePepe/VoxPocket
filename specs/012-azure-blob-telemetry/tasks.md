@@ -102,34 +102,34 @@ Every PR task below includes this acceptance in addition to its task-local check
 
 ## Phase 2: PR04 — Dormant Blob deep module
 
-**Goal sentence**: After this PR, VoxPocket contains a tested but unadopted Blob policy/configuration/store/coordinator that defaults to zero-state and cannot emit a product event from production code.
+**Goal sentence**: After this PR, VoxPocket contains a tested but unadopted consent-capable Blob policy/configuration/store/coordinator plus persisted consent/identity state and host eligibility that default to zero-state and cannot emit a product event from production code.
 
-- [ ] T008 [US1] Add the dormant Blob module, source plist/XcodeGen settings, and focused tests in `VoxPocket/Config.xcconfig`, `VoxPocket/project.yml`, `VoxPocket/VoxPocket/Info.plist`, new `VoxPocket/VoxPocket/VoxPocketBlobTelemetry.swift`, new `VoxPocket/VoxPocket/BlobTelemetryConfiguration.swift`, new `VoxPocket/VoxPocket/BlobTelemetryLifecycleCoordinator.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryPolicyTests.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryConfigurationTests.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryLifecycleCoordinatorTests.swift`, and `VoxPocket/VoxPocket.xcodeproj/project.pbxproj` only if regenerated output changes
+- [ ] T008 [US1] Add persisted consent/identity state and the dormant Blob module/host-eligibility contract, source plist/XcodeGen settings, and focused tests in `Packages/VoxInfrastructure/Sources/Preferences/PreferencesStore.swift`, new `Packages/VoxInfrastructure/Tests/PreferencesTests/ProductTelemetryPreferencesTests.swift`, `VoxPocket/Config.xcconfig`, `VoxPocket/project.yml`, `VoxPocket/VoxPocket/Info.plist`, new `VoxPocket/VoxPocket/VoxPocketBlobTelemetry.swift`, new `VoxPocket/VoxPocket/BlobTelemetryConfiguration.swift`, new `VoxPocket/VoxPocket/BlobTelemetryHostEligibility.swift`, new `VoxPocket/VoxPocket/BlobTelemetryLifecycleCoordinator.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryPolicyTests.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryConfigurationTests.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryConsentTests.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryLifecycleCoordinatorTests.swift`, and `VoxPocket/VoxPocket.xcodeproj/project.pbxproj` only if regenerated output changes
 
 | Field | Contract |
 |---|---|
-| Owner / context | `VoxPocketApp`; `VoxPocket/tech-context.md` |
-| Out of scope | `ServiceContainer.swift`; `AppDelegate.swift`; `MacOSAppScenes.swift`; production call sites/instrumentation; package source/manifests; `.github/**`; Fastlane/scripts; Loki routing/store; real identifiers/credentials |
-| Interface impact | Internal typed `userAction`/`performance` commands, configuration state, dedicated store, and coordinator; source plist/build settings exist but no production caller activates them |
-| Acceptance | Tests precede code. Invoke the exact `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)` only from actor-isolated bootstrap. The actor is sole host entry for construction/product `track`/lifecycle `flush`. Decision 2A exempts only SDK-owned internally synchronized off-main heartbeat; prove bundle startup heartbeat exists, product callers cannot emit it, and no second owner/host bypass exists. Admit only the two product shapes; reject all prohibited sentinels. Missing/empty/unexpanded config yields zero identity/store/enqueue/network; invalid present config yields fixed value-free Blob failure. Use a dedicated store and retain unconfirmed files. |
+| Owner / context | `VoxInfrastructure` Preferences (`Packages/VoxInfrastructure/tech-context.md`); dormant `VoxPocketApp` module (`VoxPocket/tech-context.md`) |
+| Out of scope | `ServiceContainer.swift`; `AppDelegate.swift`; `ContentView.swift`; `SettingsView.swift`; `VoxPocketApp.swift`; `MacOSAppScenes.swift`; Presentation source; production call sites/instrumentation; package manifests or non-enumerated package source; `.github/**`; Fastlane/scripts; Loki routing/store; real identifiers/credentials; new CLI executable |
+| Interface impact | Preferences gains default-off consent and opaque install-identity records. The app module gains internal typed `userAction`/`performance` commands, configuration/host-eligibility state, dedicated store, and coordinator; source plist/build settings exist but no production caller activates them. |
+| Acceptance | Tests precede code. With isolated `UserDefaults`, prove consent absence is off, first explicit opt-in creates one random UUID, later eligible loads reuse it, and Reset replaces it without enabling consent or exposing the value. Valid config without consent yields zero service/identity/store/enqueue/network. Model CLI/headless as negative host kinds (the repository has no production CLI target) and prove CLI/headless/test are ineligible for service construction even with valid synthetic config/consent. Invoke the exact `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)` only from actor-isolated bootstrap. The actor is sole host entry for construction/product `track`/lifecycle `flush`. Decision 2A exempts only SDK-owned internally synchronized off-main heartbeat; prove bundle startup heartbeat exists, product callers cannot emit it, and no second owner/host bypass exists. Admit only the two product shapes; reject all prohibited sentinels. Turning enablement off stops new admission/upload, cancels/disables the active generation under SDK semantics, retains unconfirmed files, and requires a later explicit opt-in to resume. Reset rotates the enabled generation so newly admitted events use only the replacement identity. Missing/empty/unexpanded config yields zero identity/store/enqueue/network; invalid present config yields fixed value-free Blob failure. Use a dedicated store and retain unconfirmed files. |
 | SAS fixture | Accept `sv=2023-11-03&sr=c&si=synthetic-create-only&spr=https&sig=fake%2Bonly%2F%3D`; assert names exactly `{sv,sr,si,spr,sig}`, `sr=c`, non-empty `si`/`sig`, `spr=https`, and no `sp`. Reject `sp=cw`, user-delegation keys including `skoid`, unknown names, or invalid `sr`. Static command fixture proves policy `--permissions c`; agents generate no token. |
-| Verification | Focused app tests; `python3 scripts/ci/run_repository_tests.py app-python`; `scripts/verify --layer VoxPocketApp`; repository-pinned XcodeGen regenerate/no-diff; structural search for coordinator-only host calls; store/request/diagnostic sentinel scan; `scripts/verify`. |
+| Verification | `swift build && swift test` from `Packages/VoxInfrastructure`; `scripts/verify --layer VoxInfrastructure`; focused app tests; `python3 scripts/ci/run_repository_tests.py app-python`; `scripts/verify --layer VoxPocketApp`; repository-pinned XcodeGen regenerate/no-diff; structural search for coordinator-only host calls; store/request/diagnostic sentinel scan; `scripts/verify`. |
 | Edges / gate | Depends on merged PR01, PR02, and PR03. Blocks PR05/PR06. Owner approval required because `project.yml` is protected. |
 
 ## Phase 3: Parallel PR05 / PR06 after PR04
 
-### PR05 — App adoption and lifecycle instrumentation
+### PR05 — Consent-gated app adoption and lifecycle instrumentation
 
-**Goal sentence**: After this PR, a valid configured app emits only the accepted product events and lifecycle flushes through the tested coordinator while unconfigured builds and Loki behavior remain unchanged.
+**Goal sentence**: After this PR, only the consented interactive app constructs Blob telemetry and emits the accepted product events/lifecycle flushes; consent defaults off, disable stops admission/upload without deleting pending files, install identity is first-opt-in/reused/resettable, excluded hosts construct nothing, and Loki behavior remains unchanged.
 
-- [ ] T009 [US1] Adopt the Blob coordinator and instrument app-shell semantic boundaries in `VoxPocket/VoxPocket/ServiceContainer.swift`, `VoxPocket/VoxPocket/AppDelegate.swift`, `VoxPocket/VoxPocket/MacOSAppScenes.swift`, `VoxPocket/VoxPocketTests/AppStartupTests.swift`, `VoxPocket/VoxPocketTests/QuickRecordingWindowLifecycleTests.swift`, `VoxPocket/VoxPocketTests/VoxPocketTests.swift`, and new `VoxPocket/VoxPocketTests/BlobTelemetryInstrumentationTests.swift`
+- [ ] T009 [US1] Add Settings controls, adopt the Blob coordinator only in the interactive app, and instrument semantic boundaries in new `Packages/VoxPresentation/Sources/UIShared/ViewModels/ProductTelemetrySettingsViewModel.swift`, `Packages/VoxPresentation/Sources/UIShared/Views/MacOSSettingsView.swift`, `Packages/VoxPresentation/Sources/UIShared/Views/MeRootView.swift`, new `Packages/VoxPresentation/Tests/UISharedTests/ProductTelemetrySettingsViewModelTests.swift`, `Packages/VoxPresentation/Tests/UISharedTests/MacOSSettingsViewTests.swift`, new `Packages/VoxPresentation/Tests/UISharedTests/ProductTelemetrySettingsViewTests.swift`, `VoxPocket/VoxPocket/ServiceContainer.swift`, `VoxPocket/VoxPocket/AppDelegate.swift`, `VoxPocket/VoxPocket/MacOSAppScenes.swift`, `VoxPocket/VoxPocketTests/AppStartupTests.swift`, `VoxPocket/VoxPocketTests/QuickRecordingWindowLifecycleTests.swift`, `VoxPocket/VoxPocketTests/VoxPocketTests.swift`, `VoxPocket/VoxPocketUITests/VoxPocketUITests.swift`, new `VoxPocket/VoxPocketTests/BlobTelemetryInstrumentationTests.swift`, and new `VoxPocket/VoxPocketTests/BlobTelemetryConsentCompositionTests.swift`
 
 | Field | Contract |
 |---|---|
-| Owner / context | `VoxPocketApp`; `VoxPocket/tech-context.md` |
-| Out of scope | Project/plist/build settings; package code/manifests; `.github/**`; Fastlane/scripts; TestFlight secrets; Loki replacement; settings/consent UI; iOS TestFlight |
-| Interface impact | Production app assembly/lifecycle uses the already-tested internal typed module; no public package API |
-| Acceptance / verification | Retain one coordinator for app lifetime; record launch performance and settings/full-panel/quick-record start/stop only at successful semantic boundaries; flush after startup, recording/session completion, and macOS resign-active; preserve ordering/join/retry. Missing/invalid config remains disabled/closed. Prove unchanged Loki construction/routing/log sink/store/safe events and no legacy fan-out. Run focused fixtures, app-python, `scripts/verify --layer VoxPocketApp`, `scripts/verify`, and required app CI. |
+| Owner / context | `VoxPresentation` UIShared (`Packages/VoxPresentation/tech-context.md`); `VoxPocketApp` composition (`VoxPocket/tech-context.md`) |
+| Out of scope | Project/plist/build settings; Infrastructure consent schema/module internals; package manifests or non-enumerated package source; `.github/**`; Fastlane/scripts; TestFlight secrets; Loki replacement; account/device-derived identity; any CLI/headless/test-host construction; new executable/CLI target; iOS TestFlight |
+| Interface impact | macOS Settings and the cross-platform privacy surface gain the exact “Send usage data” toggle and Reset action backed by the T008 preference contract; only interactive production app assembly uses the already-tested internal typed module. No generic/public telemetry API is added. |
+| Acceptance / verification | Tests precede code. Prove both Settings surfaces load default-off state independently of Blob construction, persist explicit opt-in, disable immediately, and replace identity through Reset without displaying/exposing its value. Existing unrelated Settings access may remain but cannot make Blob-service construction a side effect. Prove CLI/headless negative host-kind fixtures and real test-host composition construct no Blob service even with valid synthetic configuration and consent true; do not add a CLI executable. Retain at most one live coordinator/service generation for a consented interactive app; record launch performance and settings/full-panel/quick-record start/stop only at successful semantic boundaries; flush after startup, recording/session completion, and macOS resign-active; preserve ordering/join/retry and the T008 pending-file disable/reset contracts. Missing/invalid config remains disabled/closed. Prove unchanged Loki construction/routing/log sink/store/safe events and no legacy fan-out. Run `swift build && swift test` and `scripts/verify --layer VoxPresentation`, focused app/UI fixtures, app-python, `scripts/verify --layer VoxPocketApp`, `scripts/verify`, and required app CI. |
 | Edges | Depends on merged PR04; blocks PR07. |
 
 ### PR06 — Synthetic Release required-CI proof
@@ -164,15 +164,15 @@ Every PR task below includes this acceptance in addition to its task-local check
 
 ## Phase 5: Owner-controlled production evidence
 
-- [ ] T012 [US1] After PR01–PR07 merge, Owner provisioning, and fresh release authorization, record one TestFlight/read-only Blob result without repository edits
+- [ ] T012 [US1] After PR01–PR07 merge, Owner provisioning, fresh release authorization, and separate tester Settings opt-in, record one approved-action TestFlight/read-only Blob result without repository edits
 
 | Field | Contract |
 |---|---|
 | Owner / context | Owner provisioning/release plus Team Lead read-only evidence; no repository writer |
-| In scope | Owner executes Decision 1A commands with real values, sets both secrets, explicitly authorizes the existing manual release; Team Lead records exact merged/workflow revision, run reference, TestFlight build number, blob name, and terminal category |
+| In scope | Owner executes Decision 1A commands with real values, sets both secrets, and explicitly authorizes the existing manual release; tester separately enables “Send usage data” and performs one approved action; Team Lead records exact merged/workflow revision, run reference, TestFlight build number, blob name, and terminal category |
 | Out of scope | Agent Azure/GitHub mutation; repository edits; early/implicit dispatch; payload download; endpoint/account/container/SAS disclosure; permission widening; failed-run repair inside this task |
-| Acceptance / verification | Stored policy is time-bounded/create-only, generated SAS is provider-compatible, one used TestFlight build produces at least one blob, read-only listing records name only, and evidence contains no payload or credential. Failure routes through Team Lead to the original implementation owner. |
-| Edges | Depends on all implementation PRs merged, applicable Owner approvals, both secrets, and a new explicit Owner release authorization. Remains externally blocked until every condition holds. |
+| Acceptance / verification | Stored policy is time-bounded/create-only, generated SAS is provider-compatible, release authorization is not treated as consent, separate tester opt-in plus one approved action produces at least one blob, read-only listing records name only, and evidence contains no payload or credential. Failure routes through Team Lead to the original implementation owner. |
+| Edges | Depends on all implementation PRs merged, applicable Owner approvals, both secrets, a new explicit Owner release authorization, and separate tester Settings opt-in before the evidence action. Remains externally blocked until every condition holds. |
 
 ## Dependencies and execution order
 
@@ -182,7 +182,7 @@ T000 / PR00 reviewed planning landing
        -> PR04 T008 dormant Blob module
             -> {PR05 T009 || PR06 T010}
                  -> PR07 T011 secure TestFlight injection
-                      -> Owner provisioning + fresh release authority
+                      -> Owner provisioning + fresh release authority + separate tester opt-in
                            -> T012 production evidence
 ```
 
@@ -194,11 +194,13 @@ PR01, PR02, and PR03 are separate parallel PRs after PR00 because their owned pa
 |---|---|
 | US1/AC1 | T008, T009, T012 |
 | US1/AC2, US1/AC3, US1/AC4, US1/AC6 | T008, T009 |
+| US1/AC7, US1/AC8 | T008, T009 |
 | US1/AC5 | T012 |
 | US2/AC1 | T006–T009 |
 | US2/AC2 | T006, T007 |
 | US2/AC3, US2/AC4 | T008 |
 | US2/AC5 | T008, T010, T011 |
+| US2/AC6 | T008, T009 |
 | US3/AC1 | T001–T005 |
 | US3/AC2 | T006, T007, T009 |
 | US3/AC3 | T008, T010 |
@@ -216,19 +218,21 @@ PR01, PR02, and PR03 are separate parallel PRs after PR00 because their owned pa
 | FR-019 | T000–T011 per-PR contract |
 | FR-020 | T012 |
 | FR-021 | T008, T009 |
+| FR-022, FR-023, FR-024 | T008, T009 |
 | SC-001 | T006–T009 |
 | SC-002 | T008 |
 | SC-003 | T010, T011 |
 | SC-004 | T001–T011 |
 | SC-005 | T000–T011 per-PR contract |
 | SC-006 | T012 |
+| SC-007 | T008, T009 |
 
-Compatibility and RB-001, RB-002, and RB-003 are enforced at every applicable PR: PR01 changes only selection truth; PR02/PR03 remove only approved unsafe values; PR04 stays dormant/disabled; PR05 activates only valid configuration; PR06 is fake Release proof only; PR07 alone adds real-secret ingress without changing triggers/signing/upload/platform scope.
+Compatibility and RB-001, RB-002, and RB-003 are enforced at every applicable PR: PR01 changes only selection truth; PR02/PR03 remove only approved unsafe values; PR04 stays dormant/disabled while adding the isolated consent/identity and excluded-host contracts; PR05 activates only valid configuration plus current explicit consent in the interactive app and adds only the required Settings controls/composition; PR06 is fake Release proof only; PR07 alone adds real-secret ingress without changing triggers/signing/upload/platform scope.
 
 ## Format validation
 
 - Total tasks: 13 (`T000`–`T012`): planning 1; dependency 5 in one atomic PR; privacy 2; dormant app 1; adoption 1; synthetic CI 1; TestFlight injection 1; production evidence 1.
 - Every executable row uses native `- [ ] Txxx [US#]` syntax and exact files/paths.
-- Every implementation task declares one owning layer/support scope, in/out paths, interface impact, local acceptance, verification, and dependencies.
+- Every implementation task declares its owning layer/support scope(s), in/out paths, interface impact, local acceptance, verification, and dependencies; T008 is the dormant consent-capable module/state slice and T009 is the directionally valid Presentation/app adoption slice.
 - The graph is acyclic. T002–T005 are dependency-order-independent but execute sequentially through PR01's sole branch writer; PR01/T001–T005, PR02/T006, and PR03/T007 are independent parallel PRs after PR00, and PR04 waits for all three.
 - No PR combines dependency selection, behavioral privacy/product adaptation, synthetic CI, or TestFlight governance; no task combines implementation authority with Owner provisioning/release dispatch.

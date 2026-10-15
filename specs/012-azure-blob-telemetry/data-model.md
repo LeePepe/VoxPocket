@@ -45,12 +45,29 @@ raw plist
   └─ both valid                            -> enabled
 ```
 
-`disabled` and `invalid` construct no usable network receiver. `disabled` requests no identity and opens no store. Diagnostics are fixed categories only.
+`disabled` and `invalid` construct no usable network receiver. `disabled` requests no identity and opens no store. A valid configuration remains unconstructed until persisted product-telemetry consent is on. Diagnostics are fixed categories only.
+
+## ProductTelemetryConsent
+
+| Field | Source | Rule |
+|---|---|---|
+| `sendUsageData` | `UserDefaults` through `UserDefaultsPreferencesStore` | Defaults `false`; only an explicit Settings action sets it `true` |
+
+State transitions:
+
+```text
+off (default) --explicit opt-in--> on
+on --disable--> off + stop admission/upload + retain pending files
+off --later explicit opt-in--> on + resume eligible work
+```
+
+Valid configuration never implies consent. An excluded CLI/headless/test host remains unconstructed in either state.
 
 ## BlobInstallIdentity
 
 - Random non-personal UUID.
-- Created only when valid enabled configuration initializes a new store or when an explicit reset is performed.
+- Created only on the first explicit opt-in; persisted and reused by later eligible app launches.
+- Replaced with a new random UUID by the explicit Settings Reset action; reset never enables consent by itself, rotates any live service generation, and affects newly admitted events.
 - Never derived from Apple ID, device name, username, audio, transcript, session data, or other account/user content.
 - Not accepted as a product-event property.
 
@@ -63,7 +80,7 @@ raw plist
 
 ## BlobTelemetryLifecycleCoordinator
 
-Non-`@MainActor` actor retained for the app lifetime.
+Non-`@MainActor` actor that owns at most one live service generation while consent is on.
 
 State:
 
@@ -86,6 +103,8 @@ Invariants:
 6. A concurrent flush request joins the active flush; it does not create a second sender.
 7. UI/lifecycle callers schedule work asynchronously and never wait on synchronous file I/O.
 8. Decision 2A exempts only SDK-owned `telemetry.heartbeat` startup/daily work performed under the SDK's own synchronization; product callers cannot emit heartbeat, create another owner, or bypass the host actor.
+9. Consent off prevents construction when no service exists; disabling a live service stops new admission/upload, retains unconfirmed files, and requires a later explicit opt-in to resume.
+10. CLI, headless, and test composition roots never create the Blob service; CLI/headless are negative host-kind fixtures because this repository has no production CLI target.
 
 ## StoredPolicySASShape
 

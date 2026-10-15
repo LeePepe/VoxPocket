@@ -1,8 +1,8 @@
 # Contract: VoxPocket Blob product telemetry
 
-**Contract version**: 2
+**Contract version**: 3
 
-**Authority**: MY-1818 issue revision 1, Constitution IV, and `spec.md` FR-002–FR-016/FR-021
+**Authority**: MY-1818 issue revision 1, MY-1841 common consent contract, Constitution IV, and `spec.md` FR-002–FR-024
 
 ## Routing boundary
 
@@ -74,7 +74,7 @@ LokiKitBlobSAS = $(TELEMETRY_BLOB_SAS)
 
 ## Concurrency and lifecycle contract
 
-- One non-`@MainActor` actor owns the adapter and dedicated store for app lifetime. It invokes the exact `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)` initializer during actor-isolated asynchronous bootstrap.
+- One non-`@MainActor` actor owns at most one live adapter/dedicated-store generation while consent is on. It invokes the exact `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)` initializer during actor-isolated asynchronous bootstrap.
 - The host actor is the sole host entry for construction, product `track`, and lifecycle `flush`. `@MainActor` code submits typed commands asynchronously and never calls synchronous adapter persistence directly.
 - Decision 2A exempts only SDK-owned, internally synchronized, content-free `telemetry.heartbeat` startup/daily work initiated by that bundle initializer. The exemption does not permit product-emitted heartbeat, another store owner, host bypass, or synchronous persistence on `@MainActor`.
 - Startup records `product.performance(operation: app_launch, duration_ms: ...)`, then requests flush.
@@ -82,6 +82,14 @@ LokiKitBlobSAS = $(TELEMETRY_BLOB_SAS)
 - Recording/session completion requests flush after prior admission has drained.
 - macOS resign-active requests a non-blocking best-effort flush.
 - One active flush exists at most; later requests join it. Failure/cancellation leaves unconfirmed files retryable.
+
+## Consent, identity, and host-construction contract
+
+- Settings exposes “Send usage data” through `UserDefaultsPreferencesStore`; absence decodes as `false`, and only an explicit user action changes it to `true`.
+- Valid endpoint/SAS configuration is necessary but never sufficient: consent off means zero Blob service construction, admission, or upload.
+- Disabling immediately closes admission/upload for the active generation and retains pending local files under SDK disable semantics. Re-enable occurs only after a later explicit opt-in.
+- First opt-in creates and persists one random non-personal install UUID. Eligible launches reuse it; the Settings Reset action atomically replaces it without altering consent, rotates the enabled service generation, and ensures newly admitted events use only the replacement.
+- CLI, headless, and test hosts never construct the Blob service, regardless of configuration or persisted test values. Only the interactive app composition root may construct after valid configuration and consent. The repository has no production CLI target, so a negative host-kind fixture covers CLI/headless without adding one.
 
 ## Existing Loki privacy hardening
 
@@ -100,3 +108,6 @@ Tests must prove:
 7. existing Loki construction/routing/log-sink behavior remains, with arbitrary error text removed;
 8. the representative stored-policy query is accepted while `sp=cw`, user-delegation keys, unsupported names, and invalid `sr` are rejected;
 9. synthetic processed Release plist contains both fully expanded fake values and no unresolved build-setting reference; TestFlight packaging logs contain neither raw nor escaped sentinels and expose no value-bearing argument.
+10. a fresh preference suite defaults consent off and observes zero construction/admission/upload; disable retains pending files and stops work; only a later explicit opt-in resumes;
+11. first opt-in creates one UUID, eligible relaunch reuses it, Reset replaces it, and no identity value appears in a product property, diagnostic, or evidence fixture;
+12. CLI, headless, and test host fixtures record zero Blob-service construction even with valid synthetic configuration and consent set true.
