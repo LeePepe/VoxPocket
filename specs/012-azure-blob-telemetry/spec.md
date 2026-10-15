@@ -57,7 +57,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 
 **Acceptance Scenarios**:
 
-1. **US3/AC1** — **Given** the `v0.2.0` release tag is absent, **when** dependency adoption is frozen, **then** every consumer uses the same full reviewed revision containing the Blob API; if the immutable tag exists before implementation publication, every consumer instead uses exact `0.2.0` and records its resolved revision.
+1. **US3/AC1** — **Given** the `v0.2.0` release tag is absent, **when** dependency adoption is frozen, **then** every consumer uses the same full reviewed revision containing the Blob API; if the immutable tag exists before implementation publication, its reviewed 40-character commit SHA becomes the shared selection. Manifests and guards always pin that full SHA, never the version tag.
 2. **US3/AC2** — **Given** the new Blob path exists, **when** existing application use cases and local log collection run, **then** their Loki endpoint/token selection, store, event routing, log-sink filtering, and session-end flush behavior remain unchanged except for the privacy-authorized removal of arbitrary error text.
 3. **US3/AC3** — **Given** a synthetic Release build, **when** its processed app plist is inspected, **then** both Blob keys are present, fully expanded from the required build settings, contain only synthetic values, and contain no unresolved build reference.
 4. **US3/AC4** — **Given** an authorized macOS TestFlight run, **when** the archive starts, **then** CI writes both real GitHub Actions secret values to one untracked runner-temp xcconfig with mode `0600`, passes only that file's path through `-xcconfig`, deletes it in an `always`/`ensure` path, and exposes neither raw nor escaped sentinel/value forms in Release logs, xcargs, command-line environment assignments, or other printable arguments.
@@ -165,7 +165,7 @@ As a maintainer, I can adopt the immutable shared-telemetry Blob API, preserve t
 ## Assumptions
 
 - The accepted Owner intent authorizes product telemetry for the macOS TestFlight build; no separate end-user consent UI is part of this version.
-- At planning time `v0.2.0` is not published and reviewed shared-telemetry `main` is `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`; the issue's tag-if-available rule remains binding at implementation publication.
+- At planning time `v0.2.0` is not published and reviewed shared-telemetry `main` is `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`; the issue's tag-resolution-if-available rule remains binding at implementation publication, but selection remains a reviewed full SHA.
 - Decision 1A selects an Owner-created, key-authenticated stored access policy with permission `c` and explicit expiry, then an HTTPS-only container service SAS bound by `si`; the policy form omits `sp`, and the provider rule remains “if `sp` is present, it is exactly `c`.”
 - Decision 2A selects the exact bundle initializer and narrowly exempts only its SDK-owned, internally synchronized, content-free off-main heartbeat from the host coordinator.
 - GitHub Actions masking is defense in depth, not permission to interpolate or print a secret; production build wiring passes only a runner-temp xcconfig path through printable archive arguments and proves raw/escaped sentinel absence.

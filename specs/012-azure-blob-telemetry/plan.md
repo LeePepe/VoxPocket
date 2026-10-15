@@ -16,7 +16,7 @@ Adopt the immutable shared-telemetry Azure Blob adapter as a second, explicitly 
 
 **Language/version**: Swift 6.2 packages/app; Python 3.11+ repository tests; Ruby/Fastlane; YAML/GitHub Actions; XcodeGen
 
-**Primary dependencies**: shared-telemetry/LokiKit (reviewed Blob API at `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, exact `0.2.0` if published before implementation publication); existing SwiftUI/AppKit app shell; shared-ci `6e354f476bc53d68f0f09fc231d5cd938466af9c`
+**Primary dependencies**: shared-telemetry/LokiKit (reviewed Blob API at full SHA `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, or the reviewed 40-character commit resolved from `v0.2.0` if published before implementation publication); existing SwiftUI/AppKit app shell; shared-ci `6e354f476bc53d68f0f09fc231d5cd938466af9c`
 
 **Storage**: dedicated Application Support Blob adapter catalog/event/sidecar/capacity files; existing Loki event/log stores remain separate and untouched
 
@@ -53,7 +53,7 @@ No constitutional exception is requested.
 
 The evidence and alternatives are in [`research.md`](./research.md). Binding decisions:
 
-1. **R-001 — Immutable repository-wide dependency**: use one full reviewed SHA while `v0.2.0` is absent; if the exact tag appears before implementation publication, move every consumer/guard together and record its resolved SHA.
+1. **R-001 — Immutable repository-wide dependency**: every manifest and guard pins one full reviewed SHA. Use `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95` while `v0.2.0` is absent; if the immutable tag appears before implementation publication, resolve and review its 40-character commit SHA, then move every consumer/guard together to that SHA. Never pin the version tag.
 2. **R-002 — Separate transports and stores**: Blob neither decorates nor mirrors Loki; it owns a dedicated store and must not migrate/delete Loki data.
 3. **R-003 — Closed event vocabulary**: typed constructors expose only `product.user_action` and `product.performance`; heartbeat is SDK-owned.
 4. **R-004 — Off-main serialized host lifecycle**: one non-`@MainActor` actor is the sole host entry for the exact bundle initializer, product `track`, and lifecycle `flush`; Decision 2A exempts only SDK-owned internally synchronized off-main heartbeat work.
@@ -146,7 +146,7 @@ Land only the exact AI-Reviewer-PASS planning artifacts and Spec Kit pointers be
 
 ### PR01 — Dependency-only immutable selection
 
-Resolve the immutable tag/SHA at implementation publication, validate the provider consumer fixture, then atomically move all three manifests, guards, active authorities/projections, protected constitution amendment, and stale dependency-only workflow comment. The observable goal is one repository-wide Blob-capable immutable selection with no runtime behavior change. This PR is cross-layer but single-goal; every package and repository gate passes at its head.
+Resolve the immutable full SHA at implementation publication, using the reviewed baseline SHA or the reviewed 40-character commit resolved from `v0.2.0`, validate the provider consumer fixture, then atomically move all three manifests, guards, active authorities/projections, protected constitution amendment, and stale dependency-only workflow comment. The version tag is never itself a dependency pin. The observable goal is one repository-wide Blob-capable immutable selection with no runtime behavior change. This PR is cross-layer but single-goal; every package and repository gate passes at its head.
 
 ### PR02 / PR03 — Independent privacy repairs
 
@@ -182,7 +182,7 @@ After PR01–PR07 merge, Owner policy/secret provisioning, and fresh Owner relea
 | US2/AC2; FR-008, FR-009; RB-001 | PR02/PR03 | T006, T007 | red/green localized/stringified-error tests and closed/omitted replacement fields |
 | US2/AC3, US2/AC4; FR-010, FR-011 | PR04 | T008 | missing/empty/unexpanded zero-state and present-invalid fixed-diagnostic fixtures |
 | US2/AC5; FR-014, FR-015, FR-016, FR-018, FR-019 | PR04/PR06/PR07 | T008, T010, T011 | SAS fixture; synthetic Release; temp-xcconfig/raw+escaped log absence; preserved gates |
-| US3/AC1; FR-001 | PR01 | T001–T005 | provider consumer check; tag/SHA record; matching manifests, guards, authorities/projections; constitution amendment |
+| US3/AC1; FR-001 | PR01 | T001–T005 | provider consumer check; tag-to-full-SHA resolution record; matching full-SHA manifests, guards, authorities/projections; constitution amendment |
 | US3/AC2; FR-002, FR-003, FR-008, FR-009 | PR02/PR03/PR05 | T006, T007, T009 | Loki construction/routing/store regressions and privacy-only removals |
 | US3/AC3; FR-013, FR-015–FR-017 | PR04/PR06 | T008, T010 | XcodeGen/plist contract and processed synthetic Release app |
 | US3/AC4; FR-014, FR-015, FR-016, FR-017, FR-018 | PR07 | T011 | path-only `-xcconfig`; mode/cleanup; raw+escaped absence; unchanged release invariants |
@@ -290,7 +290,7 @@ PASS with no constitutional exception. PR01 deliberately amends only the immutab
 
 - Repository base: VoxPocket `9fddff22af2c9f693e0a90155b224a5fb41dbf06`.
 - Repo contract: shared-ci `6e354f476bc53d68f0f09fc231d5cd938466af9c`.
-- Provider dependency: reviewed shared-telemetry `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, superseded only by exact `v0.2.0` if it exists before implementation publication.
+- Provider dependency: reviewed shared-telemetry full SHA `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, superseded only by the reviewed 40-character commit resolved from `v0.2.0` if that immutable tag exists before implementation publication; the tag itself is never pinned.
 - Planning gate: AI Reviewer exact-revision PASS before Team Lead implementation dispatch.
 - Per-PR candidate gate: AI Reviewer exact frozen-tree PASS plus explicit publication permission before each commit/push/PR; a changed or rebased SHA is reviewed again.
 - Important-path gate: applicable Owner approval and required checks on each exact non-Draft PR head.
@@ -300,7 +300,7 @@ PASS with no constitutional exception. PR01 deliberately amends only the immutab
 
 | Risk | Mitigation / escalation |
 |---|---|
-| `v0.2.0` appears or resolves differently | Recheck once immediately before publication, move all consumers atomically, record the resolved SHA, and rerun dependency/provider checks. Mixed state blocks. |
+| `v0.2.0` appears or resolves differently | Recheck once immediately before publication, review its resolved 40-character commit, move all manifests and guards atomically to that full SHA, record it, and rerun dependency/provider checks. A tag pin or mixed state blocks. |
 | SDK API differs from reviewed docs | Stop and return exact compiler/provider-contract evidence; do not invent an adapter wrapper or widen shared-telemetry scope. |
 | Stored-policy SAS query differs | Compare the synthetic query-name fixture against the pinned validator. Reject user-delegation keys or `sp=cw`; do not broaden the provider or generate a real token. |
 | Synchronous host I/O leaks onto `@MainActor` | Structural typed coordinator seam plus actor/order tests. Any direct host construction/product `track`/lifecycle `flush` from UI/lifecycle code blocks review; SDK heartbeat remains only the Decision 2A exemption. |

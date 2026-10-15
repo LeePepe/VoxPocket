@@ -10,7 +10,7 @@ Immediately before implementation publication, check whether immutable `v0.2.0` 
 0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95
 ```
 
-PR01 atomically updates all three package manifests, both guards, and every current authority/projection enumerated in `tasks.md` T001–T005. Record the resolved 40-character revision in the PR. The old-selection search is scoped to that current-truth list; `spec.md` and `research.md` retain explicitly historical baseline evidence.
+If the tag exists, resolve it to a 40-character commit and review that commit before selection. PR01 always pins the selected full SHA—not the version tag—and atomically updates all three package manifests, both guards, and every current authority/projection enumerated in `tasks.md` T001–T005. Record the selected 40-character revision in the PR. The old-selection search is scoped to that current-truth list; `spec.md` and `research.md` retain explicitly historical baseline evidence.
 
 From the exact shared-telemetry checkout, validate the public consumer contract:
 

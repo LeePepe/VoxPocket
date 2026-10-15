@@ -10,7 +10,7 @@
 
 - VoxInfrastructure, VoxApplication, and VoxPresentation all pin shared-telemetry `v0.1.0` at `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`; the same revision is guarded by `scripts/ci/fetch-external-deps.sh` and `scripts/tests/test_app_logging.py`.
 - The reviewed shared-telemetry `main` revision is `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`. It contains the public Swift Azure Blob adapter and its integration, usage, migration, and compatibility contracts.
-- The remote does not publish `v0.2.0` at planning time. Implementation must therefore use the full reviewed revision unless the immutable tag exists before publication, in which case every consumer moves together to exact `0.2.0` and records the resolved SHA.
+- The remote does not publish `v0.2.0` at planning time. Implementation must therefore use the full reviewed revision unless the immutable tag exists before publication, in which case its resolved 40-character commit is reviewed and every consumer and guard moves together to that full SHA. The version tag is never itself pinned.
 - The adapter performs synchronous event admission/local persistence, owns a retryable file store, validates create-only SAS intent, emits an SDK-owned content-free heartbeat, and leaves upload explicit through `flush()`.
 - At provider revision `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`, the transport accepts only `sv`, `sr`, `si`, `sp`, `st`, `se`, `spr`, `sip`, and `sig`; requires `sr=c`; and rejects an explicit `sp` other than `c`. The prior `--permissions cw --auth-mode login --as-user` command emits both `sp=cw` and unsupported user-delegation keys, so it cannot initialize this adapter.
 - The exact bundle initializer immediately records/schedules the SDK heartbeat under the SDK's own synchronization, with later ticks originating off-main. That internal work cannot traverse a host actor and is the narrow Decision 2A exemption.
@@ -29,9 +29,9 @@
 
 ### R-001 — Use an immutable, repository-wide shared-telemetry selection
 
-All three Swift consumer manifests and both dependency guards use one selection. Until `v0.2.0` exists, the selection is the reviewed full SHA `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`; a later tag switch is allowed only before implementation publication and only when its resolved revision is recorded and all consumers move atomically.
+All three Swift consumer manifests and both dependency guards use one full-SHA selection. Until `v0.2.0` exists, the selection is the reviewed full SHA `0ffdbc82a5fbd76f54e49127b0d30a4fb8666e95`; a later tag-derived switch is allowed only before implementation publication, after its resolved 40-character commit is reviewed and recorded, and only when all consumers and guards move atomically to that SHA.
 
-**Rejected**: a branch pin, short SHA, mixed manifest revisions, or assuming the documented release tag exists.
+**Rejected**: a branch pin, version-tag pin, short SHA, mixed manifest/guard revisions, or assuming the documented release tag exists.
 
 ### R-002 — Keep Loki and Blob as separate products and stores
 
@@ -97,7 +97,7 @@ Decision 1A supersedes the issue's incompatible user-delegation example. The Own
 
 ## Open external gates
 
-1. `v0.2.0` tag availability must be rechecked immediately before implementation publication.
+1. `v0.2.0` tag availability must be rechecked immediately before implementation publication; if present, its resolved 40-character commit must be reviewed and selected rather than the tag itself.
 2. Package-manifest, XcodeGen, workflow, Fastlane, and CI edits require existing CODEOWNERS/Owner review.
 3. Real endpoint/SAS provisioning and the TestFlight dispatch require explicit Owner action after merge.
 4. Final production evidence is limited to run/revision, build number, and blob name; payload and credentials are excluded.
