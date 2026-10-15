@@ -310,7 +310,7 @@ PASS with no constitutional exception. PR01 deliberately amends only the immutab
 | Synthetic Release proof needs signing/network | Treat as a design failure and return to the app/root-support owner; do not introduce secrets or live access. |
 | Secret or sentinel value appears in logs/arguments/tests/diff | Stop publication, rotate if real, remove the exposure through the owning release seam, and rerun raw-plus-escaped absence evidence. Masking alone is not acceptance. |
 | Important approval/check is missing | Keep the PR unmerged in Owner review; never bypass CODEOWNERS/ruleset protection. |
-| Owner has not provisioned or authorized production | Repository delivery may complete, but T008 remains blocked and no workflow is dispatched or blob listed. |
+| Owner has not provisioned or authorized production | Repository delivery may complete, but T012 remains blocked and no workflow is dispatched or blob listed. |
 
 ## Complexity Tracking
 
