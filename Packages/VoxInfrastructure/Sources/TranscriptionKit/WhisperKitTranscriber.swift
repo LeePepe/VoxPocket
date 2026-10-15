@@ -128,12 +128,12 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
                 )
             } catch {
                 self._modelLoadingStateSubject.send(.failed(error.localizedDescription))
-                self.logger.error("WhisperKit model preload failed: \(error.localizedDescription)")
+                self.logger.error("WhisperKit model preload failed")
                 self.telemetry.track(
                     name: VoxPocketTelemetryEventName.whisperModelLoadFailed.rawValue,
                     properties: [
                         "model": self.config.model,
-                        "reason": String(describing: error)
+                        "category": VoxPocketTranscriptionFailureCategory.modelPreparation.rawValue
                     ]
                 )
                 throw error
@@ -171,14 +171,17 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
         return engine
     }
 
-    private func trackTranscriptionFailure(_ error: Error, phase: String) {
+    private func trackTranscriptionFailure(
+        category: VoxPocketTranscriptionFailureCategory,
+        phase: String
+    ) {
         telemetry.track(
             name: VoxPocketTelemetryEventName.transcriptionFailed.rawValue,
             properties: [
                 "provider": "whisperkit",
                 "model": config.model,
                 "phase": phase,
-                "reason": String(describing: error)
+                "category": category.rawValue
             ]
         )
     }
@@ -277,7 +280,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         do {
             engine = try await ensureEngineReady()
         } catch {
-            trackTranscriptionFailure(error, phase: "model_load")
+            trackTranscriptionFailure(category: .modelPreparation, phase: "model_load")
             await stop()
             throw error
         }
@@ -309,7 +312,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
                 }
             )
         } catch {
-            trackTranscriptionFailure(error, phase: "stream_start")
+            trackTranscriptionFailure(category: .streamingStart, phase: "stream_start")
             await stop()
             throw error
         }

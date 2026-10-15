@@ -1,12 +1,12 @@
 # Contract: VoxPocket Blob product telemetry
 
-**Contract version**: 2
+**Contract version**: 4
 
-**Authority**: MY-1818 issue revision 1, Constitution IV, and `spec.md` FR-002–FR-016/FR-021
+**Authority**: MY-1818 issue revision 1, MY-1841 common consent contract, Constitution III/IV, the 2026-10-16 Lead decision `A-keep-0.2.0-offmain-accept-defaults`, and `spec.md` FR-002–FR-026
 
 ## Routing boundary
 
-- This contract applies only to the new Azure Blob product path.
+- Product vocabulary/privacy sections apply only to the new Azure Blob product path. The lifecycle/capacity sections also bind the legacy Loki consumer adaptation required by exact `0.2.0`.
 - Existing Loki product telemetry and `VoxPocketLogging` do not route through or mirror into this path.
 - Product callers use typed APIs. No API accepting an arbitrary event name or property dictionary may be exposed outside the Blob runtime.
 
@@ -74,18 +74,28 @@ LokiKitBlobSAS = $(TELEMETRY_BLOB_SAS)
 
 ## Concurrency and lifecycle contract
 
-- One non-`@MainActor` actor owns the adapter and dedicated store for app lifetime. It invokes the exact `AzureBlobTelemetryService(bundle:app:build:version:privacy:storeDirectory:isEnabled:identityProvider:configuration:maxDiskBytes:)` initializer during actor-isolated asynchronous bootstrap.
-- The host actor is the sole host entry for construction, product `track`, and lifecycle `flush`. `@MainActor` code submits typed commands asynchronously and never calls synchronous adapter persistence directly.
-- Decision 2A exempts only SDK-owned, internally synchronized, content-free `telemetry.heartbeat` startup/daily work initiated by that bundle initializer. The exemption does not permit product-emitted heartbeat, another store owner, host bypass, or synchronous persistence on `@MainActor`.
+- One app-lifetime lifecycle coordinator is backed by a dedicated serial non-main executor. PR02 introduces it on the old provider version to lazily construct the selected legacy provider and expose only a `TelemetryService` facade; PR03 changes only the dependency/current truth; PR06 extends the same coordinator to own at most one live Blob adapter/dedicated-store generation while consent is on.
+- The coordinator is the sole underlying entry for legacy provider construction/`track`/`flush` and Blob construction/product `track`/lifecycle `flush`. `@MainActor` code submits commands asynchronously and never calls synchronous provider persistence directly. Legacy flush barriers all earlier track submissions, and concurrent flush requests join rather than compete.
+- Blob construction omits the `maxDiskBytes` argument and therefore accepts the provider default. Decision 2A exempts only SDK-owned, internally synchronized, content-free `telemetry.heartbeat` startup/daily work initiated by the bundle initializer. The exemption does not permit product-emitted heartbeat, another store owner, host bypass, or synchronous persistence on `@MainActor`.
 - Startup records `product.performance(operation: app_launch, duration_ms: ...)`, then requests flush.
 - Settings/full-panel/quick-record start/quick-record stop emit only their closed action.
 - Recording/session completion requests flush after prior admission has drained.
 - macOS resign-active requests a non-blocking best-effort flush.
-- One active flush exists at most; later requests join it. Failure/cancellation leaves unconfirmed files retryable.
+- One active flush exists at most; later requests join it. Failure/cancellation causes no host/manual deletion, and non-evicted unconfirmed files remain retryable.
+
+## Consent, identity, and host-construction contract
+
+- Settings exposes “Send usage data” through `UserDefaultsPreferencesStore`; absence decodes as `false`, and only an explicit user action changes it to `true`.
+- Valid endpoint/SAS configuration is necessary but never sufficient: consent off means zero Blob service construction, admission, or upload.
+- Before first opt-in, the host creates/requests no identity. Disabling immediately closes admission/upload for the active generation without host/manual deletion and retains non-evicted pending local files plus the persisted install UUID under SDK disable semantics; while off, no active service requests or uses that UUID. Re-enable occurs only after a later explicit opt-in and reuses that same UUID.
+- First opt-in creates and persists one random non-personal install UUID. Every later explicit opt-in and eligible launch reuses it for the app installation's lifetime. V1 exposes no install-ID Reset/rotation surface, requires no shared-telemetry API change for identity lifecycle, and performs no host parsing of adapter-private storage or catalog state.
+- CLI, headless, and test hosts never construct the Blob service, regardless of configuration or persisted test values. Only the interactive app composition root may construct after valid configuration and consent. The repository has no production CLI target, so a negative host-kind fixture covers CLI/headless without adding one.
 
 ## Existing Loki privacy hardening
 
-The Loki path remains behaviorally separate, but its current arbitrary `error.localizedDescription` and stringified `reason` properties are forbidden. The owning layer must replace them with a closed content-free failure category or omit them while preserving safe durations/counts/event outcomes. Product UI error presentation is not changed.
+The Loki path remains routing/store-separated, but exact `0.2.0` intentionally changes its execution and retention boundaries. The raw provider is constructed and invoked only by the shared serialized non-main coordinator; existing callers receive its facade. VoxPocket passes no `maxDiskBytes` override, accepting the provider's 50 MiB persisted-data default, whole-oldest-batch eviction, oversized-event rejection, and durable dropped-event/loss-ledger accounting. Existing arbitrary `error.localizedDescription` and stringified `reason` properties remain forbidden; the owning layer replaces them with a closed content-free failure category or omits them while preserving safe durations/counts/event outcomes. Product UI error presentation is not changed.
+
+Rollback stops all producers/active work, prevents old/new writer overlap, and lets the `0.2.0` capacity-aware reader finish pending paired eviction cleanup after storage is writable before any separately reviewed older reader opens the store. Retained files and the loss ledger remain. Already evicted events cannot be recovered, and VoxPocket does not manually delete or convert provider queue files.
 
 ## Mechanical evidence
 
@@ -94,9 +104,13 @@ Tests must prove:
 1. the two valid product shapes are admitted;
 2. every unknown event/key/label and non-finite/out-of-range number is rejected as a whole;
 3. transcript, refined-text, audio, prompt, error, endpoint, SAS, UUID, and credential sentinels are absent from persisted bytes, request fixtures, and diagnostics;
-4. missing/empty/unexpanded configuration causes zero identity, store, enqueue, and network calls;
+4. missing/empty/unexpanded configuration causes zero identity-provider, store, enqueue, and network calls;
 5. invalid present configuration fails only Blob closed without value disclosure;
-6. direct `@MainActor` persistence is structurally unavailable; actor tests prove coordinator-only host construction/`track`/`flush`, ordered admission, joined flush, and retained failure/cancellation state; heartbeat fixtures prove bundle startup heartbeat exists, later ticks remain SDK-owned/off-main, and product callers cannot emit it;
-7. existing Loki construction/routing/log-sink behavior remains, with arbitrary error text removed;
+6. direct `@MainActor` persistence is structurally unavailable; a main-actor-originating spy proves legacy provider construction, `track A`, `track B`, and barrier `flush` occur in order, with maximum underlying concurrency one and `Thread.isMainThread == false`; Blob tests prove coordinator-only host construction/`track`/`flush`, ordered admission, joined flush, and retained non-evicted failure/cancellation state; heartbeat fixtures prove bundle startup heartbeat exists, later ticks remain SDK-owned/off-main, and product callers cannot emit it;
+7. Loki endpoint/Noop selection, routing, log-sink behavior, and safe vocabulary remain; a structural regression proves the raw provider exists only behind the shared coordinator, no production consumer passes `maxDiskBytes:`, and arbitrary error text is removed;
 8. the representative stored-policy query is accepted while `sp=cw`, user-delegation keys, unsupported names, and invalid `sr` are rejected;
 9. synthetic processed Release plist contains both fully expanded fake values and no unresolved build-setting reference; TestFlight packaging logs contain neither raw nor escaped sentinels and expose no value-bearing argument.
+10. a fresh preference suite defaults consent off and observes zero construction/admission/upload plus zero identity creation/provider request before first opt-in; disable causes no host/manual deletion, retains non-evicted pending files plus the persisted UUID, and prevents active-service identity use; only a later explicit opt-in resumes and reuses that same UUID;
+11. first opt-in creates one random UUID, and every later explicit opt-in and eligible relaunch reuses it for the app installation's lifetime; no v1 Reset/rotation surface or private-storage parsing exists, and no identity value appears in a product property, diagnostic, or evidence fixture;
+12. CLI, headless, and test host fixtures record zero Blob-service construction even with valid synthetic configuration and consent set true.
+13. planning and migration evidence records the accepted 50 MiB default, whole-oldest-batch eviction, oversized-event rejection, durable loss accounting, cleanup-before-rollback rule, and irrecoverability of already evicted events without restating them as a no-loss guarantee.
