@@ -41,7 +41,7 @@ jobs:
     name: Build & upload to TestFlight
     # Fork guard form required by shared-ci workflow-lint for self-hosted jobs.
     if: >-
-      (github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)) &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)) &&
       (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 60
@@ -253,9 +253,9 @@ jobs:
           set -euo pipefail
           KC="$HOME/Library/Keychains/login.keychain-db"
           if [ -f "$KC" ]; then
-            security lock-keychain "$KC" 2>/dev/null || true
+            security lock-keychain "$KC" 2>/dev/null
           fi
-          rm -f /tmp/kc-unlock.err || true
+          rm -f /tmp/kc-unlock.err
 
       - name: Move last-released tag
         if: steps.gate.outputs.release == 'true' && steps.fastlane_mac.outcome == 'success'

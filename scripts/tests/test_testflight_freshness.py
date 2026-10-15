@@ -119,9 +119,17 @@ class TestFlightFreshnessTests(unittest.TestCase):
             "ref: ${{ github.event.workflow_run.head_sha || github.sha }}",
             self.workflow_text,
         )
+        self.assertIn(
+            "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+            self.workflow_text,
+        )
         self.assertIn("cancel-in-progress: false", self.workflow_text)
         self.assertIn("steps.gate.outputs.release == 'true'", self.workflow_text)
         self.assertIn("refs/tags/testflight/macos-last-released", self.workflow_text)
+        self.assertNotRegex(
+            self.workflow_text,
+            r"security lock-keychain [^\n]+\|\| true",
+        )
 
 
 if __name__ == "__main__":
