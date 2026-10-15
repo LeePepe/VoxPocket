@@ -35,7 +35,7 @@ python3 scripts/ci/run_repository_tests.py app-python
 scripts/verify --layer VoxPocketApp
 ```
 
-The dormant app-layer run must include disabled/invalid configuration, privacy sentinels, two typed event shapes, the exact bundle initializer, coordinator-only host construction/product `track`/lifecycle `flush`, SDK-owned startup/daily heartbeat ownership, actor ordering, joined flush, retry retention, and the stored-policy SAS fixture. The adoption run adds unchanged Loki routing, action instrumentation, and lifecycle flushes.
+The dormant module run must include disabled/invalid configuration and isolated-`UserDefaults` proof that “Send usage data” defaults off. With valid configuration before first opt-in, prove it constructs no service/store, creates no identity, and never invokes the identity provider. Separately, exercise missing/empty/unexpanded configuration independently of consent history, explicitly including a previous-opt-in state with a retained UUID, and prove zero identity creation, identity-provider calls, store creation/opening/access, enqueue calls, and network calls. Reset before first opt-in also creates no identity. First opt-in creates a random UUID; disable stops admission/upload while retaining pending files and that persisted UUID without active-service identity use; a later explicit opt-in reuses it unless Reset replaced it. With that UUID present, exercise Reset separately while off and on: both replace it without enabling or otherwise changing consent, and only the on case rotates the live generation for newly admitted events. The run also covers CLI/headless negative host-kind fixtures, privacy sentinels, two typed event shapes, the exact bundle initializer, coordinator-only host construction/product `track`/lifecycle `flush`, SDK-owned startup/daily heartbeat ownership, actor ordering, joined flush, retry retention, and the stored-policy SAS fixture. The adoption run proves real test-host zero service construction even with valid synthetic configuration and consent true, both macOS and cross-platform Settings wiring without Blob construction as a side effect, unchanged Loki routing, action instrumentation, and lifecycle flushes. Do not add a CLI executable solely for this proof.
 
 The representative credential-free SAS fixture is:
 
@@ -44,6 +44,20 @@ sv=2023-11-03&sr=c&si=synthetic-create-only&spr=https&sig=fake%2Bonly%2F%3D
 ```
 
 Assert exactly the accepted query names, `sr=c`, non-empty `si`/`sig`, `spr=https`, and no `sp`; reject `sp=cw`, user-delegation keys, unknown names, and invalid `sr`. A static command test proves the stored policy is created with permission `c`; no test or agent generates a real token.
+
+For PR04, verify the changed preference layer before app verification; for PR05, verify the changed Settings layer before its app verification:
+
+```sh
+(cd Packages/VoxInfrastructure && swift build && swift test)
+scripts/verify --layer VoxInfrastructure
+
+(cd Packages/VoxPresentation && swift build && swift test)
+scripts/verify --layer VoxPresentation
+python3 scripts/ci/run_repository_tests.py app-python
+scripts/verify --layer VoxPocketApp
+```
+
+All host-kind and credential fixtures are synthetic. Do not add or launch a CLI/headless helper merely to observe production telemetry; excluded hosts must mechanically report zero construction.
 
 ## 3. Synthetic Release proof
 
@@ -98,7 +112,7 @@ All three SHAs must match for every PR. Each PR must retain its one goal, Owner-
 
 ## 7. Post-merge production proof
 
-Only after PR01–PR07 merge, Owner creation of the permission-`c` stored access policy and compatible container service SAS, both secret writes, and a fresh explicit Owner authorization may the existing manual macOS TestFlight workflow run. Team Lead records only:
+Only after PR01–PR07 merge, Owner creation of the permission-`c` stored access policy and compatible container service SAS, both secret writes, and a fresh explicit Owner authorization may the existing manual macOS TestFlight workflow run. The tester must then separately enable “Send usage data” in Settings and perform one approved action; Owner release authorization is not consent. Team Lead records only:
 
 - exact merged/workflow revision and run reference;
 - TestFlight build number;
