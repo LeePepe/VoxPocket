@@ -16,3 +16,8 @@ public enum VoxPocketTelemetryEventName: String, Sendable {
     case sessionDeleted = "session.deleted"
 }
 
+/// 转录失败遥测允许的固定分类。
+public enum VoxPocketTranscriptionFailureCategory: String, Sendable {
+    case modelPreparation = "model_preparation"
+    case streamingStart = "streaming_start"
+}
