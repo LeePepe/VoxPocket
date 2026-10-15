@@ -105,7 +105,7 @@ every PR and are never required.
   project-specific non-public values in Git (code, tests, fixtures, docs). Use synthetic
   `example-*` values; real values stay in gitignored local files with a committed template.
 - Delivery is TestFlight only: after successful CI for an exact push to `main`, `.github/workflows/testflight.yml`
-  automatically publishes macOS; `workflow_dispatch` remains the manual fallback after an
+  must automatically publish macOS; `workflow_dispatch` remains the manual fallback after an
   explicit Owner request. Agents do not create local archives, install, replace or launch
   delivery builds, or sign in to App Store Connect. Upload success is not "testable"; the Owner verifies.
 - Platforms: macOS is released via TestFlight. iOS is enabled for development with CI
