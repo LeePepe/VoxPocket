@@ -7,5 +7,5 @@ subagents; never wait for the Owner to ask for a re-review.
 
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands,
-and other implementation constraints, read `specs/010-ci-test-coverage/plan.md`.
+and other implementation constraints, read `specs/011-testflight-auto-release/plan.md`.
 <!-- SPECKIT END -->
