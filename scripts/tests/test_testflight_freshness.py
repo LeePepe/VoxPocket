@@ -115,7 +115,10 @@ class TestFlightFreshnessTests(unittest.TestCase):
 
     def test_workflow_preserves_manual_and_platform_guards(self):
         self.assertIn("workflow_dispatch:", self.workflow_text)
-        self.assertIn("ref: main", self.workflow_text)
+        self.assertIn(
+            "ref: ${{ github.event.workflow_run.head_sha || 'main' }}",
+            self.workflow_text,
+        )
         self.assertIn("steps.gate.outputs.release == 'true'", self.workflow_text)
         self.assertIn("refs/tags/testflight/macos-last-released", self.workflow_text)
 
