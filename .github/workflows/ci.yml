@@ -94,6 +94,15 @@ jobs:
       - name: Regenerate xcodeproj from project.yml
         working-directory: repo/VoxPocket
         run: xcodegen generate --spec project.yml
+      - name: Run app unit tests — macOS (no signing)
+        working-directory: repo
+        run: |
+          set -o pipefail
+          xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket \
+            -destination 'platform=macOS' \
+            -only-testing:VoxPocketTests \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            test 2>&1 | tee /tmp/xcodebuild-macos-tests.log
       - name: Build app — macOS (no signing)
         working-directory: repo
         run: |
