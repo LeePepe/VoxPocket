@@ -87,7 +87,7 @@ final class MacOSSettingsViewTests: XCTestCase {
         renderer.scale = 2
         let image = try XCTUnwrap(renderer.cgImage)
         let bitmap = NSBitmapImageRep(cgImage: image)
-        let words = try recognize(bitmap).joined()
+        let words = try await recognize(bitmap).joined()
         XCTAssertTrue(words.contains("正在加载设置"), "Synthetic loading OCR: \(words)")
         XCTAssertFalse(words.contains("Azure"))
         XCTAssertFalse(words.contains("F7"))
@@ -102,7 +102,7 @@ final class MacOSSettingsViewTests: XCTestCase {
         for scheme in [ColorScheme.light, .dark] {
             for section in [MacOSSettingsView.Section.shortcuts, .text] {
                 let bitmap = try await render(section: section, scheme: scheme)
-                let words = try recognize(bitmap).joined(separator: " ")
+                let words = try await recognize(bitmap).joined(separator: " ")
                 XCTAssertTrue(words.contains(section == .shortcuts ? "快捷录音" : "识别模型"), "Synthetic settings OCR: \(words)")
                 if section == .text {
                     XCTAssertTrue(words.contains("意图模型"))
@@ -125,7 +125,7 @@ final class MacOSSettingsViewTests: XCTestCase {
     func testUnconfiguredRealtimeShowsFallbackAndDeploymentEntry() async throws {
         for scheme in [ColorScheme.light, .dark] {
             let bitmap = try await render(section: .text, scheme: scheme, configured: false)
-            let words = try recognize(bitmap).joined()
+            let words = try await recognize(bitmap).joined()
             XCTAssertTrue(words.contains("回退"))
             XCTAssertTrue(words.contains("部署名"))
             XCTAssertFalse(words.contains("实时配置就绪"))
@@ -145,6 +145,8 @@ final class MacOSSettingsViewTests: XCTestCase {
         ) : .init()
         let provider = LLMProviderSettingsViewModel(preferences: store, availability: availability)
         let shortcuts = ShortcutsViewModel(preferences: store)
+        await provider.load()
+        await shortcuts.load()
         let previousAppearance = NSApplication.shared.appearance
         let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         NSApplication.shared.appearance = appearance
@@ -163,11 +165,21 @@ final class MacOSSettingsViewTests: XCTestCase {
         let expectedText = section == .shortcuts ? "快捷录音" : "识别模型"
         let deadline = ContinuousClock.now.advanced(by: .seconds(2))
         while true {
+            await Task.yield()
             host.layoutSubtreeIfNeeded()
             panel.displayIfNeeded()
             let bitmap = try capture(panel)
-            if try recognize(bitmap).joined().contains(expectedText) || ContinuousClock.now >= deadline {
+            if try await recognize(bitmap).joined().contains(expectedText) {
                 return bitmap
+            }
+            if ContinuousClock.now >= deadline {
+                await Task.yield()
+                host.layoutSubtreeIfNeeded()
+                panel.displayIfNeeded()
+                let finalBitmap = try capture(panel)
+                let finalWords = try await recognize(finalBitmap).joined()
+                XCTAssertTrue(finalWords.contains(expectedText), "Timed out rendering settings: \(finalWords)")
+                return finalBitmap
             }
             try await Task.sleep(for: .milliseconds(50))
         }
@@ -182,13 +194,16 @@ final class MacOSSettingsViewTests: XCTestCase {
         return bitmap
     }
 
-    private func recognize(_ bitmap: NSBitmapImageRep) throws -> [String] {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.recognitionLanguages = ["zh-Hans", "en-US"]
-        request.usesLanguageCorrection = false
-        try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
-        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+    private func recognize(_ bitmap: NSBitmapImageRep) async throws -> [String] {
+        let image = try XCTUnwrap(bitmap.cgImage)
+        return try await Task.detached {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["zh-Hans", "en-US"]
+            request.usesLanguageCorrection = false
+            try VNImageRequestHandler(cgImage: image).perform([request])
+            return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        }.value
     }
 }
 #endif
