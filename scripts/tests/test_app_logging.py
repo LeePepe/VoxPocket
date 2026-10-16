@@ -78,6 +78,12 @@ let package = Package(name: "LoggingRegression", platforms: [.macOS(.v26)],
         (sources / "TelemetryLifecycleCoordinator.swift").symlink_to(
             root / "VoxPocket/VoxPocket/TelemetryLifecycleCoordinator.swift"
         )
+        for source_name in (
+            "VoxPocketBlobTelemetry.swift",
+            "BlobTelemetryConfiguration.swift",
+            "BlobTelemetryHostEligibility.swift",
+        ):
+            (sources / source_name).symlink_to(root / "VoxPocket/VoxPocket" / source_name)
         (tests / "VoxPocketLoggingTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/VoxPocketLoggingTests.swift")
         (tests / "TelemetryLifecycleCoordinatorTests.swift").symlink_to(
             root / "VoxPocket/VoxPocketTests/TelemetryLifecycleCoordinatorTests.swift"

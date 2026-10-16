@@ -6,6 +6,10 @@
 	<false/>
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
+	<key>LokiKitBlobEndpoint</key>
+	<string>$(TELEMETRY_BLOB_ENDPOINT)</string>
+	<key>LokiKitBlobSAS</key>
+	<string>$(TELEMETRY_BLOB_SAS)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

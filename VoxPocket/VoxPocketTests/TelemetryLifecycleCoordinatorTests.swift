@@ -103,6 +103,50 @@ struct TelemetryLifecycleCoordinatorTests {
 
         #expect(recorder.names == ["actual track returned", "underlying flush entered"])
     }
+
+    #if DEBUG
+    @Test func legacyFlushAndBlobBootstrapShareOneSerializedWorker() async {
+        let recorder = TelemetryOperationRecorder()
+        let gate = FlushGate()
+        let coordinator = TelemetryLifecycleCoordinator {
+            recorder.perform("construct legacy")
+            return RecordingTelemetryService(recorder: recorder, flushGate: gate)
+        }
+        let bootstrap = BlobTelemetryBootstrap.testing(
+            configuration: .enabled(.init(
+                endpoint: URL(string: "https://telemetry.example.invalid/container")!,
+                sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
+            )),
+            host: .interactiveApplication,
+            isConsented: true,
+            makeService: {
+                recorder.perform("construct blob")
+                return RecordingTelemetryService(recorder: recorder)
+            }
+        )
+
+        coordinator.track(name: "legacy", properties: [:])
+        let legacyFlush = Task { await coordinator.flush() }
+        await gate.waitUntilEntered()
+        let blobBootstrap = Task { await coordinator.bootstrapBlob(bootstrap) }
+        await Task.yield()
+
+        #expect(!recorder.names.contains("construct blob"))
+        await gate.open()
+        await legacyFlush.value
+        #expect(await blobBootstrap.value == .ready)
+
+        coordinator.trackBlob(.userAction(.settingsOpened))
+        await coordinator.flushBlob()
+
+        #expect(recorder.names == [
+            "construct legacy", "track legacy", "flush",
+            "construct blob", "track product.user_action", "flush"
+        ])
+        #expect(recorder.maximumConcurrency == 1)
+        #expect(recorder.mainThreadCalls == 0)
+    }
+    #endif
 }
 
 private final class BoundaryRecordingTelemetryService: TelemetryService, Sendable {
