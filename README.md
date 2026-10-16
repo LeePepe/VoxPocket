@@ -1,6 +1,6 @@
 # VoxPocket
 
-Last-Reviewed: 2026-09-12
+Last-Reviewed: 2026-10-16
 
 A macOS/iOS voice recording and transcription app built with SwiftUI. Supports Apple Speech, local WhisperKit and configured Azure transcription, with on-device or configured cloud text refinement.
 
@@ -29,7 +29,9 @@ cd VoxPocket
 open VoxPocket/VoxPocket.xcodeproj
 ```
 
-The project resolves LokiKit through the SwiftPM remote dependency `LeePepe/shared-telemetry`, pinned to commit `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f` (v0.1.0); only AppleUITesting remains a sibling external package. Use the package manifests and `VoxPocket/project.yml` as the dependency source of truth. CI checks out AppleUITesting and regenerates the Xcode project.
+The project resolves LokiKit through the SwiftPM remote dependency `LeePepe/shared-telemetry`, selected with exact `0.2.0`; its annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peels to commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`. These OIDs are integrity evidence, not alternate revision selectors. Only AppleUITesting remains a sibling external package. Use the package manifests and `VoxPocket/project.yml` as the dependency source of truth. CI checks out AppleUITesting and regenerates the Xcode project.
+
+VoxPocket intentionally uses the provider's 50 MiB default persisted-data capacity and does not pass `maxDiskBytes`. At capacity, whole oldest batches may be evicted, a single oversized event is rejected, and durable loss accounting records drops. Before rollback to a reader without this policy, stop producers and let the capacity-aware `0.2.0` reader finish pending eviction cleanup after storage is writable; already evicted events are irrecoverable, and the loss ledger must not be discarded or shared with an older live writer.
 
 User-facing builds are delivered through TestFlight. See [AGENTS.md](AGENTS.md) for the build/install boundary and [the release workflow](.github/workflows/testflight.yml) for current dispatch options. Agents do not replace the installed App with a local archive.
 

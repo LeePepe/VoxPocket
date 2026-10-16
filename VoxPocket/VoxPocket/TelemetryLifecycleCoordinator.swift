@@ -18,10 +18,14 @@ final class TelemetryLifecycleCoordinator: TelemetryService, Sendable {
 
     init(
         isEnabled: Bool = true,
+        flushAdmissionObserver: @escaping @Sendable () -> Void = {},
         providerFactory: @escaping ProviderFactory
     ) {
         enabled = Mutex(isEnabled)
-        worker = TelemetryLifecycleWorker(providerFactory: providerFactory)
+        worker = TelemetryLifecycleWorker(
+            providerFactory: providerFactory,
+            flushAdmissionObserver: flushAdmissionObserver
+        )
     }
 
     func track(_ event: TelemetryEvent) {
@@ -64,10 +68,15 @@ private final class TelemetryLifecycleWorker: Sendable {
         qos: .utility
     )
     private let providerFactory: TelemetryLifecycleCoordinator.ProviderFactory
+    private let flushAdmissionObserver: @Sendable () -> Void
     private let state = Mutex(State())
 
-    init(providerFactory: @escaping TelemetryLifecycleCoordinator.ProviderFactory) {
+    init(
+        providerFactory: @escaping TelemetryLifecycleCoordinator.ProviderFactory,
+        flushAdmissionObserver: @escaping @Sendable () -> Void
+    ) {
         self.providerFactory = providerFactory
+        self.flushAdmissionObserver = flushAdmissionObserver
     }
 
     func submit(_ operation: Operation) {
@@ -101,6 +110,7 @@ private final class TelemetryLifecycleWorker: Sendable {
                     }
                     return false
                 }
+                flushAdmissionObserver()
                 guard shouldStartFlush else { return }
                 startFlush()
             }

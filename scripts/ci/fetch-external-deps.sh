@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Check out AppleUITesting at its pinned full SHA next to the repository root
 # (project.yml references ../../AppleUITesting). Used by CI; locally it only fills
-# missing directories. LokiKit is resolved by SwiftPM from shared-telemetry pinned to
-# commit 5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f (v0.1.0).
+# missing directories. LokiKit is resolved by SwiftPM from shared-telemetry exact
+# 0.2.0 after this guard verifies the immutable annotated tag and peeled commit.
 #   scripts/ci/fetch-external-deps.sh [DEST]   (default: parent of the repository)
 set -euo pipefail
 
 LOKIKIT_REPO="LeePepe/shared-telemetry"
-LOKIKIT_TAG="v0.1.0"
-LOKIKIT_SHA="5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f"
+LOKIKIT_TAG="v0.2.0"
+LOKIKIT_TAG_OBJECT="8d85333eb3c039378f116f082d0f59b0b08207a5"
+LOKIKIT_SHA="903f4b9bc01cfcfeba3ce96e13519d841781b40a"
 
 APPLE_UI_TESTING_REPO="LeePepe/AppleUITesting"
 APPLE_UI_TESTING_SHA="e6be2fcdf83341a9f3000a4cc489237655461a07"
@@ -18,10 +19,10 @@ root="$(git rev-parse --show-toplevel)"
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 dest="${1:-$(cd "$root/.." && pwd)}"
 
-# Manifests pin the full commit SHA; this guard fails if the tag is ever retargeted.
+# Manifests select exact 0.2.0; this guard fails if its annotated tag is ever retargeted.
 # Package.resolved is gitignored per repo policy.
 verify_lokikit_tag() {
-    local refs sha ref peeled="" plain="" actual
+    local refs sha ref peeled="" plain=""
     if ! refs="$(git ls-remote "https://github.com/$LOKIKIT_REPO.git" "refs/tags/$LOKIKIT_TAG^{}" "refs/tags/$LOKIKIT_TAG")"; then
         refs=""
     fi
@@ -31,20 +32,15 @@ verify_lokikit_tag() {
             "refs/tags/$LOKIKIT_TAG") plain="$sha" ;;
         esac
     done <<< "$refs"
-    actual="${peeled:-$plain}"
-    if [ -z "$actual" ]; then
-        if [ -n "${CI+x}" ]; then
-            echo "[deps] error: cannot verify LokiKit $LOKIKIT_TAG from $LOKIKIT_REPO" >&2
-            exit 1
-        fi
-        echo "[deps] warning: cannot verify LokiKit $LOKIKIT_TAG from $LOKIKIT_REPO; continuing locally" >&2
-        return 0
-    fi
-    if [ "$actual" != "$LOKIKIT_SHA" ]; then
-        echo "[deps] error: LokiKit $LOKIKIT_TAG is $actual, expected $LOKIKIT_SHA" >&2
+    if [ -z "$plain" ] || [ -z "$peeled" ]; then
+        echo "[deps] error: cannot verify annotated LokiKit $LOKIKIT_TAG from $LOKIKIT_REPO" >&2
         exit 1
     fi
-    echo "[deps] LokiKit $LOKIKIT_TAG -> $LOKIKIT_SHA"
+    if [ "$plain" != "$LOKIKIT_TAG_OBJECT" ] || [ "$peeled" != "$LOKIKIT_SHA" ]; then
+        echo "[deps] error: LokiKit $LOKIKIT_TAG object/commit is $plain/$peeled, expected $LOKIKIT_TAG_OBJECT/$LOKIKIT_SHA" >&2
+        exit 1
+    fi
+    echo "[deps] LokiKit $LOKIKIT_TAG $LOKIKIT_TAG_OBJECT -> $LOKIKIT_SHA"
 }
 
 fetch() {

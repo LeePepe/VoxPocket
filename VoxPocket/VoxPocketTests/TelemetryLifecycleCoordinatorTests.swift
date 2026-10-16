@@ -25,18 +25,22 @@ struct TelemetryLifecycleCoordinatorTests {
     @Test func flushAfterInterveningAdmissionWaitsForASecondUnderlyingFlush() async {
         let recorder = TelemetryOperationRecorder()
         let gate = FlushGate()
-        let coordinator = TelemetryLifecycleCoordinator {
+        let admissions = FlushAdmissionGate()
+        let coordinator = TelemetryLifecycleCoordinator(flushAdmissionObserver: {
+            admissions.record()
+        }) {
             recorder.perform("construct")
             return RecordingTelemetryService(recorder: recorder, flushGate: gate)
         }
 
         coordinator.track(name: "A", properties: [:])
         let firstFlush = Task { await coordinator.flush() }
+        await admissions.wait(for: 1)
         await gate.waitUntilEntered()
 
         coordinator.track(name: "B", properties: [:])
         let laterFlush = Task { await coordinator.flush() }
-        await Task.yield()
+        await admissions.wait(for: 2)
         #expect(recorder.names == ["construct", "track A", "flush"])
 
         await gate.open()
@@ -51,17 +55,21 @@ struct TelemetryLifecycleCoordinatorTests {
     @Test func adjacentFlushJoinsTheActiveUnderlyingFlush() async {
         let recorder = TelemetryOperationRecorder()
         let gate = FlushGate()
-        let coordinator = TelemetryLifecycleCoordinator {
+        let admissions = FlushAdmissionGate()
+        let coordinator = TelemetryLifecycleCoordinator(flushAdmissionObserver: {
+            admissions.record()
+        }) {
             recorder.perform("construct")
             return RecordingTelemetryService(recorder: recorder, flushGate: gate)
         }
 
         coordinator.track(name: "A", properties: [:])
         let firstFlush = Task { await coordinator.flush() }
+        await admissions.wait(for: 1)
         await gate.waitUntilEntered()
 
         let joinedFlush = Task { await coordinator.flush() }
-        await Task.yield()
+        await admissions.wait(for: 2)
         #expect(recorder.names == ["construct", "track A", "flush"])
 
         await gate.open()
@@ -71,6 +79,63 @@ struct TelemetryLifecycleCoordinatorTests {
         #expect(recorder.names == ["construct", "track A", "flush"])
         #expect(recorder.maximumConcurrency == 1)
         #expect(recorder.mainThreadCalls == 0)
+    }
+
+    @Test func actualAdapterTrackReturnsBeforeUnderlyingFlushEnters() async throws {
+        let recorder = TelemetryOperationRecorder()
+        let storeDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "VoxPocketTelemetryTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: storeDirectory) }
+
+        let coordinator = TelemetryLifecycleCoordinator {
+            let adapter = LokiTelemetryService(
+                endpoint: URL(string: "http://127.0.0.1:1/loki/api/v1/push")!,
+                appLabels: ["app": "VoxPocketTests"],
+                isEnabled: true,
+                authToken: nil,
+                storeDirectory: storeDirectory
+            )
+            return BoundaryRecordingTelemetryService(adapter: adapter, recorder: recorder)
+        }
+
+        coordinator.track(name: "actual", properties: ["source": "regression"])
+        await coordinator.flush()
+
+        #expect(recorder.names == ["actual track returned", "underlying flush entered"])
+    }
+}
+
+private final class BoundaryRecordingTelemetryService: TelemetryService, Sendable {
+    private let adapter: any TelemetryService
+    private let recorder: TelemetryOperationRecorder
+
+    var isEnabled: Bool {
+        get { adapter.isEnabled }
+        set { adapter.isEnabled = newValue }
+    }
+
+    init(adapter: any TelemetryService, recorder: TelemetryOperationRecorder) {
+        self.adapter = adapter
+        self.recorder = recorder
+    }
+
+    func track(_ event: TelemetryEvent) {
+        adapter.track(event)
+        recorder.perform("actual track returned")
+    }
+
+    func track(name: String, properties: [String: String]) {
+        adapter.track(name: name, properties: properties)
+        recorder.perform("actual track returned")
+    }
+
+    func flush() async {
+        recorder.perform("underlying flush entered")
+        await adapter.flush()
+    }
+
+    func resetIdentifier() {
+        adapter.resetIdentifier()
     }
 }
 
@@ -193,5 +258,37 @@ private actor FlushGate {
         opened = true
         openWaiters.forEach { $0.resume() }
         openWaiters.removeAll()
+    }
+}
+
+private final class FlushAdmissionGate: Sendable {
+    private struct State: Sendable {
+        var count = 0
+        var waiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
+    }
+
+    private let state = Mutex(State())
+
+    func record() {
+        let ready = state.withLock { state in
+            state.count += 1
+            let ready = state.waiters.filter { $0.target <= state.count }
+            state.waiters.removeAll { $0.target <= state.count }
+            return ready.map(\.continuation)
+        }
+        ready.forEach { $0.resume() }
+    }
+
+    func wait(for target: Int) async {
+        await withCheckedContinuation { continuation in
+            let alreadyReached = state.withLock { state -> Bool in
+                guard state.count < target else { return true }
+                state.waiters.append((target, continuation))
+                return false
+            }
+            if alreadyReached {
+                continuation.resume()
+            }
+        }
     }
 }
