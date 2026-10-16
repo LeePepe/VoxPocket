@@ -29,7 +29,8 @@
 - [x] CHK021 Raw and shell/percent-escaped synthetic sentinel forms are both required absent from Release-path logs, arguments, and messages.
 - [x] CHK022 Decision 1A is exact: key-auth stored policy with permission `c`/explicit expiry, HTTPS-only `--policy-name` service SAS, supported query names, stored-policy `sp` omission, and no user-delegation fields.
 - [x] CHK026 The common consent contract is exact: persisted “Send usage data” defaults off, disable stops admission/upload without host/manual deletion while retaining non-evicted pending files plus any persisted UUID, provider-owned capacity eviction remains allowed, and only a later explicit opt-in resumes.
-- [x] CHK027 Install identity is random, created/requested only on first opt-in, retained across disable without active-service use, reused after every later opt-in and eligible launch for the app installation's lifetime, has no v1 Reset/rotation surface, requires no shared-telemetry API change or private-storage parsing, and is never exposed as a product property or evidence value.
+- [x] CHK027 Install identity is random and provisioned only by eligible interactive-app composition after explicit consent is persisted; missing/invalid configuration and excluded hosts retain consent with no identity request/creation. The UUID is retained across disable without active-service use, reused after every later opt-in and eligible launch for the app installation's lifetime, has no v1 Reset/rotation surface, requires no shared-telemetry API change or private-storage parsing, and is never exposed as a product property or evidence value.
+- [x] CHK031 T009 owns an additive consent-only preference interface and focused Infrastructure proof while preserving the accepted T008 coupled provisioning behavior and tests.
 
 ## Architecture and delivery
 
@@ -43,6 +44,7 @@
 - [x] CHK028 CLI, headless, and test hosts have an explicit zero-construction contract and credential-free fixtures, while only the interactive app composition root may construct after configuration plus consent; no production CLI target is invented for the proof.
 - [x] CHK029 A main-actor-originating test proves provider construction, ordered legacy tracks, and barrier flush all reach the underlying spy with `Thread.isMainThread == false` and maximum concurrency one; a structural assertion rejects raw-provider bypass.
 - [x] CHK030 The plan and migration/rollback notes intentionally accept the pinned provider's 50 MiB default, whole-oldest-batch eviction, oversized-event rejection, durable loss accounting, cleanup-before-downgrade rule, and irrecoverable evictions, with no `maxDiskBytes` override.
+- [x] CHK032 Rapid-release and startup/recording/session/resign-active regressions drive the real `AppDelegate` / `ServiceContainer` callers; direct instrumentation tests are supplemental rather than substitutes.
 
 ## Review readiness
 
