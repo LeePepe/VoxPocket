@@ -742,7 +742,7 @@ private final class RuntimeFixture {
                     makeService: { recorder.construct() }
                 )
             },
-            productTelemetryActivationCheckpoint: activationCheckpoint
+            debugProductTelemetryActivationCheckpoint: activationCheckpoint
         )
     }
 

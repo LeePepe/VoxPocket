@@ -127,7 +127,7 @@ public final class ServiceContainer: ObservableObject {
             BlobTelemetryConfiguration()
         },
         productTelemetryBootstrapFactory: ProductTelemetryRuntime.BootstrapFactory? = nil,
-        productTelemetryActivationCheckpoint: ProductTelemetryRuntime.ActivationCheckpoint?
+        debugProductTelemetryActivationCheckpoint: ProductTelemetryRuntime.ActivationCheckpoint?
     ) {
         self.init(
             productTelemetryPreferences: productTelemetryPreferences,
@@ -135,7 +135,7 @@ public final class ServiceContainer: ObservableObject {
             processArguments: processArguments,
             productTelemetryConfiguration: productTelemetryConfiguration,
             productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
-            productTelemetryActivationCheckpoint: productTelemetryActivationCheckpoint
+            productTelemetryActivationCheckpoint: debugProductTelemetryActivationCheckpoint
         )
     }
     #endif
