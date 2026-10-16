@@ -1,0 +1,236 @@
+import Foundation
+import Testing
+@testable import UseCases
+
+@MainActor
+struct ProductTelemetryActivationUseCaseTests {
+    @Test func defaultOffAndIneligibleStartupNeverInstallIdentity() async {
+        let recorder = ActivationRecorder(consent: false)
+        let useCase = recorder.makeUseCase()
+
+        await useCase.activateAtStartupIfEligible(true)
+        #expect(!useCase.isReady)
+        recorder.consent = true
+        await useCase.activateAtStartupIfEligible(false)
+        #expect(!useCase.isReady)
+
+        #expect(recorder.operations == ["read"])
+    }
+
+    @Test func explicitTransitionsPersistOrderedBooleansAndTerminateEveryWaiter() async {
+        let gate = AsyncGate()
+        let recorder = ActivationRecorder(consent: false, persistGate: gate.suspendFirst)
+        let useCase = recorder.makeUseCase()
+        let enabling = useCase.beginConsentTransition(true, isEligible: true)
+        await gate.waitUntilSuspended()
+        let disabling = useCase.beginConsentTransition(false, isEligible: true)
+        await gate.release()
+        await enabling.value
+        await disabling.value
+        await useCase.waitForPendingTransition()
+
+        #expect(recorder.writes == [true, false])
+        #expect(!useCase.isReady)
+    }
+
+    @Test func startupDefersBehindExplicitTransition() async {
+        let gate = AsyncGate()
+        let recorder = ActivationRecorder(consent: false, persistGate: gate.suspendFirst)
+        let useCase = recorder.makeUseCase()
+
+        let transition = useCase.beginConsentTransition(true, isEligible: true)
+        await gate.waitUntilSuspended()
+        let startup = Task { await useCase.activateAtStartupIfEligible(true) }
+        await Task.yield()
+        #expect(recorder.identities.isEmpty)
+
+        await gate.release()
+        await transition.value
+        await startup.value
+        #expect(useCase.isReady)
+    }
+
+    @Test func eligibilityIsCheckedBeforeConsentAndIdentity() async {
+        let recorder = ActivationRecorder(consent: true)
+        let useCase = recorder.makeUseCase()
+
+        await useCase.activateAtStartupIfEligible(false)
+        #expect(!useCase.isReady)
+
+        #expect(recorder.operations.isEmpty)
+        #expect(recorder.identities.isEmpty)
+    }
+
+    @Test func identityIsReusedAcrossDisableAndReenable() async {
+        let recorder = ActivationRecorder(consent: false)
+        let useCase = recorder.makeUseCase()
+
+        await useCase.beginConsentTransition(true, isEligible: true).value
+        await useCase.beginConsentTransition(false, isEligible: true).value
+        await useCase.beginConsentTransition(true, isEligible: true).value
+
+        #expect(recorder.identities.count == 2)
+        #expect(Set(recorder.identities).count == 1)
+        #expect(useCase.isReady)
+    }
+
+    #if DEBUG
+    @Test func staleActivationCannotRestoreReadiness() async {
+        let checkpoint = AsyncGate()
+        let recorder = ActivationRecorder(consent: true)
+        let useCase = recorder.makeUseCase {
+            await checkpoint.suspendFirst()
+        }
+
+        let startup = Task { await useCase.activateAtStartupIfEligible(true) }
+        await checkpoint.waitUntilSuspended()
+        await useCase.beginConsentTransition(false, isEligible: true).value
+        await checkpoint.release()
+
+        await startup.value
+        #expect(!useCase.isReady)
+    }
+    #endif
+
+    @Test func failedActivationCanRetryWithoutCreatingAnotherPolicyWorker() async {
+        let recorder = ActivationRecorder(consent: true, activationResults: [false, true])
+        let useCase = recorder.makeUseCase()
+
+        await useCase.activateAtStartupIfEligible(true)
+        #expect(!useCase.isReady)
+        await useCase.activateAtStartupIfEligible(true)
+
+        #expect(recorder.identities.count == 2)
+        #expect(Set(recorder.identities).count == 1)
+        #expect(useCase.isReady)
+    }
+
+    @Test func readinessGatesRecordAndFlushAcrossActivationAndOptOut() async {
+        let recorder = ActivationRecorder(consent: true)
+        let useCase = recorder.makeUseCase()
+        let telemetry = ReadinessGatedTelemetry(activation: useCase)
+
+        telemetry.record()
+        telemetry.flush()
+        #expect(telemetry.operations.isEmpty)
+
+        await useCase.activateAtStartupIfEligible(true)
+        telemetry.record()
+        telemetry.flush()
+        #expect(telemetry.operations == ["record", "flush"])
+
+        await useCase.beginConsentTransition(false, isEligible: true).value
+        telemetry.record()
+        telemetry.flush()
+        #expect(telemetry.operations == ["record", "flush"])
+    }
+}
+
+@MainActor
+private final class ActivationRecorder {
+    var consent: Bool
+    var operations: [String] = []
+    var writes: [Bool] = []
+    var identities: [UUID] = []
+
+    private let identity = UUID()
+    private var activationResults: [Bool]
+    private let persistGate: (@Sendable (Bool) async -> Void)?
+
+    init(
+        consent: Bool,
+        activationResults: [Bool] = [true],
+        persistGate: (@Sendable (Bool) async -> Void)? = nil
+    ) {
+        self.consent = consent
+        self.activationResults = activationResults
+        self.persistGate = persistGate
+    }
+
+    func makeDependencies() -> ProductTelemetryActivationDependencies {
+        ProductTelemetryActivationDependencies(
+            readConsent: { [self] in
+                operations.append("read")
+                return consent
+            },
+            persistConsent: { [self] value in
+                operations.append("persist \(value)")
+                await persistGate?(value)
+                writes.append(value)
+                consent = value
+            },
+            installIdentityIfConsented: { [self] in
+                operations.append("identity")
+                guard consent else { return nil }
+                identities.append(identity)
+                return identity
+            },
+            activate: { [self] _ in
+                operations.append("activate")
+                return activationResults.isEmpty ? true : activationResults.removeFirst()
+            },
+            deactivate: { [self] in
+                operations.append("deactivate")
+            }
+        )
+    }
+
+    func makeUseCase() -> DefaultProductTelemetryActivationUseCase {
+        DefaultProductTelemetryActivationUseCase(dependencies: makeDependencies())
+    }
+
+    #if DEBUG
+    func makeUseCase(
+        activationCheckpoint: @escaping DefaultProductTelemetryActivationUseCase.ActivationCheckpoint
+    ) -> DefaultProductTelemetryActivationUseCase {
+        DefaultProductTelemetryActivationUseCase(
+            dependencies: makeDependencies(),
+            activationCheckpoint: activationCheckpoint
+        )
+    }
+    #endif
+}
+
+@MainActor
+private final class ReadinessGatedTelemetry {
+    private let activation: any ProductTelemetryActivationUseCase
+    private(set) var operations: [String] = []
+
+    init(activation: any ProductTelemetryActivationUseCase) {
+        self.activation = activation
+    }
+
+    func record() {
+        guard activation.isReady else { return }
+        operations.append("record")
+    }
+
+    func flush() {
+        guard activation.isReady else { return }
+        operations.append("flush")
+    }
+}
+
+private actor AsyncGate {
+    private var didSuspend = false
+    private var entryWaiter: CheckedContinuation<Void, Never>?
+    private var releaseWaiter: CheckedContinuation<Void, Never>?
+
+    func suspendFirst(_: Bool = true) async {
+        guard !didSuspend else { return }
+        didSuspend = true
+        entryWaiter?.resume()
+        entryWaiter = nil
+        await withCheckedContinuation { releaseWaiter = $0 }
+    }
+
+    func waitUntilSuspended() async {
+        guard !didSuspend else { return }
+        await withCheckedContinuation { entryWaiter = $0 }
+    }
+
+    func release() {
+        releaseWaiter?.resume()
+        releaseWaiter = nil
+    }
+}

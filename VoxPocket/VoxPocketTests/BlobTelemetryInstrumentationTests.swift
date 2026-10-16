@@ -20,10 +20,7 @@ struct BlobTelemetryInstrumentationTests {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
         let center = NotificationCenter()
-        let instrumentation = ProductTelemetryInstrumentation(
-            runtime: fixture.makeRuntime(),
-            notificationCenter: center
-        )
+        let instrumentation = fixture.makeInstrumentation(notificationCenter: center)
 
         center.post(
             name: ProductTelemetrySettingsViewModel.consentDidChange,
@@ -56,10 +53,7 @@ struct BlobTelemetryInstrumentationTests {
         let fixture = RuntimeFixture(productTelemetryConsentWriteGate: persistenceGate.suspend)
         defer { fixture.remove() }
         let center = NotificationCenter()
-        let instrumentation = ProductTelemetryInstrumentation(
-            runtime: fixture.makeRuntime(),
-            notificationCenter: center
-        )
+        let instrumentation = fixture.makeInstrumentation(notificationCenter: center)
         let model = ProductTelemetrySettingsViewModel(
             preferences: fixture.preferences,
             notificationCenter: center
@@ -93,10 +87,7 @@ struct BlobTelemetryInstrumentationTests {
         defer { fixture.remove() }
         _ = await fixture.preferences.setConsent(true)
         let center = NotificationCenter()
-        let instrumentation = ProductTelemetryInstrumentation(
-            runtime: fixture.makeRuntime(),
-            notificationCenter: center
-        )
+        let instrumentation = fixture.makeInstrumentation(notificationCenter: center)
         await instrumentation.completeStartup(startedAt: .now)
         let normal = QuickRecordFixture()
         let normalDelegate = AppDelegate(
@@ -369,7 +360,7 @@ struct BlobTelemetryInstrumentationTests {
     @Test func startupAndActionsEmitOnlyAfterSuccessfulComposition() async {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
-        let runtime = fixture.makeRuntime()
+        let runtime = fixture.makeInstrumentation()
 
         runtime.record(.settingsOpened)
         await runtime.completeStartup(startedAt: .now)
@@ -397,10 +388,10 @@ struct BlobTelemetryInstrumentationTests {
     @Test func sameTurnFlushRequestIsAdmittedBeforeLaterAction() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
-        let runtime = fixture.makeRuntime()
+        let runtime = fixture.makeInstrumentation()
 
         await runtime.setConsent(true)
-        let flushCompletion = try #require(runtime.requestFlush())
+        let flushCompletion = try #require(runtime.requestFlushIfReady())
         runtime.record(.settingsOpened)
 
         await flushCompletion.value
@@ -415,10 +406,10 @@ struct BlobTelemetryInstrumentationTests {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
         _ = await fixture.preferences.setConsent(true)
-        let runtime = fixture.makeRuntime()
+        let runtime = fixture.makeInstrumentation()
 
-        let startupCompletion = await runtime.completeStartup(startedAt: .now)
-        await startupCompletion?.value
+        await runtime.completeStartup(startedAt: .now)
+        await runtime.waitForPendingStartupCompletion()
 
         let event = try #require(fixture.recorder.events.first)
         #expect(event.name == "product.performance")
@@ -431,7 +422,7 @@ struct BlobTelemetryInstrumentationTests {
     @Test func disableStopsAdmissionUntilExplicitReenable() async {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
-        let runtime = fixture.makeRuntime()
+        let runtime = fixture.makeInstrumentation()
 
         await runtime.setConsent(true)
         runtime.record(.quickRecordStarted)
@@ -818,19 +809,20 @@ private final class RuntimeFixture {
 
     var identities: [UUID] { recordedIdentities.withLock { $0 } }
 
-    func makeRuntime(host: BlobTelemetryHostKind = .interactiveApplication) -> ProductTelemetryRuntime {
+    func makeInstrumentation(
+        host: BlobTelemetryHostKind = .interactiveApplication,
+        notificationCenter: NotificationCenter = .default
+    ) -> ProductTelemetryInstrumentation {
         let coordinator = TelemetryLifecycleCoordinator(isEnabled: false) { NoopTelemetryService() }
-        return ProductTelemetryRuntime(
-            coordinator: coordinator,
-            preferences: preferences,
-            host: host,
-            configuration: { .enabled(.init(
-                endpoint: URL(string: "https://telemetry.example.invalid/container")!,
-                sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
-            )) },
-            makeBootstrap: { [self] identity in
+        let dependencies = ProductTelemetryActivationDependencies(
+            readConsent: { [self] in await preferences.isConsented },
+            persistConsent: { [self] in await preferences.persistConsent($0) },
+            installIdentityIfConsented: { [self] in
+                await preferences.installIdentityIfConsented()
+            },
+            activate: { [self] identity in
                 recordedIdentities.withLock { $0.append(identity) }
-                return .testing(
+                let bootstrap = BlobTelemetryBootstrap.testing(
                     configuration: .enabled(.init(
                         endpoint: URL(string: "https://telemetry.example.invalid/container")!,
                         sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
@@ -839,12 +831,25 @@ private final class RuntimeFixture {
                     isConsented: true,
                     makeService: { recorder.construct() }
                 )
-            }
+                return await coordinator.bootstrapBlob(bootstrap) == .ready
+            },
+            deactivate: { await coordinator.disableBlob() }
+        )
+        let activationUseCase = DefaultProductTelemetryActivationUseCase(
+            dependencies: dependencies
+        )
+        return ProductTelemetryInstrumentation(
+            activationUseCase: activationUseCase,
+            isEligible: { host.isEligibleForBlobTelemetry },
+            track: { coordinator.trackBlob($0) },
+            requestFlush: { coordinator.requestBlobFlush() },
+            notificationCenter: notificationCenter
         )
     }
 
     func makeContainer(
-        activationCheckpoint: ProductTelemetryRuntime.ActivationCheckpoint? = nil
+        activationCheckpoint:
+            DefaultProductTelemetryActivationUseCase.ActivationCheckpoint? = nil
     ) -> ServiceContainer {
         ServiceContainer(
             productTelemetryPreferences: preferences,

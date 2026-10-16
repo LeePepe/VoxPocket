@@ -80,15 +80,16 @@ struct BlobTelemetryConsentCompositionTests {
         )
         await preferences.persistConsent(true)
         let bootstrapCalls = Mutex(0)
-        let runtime = ProductTelemetryRuntime(
-            coordinator: TelemetryLifecycleCoordinator(isEnabled: false) { NoopTelemetryService() },
-            preferences: preferences,
-            host: host,
-            configuration: { .enabled(.init(
+        let container = ServiceContainer(
+            productTelemetryPreferences: preferences,
+            processEnvironment: host == .uiTestApplication
+                ? [ServiceContainer.uiTestHostEnvironmentKey: "1"] : [:],
+            processArguments: host == .uiTestApplication ? ["--vox-ui-test-host"] : [],
+            productTelemetryConfiguration: { .enabled(.init(
                 endpoint: URL(string: "https://telemetry.example.invalid/container")!,
                 sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
             )) },
-            makeBootstrap: { _ in
+            productTelemetryBootstrapFactory: { _ in
                 bootstrapCalls.withLock { $0 += 1 }
                 return .testing(
                     configuration: .disabled,
@@ -96,10 +97,11 @@ struct BlobTelemetryConsentCompositionTests {
                     isConsented: true,
                     makeService: { NoopTelemetryService() }
                 )
-            }
+            },
+            productTelemetryHostOverride: host
         )
 
-        await runtime.completeStartup(startedAt: .now)
+        await container.completeProductTelemetryStartup(startedAt: .now)
 
         #expect(bootstrapCalls.withLock { $0 } == 0)
         #expect(
@@ -128,12 +130,12 @@ struct BlobTelemetryConsentCompositionTests {
             let preferences = ProductTelemetryPreferences(store: store)
             let bootstrapCalls = Mutex(0)
             let serviceConstructions = Mutex(0)
-            let runtime = ProductTelemetryRuntime(
-                coordinator: TelemetryLifecycleCoordinator(isEnabled: false) { NoopTelemetryService() },
-                preferences: preferences,
-                host: .interactiveApplication,
-                configuration: { configuration },
-                makeBootstrap: { _ in
+            let container = ServiceContainer(
+                productTelemetryPreferences: preferences,
+                processEnvironment: [:],
+                processArguments: [],
+                productTelemetryConfiguration: { configuration },
+                productTelemetryBootstrapFactory: { _ in
                     bootstrapCalls.withLock { $0 += 1 }
                     return .testing(
                         configuration: configuration,
@@ -146,11 +148,10 @@ struct BlobTelemetryConsentCompositionTests {
                     )
                 }
             )
-            let instrumentation = ProductTelemetryInstrumentation(runtime: runtime)
             let model = ProductTelemetrySettingsViewModel(preferences: preferences)
 
             await model.setSendingUsageData(true)
-            await instrumentation.waitForPendingConsentChange()
+            await container.waitForPendingProductTelemetryConsentChange()
 
             #expect(model.isSendingUsageData)
             #expect(await preferences.isConsented)

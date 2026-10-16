@@ -22,6 +22,13 @@ import LokiKit
 import PlatformUI
 #endif
 
+typealias ProductTelemetryConfigurationProvider =
+    @MainActor @Sendable () -> BlobTelemetryConfiguration
+typealias ProductTelemetryBootstrapFactory =
+    @MainActor @Sendable (UUID) -> BlobTelemetryBootstrap
+typealias ProductTelemetryActivationCheckpoint =
+    @MainActor @Sendable () async -> Void
+
 /// 服务容器
 ///
 /// 集中管理所有服务和用例实例，避免重复创建。
@@ -85,7 +92,6 @@ public final class ServiceContainer: ObservableObject {
     public let telemetryService: any TelemetryService
     private let telemetryCoordinator: TelemetryLifecycleCoordinator
     private let productTelemetryPreferences: ProductTelemetryPreferences
-    private var productTelemetryRuntime: ProductTelemetryRuntime!
     private var productTelemetryInstrumentation: ProductTelemetryInstrumentation!
     private var pendingProductTelemetryRecordingCompletion: Task<Void, Never>?
 
@@ -103,10 +109,11 @@ public final class ServiceContainer: ObservableObject {
         productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment,
         processArguments: [String] = ProcessInfo.processInfo.arguments,
-        productTelemetryConfiguration: @escaping ProductTelemetryRuntime.Configuration = {
+        productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider = {
             BlobTelemetryConfiguration()
         },
-        productTelemetryBootstrapFactory: ProductTelemetryRuntime.BootstrapFactory? = nil
+        productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil,
+        productTelemetryHostOverride: BlobTelemetryHostKind? = nil
     ) {
         self.init(
             productTelemetryPreferences: productTelemetryPreferences,
@@ -114,6 +121,7 @@ public final class ServiceContainer: ObservableObject {
             processArguments: processArguments,
             productTelemetryConfiguration: productTelemetryConfiguration,
             productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
+            productTelemetryHostOverride: productTelemetryHostOverride,
             productTelemetryActivationCheckpoint: nil
         )
     }
@@ -123,11 +131,13 @@ public final class ServiceContainer: ObservableObject {
         productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment,
         processArguments: [String] = ProcessInfo.processInfo.arguments,
-        productTelemetryConfiguration: @escaping ProductTelemetryRuntime.Configuration = {
+        productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider = {
             BlobTelemetryConfiguration()
         },
-        productTelemetryBootstrapFactory: ProductTelemetryRuntime.BootstrapFactory? = nil,
-        debugProductTelemetryActivationCheckpoint: ProductTelemetryRuntime.ActivationCheckpoint?
+        productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil,
+        debugProductTelemetryActivationCheckpoint:
+            ProductTelemetryActivationCheckpoint?,
+        productTelemetryHostOverride: BlobTelemetryHostKind? = nil
     ) {
         self.init(
             productTelemetryPreferences: productTelemetryPreferences,
@@ -135,6 +145,7 @@ public final class ServiceContainer: ObservableObject {
             processArguments: processArguments,
             productTelemetryConfiguration: productTelemetryConfiguration,
             productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
+            productTelemetryHostOverride: productTelemetryHostOverride,
             productTelemetryActivationCheckpoint: debugProductTelemetryActivationCheckpoint
         )
     }
@@ -144,9 +155,10 @@ public final class ServiceContainer: ObservableObject {
         productTelemetryPreferences: ProductTelemetryPreferences,
         processEnvironment: [String: String],
         processArguments: [String],
-        productTelemetryConfiguration: @escaping ProductTelemetryRuntime.Configuration,
-        productTelemetryBootstrapFactory: ProductTelemetryRuntime.BootstrapFactory?,
-        productTelemetryActivationCheckpoint: (@MainActor @Sendable () async -> Void)?
+        productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider,
+        productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory?,
+        productTelemetryHostOverride: BlobTelemetryHostKind?,
+        productTelemetryActivationCheckpoint: ProductTelemetryActivationCheckpoint?
     ) {
         VoxPocketLogging.start()
         logger = PrintLogger(subsystem: "ServiceContainer")
@@ -154,7 +166,7 @@ public final class ServiceContainer: ObservableObject {
         self.telemetryCoordinator = telemetryCoordinator
         telemetryService = telemetryCoordinator
         self.productTelemetryPreferences = productTelemetryPreferences
-        let blobHost = Self.classifyBlobTelemetryHost(
+        let blobHost = productTelemetryHostOverride ?? Self.classifyBlobTelemetryHost(
             environment: processEnvironment,
             arguments: processArguments
         )
@@ -166,35 +178,45 @@ public final class ServiceContainer: ObservableObject {
                 identityProvider: { identity }
             )
         }
+        let isProductTelemetryEligible: @MainActor @Sendable () -> Bool = {
+            guard blobHost.isEligibleForBlobTelemetry else { return false }
+            guard case .enabled = productTelemetryConfiguration() else { return false }
+            return true
+        }
+        let activationDependencies = ProductTelemetryActivationDependencies(
+            readConsent: { await productTelemetryPreferences.isConsented },
+            persistConsent: { await productTelemetryPreferences.persistConsent($0) },
+            installIdentityIfConsented: {
+                await productTelemetryPreferences.installIdentityIfConsented()
+            },
+            activate: { identity in
+                await telemetryCoordinator.bootstrapBlob(makeBootstrap(identity)) == .ready
+            },
+            deactivate: { await telemetryCoordinator.disableBlob() }
+        )
+        let activationUseCase: DefaultProductTelemetryActivationUseCase
         #if DEBUG
         if let productTelemetryActivationCheckpoint {
-            productTelemetryRuntime = ProductTelemetryRuntime(
-                coordinator: telemetryCoordinator,
-                preferences: productTelemetryPreferences,
-                host: blobHost,
-                configuration: productTelemetryConfiguration,
-                makeBootstrap: makeBootstrap,
+            activationUseCase = DefaultProductTelemetryActivationUseCase(
+                dependencies: activationDependencies,
                 activationCheckpoint: productTelemetryActivationCheckpoint
             )
         } else {
-            productTelemetryRuntime = ProductTelemetryRuntime(
-                coordinator: telemetryCoordinator,
-                preferences: productTelemetryPreferences,
-                host: blobHost,
-                configuration: productTelemetryConfiguration,
-                makeBootstrap: makeBootstrap
+            activationUseCase = DefaultProductTelemetryActivationUseCase(
+                dependencies: activationDependencies
             )
         }
         #else
-        productTelemetryRuntime = ProductTelemetryRuntime(
-            coordinator: telemetryCoordinator,
-            preferences: productTelemetryPreferences,
-            host: blobHost,
-            configuration: productTelemetryConfiguration,
-            makeBootstrap: makeBootstrap
+        activationUseCase = DefaultProductTelemetryActivationUseCase(
+            dependencies: activationDependencies
         )
         #endif
-        productTelemetryInstrumentation = ProductTelemetryInstrumentation(runtime: productTelemetryRuntime)
+        productTelemetryInstrumentation = ProductTelemetryInstrumentation(
+            activationUseCase: activationUseCase,
+            isEligible: isProductTelemetryEligible,
+            track: { telemetryCoordinator.trackBlob($0) },
+            requestFlush: { telemetryCoordinator.requestBlobFlush() }
+        )
         let azureConfig = Self.makeAzureFoundryConfig()
         #if os(macOS)
         let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings)
@@ -252,7 +274,7 @@ public final class ServiceContainer: ObservableObject {
         sessionUseCase = ProxySessionUseCase(
             backing: InMemorySessionUseCase(),
             onCompletedSession: {
-                productTelemetryInstrumentation.sessionDidComplete()
+                await productTelemetryInstrumentation.sessionDidComplete()
             }
         )
 
@@ -716,16 +738,29 @@ public final class ServiceContainer: ObservableObject {
 
 @MainActor
 final class ProductTelemetryInstrumentation {
-    private let runtime: ProductTelemetryRuntime
+    typealias EligibilityDecision = @MainActor @Sendable () -> Bool
+    typealias Track = @MainActor @Sendable (BlobProductTelemetryEvent) -> Void
+    typealias FlushRequest = @MainActor @Sendable () -> Task<Void, Never>
+
+    private let activationUseCase: any ProductTelemetryActivationUseCase
+    private let isEligible: EligibilityDecision
+    private let track: Track
+    private let requestFlush: FlushRequest
     private var observers: [NSObjectProtocol] = []
     private var pendingStartupCompletion: Task<Void, Never>?
     private var pendingSessionCompletion: Task<Void, Never>?
 
     init(
-        runtime: ProductTelemetryRuntime,
+        activationUseCase: any ProductTelemetryActivationUseCase,
+        isEligible: @escaping EligibilityDecision,
+        track: @escaping Track,
+        requestFlush: @escaping FlushRequest,
         notificationCenter: NotificationCenter = .default
     ) {
-        self.runtime = runtime
+        self.activationUseCase = activationUseCase
+        self.isEligible = isEligible
+        self.track = track
+        self.requestFlush = requestFlush
         observers.append(notificationCenter.addObserver(
             forName: ProductTelemetrySettingsViewModel.consentDidChange,
             object: nil,
@@ -736,10 +771,14 @@ final class ProductTelemetryInstrumentation {
                 guard let self else { return }
                 let completion = notification.userInfo?["transitionCompletion"]
                     as? AsyncStream<Void>.Continuation
-                self.runtime.beginConsentTransition(
+                let transition = self.activationUseCase.beginConsentTransition(
                     isConsented,
-                    completion: completion
+                    isEligible: self.isEligible()
                 )
+                Task {
+                    await transition.value
+                    completion?.finish()
+                }
             }
         })
         observers.append(notificationCenter.addObserver(
@@ -773,11 +812,24 @@ final class ProductTelemetryInstrumentation {
     }
 
     func waitForPendingConsentChange() async {
-        await runtime.waitForPendingTransition()
+        await activationUseCase.waitForPendingTransition()
     }
 
     func completeStartup(startedAt: ContinuousClock.Instant) async {
-        pendingStartupCompletion = await runtime.completeStartup(startedAt: startedAt)
+        await activationUseCase.activateAtStartupIfEligible(isEligible())
+        guard activationUseCase.isReady else { return }
+        let duration = startedAt.duration(to: .now).components
+        let milliseconds = min(
+            3_600_000,
+            max(0, Double(duration.seconds) * 1_000
+                + Double(duration.attoseconds) / 1_000_000_000_000_000)
+        )
+        guard let event = try? BlobProductTelemetryEvent.performance(
+            .appLaunch,
+            durationMilliseconds: milliseconds
+        ) else { return }
+        track(event)
+        pendingStartupCompletion = requestFlush()
     }
 
     func waitForPendingStartupCompletion() async {
@@ -785,15 +837,16 @@ final class ProductTelemetryInstrumentation {
     }
 
     func record(_ action: BlobProductAction) {
-        runtime.record(action)
+        guard activationUseCase.isReady else { return }
+        track(.userAction(action))
     }
 
     func recordingDidComplete() async {
-        await runtime.flush()
+        await flush()
     }
 
-    func sessionDidComplete() {
-        pendingSessionCompletion = runtime.requestFlush()
+    func sessionDidComplete() async {
+        pendingSessionCompletion = flushRequest()
     }
 
     func waitForPendingSessionCompletion() async {
@@ -801,8 +854,29 @@ final class ProductTelemetryInstrumentation {
     }
 
     func applicationWillResignActive() async {
-        await runtime.flush()
+        await flush()
     }
+
+    func setConsent(_ isConsented: Bool) async {
+        await activationUseCase.beginConsentTransition(
+            isConsented,
+            isEligible: isEligible()
+        ).value
+    }
+
+    func requestFlushIfReady() -> Task<Void, Never>? {
+        flushRequest()
+    }
+
+    private func flush() async {
+        await flushRequest()?.value
+    }
+
+    private func flushRequest() -> Task<Void, Never>? {
+        guard activationUseCase.isReady else { return nil }
+        return requestFlush()
+    }
+
 }
 
 enum ProductTelemetryNotificationBoundary {
@@ -820,181 +894,6 @@ enum ProductTelemetryNotificationBoundary {
 
     static func postQuickRecordStopped(to center: NotificationCenter = .default) {
         center.post(name: quickRecordStopped, object: nil)
-    }
-}
-
-@MainActor
-final class ProductTelemetryRuntime {
-    typealias Configuration = @MainActor @Sendable () -> BlobTelemetryConfiguration
-    typealias BootstrapFactory = @MainActor @Sendable (UUID) -> BlobTelemetryBootstrap
-    #if DEBUG
-    typealias ActivationCheckpoint = @MainActor @Sendable () async -> Void
-    #endif
-
-    private let coordinator: TelemetryLifecycleCoordinator
-    private let preferences: ProductTelemetryPreferences
-    private let host: BlobTelemetryHostKind
-    private let configuration: Configuration
-    private let makeBootstrap: BootstrapFactory
-    #if DEBUG
-    private let activationCheckpoint: ActivationCheckpoint?
-    #endif
-    private var isReady = false
-    private var consentIntentGeneration: UInt64 = 0
-    private var pendingTransition: Task<Void, Never>?
-
-    init(
-        coordinator: TelemetryLifecycleCoordinator,
-        preferences: ProductTelemetryPreferences,
-        host: BlobTelemetryHostKind,
-        configuration: @escaping Configuration,
-        makeBootstrap: @escaping BootstrapFactory
-    ) {
-        self.coordinator = coordinator
-        self.preferences = preferences
-        self.host = host
-        self.configuration = configuration
-        self.makeBootstrap = makeBootstrap
-        #if DEBUG
-        activationCheckpoint = nil
-        #endif
-    }
-
-    #if DEBUG
-    init(
-        coordinator: TelemetryLifecycleCoordinator,
-        preferences: ProductTelemetryPreferences,
-        host: BlobTelemetryHostKind,
-        configuration: @escaping Configuration,
-        makeBootstrap: @escaping BootstrapFactory,
-        activationCheckpoint: ActivationCheckpoint
-    ) {
-        self.coordinator = coordinator
-        self.preferences = preferences
-        self.host = host
-        self.configuration = configuration
-        self.makeBootstrap = makeBootstrap
-        self.activationCheckpoint = activationCheckpoint
-    }
-    #endif
-
-    func completeStartup(startedAt: ContinuousClock.Instant) async -> Task<Void, Never>? {
-        while true {
-            let observedIntent = consentIntentGeneration
-            let explicitTransition = pendingTransition
-            await explicitTransition?.value
-            guard observedIntent == consentIntentGeneration else { continue }
-            return await completeStartupTransition(startedAt: startedAt, intent: observedIntent)
-        }
-    }
-
-    func setConsent(_ isConsented: Bool) async {
-        await beginConsentTransition(isConsented).value
-    }
-
-    @discardableResult
-    func beginConsentTransition(
-        _ isConsented: Bool,
-        completion: AsyncStream<Void>.Continuation? = nil
-    ) -> Task<Void, Never> {
-        beginTransition(isConsented, completion: completion)
-    }
-
-    func waitForPendingTransition() async {
-        while true {
-            let intent = consentIntentGeneration
-            await pendingTransition?.value
-            guard intent != consentIntentGeneration else { return }
-        }
-    }
-
-    func record(_ action: BlobProductAction) {
-        guard isReady else { return }
-        coordinator.trackBlob(.userAction(action))
-    }
-
-    func flush() async {
-        await requestFlush()?.value
-    }
-
-    func requestFlush() -> Task<Void, Never>? {
-        guard isReady else { return nil }
-        return coordinator.requestBlobFlush()
-    }
-
-    private func activateIfEligible(intent: UInt64) async -> Bool {
-        guard isCurrentIntent(intent) else { return false }
-        guard host.isEligibleForBlobTelemetry else { return false }
-        guard case .enabled = configuration() else { return false }
-        let isConsented = await preferences.isConsented
-        guard isCurrentIntent(intent) else { return false }
-        guard isConsented else { return false }
-        guard let identity = await preferences.installIdentityIfConsented() else { return false }
-        guard isCurrentIntent(intent) else { return false }
-        let outcome = await coordinator.bootstrapBlob(makeBootstrap(identity))
-        #if DEBUG
-        await activationCheckpoint?()
-        #endif
-        guard isCurrentIntent(intent) else { return false }
-        isReady = outcome == .ready
-        return isReady
-    }
-
-    private func beginTransition(
-        _ isConsented: Bool,
-        completion: AsyncStream<Void>.Continuation?
-    ) -> Task<Void, Never> {
-        let prior = pendingTransition
-        prior?.cancel()
-        consentIntentGeneration &+= 1
-        let currentIntent = consentIntentGeneration
-        isReady = false
-        let task = Task { @MainActor [weak self] in
-            defer { completion?.finish() }
-            if !isConsented {
-                guard let self else { return }
-                await self.coordinator.disableBlob()
-                await prior?.value
-                guard self.isCurrentIntent(currentIntent) else { return }
-                await self.preferences.persistConsent(false)
-                guard self.isCurrentIntent(currentIntent) else { return }
-                return
-            }
-            await prior?.value
-            guard let self, self.isCurrentIntent(currentIntent) else { return }
-            await self.enable(intent: currentIntent)
-        }
-        pendingTransition = task
-        return task
-    }
-
-    private func enable(intent: UInt64) async {
-        await preferences.persistConsent(true)
-        guard isCurrentIntent(intent) else { return }
-        _ = await activateIfEligible(intent: intent)
-    }
-
-    private func completeStartupTransition(
-        startedAt: ContinuousClock.Instant,
-        intent: UInt64
-    ) async -> Task<Void, Never>? {
-        guard await activateIfEligible(intent: intent) else { return nil }
-        guard isCurrentIntent(intent) else { return nil }
-        let duration = startedAt.duration(to: .now).components
-        let milliseconds = min(
-            3_600_000,
-            max(0, Double(duration.seconds) * 1_000 + Double(duration.attoseconds) / 1_000_000_000_000_000)
-        )
-        guard let event = try? BlobProductTelemetryEvent.performance(
-            .appLaunch,
-            durationMilliseconds: milliseconds
-        ) else { return nil }
-        coordinator.trackBlob(event)
-        return requestFlush()
-    }
-
-    private func isCurrentIntent(_ intent: UInt64) -> Bool {
-        !Task.isCancelled && consentIntentGeneration == intent
     }
 }
 
