@@ -1,6 +1,6 @@
 # AGENTS.md — VoxPocket
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-10-16
 
 VoxPocket is a SwiftUI voice recording and transcription app for macOS and iOS
 (default speech locale `zh-Hans`, text refinement with Apple Intelligence or a
@@ -104,12 +104,12 @@ every PR and are never required.
 - No Microsoft/Azure resource identifiers, real endpoints, tenant IDs or other
   project-specific non-public values in Git (code, tests, fixtures, docs). Use synthetic
   `example-*` values; real values stay in gitignored local files with a committed template.
-- Delivery is TestFlight only: every user-facing macOS/iOS App build goes through
-  `.github/workflows/testflight.yml` (manual `workflow_dispatch` after an explicit Owner
-  request). Agents do not create local archives, install, replace or launch delivery builds,
-  or sign in to App Store Connect. Upload success is not "testable"; the Owner verifies.
+- Delivery is TestFlight only: after successful CI for an exact push to `main`, `.github/workflows/testflight.yml`
+  must automatically publish macOS; `workflow_dispatch` remains the manual fallback after an
+  explicit Owner request. Agents do not create local archives, install, replace or launch
+  delivery builds, or sign in to App Store Connect. Upload success is not "testable"; the Owner verifies.
 - Platforms: macOS is released via TestFlight. iOS is enabled for development with CI
-  build/test; iOS TestFlight releases need separate Owner authorization.
+  build/test; iOS TestFlight releases require separate Owner authorization.
 - `VoxPocket/project.yml` (XcodeGen) is the source of truth for the Xcode project.
 - Changes to `.github/**`, hooks, `scripts/verify`, rulesets, tech-context or AGENTS/
   constitution are important PRs.
