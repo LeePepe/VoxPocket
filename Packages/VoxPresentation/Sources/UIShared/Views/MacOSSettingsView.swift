@@ -7,43 +7,70 @@ import Preferences
 public struct MacOSSettingsView: View {
     @StateObject private var providerSettings: LLMProviderSettingsViewModel
     @StateObject private var shortcuts: ShortcutsViewModel
-    @State private var isLoaded = false
+    @StateObject private var productTelemetry: ProductTelemetrySettingsViewModel
+    private let observeProductTelemetryControl: (@MainActor (ProductTelemetrySettingsViewModel) -> Void)?
+    private let loadProviderSettings: (@MainActor (LLMProviderSettingsViewModel) async -> Void)?
+    private let loadShortcuts: (@MainActor (ShortcutsViewModel) async -> Void)?
+    @State private var providerSettingsLoaded = false
+    @State private var shortcutsLoaded = false
     @State private var selection: Section = .shortcuts
     let localModelLoadingStatus: LocalModelLoadingStatus?
-    enum Section: Hashable { case shortcuts, text }
+    enum Section: Hashable { case shortcuts, text, privacy }
 
     public init(
         providerSettings: LLMProviderSettingsViewModel = LLMProviderSettingsViewModel(),
         shortcuts: ShortcutsViewModel = ShortcutsViewModel(),
+        productTelemetry: ProductTelemetrySettingsViewModel = ProductTelemetrySettingsViewModel(),
         localModelLoadingStatus: LocalModelLoadingStatus? = nil
     ) {
         _providerSettings = StateObject(wrappedValue: providerSettings)
         _shortcuts = StateObject(wrappedValue: shortcuts)
+        _productTelemetry = StateObject(wrappedValue: productTelemetry)
+        observeProductTelemetryControl = nil
+        loadProviderSettings = nil
+        loadShortcuts = nil
         self.localModelLoadingStatus = localModelLoadingStatus
     }
 
     init(providerSettings: LLMProviderSettingsViewModel, shortcuts: ShortcutsViewModel,
-         localModelLoadingStatus: LocalModelLoadingStatus? = nil, initialSection: Section) {
-        self.init(providerSettings: providerSettings, shortcuts: shortcuts,
-                  localModelLoadingStatus: localModelLoadingStatus)
+         productTelemetry: ProductTelemetrySettingsViewModel = ProductTelemetrySettingsViewModel(),
+         localModelLoadingStatus: LocalModelLoadingStatus? = nil, initialSection: Section,
+         observeProductTelemetryControl: (@MainActor (ProductTelemetrySettingsViewModel) -> Void)? = nil,
+         loadProviderSettings: (@MainActor (LLMProviderSettingsViewModel) async -> Void)? = nil,
+         loadShortcuts: (@MainActor (ShortcutsViewModel) async -> Void)? = nil) {
+        _providerSettings = StateObject(wrappedValue: providerSettings)
+        _shortcuts = StateObject(wrappedValue: shortcuts)
+        _productTelemetry = StateObject(wrappedValue: productTelemetry)
+        self.localModelLoadingStatus = localModelLoadingStatus
+        self.observeProductTelemetryControl = observeProductTelemetryControl
+        self.loadProviderSettings = loadProviderSettings
+        self.loadShortcuts = loadShortcuts
         _selection = State(initialValue: initialSection)
     }
 
     public var body: some View {
-        Group {
-            if isLoaded { settingsTabs }
-            else {
-                ProgressView("正在加载设置…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityIdentifier("vox.settings.loading")
-            }
-        }
+        settingsTabs
         .frame(minWidth: 560, idealWidth: 640, minHeight: 480, idealHeight: 680)
         .accessibilityIdentifier("vox.settings")
         .task {
-            await providerSettings.load()
-            await shortcuts.load()
-            isLoaded = true
+            if let loadProviderSettings {
+                await loadProviderSettings(providerSettings)
+            } else {
+                await providerSettings.load()
+            }
+            providerSettingsLoaded = true
+        }
+        .task {
+            if let loadShortcuts {
+                await loadShortcuts(shortcuts)
+            } else {
+                await shortcuts.load()
+            }
+            shortcutsLoaded = true
+        }
+        .task {
+            await productTelemetry.load()
+            observeProductTelemetryControl?(productTelemetry)
         }
         .onReceive(NotificationCenter.default.publisher(for: PreferencesNotification.hotkeysDidChange)) { _ in
             Task { await shortcuts.load() }
@@ -61,13 +88,76 @@ public struct MacOSSettingsView: View {
 
     private var settingsTabs: some View {
         TabView(selection: $selection) {
-            MacOSShortcutSettingsPane(viewModel: shortcuts)
+            loadedPane(isLoaded: shortcutsLoaded) {
+                MacOSShortcutSettingsPane(viewModel: shortcuts)
+            }
                 .tag(Section.shortcuts)
                 .tabItem { Label("快捷键", systemImage: "keyboard") }
-            MacOSTextSettingsPane(viewModel: providerSettings, localModelLoadingStatus: localModelLoadingStatus)
+            loadedPane(isLoaded: providerSettingsLoaded) {
+                MacOSTextSettingsPane(
+                    viewModel: providerSettings,
+                    localModelLoadingStatus: localModelLoadingStatus
+                )
+            }
                 .tag(Section.text)
                 .tabItem { Label("语音与文本", systemImage: "waveform") }
+            productTelemetrySettings
+                .tag(Section.privacy)
+                .tabItem { Label("隐私", systemImage: "hand.raised") }
         }
+    }
+
+    @ViewBuilder
+    private func loadedPane<Content: View>(
+        isLoaded: Bool,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if isLoaded {
+            content()
+        } else {
+            ProgressView("正在加载设置…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier("vox.settings.loading")
+        }
+    }
+
+    var productTelemetrySettings: some View {
+        ProductTelemetrySettingsView(viewModel: productTelemetry)
+            .onChange(of: productTelemetry.isSendingUsageData) {
+                observeProductTelemetryControl?(productTelemetry)
+            }
+    }
+}
+
+@MainActor
+public struct ProductTelemetrySettingsView: View {
+    @ObservedObject private var viewModel: ProductTelemetrySettingsViewModel
+
+    public init(viewModel: ProductTelemetrySettingsViewModel) {
+        self.viewModel = viewModel
+    }
+
+    var consentBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.isSendingUsageData },
+            set: { value in Task { await viewModel.setSendingUsageData(value) } }
+        )
+    }
+
+    public var body: some View {
+        Form {
+            Section {
+                Toggle("Send usage data", isOn: consentBinding)
+                    .disabled(!viewModel.isLoaded)
+                    .accessibilityIdentifier("vox.settings.sendUsageData")
+                Text("发送不含录音、转写文本或精炼文本的使用情况事件。你可以随时关闭。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("产品改进")
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 

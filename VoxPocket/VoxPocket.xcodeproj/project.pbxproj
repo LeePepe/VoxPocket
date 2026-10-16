@@ -26,6 +26,7 @@
 		6E644F205F37B430742C1599 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73E018E9065109FF12437540 /* SwiftUI.framework */; };
 		6F6475AB782E4C903B7B99F1 /* TranscriberSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */; };
 		753150564083C6F80527BB81 /* PlatformUI in Frameworks */ = {isa = PBXBuildFile; productRef = 51ABF4EE6A69D0E882B3B36D /* PlatformUI */; };
+		83C434A665D2A49402AAA93F /* BlobTelemetryInstrumentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89772BC7F823BAC86783E497 /* BlobTelemetryInstrumentationTests.swift */; };
 		89AFCB1041B43BA6DD907D3D /* VoxPocketBlobTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3FD9E601B7C25A0A7EAFA6C /* VoxPocketBlobTelemetry.swift */; };
 		8B8E418F440560813609654C /* AppStartupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9F2A95618F6A1BCBDC0548 /* AppStartupTests.swift */; };
 		8BAF52832DE538C9ECFBF660 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6E1123F8B038F5E5132BADB9 /* Assets.xcassets */; };
@@ -51,6 +52,7 @@
 		DE4CDB33A72CDAB46E009C9D /* WidgetUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1BBF52B228A0B16EC6FA6CF1 /* WidgetUI */; };
 		EE40B4FFE177EE0350CA9411 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007D223D190CA65066429E21 /* ContentView.swift */; };
 		EF64233609A8744936963A02 /* LLMAppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */; };
+		FED3603ADF4B4B697B1EEA9A /* BlobTelemetryConsentCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0384E185F7169AEF7D021111 /* BlobTelemetryConsentCompositionTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +95,7 @@
 
 /* Begin PBXFileReference section */
 		007D223D190CA65066429E21 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		0384E185F7169AEF7D021111 /* BlobTelemetryConsentCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryConsentCompositionTests.swift; sourceTree = "<group>"; };
 		0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMAppConfig.swift; sourceTree = "<group>"; };
 		0A9B8C0385BA4849453043ED /* VoxPocketWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketWidgetBundle.swift; sourceTree = "<group>"; };
 		0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriberSelectionTests.swift; sourceTree = "<group>"; };
@@ -117,6 +120,7 @@
 		76A5EE8AAF401C6343BAC20B /* BlobTelemetryConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryConfigurationTests.swift; sourceTree = "<group>"; };
 		77AB160FC41A2F4691F66612 /* VoxPocket.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = VoxPocket.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F9B119D544EB00172D6981A /* BlobTelemetryConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryConfiguration.swift; sourceTree = "<group>"; };
+		89772BC7F823BAC86783E497 /* BlobTelemetryInstrumentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryInstrumentationTests.swift; sourceTree = "<group>"; };
 		898DDDAC245F6EDC97E3270D /* AppPersistenceStartup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPersistenceStartup.swift; sourceTree = "<group>"; };
 		8B67B4B611B0DDD00F6DC6EA /* MacOSAppScenes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSAppScenes.swift; sourceTree = "<group>"; };
 		8E9F2A95618F6A1BCBDC0548 /* AppStartupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStartupTests.swift; sourceTree = "<group>"; };
@@ -275,7 +279,9 @@
 				5490994A8186D12391779CCD /* AppPersistenceStartupTests.swift */,
 				8E9F2A95618F6A1BCBDC0548 /* AppStartupTests.swift */,
 				76A5EE8AAF401C6343BAC20B /* BlobTelemetryConfigurationTests.swift */,
+				0384E185F7169AEF7D021111 /* BlobTelemetryConsentCompositionTests.swift */,
 				39B8B4DD58755568CD305173 /* BlobTelemetryConsentTests.swift */,
+				89772BC7F823BAC86783E497 /* BlobTelemetryInstrumentationTests.swift */,
 				6CFF112393D8CBDE0C341C68 /* BlobTelemetryPolicyTests.swift */,
 				D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */,
 				4BB27BCA736DF9F266FD879B /* RealtimeTranscriberConfigurationTests.swift */,
@@ -450,7 +456,9 @@
 				9AD4D6536E8A09719BA32AE5 /* AppPersistenceStartupTests.swift in Sources */,
 				8B8E418F440560813609654C /* AppStartupTests.swift in Sources */,
 				0BBD9AA8B029D150B42ADAAB /* BlobTelemetryConfigurationTests.swift in Sources */,
+				FED3603ADF4B4B697B1EEA9A /* BlobTelemetryConsentCompositionTests.swift in Sources */,
 				5D89F0261137B1ECA92C0AA6 /* BlobTelemetryConsentTests.swift in Sources */,
+				83C434A665D2A49402AAA93F /* BlobTelemetryInstrumentationTests.swift in Sources */,
 				4A1DE0A743A092ABA12E818D /* BlobTelemetryPolicyTests.swift in Sources */,
 				D106C5B2E507C744805EFD01 /* QuickRecordingWindowLifecycleTests.swift in Sources */,
 				5A12763FF94A40E50B6B4F3D /* RealtimeTranscriberConfigurationTests.swift in Sources */,

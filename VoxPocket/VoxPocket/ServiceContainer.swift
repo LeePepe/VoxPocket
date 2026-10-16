@@ -83,6 +83,11 @@ public final class ServiceContainer: ObservableObject {
     // MARK: - 遥测
 
     public let telemetryService: any TelemetryService
+    private let telemetryCoordinator: TelemetryLifecycleCoordinator
+    private let productTelemetryPreferences: ProductTelemetryPreferences
+    private var productTelemetryRuntime: ProductTelemetryRuntime!
+    private var productTelemetryInstrumentation: ProductTelemetryInstrumentation!
+    private var pendingProductTelemetryRecordingCompletion: Task<Void, Never>?
 
     // MARK: - 状态跟踪
 
@@ -94,10 +99,102 @@ public final class ServiceContainer: ObservableObject {
 
     // MARK: - 初始化
 
-    private init() {
+    convenience init(
+        productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment,
+        processArguments: [String] = ProcessInfo.processInfo.arguments,
+        productTelemetryConfiguration: @escaping ProductTelemetryRuntime.Configuration = {
+            BlobTelemetryConfiguration()
+        },
+        productTelemetryBootstrapFactory: ProductTelemetryRuntime.BootstrapFactory? = nil
+    ) {
+        self.init(
+            productTelemetryPreferences: productTelemetryPreferences,
+            processEnvironment: processEnvironment,
+            processArguments: processArguments,
+            productTelemetryConfiguration: productTelemetryConfiguration,
+            productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
+            productTelemetryActivationCheckpoint: nil
+        )
+    }
+
+    #if DEBUG
+    convenience init(
+        productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment,
+        processArguments: [String] = ProcessInfo.processInfo.arguments,
+        productTelemetryConfiguration: @escaping ProductTelemetryRuntime.Configuration = {
+            BlobTelemetryConfiguration()
+        },
+        productTelemetryBootstrapFactory: ProductTelemetryRuntime.BootstrapFactory? = nil,
+        productTelemetryActivationCheckpoint: ProductTelemetryRuntime.ActivationCheckpoint?
+    ) {
+        self.init(
+            productTelemetryPreferences: productTelemetryPreferences,
+            processEnvironment: processEnvironment,
+            processArguments: processArguments,
+            productTelemetryConfiguration: productTelemetryConfiguration,
+            productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
+            productTelemetryActivationCheckpoint: productTelemetryActivationCheckpoint
+        )
+    }
+    #endif
+
+    private init(
+        productTelemetryPreferences: ProductTelemetryPreferences,
+        processEnvironment: [String: String],
+        processArguments: [String],
+        productTelemetryConfiguration: @escaping ProductTelemetryRuntime.Configuration,
+        productTelemetryBootstrapFactory: ProductTelemetryRuntime.BootstrapFactory?,
+        productTelemetryActivationCheckpoint: (@MainActor @Sendable () async -> Void)?
+    ) {
         VoxPocketLogging.start()
         logger = PrintLogger(subsystem: "ServiceContainer")
-        telemetryService = Self.makeTelemetryService()
+        let telemetryCoordinator = Self.makeTelemetryService()
+        self.telemetryCoordinator = telemetryCoordinator
+        telemetryService = telemetryCoordinator
+        self.productTelemetryPreferences = productTelemetryPreferences
+        let blobHost = Self.classifyBlobTelemetryHost(
+            environment: processEnvironment,
+            arguments: processArguments
+        )
+        let makeBootstrap = productTelemetryBootstrapFactory ?? { identity in
+            BlobTelemetryBootstrap.production(
+                host: blobHost,
+                isConsented: true,
+                storeDirectory: Self.blobTelemetryStoreDirectory,
+                identityProvider: { identity }
+            )
+        }
+        #if DEBUG
+        if let productTelemetryActivationCheckpoint {
+            productTelemetryRuntime = ProductTelemetryRuntime(
+                coordinator: telemetryCoordinator,
+                preferences: productTelemetryPreferences,
+                host: blobHost,
+                configuration: productTelemetryConfiguration,
+                makeBootstrap: makeBootstrap,
+                activationCheckpoint: productTelemetryActivationCheckpoint
+            )
+        } else {
+            productTelemetryRuntime = ProductTelemetryRuntime(
+                coordinator: telemetryCoordinator,
+                preferences: productTelemetryPreferences,
+                host: blobHost,
+                configuration: productTelemetryConfiguration,
+                makeBootstrap: makeBootstrap
+            )
+        }
+        #else
+        productTelemetryRuntime = ProductTelemetryRuntime(
+            coordinator: telemetryCoordinator,
+            preferences: productTelemetryPreferences,
+            host: blobHost,
+            configuration: productTelemetryConfiguration,
+            makeBootstrap: makeBootstrap
+        )
+        #endif
+        productTelemetryInstrumentation = ProductTelemetryInstrumentation(runtime: productTelemetryRuntime)
         let azureConfig = Self.makeAzureFoundryConfig()
         #if os(macOS)
         let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings)
@@ -151,7 +248,13 @@ public final class ServiceContainer: ObservableObject {
         )
 
         // 启动时先用内存实现，避免 ModelContainer 创建阻塞 UI
-        sessionUseCase = ProxySessionUseCase(backing: InMemorySessionUseCase())
+        let productTelemetryInstrumentation = self.productTelemetryInstrumentation!
+        sessionUseCase = ProxySessionUseCase(
+            backing: InMemorySessionUseCase(),
+            onCompletedSession: {
+                await productTelemetryInstrumentation.sessionDidComplete()
+            }
+        )
 
         // Deep Link 路由
         deepLinkRouter = DefaultDeepLinkRouter()
@@ -197,6 +300,7 @@ public final class ServiceContainer: ObservableObject {
         #endif
 
         logger.debug("Initialized")
+
     }
 
     private func observeProviderPreferenceChanges() {
@@ -411,7 +515,7 @@ public final class ServiceContainer: ObservableObject {
     /// Debug 默认连接本地 Docker Loki（`http://localhost:3100/loki/api/v1/push`）。
     /// Release 须通过 `LOKI_ENDPOINT` 环境变量显式指定，否则回退到 Noop。
     /// 可通过 `LOKI_TOKEN` 提供 Bearer token（Grafana Cloud）。
-    private static func makeTelemetryService() -> any TelemetryService {
+    private static func makeTelemetryService() -> TelemetryLifecycleCoordinator {
         let env = ProcessInfo.processInfo.environment
 
         let endpoint: URL
@@ -445,6 +549,46 @@ public final class ServiceContainer: ObservableObject {
                 authToken: authToken
             )
         }
+    }
+
+    static let uiTestHostEnvironmentKey = "VOXPOCKET_UI_TEST_HOST"
+
+    static func classifyBlobTelemetryHost(
+        environment: [String: String],
+        arguments: [String]
+    ) -> BlobTelemetryHostKind {
+        if environment[uiTestHostEnvironmentKey] == "1"
+            && arguments.contains("--vox-ui-test-host") {
+            return .test
+        }
+        if environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCTestBundlePath"] != nil
+            || environment["XCTestSessionIdentifier"] != nil {
+            return .test
+        }
+        return .interactiveApplication
+    }
+
+    private static var blobTelemetryStoreDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("VoxPocket", isDirectory: true)
+            .appendingPathComponent("ProductTelemetry", isDirectory: true)
+    }
+
+    func completeProductTelemetryStartup(startedAt: ContinuousClock.Instant) async {
+        await productTelemetryInstrumentation.completeStartup(startedAt: startedAt)
+    }
+
+    func recordProductAction(_ action: BlobProductAction) {
+        productTelemetryInstrumentation.record(action)
+    }
+
+    func productTelemetryApplicationWillResignActive() async {
+        await productTelemetryInstrumentation.applicationWillResignActive()
+    }
+
+    func waitForPendingProductTelemetryConsentChange() async {
+        await productTelemetryInstrumentation.waitForPendingConsentChange()
     }
 
     // MARK: - 延迟持久化初始化
@@ -551,6 +695,286 @@ public final class ServiceContainer: ObservableObject {
         logger.debug("Recording ended")
         let svc = telemetryService
         Task { await svc.flush() }
+        let productTelemetryInstrumentation = productTelemetryInstrumentation!
+        pendingProductTelemetryRecordingCompletion = Task {
+            await productTelemetryInstrumentation.recordingDidComplete()
+        }
+    }
+
+    func waitForPendingProductTelemetryRecordingCompletion() async {
+        await pendingProductTelemetryRecordingCompletion?.value
+    }
+}
+
+@MainActor
+final class ProductTelemetryInstrumentation {
+    private let runtime: ProductTelemetryRuntime
+    private var observers: [NSObjectProtocol] = []
+
+    init(
+        runtime: ProductTelemetryRuntime,
+        notificationCenter: NotificationCenter = .default
+    ) {
+        self.runtime = runtime
+        observers.append(notificationCenter.addObserver(
+            forName: ProductTelemetrySettingsViewModel.consentDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let isConsented = notification.userInfo?["isConsented"] as? Bool else { return }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let completion = notification.userInfo?["transitionCompletion"]
+                    as? AsyncStream<Void>.Continuation
+                self.runtime.beginConsentTransition(
+                    isConsented,
+                    completion: completion
+                )
+            }
+        })
+        observers.append(notificationCenter.addObserver(
+            forName: ProductTelemetrySettingsViewModel.settingsDidOpen,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.record(.settingsOpened) }
+        })
+        observers.append(notificationCenter.addObserver(
+            forName: ProductTelemetryNotificationBoundary.fullPanelOpened,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.record(.fullPanelOpened) }
+        })
+        observers.append(notificationCenter.addObserver(
+            forName: ProductTelemetryNotificationBoundary.quickRecordStarted,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.record(.quickRecordStarted) }
+        })
+        observers.append(notificationCenter.addObserver(
+            forName: ProductTelemetryNotificationBoundary.quickRecordStopped,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.record(.quickRecordStopped) }
+        })
+    }
+
+    func waitForPendingConsentChange() async {
+        await runtime.waitForPendingTransition()
+    }
+
+    func completeStartup(startedAt: ContinuousClock.Instant) async {
+        await runtime.completeStartup(startedAt: startedAt)
+    }
+
+    func record(_ action: BlobProductAction) {
+        runtime.record(action)
+    }
+
+    func recordingDidComplete() async {
+        await runtime.flush()
+    }
+
+    func sessionDidComplete() async {
+        await runtime.flush()
+    }
+
+    func applicationWillResignActive() async {
+        await runtime.flush()
+    }
+}
+
+enum ProductTelemetryNotificationBoundary {
+    static let fullPanelOpened = Notification.Name("vox.productTelemetry.fullPanelOpened")
+    static let quickRecordStarted = Notification.Name("vox.productTelemetry.quickRecordStarted")
+    static let quickRecordStopped = Notification.Name("vox.productTelemetry.quickRecordStopped")
+
+    static func postFullPanelOpened(to center: NotificationCenter = .default) {
+        center.post(name: fullPanelOpened, object: nil)
+    }
+
+    static func postQuickRecordStarted(to center: NotificationCenter = .default) {
+        center.post(name: quickRecordStarted, object: nil)
+    }
+
+    static func postQuickRecordStopped(to center: NotificationCenter = .default) {
+        center.post(name: quickRecordStopped, object: nil)
+    }
+}
+
+@MainActor
+final class ProductTelemetryRuntime {
+    typealias Configuration = @MainActor @Sendable () -> BlobTelemetryConfiguration
+    typealias BootstrapFactory = @MainActor @Sendable (UUID) -> BlobTelemetryBootstrap
+    #if DEBUG
+    typealias ActivationCheckpoint = @MainActor @Sendable () async -> Void
+    #endif
+
+    private let coordinator: TelemetryLifecycleCoordinator
+    private let preferences: ProductTelemetryPreferences
+    private let host: BlobTelemetryHostKind
+    private let configuration: Configuration
+    private let makeBootstrap: BootstrapFactory
+    #if DEBUG
+    private let activationCheckpoint: ActivationCheckpoint?
+    #endif
+    private var isReady = false
+    private var consentIntentGeneration: UInt64 = 0
+    private var pendingTransition: Task<Void, Never>?
+
+    init(
+        coordinator: TelemetryLifecycleCoordinator,
+        preferences: ProductTelemetryPreferences,
+        host: BlobTelemetryHostKind,
+        configuration: @escaping Configuration,
+        makeBootstrap: @escaping BootstrapFactory
+    ) {
+        self.coordinator = coordinator
+        self.preferences = preferences
+        self.host = host
+        self.configuration = configuration
+        self.makeBootstrap = makeBootstrap
+        #if DEBUG
+        activationCheckpoint = nil
+        #endif
+    }
+
+    #if DEBUG
+    init(
+        coordinator: TelemetryLifecycleCoordinator,
+        preferences: ProductTelemetryPreferences,
+        host: BlobTelemetryHostKind,
+        configuration: @escaping Configuration,
+        makeBootstrap: @escaping BootstrapFactory,
+        activationCheckpoint: ActivationCheckpoint
+    ) {
+        self.coordinator = coordinator
+        self.preferences = preferences
+        self.host = host
+        self.configuration = configuration
+        self.makeBootstrap = makeBootstrap
+        self.activationCheckpoint = activationCheckpoint
+    }
+    #endif
+
+    func completeStartup(startedAt: ContinuousClock.Instant) async {
+        while true {
+            let observedIntent = consentIntentGeneration
+            let explicitTransition = pendingTransition
+            await explicitTransition?.value
+            guard observedIntent == consentIntentGeneration else { continue }
+            await completeStartupTransition(startedAt: startedAt, intent: observedIntent)
+            return
+        }
+    }
+
+    func setConsent(_ isConsented: Bool) async {
+        await beginConsentTransition(isConsented).value
+    }
+
+    @discardableResult
+    func beginConsentTransition(
+        _ isConsented: Bool,
+        completion: AsyncStream<Void>.Continuation? = nil
+    ) -> Task<Void, Never> {
+        beginTransition(isConsented, completion: completion)
+    }
+
+    func waitForPendingTransition() async {
+        while true {
+            let intent = consentIntentGeneration
+            await pendingTransition?.value
+            guard intent != consentIntentGeneration else { return }
+        }
+    }
+
+    func record(_ action: BlobProductAction) {
+        guard isReady else { return }
+        coordinator.trackBlob(.userAction(action))
+    }
+
+    func flush() async {
+        guard isReady else { return }
+        await coordinator.flushBlob()
+    }
+
+    private func activateIfEligible(intent: UInt64) async -> Bool {
+        guard isCurrentIntent(intent) else { return false }
+        guard host.isEligibleForBlobTelemetry else { return false }
+        guard case .enabled = configuration() else { return false }
+        let isConsented = await preferences.isConsented
+        guard isCurrentIntent(intent) else { return false }
+        guard isConsented else { return false }
+        guard let identity = await preferences.installIdentityIfConsented() else { return false }
+        guard isCurrentIntent(intent) else { return false }
+        let outcome = await coordinator.bootstrapBlob(makeBootstrap(identity))
+        #if DEBUG
+        await activationCheckpoint?()
+        #endif
+        guard isCurrentIntent(intent) else { return false }
+        isReady = outcome == .ready
+        return isReady
+    }
+
+    private func beginTransition(
+        _ isConsented: Bool,
+        completion: AsyncStream<Void>.Continuation?
+    ) -> Task<Void, Never> {
+        let prior = pendingTransition
+        prior?.cancel()
+        consentIntentGeneration &+= 1
+        let currentIntent = consentIntentGeneration
+        isReady = false
+        let task = Task { @MainActor [weak self] in
+            defer { completion?.finish() }
+            if !isConsented {
+                guard let self else { return }
+                await self.coordinator.disableBlob()
+                await prior?.value
+                guard self.isCurrentIntent(currentIntent) else { return }
+                await self.preferences.persistConsent(false)
+                guard self.isCurrentIntent(currentIntent) else { return }
+                return
+            }
+            await prior?.value
+            guard let self, self.isCurrentIntent(currentIntent) else { return }
+            await self.enable(intent: currentIntent)
+        }
+        pendingTransition = task
+        return task
+    }
+
+    private func enable(intent: UInt64) async {
+        await preferences.persistConsent(true)
+        guard isCurrentIntent(intent) else { return }
+        _ = await activateIfEligible(intent: intent)
+    }
+
+    private func completeStartupTransition(
+        startedAt: ContinuousClock.Instant,
+        intent: UInt64
+    ) async {
+        guard await activateIfEligible(intent: intent) else { return }
+        guard isCurrentIntent(intent) else { return }
+        let duration = startedAt.duration(to: .now).components
+        let milliseconds = min(
+            3_600_000,
+            max(0, Double(duration.seconds) * 1_000 + Double(duration.attoseconds) / 1_000_000_000_000_000)
+        )
+        guard let event = try? BlobProductTelemetryEvent.performance(
+            .appLaunch,
+            durationMilliseconds: milliseconds
+        ) else { return }
+        coordinator.trackBlob(event)
+        await coordinator.flushBlob()
+        guard isCurrentIntent(intent) else { return }
+    }
+
+    private func isCurrentIntent(_ intent: UInt64) -> Bool {
+        !Task.isCancelled && consentIntentGeneration == intent
     }
 }
 
@@ -571,13 +995,18 @@ public enum RecordingSource: String {
 public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
 
     private var backing: SessionUseCase
+    private let onCompletedSession: @Sendable () async -> Void
     private var sessionsSubscription: AnyCancellable?
     private var currentSessionSubscription: AnyCancellable?
     private let sessionsRelay = CurrentValueSubject<[Session], Error>([])
     private let currentSessionRelay = CurrentValueSubject<Session?, Never>(nil)
 
-    init(backing: SessionUseCase) {
+    init(
+        backing: SessionUseCase,
+        onCompletedSession: @escaping @Sendable () async -> Void = {}
+    ) {
         self.backing = backing
+        self.onCompletedSession = onCompletedSession
         rebindPublisher()
     }
 
@@ -648,6 +1077,12 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
 
     @discardableResult
     public func saveCompletedSession(title: String?, rawText: String, refinedText: String) async throws -> Session {
-        try await backing.saveCompletedSession(title: title, rawText: rawText, refinedText: refinedText)
+        let session = try await backing.saveCompletedSession(
+            title: title,
+            rawText: rawText,
+            refinedText: refinedText
+        )
+        await onCompletedSession()
+        return session
     }
 }

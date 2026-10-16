@@ -56,7 +56,11 @@ raw plist
 State transitions:
 
 ```text
-never-opted-in/off (no UUID) --explicit opt-in--> on (create UUID)
+never-opted-in/off (no UUID) --explicit opt-in--> consented/persisted (still no UUID)
+consented/persisted --disable--> off (no UUID)
+off (no UUID) --later explicit opt-in--> consented/persisted (still no UUID)
+consented/persisted + excluded host or missing/invalid config -> consented/persisted (still no UUID)
+consented/persisted + eligible interactive app + valid config -> on (create UUID)
 on (UUID active) --disable--> disabled-after-opt-in/off (retain UUID + non-evicted pending files; no host deletion or active use)
 disabled-after-opt-in/off --later explicit opt-in--> on (reuse retained UUID)
 ```
@@ -66,7 +70,7 @@ Valid configuration never implies consent. An excluded CLI/headless/test host re
 ## BlobInstallIdentity
 
 - Random non-personal UUID.
-- Created/requested only on the first explicit opt-in; persisted across disable and reused by every later explicit opt-in and eligible app launch for the app installation's lifetime. While consent is off, the UUID remains stored but is not requested or used by an active service.
+- Created/requested only by the first eligible interactive-app composition after explicit opt-in has been persisted; missing/invalid configuration and excluded hosts leave consent stored with no UUID. The UUID persists across disable and is reused by every later explicit opt-in and eligible app launch for the app installation's lifetime. While consent is off, the UUID remains stored but is not requested or used by an active service.
 - V1 exposes no install-ID Reset or rotation surface, changes no shared-telemetry API for identity lifecycle, and does not parse adapter-private storage or catalog state.
 - Never derived from Apple ID, device name, username, audio, transcript, session data, or other account/user content.
 - Not accepted as a product-event property.
@@ -108,7 +112,7 @@ Invariants:
 7. A concurrent flush request joins the active flush; it does not create a second sender.
 8. UI/lifecycle callers schedule work asynchronously and never wait on synchronous file I/O.
 9. Decision 2A exempts only SDK-owned `telemetry.heartbeat` startup/daily work performed under the SDK's own synchronization; product callers cannot emit heartbeat, create another owner, or bypass the host coordinator.
-10. Never-opted-in/off creates no Blob identity/service/store. Disabling after opt-in stops new admission/upload while retaining non-evicted unconfirmed files, capacity ledger state, and the persisted UUID without active-service identity use; every later explicit opt-in and eligible app launch reuses that same UUID for the app installation's lifetime.
+10. Consent persistence is identity-free. Never-opted-in/off, excluded hosts, and missing/invalid configuration create no Blob identity/service/store; only eligible interactive-app composition after persisted opt-in provisions/reuses identity. Disabling after opt-in stops new admission/upload while retaining non-evicted unconfirmed files, capacity ledger state, and the persisted UUID without active-service identity use; every later explicit opt-in and eligible app launch reuses that same UUID for the app installation's lifetime.
 11. CLI, headless, and test composition roots never create the Blob service; CLI/headless are negative host-kind fixtures because this repository has no production CLI target.
 12. Neither legacy nor Blob construction passes `maxDiskBytes`; both accept the provider-default 50 MiB capacity and loss accounting.
 
