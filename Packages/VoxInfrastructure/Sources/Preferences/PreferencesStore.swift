@@ -9,6 +9,67 @@ public enum PreferencesKey: String, CaseIterable, Sendable {
     case intentModel = "model.intent"
     case toneModel = "model.tone"
     case realtimeDeployment = "model.realtimeDeployment"
+    case productTelemetryConsent = "telemetry.product.consent"
+}
+
+public actor ProductTelemetryPreferences {
+    private let store: UserDefaultsPreferencesStore
+    private let identityGenerator: @Sendable () -> UUID
+    private var lastMutation: Task<UUID?, Never>?
+
+    public init(store: UserDefaultsPreferencesStore = .shared) {
+        self.store = store
+        identityGenerator = { UUID() }
+    }
+
+#if DEBUG
+    init(
+        store: UserDefaultsPreferencesStore,
+        identityGenerator: @escaping @Sendable () -> UUID
+    ) {
+        self.store = store
+        self.identityGenerator = identityGenerator
+    }
+#endif
+
+    public var isConsented: Bool {
+        get async {
+            _ = await lastMutation?.value
+            let consent: Bool? = await store.getValue(for: .productTelemetryConsent)
+            return consent ?? false
+        }
+    }
+
+    @discardableResult
+    public func setConsent(_ isConsented: Bool) async -> UUID? {
+        let previous = lastMutation
+        let store = store
+        let identityGenerator = identityGenerator
+        let mutation = Task<UUID?, Never> {
+            _ = await previous?.value
+            guard isConsented else {
+                await store.setValue(false, for: .productTelemetryConsent)
+                return nil
+            }
+            let identity = await store.productTelemetryInstallIdentity(
+                creatingWith: identityGenerator
+            )
+            await store.setValue(true, for: .productTelemetryConsent)
+            return identity
+        }
+        lastMutation = mutation
+        return await mutation.value
+    }
+
+    public func installIdentityIfConsented() async -> UUID? {
+        _ = await lastMutation?.value
+        let consent: Bool? = await store.getValue(for: .productTelemetryConsent)
+        guard consent == true else { return nil }
+        if let persisted = await store.productTelemetryInstallIdentity {
+            return persisted
+        }
+        return await setConsent(true)
+    }
 }
 
 public enum PreferencesNotification {
@@ -28,6 +89,7 @@ public protocol PreferencesStore: AnyObject, Sendable {
 public actor UserDefaultsPreferencesStore: PreferencesStore {
     public static let shared = UserDefaultsPreferencesStore()
 
+    private static let productTelemetryInstallIdentityKey = "telemetry.product.installIdentity"
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -56,5 +118,25 @@ public actor UserDefaultsPreferencesStore: PreferencesStore {
 
     public func removeValue(for key: PreferencesKey) async {
         defaults.removeObject(forKey: key.rawValue)
+    }
+
+    fileprivate var productTelemetryInstallIdentity: UUID? {
+        guard let data = defaults.data(forKey: Self.productTelemetryInstallIdentityKey) else {
+            return nil
+        }
+        return try? decoder.decode(UUID.self, from: data)
+    }
+
+    fileprivate func productTelemetryInstallIdentity(
+        creatingWith identityGenerator: @Sendable () -> UUID
+    ) -> UUID {
+        if let identity = productTelemetryInstallIdentity {
+            return identity
+        }
+        let identity = identityGenerator()
+        if let data = try? encoder.encode(identity) {
+            defaults.set(data, forKey: Self.productTelemetryInstallIdentityKey)
+        }
+        return identity
     }
 }
