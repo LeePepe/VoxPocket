@@ -70,8 +70,12 @@ system boundary before use. Fail fast with a clear message. Never trust external
 - **File organization**: many small focused files over few large ones. Functions < 50 lines,
   files < 800 lines, nesting ≤ 4 levels.
 - **LokiKit is external**: it is published by `LeePepe/shared-telemetry` and resolved by SwiftPM
-  as a remote dependency pinned to exact `0.1.0`. Changes to LokiKit are out of scope for this
-  repo's gates.
+  as a remote dependency pinned to exact `0.2.0`. Provider implementation changes are out of scope
+  for this repo's gates. VoxPocket does not override `maxDiskBytes`: it accepts the provider's
+  50 MiB default, whole-oldest-batch eviction, oversized-event rejection, and durable loss
+  accounting. Before rollback to a reader without the capacity policy, producers stop and the
+  capacity-aware reader completes pending eviction cleanup after storage is writable; loss-ledger
+  state is retained, old and new writers never overlap, and already evicted events are irrecoverable.
 - **Platforms**: macOS and iOS are both in development scope; CI builds and tests both. App
   delivery is TestFlight-only; iOS TestFlight releases need separate Owner authorization.
 
@@ -102,4 +106,13 @@ hook ownership only, not layer red lines, CI requirements, or internal review re
 hooks and CI, LokiKit pinned from shared-telemetry, iOS back in development scope (Owner decision Q6/Q12).
 Layer red lines are unchanged.
 
-**Version**: 1.2.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-09-24
+**Amendment (2026-10-16, `loki02v1`)**: Adopt shared-telemetry exact `0.2.0` because its
+synchronous legacy enqueue closes the enqueue/flush window and its bounded queue supplies the
+reviewed retention policy. The Owner approved a one-time-only repository-contract deviation for the
+atomic MY-1856 packet: the dependency pin, required non-trivial off-main adaptation, dependency
+guards/current-truth projections, and this governance fact may ship in one candidate instead of
+separate change kinds. This authorization applies only to that indivisible migration, creates no
+general exception, changes no privacy/concurrency/layer red line, and does not authorize Blob
+adoption, credentials, CI-gate changes, delivery changes, or shared-telemetry edits.
+
+**Version**: 1.3.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-10-16

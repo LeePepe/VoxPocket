@@ -57,9 +57,10 @@ scripts/verify            # changed layers vs origin/main + policy (what pre-pus
 scripts/verify --all      # every layer gate + policy (what CI runs)
 scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one layer
 ```
-
-- LokiKit is a SwiftPM remote dependency on https://github.com/LeePepe/shared-telemetry,
-  pinned to commit `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f` (v0.1.0). Only `../AppleUITesting` lives next to the repository.
+- LokiKit is the SwiftPM remote dependency https://github.com/LeePepe/shared-telemetry at exact
+  `0.2.0`; tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peels to
+  `903f4b9bc01cfcfeba3ce96e13519d841781b40a` as integrity evidence, not a selector.
+  Only `../AppleUITesting` lives next to the repository.
   `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks out AppleUITesting
   at its pinned SHA when missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
 - `pre-commit` keeps the fast staged-layer build/test plus docs map/freshness checks.
@@ -82,14 +83,13 @@ Merging to `main` requires (must match the live ruleset `main protection`, mirro
 - `App target`
 - `Lint & policy`
 
-The ruleset also requires CODEOWNERS review (0 extra approvals) and dismisses stale reviews on
-push. It requires the branch to be up to date before merging (`strict` on, Owner decision
-2026-10-15), so PR CI tests exactly what lands on `main`; after merge is CD. `quality / aggregate`
+The ruleset requires CODEOWNERS review (0 extra approvals), dismisses stale reviews on push,
+and requires an up-to-date branch (`strict`, Owner decision 2026-10-15), so PR CI tests exactly
+what lands on `main`; after merge is CD. `quality / aggregate`
 fails unless every lane passed on the PR head SHA (and the PR body is complete), and stale
 reviews are dismissed on push, so evidence is always for the head being merged.
-`codex-review-target / codex-review` replaced the legacy `codex-review-target` context,
-which the workflow still emits but is not required. `iOS simulator` and `kimi-review` run on
-every PR and are never required.
+`codex-review-target / codex-review` replaced the legacy context, which the workflow still
+emits but does not require. `iOS simulator` and `kimi-review` run on every PR and are advisory.
 
 ## Red lines
 
@@ -115,13 +115,13 @@ every PR and are never required.
   constitution are important PRs.
 - No personal account names, credential-profile paths or local home paths in the repo.
 
-Approved exceptions: none.
+The constitution's 2026-10-16 `loki02v1` amendment records the sole approved
+repository-contract deviation; it creates no broader exception.
 
 ## Dependencies
-
 These are the current pins; they change only through Owner-reviewed PRs.
 - `shared-ci` `6e354f476bc53d68f0f09fc231d5cd938466af9c` — https://github.com/LeePepe/shared-ci/blob/6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/
-- LokiKit from LeePepe/shared-telemetry `0.1.0` (tag v0.1.0 = `5f4b4d97d7ad05adb849e0d8937c8745d9b6d15f`), SwiftPM full-SHA `revision` pin in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag→SHA guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.1.0/ai/
+- LokiKit from LeePepe/shared-telemetry exact `0.2.0` (annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` → commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`), exact-version selectors in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag integrity guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.2.0/ai/
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
 ## Delivery

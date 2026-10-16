@@ -421,7 +421,9 @@ public final class ServiceContainer: ObservableObject {
             #if DEBUG
             endpoint = URL(string: "http://localhost:3100/loki/api/v1/push")!
             #else
-            return NoopTelemetryService()
+            return TelemetryLifecycleCoordinator(isEnabled: false) {
+                NoopTelemetryService()
+            }
             #endif
         }
 
@@ -435,11 +437,14 @@ public final class ServiceContainer: ObservableObject {
             labels["version"] = version
         }
 
-        return LokiTelemetryService(
-            endpoint: endpoint,
-            appLabels: labels,
-            authToken: env["LOKI_TOKEN"]
-        )
+        let authToken = env["LOKI_TOKEN"]
+        return TelemetryLifecycleCoordinator {
+            LokiTelemetryService(
+                endpoint: endpoint,
+                appLabels: labels,
+                authToken: authToken
+            )
+        }
     }
 
     // MARK: - 延迟持久化初始化
