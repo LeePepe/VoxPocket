@@ -18,6 +18,7 @@
 		37064ED50A4E66491772E356 /* AppStartupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90DE43428CBBA64A57D2D0FA /* AppStartupView.swift */; };
 		4754CD05B924E4EDE528B6A3 /* VoxPocketWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4CA3A932239127C1D4F7BBC4 /* VoxPocketUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBA06204946E030AFE05371 /* VoxPocketUITests.swift */; };
+		4DA3D39C1245885D6B5608AD /* TelemetryLifecycleCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1E619B4998E9FCF2D79CDC /* TelemetryLifecycleCoordinatorTests.swift */; };
 		5A12763FF94A40E50B6B4F3D /* RealtimeTranscriberConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB27BCA736DF9F266FD879B /* RealtimeTranscriberConfigurationTests.swift */; };
 		6E644F205F37B430742C1599 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73E018E9065109FF12437540 /* SwiftUI.framework */; };
 		6F6475AB782E4C903B7B99F1 /* TranscriberSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */; };
@@ -37,6 +38,7 @@
 		AAFB270D9720E863F23F07BA /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A33B759B18AF93DC1CEAD42D /* WidgetKit.framework */; };
 		AD4F2E900A5F3AF188BCCFA2 /* VoxPocketApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF62A71944E1E1B0DE53C00F /* VoxPocketApp.swift */; };
 		AE6D0DE9130BACC1EA35668F /* MacOSAppScenes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B67B4B611B0DDD00F6DC6EA /* MacOSAppScenes.swift */; };
+		B701330EDE330D71F4D078AE /* TelemetryLifecycleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A123D80112790CC0F07247 /* TelemetryLifecycleCoordinator.swift */; };
 		BB191F3459B42B9F95D1A3D9 /* DefaultStageTextModelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAAF347420C9E50C1C20E25 /* DefaultStageTextModelService.swift */; };
 		D106C5B2E507C744805EFD01 /* QuickRecordingWindowLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */; };
 		D3931380CB615F0E567C48EA /* SingleInstanceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9271618B664CBCE26F3953EB /* SingleInstanceGuardTests.swift */; };
@@ -89,6 +91,7 @@
 		0A9B8C0385BA4849453043ED /* VoxPocketWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketWidgetBundle.swift; sourceTree = "<group>"; };
 		0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriberSelectionTests.swift; sourceTree = "<group>"; };
 		189133DA376CDFC9A1BB61F5 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
+		19A123D80112790CC0F07247 /* TelemetryLifecycleCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryLifecycleCoordinator.swift; sourceTree = "<group>"; };
 		1C5B24029B5D02AE13B76160 /* AppStartup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStartup.swift; sourceTree = "<group>"; };
 		1E33A98E778BE211E1AC3970 /* VoxPocketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketTests.swift; sourceTree = "<group>"; };
 		2124C2857625DF81C964DB17 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -121,6 +124,7 @@
 		C5849A59932F468AA0132586 /* VoxPocketLoggingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketLoggingTests.swift; sourceTree = "<group>"; };
 		D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickRecordingWindowLifecycleTests.swift; sourceTree = "<group>"; };
 		D9B4322401C88433C576C972 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		DD1E619B4998E9FCF2D79CDC /* TelemetryLifecycleCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryLifecycleCoordinatorTests.swift; sourceTree = "<group>"; };
 		"TEMP_FD37341D-8CD6-4419-8450-E335D6C5657A" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -206,6 +210,7 @@
 				A8D178BE85E727F731B8B667 /* SettingsView.swift */,
 				2751A05FA4192D63C77510F9 /* SingleInstanceGuard.swift */,
 				4DD039F530CCACAA63257C89 /* StageModelRouting.swift */,
+				19A123D80112790CC0F07247 /* TelemetryLifecycleCoordinator.swift */,
 				AF62A71944E1E1B0DE53C00F /* VoxPocketApp.swift */,
 				5408939FCB2A3EA54DA45BB5 /* VoxPocketLogging.swift */,
 				189133DA376CDFC9A1BB61F5 /* WindowManager.swift */,
@@ -257,6 +262,7 @@
 				D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */,
 				4BB27BCA736DF9F266FD879B /* RealtimeTranscriberConfigurationTests.swift */,
 				9271618B664CBCE26F3953EB /* SingleInstanceGuardTests.swift */,
+				DD1E619B4998E9FCF2D79CDC /* TelemetryLifecycleCoordinatorTests.swift */,
 				0DBB4D6FCD76CDC59468C5C2 /* TranscriberSelectionTests.swift */,
 				C5849A59932F468AA0132586 /* VoxPocketLoggingTests.swift */,
 				1E33A98E778BE211E1AC3970 /* VoxPocketTests.swift */,
@@ -428,6 +434,7 @@
 				D106C5B2E507C744805EFD01 /* QuickRecordingWindowLifecycleTests.swift in Sources */,
 				5A12763FF94A40E50B6B4F3D /* RealtimeTranscriberConfigurationTests.swift in Sources */,
 				D3931380CB615F0E567C48EA /* SingleInstanceGuardTests.swift in Sources */,
+				4DA3D39C1245885D6B5608AD /* TelemetryLifecycleCoordinatorTests.swift in Sources */,
 				6F6475AB782E4C903B7B99F1 /* TranscriberSelectionTests.swift in Sources */,
 				298F17841831F2FF453A8B83 /* VoxPocketLoggingTests.swift in Sources */,
 				8E089D9B9CE0539C13928EA8 /* VoxPocketTests.swift in Sources */,
@@ -451,6 +458,7 @@
 				9340FF368FAC64D4889B5075 /* SingleInstanceGuard.swift in Sources */,
 				1A78662E898F0874742BEAFD /* StageModelRouting.swift in Sources */,
 				08DB2234C39F8AF9CDFFC333 /* StartRecordingIntent.swift in Sources */,
+				B701330EDE330D71F4D078AE /* TelemetryLifecycleCoordinator.swift in Sources */,
 				AD4F2E900A5F3AF188BCCFA2 /* VoxPocketApp.swift in Sources */,
 				07155AEFFE1208E086DFC94D /* VoxPocketLogging.swift in Sources */,
 				A8E0D7098CE2D4706AEBA0DE /* WindowManager.swift in Sources */,

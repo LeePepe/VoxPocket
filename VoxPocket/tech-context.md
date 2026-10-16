@@ -17,7 +17,7 @@ red_lines:
 
 ## 职责
 `VoxPocket/VoxPocket/`:App 入口(`VoxPocketApp`、`AppDelegate`)、`@MainActor` 单例 DI 容器
-`ServiceContainer`、macOS 场景与 `WindowManager` 浮窗、启动与私密配置加载。
+`ServiceContainer`、macOS 场景与 `WindowManager` 浮窗、启动、遥测生命周期协调与私密配置加载。
 `VoxPocket/project.yml`(XcodeGen)生成 `VoxPocket.xcodeproj`;`VoxPocketWidget/` 是仅 iOS 的 Widget 扩展。
 
 ## 依赖
@@ -28,10 +28,14 @@ red_lines:
   `AppleUITesting`(`UITestingBridge`)放在仓库同级目录,CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA 取出。
 
 ## ServiceContainer 初始化顺序
-`ServiceContainer.init()` 在主线程同步执行:Logger + 遥测 → 转写器(`LLMAppConfig.defaultTranscriberProvider`)
+`ServiceContainer.init()` 在主线程同步执行:Logger + 遥测 facade → 转写器(`LLMAppConfig.defaultTranscriberProvider`)
 → `DefaultLLMService` 与 macOS 平台服务 → UseCases(Editing → Recording → Transcription → Refinement)
 → `ProxySessionUseCase` 先用 `InMemorySessionUseCase`,首帧后 `initializePersistence()` 热切到
 `SwiftDataSessionUseCase` → macOS 独立的快捷录音栈(与主编辑器隔离,防状态串扰)。
+
+`TelemetryLifecycleCoordinator` 是 app-lifetime `TelemetryService` facade。它在专用串行非主线程
+executor 上惰性构造选定的 Loki/Noop provider，按 admission 顺序执行所有底层 `track`/`flush`，
+并让没有中间 operation 的相邻 flush 调用加入同一个底层 flush；`LokiLogSink` 仍由独立日志路径拥有。
 
 ## 门禁
 - 本地/CI `gate`:通过 root discovery CLI `app-python` (`python3 scripts/ci/run_repository_tests.py app-python --timeout 600`) 执行门禁。该 runner 对 `scripts/tests/test_*.py` 执行确定性排序与自动发现，直接运行每一个匹配的 Python 回归测试文件（包含既有的全部 8 个 baseline 回归脚本与未来新增脚本），每个文件保留 600 秒的有限外层超时，且在未发现任何测试文件或任一测试失败/超时时 fail-closed 退出非 0，防止空跑或静默遗漏，替代原先逐项手工注册的 6 项单文件命令。
