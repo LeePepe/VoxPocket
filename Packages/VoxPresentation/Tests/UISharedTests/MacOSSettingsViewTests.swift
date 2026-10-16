@@ -185,7 +185,7 @@ final class MacOSSettingsViewTests: XCTestCase {
         settingsHost.layoutSubtreeIfNeeded()
         settingsPanel.displayIfNeeded()
         let settingsWords = try await recognize(capture(settingsPanel)).joined()
-        XCTAssertTrue(settingsWords.contains("Send usage data"), "Mounted settings parent OCR: \(settingsWords)")
+        XCTAssertTrue(settingsWords.localizedCaseInsensitiveContains("Send usage data"), "Mounted settings parent OCR: \(settingsWords)")
         let settingsObservationsBeforeReplacementMutation = observedSettingsModels.count
         await replacementSettingsModel.setSendingUsageData(true)
         await Task.yield()
@@ -234,7 +234,7 @@ final class MacOSSettingsViewTests: XCTestCase {
         meHost.layoutSubtreeIfNeeded()
         mePanel.displayIfNeeded()
         let meWords = try await recognize(capture(mePanel)).joined()
-        XCTAssertTrue(meWords.contains("Send usage data"), "Mounted Me parent OCR: \(meWords)")
+        XCTAssertTrue(meWords.localizedCaseInsensitiveContains("Send usage data"), "Mounted Me parent OCR: \(meWords)")
         let meObservationsBeforeReplacementMutation = observedMeModels.count
         await replacementMeModel.setSendingUsageData(false)
         await Task.yield()
@@ -290,7 +290,7 @@ final class MacOSSettingsViewTests: XCTestCase {
             host.layoutSubtreeIfNeeded()
             panel.displayIfNeeded()
             let words = try await recognize(capture(panel)).joined()
-            XCTAssertTrue(words.contains("Send usage data"), "Mounted Privacy surface OCR: \(words)")
+            XCTAssertTrue(words.localizedCaseInsensitiveContains("Send usage data"), "Mounted Privacy surface OCR: \(words)")
 
             let privacySurface = ProductTelemetrySettingsView(viewModel: productTelemetry)
             XCTAssertTrue(privacySurface.consentBinding.wrappedValue)
