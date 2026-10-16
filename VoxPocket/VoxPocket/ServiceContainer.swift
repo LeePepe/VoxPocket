@@ -252,7 +252,7 @@ public final class ServiceContainer: ObservableObject {
         sessionUseCase = ProxySessionUseCase(
             backing: InMemorySessionUseCase(),
             onCompletedSession: {
-                await productTelemetryInstrumentation.sessionDidComplete()
+                productTelemetryInstrumentation.sessionDidComplete()
             }
         )
 
@@ -579,6 +579,10 @@ public final class ServiceContainer: ObservableObject {
         await productTelemetryInstrumentation.completeStartup(startedAt: startedAt)
     }
 
+    func waitForPendingProductTelemetryStartupCompletion() async {
+        await productTelemetryInstrumentation.waitForPendingStartupCompletion()
+    }
+
     func recordProductAction(_ action: BlobProductAction) {
         productTelemetryInstrumentation.record(action)
     }
@@ -704,12 +708,18 @@ public final class ServiceContainer: ObservableObject {
     func waitForPendingProductTelemetryRecordingCompletion() async {
         await pendingProductTelemetryRecordingCompletion?.value
     }
+
+    func waitForPendingProductTelemetrySessionCompletion() async {
+        await productTelemetryInstrumentation.waitForPendingSessionCompletion()
+    }
 }
 
 @MainActor
 final class ProductTelemetryInstrumentation {
     private let runtime: ProductTelemetryRuntime
     private var observers: [NSObjectProtocol] = []
+    private var pendingStartupCompletion: Task<Void, Never>?
+    private var pendingSessionCompletion: Task<Void, Never>?
 
     init(
         runtime: ProductTelemetryRuntime,
@@ -767,7 +777,11 @@ final class ProductTelemetryInstrumentation {
     }
 
     func completeStartup(startedAt: ContinuousClock.Instant) async {
-        await runtime.completeStartup(startedAt: startedAt)
+        pendingStartupCompletion = await runtime.completeStartup(startedAt: startedAt)
+    }
+
+    func waitForPendingStartupCompletion() async {
+        await pendingStartupCompletion?.value
     }
 
     func record(_ action: BlobProductAction) {
@@ -778,8 +792,12 @@ final class ProductTelemetryInstrumentation {
         await runtime.flush()
     }
 
-    func sessionDidComplete() async {
-        await runtime.flush()
+    func sessionDidComplete() {
+        pendingSessionCompletion = runtime.requestFlush()
+    }
+
+    func waitForPendingSessionCompletion() async {
+        await pendingSessionCompletion?.value
     }
 
     func applicationWillResignActive() async {
@@ -860,14 +878,13 @@ final class ProductTelemetryRuntime {
     }
     #endif
 
-    func completeStartup(startedAt: ContinuousClock.Instant) async {
+    func completeStartup(startedAt: ContinuousClock.Instant) async -> Task<Void, Never>? {
         while true {
             let observedIntent = consentIntentGeneration
             let explicitTransition = pendingTransition
             await explicitTransition?.value
             guard observedIntent == consentIntentGeneration else { continue }
-            await completeStartupTransition(startedAt: startedAt, intent: observedIntent)
-            return
+            return await completeStartupTransition(startedAt: startedAt, intent: observedIntent)
         }
     }
 
@@ -897,8 +914,14 @@ final class ProductTelemetryRuntime {
     }
 
     func flush() async {
-        guard isReady else { return }
-        await coordinator.flushBlob()
+        await requestFlush()?.value
+    }
+
+    func requestFlush() -> Task<Void, Never>? {
+        guard isReady else { return nil }
+        return Task { [coordinator] in
+            await coordinator.flushBlob()
+        }
     }
 
     private func activateIfEligible(intent: UInt64) async -> Bool {
@@ -956,9 +979,9 @@ final class ProductTelemetryRuntime {
     private func completeStartupTransition(
         startedAt: ContinuousClock.Instant,
         intent: UInt64
-    ) async {
-        guard await activateIfEligible(intent: intent) else { return }
-        guard isCurrentIntent(intent) else { return }
+    ) async -> Task<Void, Never>? {
+        guard await activateIfEligible(intent: intent) else { return nil }
+        guard isCurrentIntent(intent) else { return nil }
         let duration = startedAt.duration(to: .now).components
         let milliseconds = min(
             3_600_000,
@@ -967,10 +990,9 @@ final class ProductTelemetryRuntime {
         guard let event = try? BlobProductTelemetryEvent.performance(
             .appLaunch,
             durationMilliseconds: milliseconds
-        ) else { return }
+        ) else { return nil }
         coordinator.trackBlob(event)
-        await coordinator.flushBlob()
-        guard isCurrentIntent(intent) else { return }
+        return requestFlush()
     }
 
     private func isCurrentIntent(_ intent: UInt64) -> Bool {

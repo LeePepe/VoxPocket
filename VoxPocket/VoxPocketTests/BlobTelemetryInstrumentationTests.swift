@@ -181,6 +181,7 @@ struct BlobTelemetryInstrumentationTests {
             Notification(name: NSApplication.didFinishLaunchingNotification)
         )
         await delegate.waitForPendingStartup()
+        await container.waitForPendingProductTelemetryStartupCompletion()
         #expect(fixture.recorder.operations.filter { $0 == "flush" }.count == 1)
 
         #expect(container.tryStartRecording(source: .quickRecording))
@@ -192,6 +193,7 @@ struct BlobTelemetryInstrumentationTests {
             rawText: "synthetic raw",
             refinedText: "synthetic refined"
         )
+        await container.waitForPendingProductTelemetrySessionCompletion()
         #expect(fixture.recorder.operations.filter { $0 == "flush" }.count == 3)
         delegate.applicationWillResignActive(
             Notification(name: Notification.Name("test.applicationWillResignActive"))
@@ -199,6 +201,72 @@ struct BlobTelemetryInstrumentationTests {
         await delegate.waitForPendingProductTelemetryResignActive()
 
         #expect(fixture.recorder.operations.filter { $0 == "flush" }.count == 4)
+    }
+
+    @Test func startupAndSessionPersistenceReturnWhileLifecycleFlushRemainsPending() async {
+        let startupFlushGate = TelemetryFlushGate(targetEntry: 1)
+        let startupFixture = RuntimeFixture(telemetryFlushGate: startupFlushGate.suspendTarget)
+        defer { startupFixture.remove() }
+        _ = await startupFixture.preferences.setConsent(true)
+        let startupContainer = startupFixture.makeContainer()
+        let startupDelegate = AppDelegate(
+            productTelemetryNotificationCenter: NotificationCenter(),
+            startup: AppStartup {},
+            serviceContainer: startupContainer,
+            hotkeyService: TestGlobalHotkeyService(),
+            startupInitializePersistence: {},
+            startupScheduleQuickRecordingPrewarm: {}
+        )
+        startupDelegate.applicationDidFinishLaunching(
+            Notification(name: NSApplication.didFinishLaunchingNotification)
+        )
+        let startupReturned = Mutex(false)
+        let startupCaller = Task {
+            await startupDelegate.waitForPendingStartup()
+            startupReturned.withLock { $0 = true }
+        }
+
+        await startupFlushGate.waitUntilEntered()
+        for _ in 0..<100 where !startupReturned.withLock({ $0 }) {
+            await Task.yield()
+        }
+        #expect(startupReturned.withLock { $0 })
+        #expect(startupFixture.recorder.operations == [
+            "construct", "track product.performance", "flush"
+        ])
+        await startupFlushGate.release()
+        await startupCaller.value
+        await startupContainer.waitForPendingProductTelemetryStartupCompletion()
+
+        let sessionFlushGate = TelemetryFlushGate(targetEntry: 2)
+        let sessionFixture = RuntimeFixture(telemetryFlushGate: sessionFlushGate.suspendTarget)
+        defer { sessionFixture.remove() }
+        _ = await sessionFixture.preferences.setConsent(true)
+        let sessionContainer = sessionFixture.makeContainer()
+        await sessionContainer.completeProductTelemetryStartup(startedAt: .now)
+        await sessionContainer.waitForPendingProductTelemetryStartupCompletion()
+
+        let sessionReturned = Mutex(false)
+        let sessionCaller = Task {
+            _ = try? await sessionContainer.sessionUseCase.saveCompletedSession(
+                title: nil,
+                rawText: "synthetic raw",
+                refinedText: "synthetic refined"
+            )
+            sessionReturned.withLock { $0 = true }
+        }
+
+        await sessionFlushGate.waitUntilEntered()
+        for _ in 0..<100 where !sessionReturned.withLock({ $0 }) {
+            await Task.yield()
+        }
+        #expect(sessionReturned.withLock { $0 })
+        #expect(sessionFixture.recorder.operations == [
+            "construct", "track product.performance", "flush", "flush"
+        ])
+        await sessionFlushGate.release()
+        await sessionCaller.value
+        await sessionContainer.waitForPendingProductTelemetrySessionCompletion()
     }
 
     @Test func suspendedPersistenceCannotPrecedeInteractiveTelemetryActivation() async {
@@ -332,7 +400,8 @@ struct BlobTelemetryInstrumentationTests {
         _ = await fixture.preferences.setConsent(true)
         let runtime = fixture.makeRuntime()
 
-        await runtime.completeStartup(startedAt: .now)
+        let startupCompletion = await runtime.completeStartup(startedAt: .now)
+        await startupCompletion?.value
 
         let event = try #require(fixture.recorder.events.first)
         #expect(event.name == "product.performance")
@@ -466,6 +535,40 @@ private actor QuickRecordStartGate {
 
     func waitUntilEntered() async {
         guard !entered else { return }
+        await withCheckedContinuation { enteredWaiter = $0 }
+    }
+
+    func release() {
+        released = true
+        releaseWaiter?.resume()
+        releaseWaiter = nil
+    }
+}
+
+private actor TelemetryFlushGate {
+    private let targetEntry: Int
+    private var entryCount = 0
+    private var enteredWaiter: CheckedContinuation<Void, Never>?
+    private var releaseWaiter: CheckedContinuation<Void, Never>?
+    private var targetEntered = false
+    private var released = false
+
+    init(targetEntry: Int) {
+        self.targetEntry = targetEntry
+    }
+
+    func suspendTarget() async {
+        entryCount += 1
+        guard entryCount == targetEntry else { return }
+        targetEntered = true
+        enteredWaiter?.resume()
+        enteredWaiter = nil
+        guard !released else { return }
+        await withCheckedContinuation { releaseWaiter = $0 }
+    }
+
+    func waitUntilEntered() async {
+        guard !targetEntered else { return }
         await withCheckedContinuation { enteredWaiter = $0 }
     }
 
@@ -677,9 +780,13 @@ private final class RuntimeFixture {
 
     init(
         productTelemetryConsentWriteGate: (@Sendable (Bool) async -> Void)? = nil,
-        telemetryOperationObserver: (@Sendable (String) -> Void)? = nil
+        telemetryOperationObserver: (@Sendable (String) -> Void)? = nil,
+        telemetryFlushGate: (@Sendable () async -> Void)? = nil
     ) {
-        recorder = RuntimeTelemetryRecorder(operationObserver: telemetryOperationObserver)
+        recorder = RuntimeTelemetryRecorder(
+            operationObserver: telemetryOperationObserver,
+            flushGate: telemetryFlushGate
+        )
         let defaults = UserDefaults(suiteName: suite)!
         if let productTelemetryConsentWriteGate {
             store = UserDefaultsPreferencesStore(
@@ -759,9 +866,14 @@ private final class RuntimeTelemetryRecorder: Sendable {
     }
     private let state = Mutex(State())
     private let operationObserver: (@Sendable (String) -> Void)?
+    private let flushGate: (@Sendable () async -> Void)?
 
-    init(operationObserver: (@Sendable (String) -> Void)? = nil) {
+    init(
+        operationObserver: (@Sendable (String) -> Void)? = nil,
+        flushGate: (@Sendable () async -> Void)? = nil
+    ) {
         self.operationObserver = operationObserver
+        self.flushGate = flushGate
     }
 
     var constructionCount: Int { state.withLock { $0.constructionCount } }
@@ -783,8 +895,9 @@ private final class RuntimeTelemetryRecorder: Sendable {
         }
     }
 
-    func flush() {
+    func flush() async {
         state.withLock { $0.operations.append("flush") }
+        await flushGate?()
     }
 
     func setEnabled(_ value: Bool) {
@@ -821,7 +934,7 @@ private final class RuntimeTelemetryService: TelemetryService, Sendable {
 
     func flush() async {
         guard isEnabled else { return }
-        recorder.flush()
+        await recorder.flush()
     }
 
     func resetIdentifier() {}
