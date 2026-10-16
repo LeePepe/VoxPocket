@@ -160,9 +160,20 @@ final class MacOSSettingsViewTests: XCTestCase {
         panel.contentView = host
         panel.makeKeyAndOrderFront(nil)
         defer { panel.orderOut(nil) }
-        try await Task.sleep(for: .milliseconds(350))
-        host.layoutSubtreeIfNeeded()
-        panel.displayIfNeeded()
+        let expectedText = section == .shortcuts ? "快捷录音" : "识别模型"
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while true {
+            host.layoutSubtreeIfNeeded()
+            panel.displayIfNeeded()
+            let bitmap = try capture(panel)
+            if try recognize(bitmap).joined().contains(expectedText) || ContinuousClock.now >= deadline {
+                return bitmap
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    private func capture(_ panel: NSPanel) throws -> NSBitmapImageRep {
         let frameView = try XCTUnwrap(panel.contentView?.superview)
         let bitmap = try XCTUnwrap(frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds))
         frameView.effectiveAppearance.performAsCurrentDrawingAppearance {
