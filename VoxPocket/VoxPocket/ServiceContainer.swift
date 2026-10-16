@@ -919,9 +919,7 @@ final class ProductTelemetryRuntime {
 
     func requestFlush() -> Task<Void, Never>? {
         guard isReady else { return nil }
-        return Task { [coordinator] in
-            await coordinator.flushBlob()
-        }
+        return coordinator.requestBlobFlush()
     }
 
     private func activateIfEligible(intent: UInt64) async -> Bool {

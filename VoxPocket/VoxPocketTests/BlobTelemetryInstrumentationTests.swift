@@ -394,6 +394,23 @@ struct BlobTelemetryInstrumentationTests {
         #expect(fixture.recorder.operations.last == "flush")
     }
 
+    @Test func sameTurnFlushRequestIsAdmittedBeforeLaterAction() async throws {
+        let fixture = RuntimeFixture()
+        defer { fixture.remove() }
+        let runtime = fixture.makeRuntime()
+
+        await runtime.setConsent(true)
+        let flushCompletion = try #require(runtime.requestFlush())
+        runtime.record(.settingsOpened)
+
+        await flushCompletion.value
+        await runtime.flush()
+
+        #expect(fixture.recorder.operations == [
+            "construct", "flush", "track product.user_action", "flush"
+        ])
+    }
+
     @Test func consentedStartupRecordsBoundedLaunchDurationThenFlushes() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }

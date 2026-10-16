@@ -105,6 +105,34 @@ struct TelemetryLifecycleCoordinatorTests {
     }
 
     #if DEBUG
+    @Test func requestedBlobFlushIsSubmittedBeforeSameTurnTrack() async {
+        let recorder = TelemetryOperationRecorder()
+        let coordinator = TelemetryLifecycleCoordinator { NoopTelemetryService() }
+        let bootstrap = BlobTelemetryBootstrap.testing(
+            configuration: .enabled(.init(
+                endpoint: URL(string: "https://telemetry.example.invalid/container")!,
+                sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
+            )),
+            host: .interactiveApplication,
+            isConsented: true,
+            makeService: {
+                recorder.perform("construct blob")
+                return RecordingTelemetryService(recorder: recorder)
+            }
+        )
+
+        #expect(await coordinator.bootstrapBlob(bootstrap) == .ready)
+        let flushCompletion = coordinator.requestBlobFlush()
+        coordinator.trackBlob(.userAction(.settingsOpened))
+
+        await flushCompletion.value
+        await coordinator.flushBlob()
+
+        #expect(recorder.names == [
+            "construct blob", "flush", "track product.user_action", "flush"
+        ])
+    }
+
     @Test func legacyFlushAndBlobBootstrapShareOneSerializedWorker() async {
         let recorder = TelemetryOperationRecorder()
         let gate = FlushGate()
