@@ -85,6 +85,9 @@ jobs:
         run: |
           brew list fastlane >/dev/null 2>&1 || brew install fastlane
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Verify unsigned telemetry Release configuration
+        working-directory: repo
+        run: scripts/ci/verify_telemetry_release.sh
       - name: Test release packaging (fastlane Ruby)
         working-directory: repo
         run: |
