@@ -49,6 +49,7 @@ mkdir -p VoxPocket.xcodeproj
 import os
 from pathlib import Path
 import plistlib
+import stat
 import sys
 
 args = sys.argv[1:]
@@ -59,11 +60,10 @@ required = {{
     "-configuration", "Release",
     "-destination", "platform=macOS",
     "-scheme", "VoxPocket",
+    "-xcconfig",
     "CODE_SIGN_IDENTITY=",
     "CODE_SIGNING_REQUIRED=NO",
     "CODE_SIGNING_ALLOWED=NO",
-    "TELEMETRY_BLOB_ENDPOINT={SYNTHETIC_ENDPOINT}",
-    "TELEMETRY_BLOB_SAS={SYNTHETIC_SAS}",
     "build",
 }}
 if not required.issubset(set(args)):
@@ -72,6 +72,17 @@ if not args[args.index("-project") + 1].endswith("/VoxPocket/VoxPocket.xcodeproj
     sys.exit(91)
 if any(value in args for value in ("archive", "-exportArchive", "upload")):
     sys.exit(92)
+if any("{SYNTHETIC_ENDPOINT}" in value or "{SYNTHETIC_SAS}" in value for value in args):
+    sys.exit(93)
+
+xcconfig = Path(args[args.index("-xcconfig") + 1])
+if stat.S_IMODE(xcconfig.stat().st_mode) != 0o600:
+    sys.exit(94)
+if xcconfig.read_text().splitlines() != [
+    "TELEMETRY_BLOB_ENDPOINT = https:/$()/telemetry.example.invalid/container",
+    "TELEMETRY_BLOB_SAS = {SYNTHETIC_SAS}",
+]:
+    sys.exit(95)
 
 derived = Path(args[args.index("-derivedDataPath") + 1])
 plist = derived / "Build/Products/Release/VoxPocket.app/Contents/Info.plist"
@@ -127,7 +138,13 @@ with plist.open("wb") as output:
         self.assertIn("xcodegen|", calls)
         self.assertIn("|generate --spec project.yml", calls)
         self.assertIn("xcodebuild|", calls)
+        self.assertIn("|-xcconfig|", calls)
+        build_args = next(line for line in calls.splitlines() if line.startswith("xcodebuild|")).split("|")
+        xcconfig = Path(build_args[build_args.index("-xcconfig") + 1])
+        self.assertFalse(xcconfig.exists())
         self.assertNotIn("forbidden:", calls)
+        self.assertNotIn(SYNTHETIC_ENDPOINT, calls)
+        self.assertNotIn(SYNTHETIC_SAS, calls)
         self.assertNotIn(SYNTHETIC_ENDPOINT, result.stdout + result.stderr)
         self.assertNotIn(SYNTHETIC_SAS, result.stdout + result.stderr)
 

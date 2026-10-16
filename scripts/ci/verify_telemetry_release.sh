@@ -4,11 +4,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
+umask 077
 DERIVED_DATA="$(mktemp -d "${TMPDIR:-/tmp}/voxpocket-telemetry-release.XXXXXX")"
 trap 'rm -rf "$DERIVED_DATA"' EXIT
 
 SYNTHETIC_ENDPOINT="https://telemetry.example.invalid/container"
 SYNTHETIC_SAS="sv=2023-11-03&sr=c&si=synthetic-create-only&spr=https&sig=fake%2Bonly%2F%3D"
+SYNTHETIC_XCCONFIG="$DERIVED_DATA/telemetry.xcconfig"
 
 fail() {
   printf 'Synthetic telemetry Release verification failed: %s\n' "$1" >&2
@@ -20,18 +22,23 @@ fail() {
   xcodegen generate --spec project.yml
 )
 
+printf '%s\n' \
+  'TELEMETRY_BLOB_ENDPOINT = https:/$()/telemetry.example.invalid/container' \
+  "TELEMETRY_BLOB_SAS = $SYNTHETIC_SAS" \
+  >"$SYNTHETIC_XCCONFIG"
+chmod 600 "$SYNTHETIC_XCCONFIG"
+
 xcodebuild \
   -project "$REPO_ROOT/VoxPocket/VoxPocket.xcodeproj" \
   -scheme VoxPocket \
   -configuration Release \
   -destination "platform=macOS" \
   -derivedDataPath "$DERIVED_DATA" \
+  -xcconfig "$SYNTHETIC_XCCONFIG" \
   -quiet \
   CODE_SIGN_IDENTITY="" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
-  "TELEMETRY_BLOB_ENDPOINT=$SYNTHETIC_ENDPOINT" \
-  "TELEMETRY_BLOB_SAS=$SYNTHETIC_SAS" \
   build
 
 PROCESSED_PLIST="$DERIVED_DATA/Build/Products/Release/VoxPocket.app/Contents/Info.plist"
