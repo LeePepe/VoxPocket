@@ -45,12 +45,13 @@
 - [x] CHK029 A main-actor-originating test proves provider construction, ordered legacy tracks, and barrier flush all reach the underlying spy with `Thread.isMainThread == false` and maximum concurrency one; a structural assertion rejects raw-provider bypass.
 - [x] CHK030 The plan and migration/rollback notes intentionally accept the pinned provider's 50 MiB default, whole-oldest-batch eviction, oversized-event rejection, durable loss accounting, cleanup-before-downgrade rule, and irrecoverable evictions, with no `maxDiskBytes` override.
 - [x] CHK032 Rapid-release and startup/recording/session/resign-active regressions drive the real `AppDelegate` / `ServiceContainer` callers; direct instrumentation tests are supplemental rather than substitutes.
+- [x] CHK033 The iOS persisted-consent cold-start increment is lifecycle-owned, invokes the existing startup adapter only after successful shared configuration preparation, proves relaunch UUID reuse and one startup event/flush per lifetime without sleep, binds the actual conditional caller, and leaves macOS/default-off/fail-closed/excluded-host behavior unchanged.
 
 ## Review readiness
 
 - [x] CHK019 No unresolved `[placeholder]`, `NEEDS CLARIFICATION`, or invented credential/resource value remains.
 - [x] CHK020 `spec.md`, `plan.md`, `research.md`, `data-model.md`, contract, quickstart, checklist, and layer-scoped `tasks.md` form one consistent design.
-- [x] CHK025 All 21 stable AC IDs, FR-001–FR-026, SC-001–SC-008, RB-001–RB-005, and T000–T013 are covered without a placeholder, stale no-behavior-change claim, stale consent contradiction, stale singular-PR contract, or unresolved prior finding.
+- [x] CHK025 All 23 stable AC IDs, FR-001–FR-028, SC-001–SC-010, RB-001–RB-005, and T000–T013 are covered without a placeholder, stale no-behavior-change claim, stale consent contradiction, stale singular-PR contract, or unresolved prior finding.
 
 ## Notes
 
