@@ -350,6 +350,10 @@ struct BlobTelemetryInstrumentationTests {
             startupScheduleQuickRecordingPrewarm: {}
         )
 
+        delegate.applicationDidFinishLaunching(
+            Notification(name: NSApplication.didFinishLaunchingNotification)
+        )
+        await delegate.waitForPendingStartup()
         await model.setSendingUsageData(true)
         delegate.applicationWillResignActive(
             Notification(name: Notification.Name("test.applicationWillResignActive"))
