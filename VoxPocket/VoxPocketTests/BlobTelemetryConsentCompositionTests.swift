@@ -82,9 +82,9 @@ struct BlobTelemetryConsentCompositionTests {
         let bootstrapCalls = Mutex(0)
         let container = ServiceContainer(
             productTelemetryPreferences: preferences,
-            processEnvironment: host == .uiTestApplication
+            processEnvironment: host == .test
                 ? [ServiceContainer.uiTestHostEnvironmentKey: "1"] : [:],
-            processArguments: host == .uiTestApplication ? ["--vox-ui-test-host"] : [],
+            processArguments: host == .test ? ["--vox-ui-test-host"] : [],
             productTelemetryConfiguration: { .enabled(.init(
                 endpoint: URL(string: "https://telemetry.example.invalid/container")!,
                 sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"

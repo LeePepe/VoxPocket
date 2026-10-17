@@ -357,7 +357,7 @@ struct BlobTelemetryInstrumentationTests {
         ])
     }
 
-    @Test func startupAndActionsEmitOnlyAfterSuccessfulComposition() async {
+    @Test func startupAndActionsEmitOnlyAfterSuccessfulComposition() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
         let runtime = fixture.makeInstrumentation()
@@ -371,7 +371,8 @@ struct BlobTelemetryInstrumentationTests {
         runtime.record(.fullPanelOpened)
         runtime.record(.quickRecordStarted)
         runtime.record(.quickRecordStopped)
-        await runtime.flush()
+        let flush = try #require(runtime.requestFlushIfReady())
+        await flush.value
 
         let events = fixture.recorder.events
         #expect(events.map(\.name) == [
@@ -395,7 +396,8 @@ struct BlobTelemetryInstrumentationTests {
         runtime.record(.settingsOpened)
 
         await flushCompletion.value
-        await runtime.flush()
+        let flush = try #require(runtime.requestFlushIfReady())
+        await flush.value
 
         #expect(fixture.recorder.operations == [
             "construct", "flush", "track product.user_action", "flush"
@@ -419,7 +421,7 @@ struct BlobTelemetryInstrumentationTests {
         #expect(fixture.recorder.operations == ["construct", "track product.performance", "flush"])
     }
 
-    @Test func disableStopsAdmissionUntilExplicitReenable() async {
+    @Test func disableStopsAdmissionUntilExplicitReenable() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
         let runtime = fixture.makeInstrumentation()
@@ -430,7 +432,8 @@ struct BlobTelemetryInstrumentationTests {
         runtime.record(.quickRecordStopped)
         await runtime.setConsent(true)
         runtime.record(.quickRecordStopped)
-        await runtime.flush()
+        let flush = try #require(runtime.requestFlushIfReady())
+        await flush.value
 
         #expect(fixture.recorder.constructionCount == 1)
         #expect(fixture.recorder.events.compactMap { $0.properties["action"] } == [
