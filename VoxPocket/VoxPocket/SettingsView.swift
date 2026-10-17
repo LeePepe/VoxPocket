@@ -12,6 +12,9 @@ struct SettingsView: View {
         MacOSSettingsView(providerSettings: LLMProviderSettingsViewModel(
             availability: StageModelRouting.availability(environment: LLMAppConfig.runtimeEnvironment)
         ), localModelLoadingStatus: localModelLoadingStatus)
+            .onAppear {
+                ServiceContainer.shared.recordProductAction(.settingsOpened)
+            }
             .task {
                 if localModelLoadingStatus == nil,
                    let observable = ServiceContainer.shared.localModelLoadingObservable {

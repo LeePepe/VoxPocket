@@ -33,7 +33,7 @@ final class VoxPocketUITests: XCTestCase {
     /// macOS 主窗口按需打开；iOS 仍直接进入主页面。
     @MainActor
     func testAppLaunchShowsRecordButton() throws {
-        let app = XCUIApplication()
+        let app = makeVoxPocketUIApplication()
         try app.launchOpeningMainWindow()
 
         // The primary control renders as either record or stop depending on state.
@@ -51,14 +51,14 @@ final class VoxPocketUITests: XCTestCase {
     @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            makeVoxPocketUIApplication().launch()
         }
     }
 
 #if os(macOS)
     @MainActor
     func testMacOSLaunchKeepsMainWindowClosed() {
-        let app = XCUIApplication()
+        let app = makeVoxPocketUIApplication()
         app.launch()
         XCTAssertTrue(app.voxMenuBarItem.waitForExistence(timeout: 10))
         XCTAssertFalse(app.windows["VoxPocket"].isHittable)
@@ -70,7 +70,7 @@ final class VoxPocketUITests: XCTestCase {
 
     @MainActor
     func testMacOSSettingsContainMigratedPreferences() {
-        let app = XCUIApplication()
+        let app = makeVoxPocketUIApplication()
         app.launch()
         XCTAssertTrue(app.voxMenuBarItem.waitForExistence(timeout: 10))
         app.voxMenuBarItem.click()
@@ -91,7 +91,7 @@ final class VoxPocketUITests: XCTestCase {
     /// Taps the record button and verifies the stop button appears, indicating recording started.
     @MainActor
     func testTapRecordButtonStartsRecording() throws {
-        let app = XCUIApplication()
+        let app = makeVoxPocketUIApplication()
         try app.launchOpeningMainWindow()
 
         let recordButton = app.buttons[VoxID.recordButton]
@@ -114,7 +114,7 @@ final class VoxPocketUITests: XCTestCase {
     /// Verifies the session list container is accessible in the sidebar.
     @MainActor
     func testSessionListIsAccessible() throws {
-        let app = XCUIApplication()
+        let app = makeVoxPocketUIApplication()
         try app.launchOpeningMainWindow()
 
         // The session list lives in the sidebar drawer.  On macOS it may be visible by default.
@@ -165,7 +165,7 @@ final class VoxAgentEvalIntegrationTests: XCTestCase {
             return
         }
 
-        let app = XCUIApplication()
+        let app = makeVoxPocketUIApplication()
         try app.launchOpeningMainWindow()
 
         // Allow the UI to settle.
@@ -249,6 +249,14 @@ private extension XCUIApplication {
         launch()
 #endif
     }
+}
+
+@MainActor
+func makeVoxPocketUIApplication() -> XCUIApplication {
+    let application = XCUIApplication()
+    application.launchEnvironment["VOXPOCKET_UI_TEST_HOST"] = "1"
+    application.launchArguments.append("--vox-ui-test-host")
+    return application
 }
 
 // MARK: - Inline type aliases so the UITest target compiles without importing VoxAgentEval.

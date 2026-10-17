@@ -61,14 +61,32 @@ public actor ProductTelemetryPreferences {
         return await mutation.value
     }
 
-    public func installIdentityIfConsented() async -> UUID? {
-        _ = await lastMutation?.value
-        let consent: Bool? = await store.getValue(for: .productTelemetryConsent)
-        guard consent == true else { return nil }
-        if let persisted = await store.productTelemetryInstallIdentity {
-            return persisted
+    public func persistConsent(_ isConsented: Bool) async {
+        let previous = lastMutation
+        let store = store
+        let mutation = Task<UUID?, Never> {
+            _ = await previous?.value
+            await store.setValue(isConsented, for: .productTelemetryConsent)
+            return nil
         }
-        return await setConsent(true)
+        lastMutation = mutation
+        _ = await mutation.value
+    }
+
+    public func installIdentityIfConsented() async -> UUID? {
+        let previous = lastMutation
+        let store = store
+        let identityGenerator = identityGenerator
+        let mutation = Task<UUID?, Never> {
+            _ = await previous?.value
+            let consent: Bool? = await store.getValue(for: .productTelemetryConsent)
+            guard consent == true else { return nil }
+            return await store.productTelemetryInstallIdentity(
+                creatingWith: identityGenerator
+            )
+        }
+        lastMutation = mutation
+        return await mutation.value
     }
 }
 
@@ -91,12 +109,24 @@ public actor UserDefaultsPreferencesStore: PreferencesStore {
 
     private static let productTelemetryInstallIdentityKey = "telemetry.product.installIdentity"
     private let defaults: UserDefaults
+    private let productTelemetryConsentWriteGate: (@Sendable (Bool) async -> Void)?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        productTelemetryConsentWriteGate = nil
     }
+
+#if DEBUG
+    init(
+        defaults: UserDefaults,
+        productTelemetryConsentWriteGate: @escaping @Sendable (Bool) async -> Void
+    ) {
+        self.defaults = defaults
+        self.productTelemetryConsentWriteGate = productTelemetryConsentWriteGate
+    }
+#endif
 
     public func getValue<T: Codable & Sendable>(for key: PreferencesKey) async -> T? {
         guard let data = defaults.data(forKey: key.rawValue) else { return nil }
@@ -112,6 +142,10 @@ public actor UserDefaultsPreferencesStore: PreferencesStore {
     }
 
     public func setValue<T: Codable & Sendable>(_ value: T, for key: PreferencesKey) async {
+        if key == .productTelemetryConsent,
+           let consent = value as? Bool {
+            await productTelemetryConsentWriteGate?(consent)
+        }
         guard let data = try? encoder.encode(value) else { return }
         defaults.set(data, forKey: key.rawValue)
     }
