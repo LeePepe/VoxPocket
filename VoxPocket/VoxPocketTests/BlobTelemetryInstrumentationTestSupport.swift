@@ -72,17 +72,62 @@ actor TelemetryFlushGate {
     }
 }
 
+final class QuickRecordOperationRecorder: Sendable {
+    private struct State: Sendable {
+        var operations: [String] = []
+        var cleanupOperations: Set<String> = []
+        var didSignalCleanup = false
+    }
+
+    private let state = Mutex(State())
+    private let cleanupCompletion: AsyncStream<Void>
+    private let cleanupContinuation: AsyncStream<Void>.Continuation
+
+    init() {
+        (cleanupCompletion, cleanupContinuation) = AsyncStream<Void>.makeStream()
+    }
+
+    var operations: [String] { state.withLock { $0.operations } }
+
+    func record(_ operation: String) {
+        let shouldSignal = state.withLock { state in
+            state.operations.append(operation)
+            guard operation == "hide" || operation == "end" else { return false }
+            state.cleanupOperations.insert(operation)
+            guard state.cleanupOperations.count == 2, !state.didSignalCleanup else { return false }
+            state.didSignalCleanup = true
+            return true
+        }
+        if shouldSignal {
+            cleanupContinuation.yield()
+            cleanupContinuation.finish()
+        }
+    }
+
+    func waitForFirstCleanup() async {
+        for await _ in cleanupCompletion {
+            return
+        }
+    }
+}
+
 // Combine subjects provide the immutable publisher bridge; mutable counters are Mutex-protected.
 final class QuickRecordRecordingUseCase: RecordingUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
     private let startError: Error?
     private let startGate: QuickRecordStartGate?
+    private let operationRecorder: QuickRecordOperationRecorder
     private let counts = Mutex((start: 0, stop: 0))
 
-    init(startError: Error?, startGate: QuickRecordStartGate?) {
+    init(
+        startError: Error?,
+        startGate: QuickRecordStartGate?,
+        operationRecorder: QuickRecordOperationRecorder
+    ) {
         self.startError = startError
         self.startGate = startGate
+        self.operationRecorder = operationRecorder
     }
 
     var startCallCount: Int { counts.withLock { $0.start } }
@@ -100,6 +145,7 @@ final class QuickRecordRecordingUseCase: RecordingUseCase, @unchecked Sendable {
 
     func stopRecording() async throws {
         counts.withLock { $0.stop += 1 }
+        operationRecorder.record("stop")
         stateSubject.send(.idle)
     }
 

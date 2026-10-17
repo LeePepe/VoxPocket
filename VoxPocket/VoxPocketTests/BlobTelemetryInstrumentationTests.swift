@@ -87,13 +87,9 @@ struct BlobTelemetryInstrumentationTests {
         #expect(normal.recording.startCallCount == 1)
         #expect(normal.viewModel.recorderStatus == .listening)
         await hotkeys.release()
-        await Task.yield()
+        await normal.waitForFirstCleanup()
         #expect(normal.recording.stopCallCount == 1)
-        #expect(normal.operations.first == "claim")
-        #expect(normal.operations.contains("show"))
-        #expect(normal.operations.contains("stop"))
-        #expect(normal.operations.contains("hide"))
-        #expect(normal.operations.contains("end"))
+        assertQuickRecordOrder(normal.operations)
         withExtendedLifetime(launched.0) {}
     }
 
@@ -125,11 +121,27 @@ struct BlobTelemetryInstrumentationTests {
         #expect(rapid.recording.stopCallCount == 0)
         await startGate.release()
         await startTask.value
-        await Task.yield()
+        await rapid.waitForFirstCleanup()
         #expect(rapid.recording.startCallCount == 1)
         #expect(rapid.recording.stopCallCount == 1)
-        #expect(rapid.operations.starts(with: ["claim", "show", "get", "get"]))
+        assertQuickRecordOrder(rapid.operations)
         withExtendedLifetime(launched.0) {}
+    }
+
+    private func assertQuickRecordOrder(_ operations: [String]) {
+        let expected = ["claim", "show", "get", "active", "get", "stop"]
+        var nextIndex = operations.startIndex
+        for operation in expected {
+            guard let index = operations[nextIndex...].firstIndex(of: operation) else {
+                Issue.record("Missing ordered quick-record operation: \(operation)")
+                return
+            }
+            nextIndex = operations.index(after: index)
+        }
+        let cleanupIndex = operations[nextIndex...].firstIndex { $0 == "hide" || $0 == "end" }
+        #expect(cleanupIndex != nil)
+        #expect(operations.contains("hide"))
+        #expect(operations.contains("end"))
     }
 
     private func launchQuickRecordDelegate(
@@ -469,10 +481,14 @@ private final class QuickRecordFixture {
     let recording: QuickRecordRecordingUseCase
     let viewModel: QuickRecordingViewModel
     private(set) var source: RecordingSource?
-    private(set) var operations: [String] = []
+    private let operationRecorder = QuickRecordOperationRecorder()
 
     init(startError: Error? = nil, startGate: QuickRecordStartGate? = nil) {
-        recording = QuickRecordRecordingUseCase(startError: startError, startGate: startGate)
+        recording = QuickRecordRecordingUseCase(
+            startError: startError,
+            startGate: startGate,
+            operationRecorder: operationRecorder
+        )
         viewModel = QuickRecordingViewModel(
             recordingUseCase: recording,
             transcriptionUseCase: QuickRecordTranscriptionUseCase(),
@@ -481,33 +497,39 @@ private final class QuickRecordFixture {
         )
     }
 
+    var operations: [String] { operationRecorder.operations }
+
+    func waitForFirstCleanup() async {
+        await operationRecorder.waitForFirstCleanup()
+    }
+
     func tryStart(_ requestedSource: RecordingSource) -> Bool {
-        operations.append("claim")
+        operationRecorder.record("claim")
         guard source == nil else { return false }
         source = requestedSource
         return true
     }
 
     func activeSource() -> RecordingSource? {
-        operations.append("active")
+        operationRecorder.record("active")
         return source
     }
 
     func end() {
-        operations.append("end")
+        operationRecorder.record("end")
         source = nil
     }
 
     func show() {
-        operations.append("show")
+        operationRecorder.record("show")
     }
 
     func getViewModel() -> QuickRecordingViewModel? {
-        operations.append("get")
+        operationRecorder.record("get")
         return viewModel
     }
 
     func hide() {
-        operations.append("hide")
+        operationRecorder.record("hide")
     }
 }
