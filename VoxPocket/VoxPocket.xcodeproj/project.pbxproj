@@ -145,7 +145,7 @@
 		D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickRecordingWindowLifecycleTests.swift; sourceTree = "<group>"; };
 		D9B4322401C88433C576C972 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		DD1E619B4998E9FCF2D79CDC /* TelemetryLifecycleCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryLifecycleCoordinatorTests.swift; sourceTree = "<group>"; };
-		"TEMP_CA12DC03-B59F-4E40-AA6A-6CA0D6DF70F7" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_FDB17776-9E2D-40DF-9191-8C88265D01DC" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -300,10 +300,10 @@
 			path = VoxPocketTests;
 			sourceTree = "<group>";
 		};
-		"TEMP_9F755DBD-809C-4E5C-AD18-C714E2BBB971" /* VoxPocket */ = {
+		"TEMP_08A57EBB-7CBB-490E-8926-2780A684C3E2" /* VoxPocket */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_CA12DC03-B59F-4E40-AA6A-6CA0D6DF70F7" /* Config.xcconfig */,
+				"TEMP_FDB17776-9E2D-40DF-9191-8C88265D01DC" /* Config.xcconfig */,
 			);
 			path = VoxPocket;
 			sourceTree = "<group>";
@@ -602,7 +602,7 @@
 		};
 		489E40965BE35970213C29E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_CA12DC03-B59F-4E40-AA6A-6CA0D6DF70F7" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_FDB17776-9E2D-40DF-9191-8C88265D01DC" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -844,7 +844,7 @@
 		};
 		C42F15964F9234EBB655F756 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_CA12DC03-B59F-4E40-AA6A-6CA0D6DF70F7" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_FDB17776-9E2D-40DF-9191-8C88265D01DC" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
