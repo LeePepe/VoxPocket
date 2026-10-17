@@ -1,5 +1,13 @@
 # Feature Specification: Privacy-safe Azure Blob product telemetry
 
+## Current T009 consent-peer correction
+
+Owner decision `compact-four-doc-peer-repair` (`01a148a6-1a13-7855-b104-f267c9b8cf5b`) adds only committed-state convergence in the existing `ProductTelemetrySettingsViewModel` and its Package tests; frozen product head `02e5e76532deaf21600b88b7318ad3c60034314d` and every prior behavior, privacy, lifecycle, and evidence obligation remain unchanged.
+
+After an opt-in or opt-out callback completes, the origin model rereads its own persisted consent; only its latest matching intent may publish committed display and emit a value-free completion pulse. Loaded peers keep their previous committed value while persistence is pending, respond only by rereading their own preference object, reject stale load/refresh results during rapid choices, and perform no consent write, identity request, activation, admission, or upload. A model over another store retains that store's value. The existing process-local notification/completion boundary is trusted and adds no value-bearing payload, authority, manager, executor, state machine, protocol, dependency, singleton, App test seam, event type, gate, permission, transport, or iPad multi-window scope.
+
+Deterministic no-sleep Presentation tests separately gate same-store opt-in and opt-out, prove pending display stability then committed reread convergence, cover rapid-choice/overlapping-refresh stale rejection, assert one origin callback with zero peer side effects, and prove different-store isolation. This is `US1/AC9`, `FR-027`, and `SC-009`; all later references use those identifiers.
+
 **Feature Branch**: `012-azure-blob-telemetry`
 
 **Created**: 2026-10-15
