@@ -67,20 +67,26 @@ struct BlobTelemetryInstrumentationTests {
         let container = fixture.makeContainer(notificationCenter: center)
         await container.completeProductTelemetryStartup(startedAt: .now)
         await container.waitForPendingProductTelemetryStartupCompletion()
+        await assertNormalQuickRecord(center: center, container: container)
+        await assertFailedQuickRecord(center: center, container: container)
+        await assertRapidRelease(center: center, container: container)
+        #expect(fixture.recorder.events.compactMap { $0.properties["action"] } == [
+            "quick_record_started", "quick_record_stopped",
+            "quick_record_started", "quick_record_stopped"
+        ])
+    }
+
+    private func assertNormalQuickRecord(
+        center: NotificationCenter,
+        container: ServiceContainer
+    ) async {
         let normal = QuickRecordFixture()
-        let normalDelegate = AppDelegate(
-            productTelemetryNotificationCenter: center,
-            quickRecordTryStart: normal.tryStart,
-            quickRecordActiveSource: normal.activeSource,
-            quickRecordEnd: normal.end,
-            quickRecordShowWindow: normal.show,
-            quickRecordViewModel: normal.getViewModel,
-            quickRecordHideWindow: normal.hide
-        )
-        await normalDelegate.enterQuickRecordStart()
+        let launched = await launchQuickRecordDelegate(normal, center: center, container: container)
+        let hotkeys = launched.1
+        await hotkeys.press()
         #expect(normal.recording.startCallCount == 1)
         #expect(normal.viewModel.recorderStatus == .listening)
-        await normalDelegate.enterQuickRecordStop()
+        await hotkeys.release()
         await Task.yield()
         #expect(normal.recording.stopCallCount == 1)
         #expect(normal.operations.first == "claim")
@@ -88,36 +94,34 @@ struct BlobTelemetryInstrumentationTests {
         #expect(normal.operations.contains("stop"))
         #expect(normal.operations.contains("hide"))
         #expect(normal.operations.contains("end"))
+        withExtendedLifetime(launched.0) {}
+    }
 
+    private func assertFailedQuickRecord(
+        center: NotificationCenter,
+        container: ServiceContainer
+    ) async {
         let failing = QuickRecordFixture(startError: QuickRecordFixture.StartError.synthetic)
-        let errorDelegate = AppDelegate(
-            productTelemetryNotificationCenter: center,
-            quickRecordTryStart: failing.tryStart,
-            quickRecordActiveSource: failing.activeSource,
-            quickRecordEnd: failing.end,
-            quickRecordShowWindow: failing.show,
-            quickRecordViewModel: failing.getViewModel,
-            quickRecordHideWindow: failing.hide
-        )
-        await errorDelegate.enterQuickRecordStart()
+        let launched = await launchQuickRecordDelegate(failing, center: center, container: container)
+        let hotkeys = launched.1
+        await hotkeys.press()
         #expect(failing.recording.startCallCount == 1)
         #expect(failing.viewModel.recorderStatus == .error)
+        withExtendedLifetime(launched.0) {}
+    }
 
+    private func assertRapidRelease(
+        center: NotificationCenter,
+        container: ServiceContainer
+    ) async {
         let startGate = QuickRecordStartGate()
         let rapid = QuickRecordFixture(startGate: startGate)
-        let rapidReleaseDelegate = AppDelegate(
-            productTelemetryNotificationCenter: center,
-            quickRecordTryStart: rapid.tryStart,
-            quickRecordActiveSource: rapid.activeSource,
-            quickRecordEnd: rapid.end,
-            quickRecordShowWindow: rapid.show,
-            quickRecordViewModel: rapid.getViewModel,
-            quickRecordHideWindow: rapid.hide
-        )
-        let startTask = Task { await rapidReleaseDelegate.enterQuickRecordStart() }
+        let launched = await launchQuickRecordDelegate(rapid, center: center, container: container)
+        let hotkeys = launched.1
+        let startTask = Task { await hotkeys.press() }
         await startGate.waitUntilEntered()
         #expect(rapid.viewModel.isStartingRecording)
-        await rapidReleaseDelegate.enterQuickRecordStop()
+        await hotkeys.release()
         #expect(rapid.recording.stopCallCount == 0)
         await startGate.release()
         await startTask.value
@@ -125,11 +129,34 @@ struct BlobTelemetryInstrumentationTests {
         #expect(rapid.recording.startCallCount == 1)
         #expect(rapid.recording.stopCallCount == 1)
         #expect(rapid.operations.starts(with: ["claim", "show", "get", "get"]))
+        withExtendedLifetime(launched.0) {}
+    }
 
-        #expect(fixture.recorder.events.compactMap { $0.properties["action"] } == [
-            "quick_record_started", "quick_record_stopped",
-            "quick_record_started", "quick_record_stopped"
-        ])
+    private func launchQuickRecordDelegate(
+        _ fixture: QuickRecordFixture,
+        center: NotificationCenter,
+        container: ServiceContainer
+    ) async -> (AppDelegate, TestGlobalHotkeyService) {
+        let hotkeys = TestGlobalHotkeyService()
+        let delegate = AppDelegate(
+            productTelemetryNotificationCenter: center,
+            startup: AppStartup {},
+            serviceContainer: container,
+            hotkeyService: hotkeys,
+            startupInitializePersistence: {},
+            startupScheduleQuickRecordingPrewarm: {},
+            quickRecordTryStart: fixture.tryStart,
+            quickRecordActiveSource: fixture.activeSource,
+            quickRecordEnd: fixture.end,
+            quickRecordShowWindow: fixture.show,
+            quickRecordViewModel: fixture.getViewModel,
+            quickRecordHideWindow: fixture.hide
+        )
+        delegate.applicationDidFinishLaunching(
+            Notification(name: NSApplication.didFinishLaunchingNotification)
+        )
+        await delegate.waitForPendingStartup()
+        return (delegate, hotkeys)
     }
 
     @Test func productionLifecycleBoundariesFlushStartupRecordingSessionAndResignActive() async {
@@ -173,6 +200,11 @@ struct BlobTelemetryInstrumentationTests {
     }
 
     @Test func startupAndSessionPersistenceReturnWhileLifecycleFlushRemainsPending() async {
+        await assertStartupReturnsWhileFlushIsPending()
+        await assertSessionReturnsWhileFlushIsPending()
+    }
+
+    private func assertStartupReturnsWhileFlushIsPending() async {
         let startupFlushGate = TelemetryFlushGate(targetEntry: 1)
         let startupFixture = RuntimeFixture(telemetryFlushGate: startupFlushGate.suspendTarget)
         defer { startupFixture.remove() }
@@ -206,7 +238,9 @@ struct BlobTelemetryInstrumentationTests {
         await startupFlushGate.release()
         await startupCaller.value
         await startupContainer.waitForPendingProductTelemetryStartupCompletion()
+    }
 
+    private func assertSessionReturnsWhileFlushIsPending() async {
         let sessionFlushGate = TelemetryFlushGate(targetEntry: 2)
         let sessionFixture = RuntimeFixture(telemetryFlushGate: sessionFlushGate.suspendTarget)
         defer { sessionFixture.remove() }
@@ -354,7 +388,13 @@ struct BlobTelemetryInstrumentationTests {
             Notification(name: NSApplication.didFinishLaunchingNotification)
         )
         await delegate.waitForPendingStartup()
+        await container.waitForPendingProductTelemetryStartupCompletion()
+        #expect(fixture.identities.isEmpty)
+        #expect(fixture.recorder.constructionCount == 0)
+        #expect(fixture.recorder.events.isEmpty)
+        #expect(fixture.recorder.operations.isEmpty)
         await model.setSendingUsageData(true)
+        await container.waitForPendingProductTelemetryConsentChange()
         delegate.applicationWillResignActive(
             Notification(name: Notification.Name("test.applicationWillResignActive"))
         )
@@ -470,324 +510,4 @@ private final class QuickRecordFixture {
     func hide() {
         operations.append("hide")
     }
-}
-
-private actor QuickRecordStartGate {
-    private var entered = false
-    private var enteredWaiter: CheckedContinuation<Void, Never>?
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-    private var released = false
-
-    func suspendStart() async {
-        entered = true
-        enteredWaiter?.resume()
-        enteredWaiter = nil
-        guard !released else { return }
-        await withCheckedContinuation { releaseWaiter = $0 }
-    }
-
-    func waitUntilEntered() async {
-        guard !entered else { return }
-        await withCheckedContinuation { enteredWaiter = $0 }
-    }
-
-    func release() {
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
-    }
-}
-
-private actor TelemetryFlushGate {
-    private let targetEntry: Int
-    private var entryCount = 0
-    private var enteredWaiter: CheckedContinuation<Void, Never>?
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-    private var targetEntered = false
-    private var released = false
-
-    init(targetEntry: Int) {
-        self.targetEntry = targetEntry
-    }
-
-    func suspendTarget() async {
-        entryCount += 1
-        guard entryCount == targetEntry else { return }
-        targetEntered = true
-        enteredWaiter?.resume()
-        enteredWaiter = nil
-        guard !released else { return }
-        await withCheckedContinuation { releaseWaiter = $0 }
-    }
-
-    func waitUntilEntered() async {
-        guard !targetEntered else { return }
-        await withCheckedContinuation { enteredWaiter = $0 }
-    }
-
-    func release() {
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
-    }
-}
-
-private final class QuickRecordRecordingUseCase: RecordingUseCase, @unchecked Sendable {
-    private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
-    private let levelSubject = CurrentValueSubject<Float, Never>(0)
-    private let startError: Error?
-    private let startGate: QuickRecordStartGate?
-    private let counts = Mutex((start: 0, stop: 0))
-
-    init(startError: Error?, startGate: QuickRecordStartGate?) {
-        self.startError = startError
-        self.startGate = startGate
-    }
-
-    var startCallCount: Int { counts.withLock { $0.start } }
-    var stopCallCount: Int { counts.withLock { $0.stop } }
-    var state: RecordingState { stateSubject.value }
-    var statePublisher: AnyPublisher<RecordingState, Never> { stateSubject.eraseToAnyPublisher() }
-    var audioLevelPublisher: AnyPublisher<Float, Never> { levelSubject.eraseToAnyPublisher() }
-
-    func startRecording() async throws {
-        counts.withLock { $0.start += 1 }
-        if let startGate { await startGate.suspendStart() }
-        if let startError { throw startError }
-        stateSubject.send(.recording(duration: 0))
-    }
-
-    func stopRecording() async throws {
-        counts.withLock { $0.stop += 1 }
-        stateSubject.send(.idle)
-    }
-
-    func pauseRecording() { stateSubject.send(.paused(duration: 0)) }
-    func resumeRecording() { stateSubject.send(.recording(duration: 0)) }
-    func cancelRecording() { stateSubject.send(.idle) }
-    func checkPermission() async -> Bool { true }
-    func requestPermission() async -> Bool { true }
-}
-
-private final class QuickRecordTranscriptionUseCase: TranscriptionUseCase, @unchecked Sendable {
-    private let liveText = CurrentValueSubject<String, Never>("")
-    private let finalResult = PassthroughSubject<TranscriptionResult, Error>()
-    private let snapshots = PassthroughSubject<String, Never>()
-    private var language = Locale(identifier: "zh-Hans")
-
-    var liveTextPublisher: AnyPublisher<String, Never> { liveText.eraseToAnyPublisher() }
-    var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> { finalResult.eraseToAnyPublisher() }
-    var currentLanguage: Locale { language }
-    var supportedLanguages: [Locale] { [language] }
-    var snapshotPublisher: AnyPublisher<String, Never> { snapshots.eraseToAnyPublisher() }
-    var snapshotGateActive = false
-
-    func setLanguage(_ locale: Locale) { language = locale }
-    func commitCurrentTranscription() async throws {}
-    func clearLiveText() { liveText.send("") }
-}
-
-private final class QuickRecordRefinementUseCase: RefinementUseCase, @unchecked Sendable {
-    private let subject = CurrentValueSubject<RefinementState, Never>(.idle)
-    var state: RefinementState { subject.value }
-    var statePublisher: AnyPublisher<RefinementState, Never> { subject.eraseToAnyPublisher() }
-    var isConfigured: Bool { true }
-    func refine(customPrompt: String?) async throws {}
-    func refineSelection(range: NSRange, customPrompt: String?) async throws {}
-    func refineStreaming(customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
-        refineStreaming(customPrompt: customPrompt, transcriptionMetadata: nil)
-    }
-    func refineStreaming(
-        customPrompt: String?,
-        transcriptionMetadata: TranscriptionMetadata?
-    ) -> AsyncThrowingStream<RefinementEvent, Error> {
-        AsyncThrowingStream { $0.finish() }
-    }
-    func cancel() {}
-    func refineText(_ text: String, customPrompt: String?) -> AsyncThrowingStream<RefinementEvent, Error> {
-        AsyncThrowingStream { $0.finish() }
-    }
-}
-
-private final class QuickRecordClipboardService: ClipboardService, @unchecked Sendable {
-    var hasText: Bool { false }
-    func copy(_ text: String) {}
-    func paste() -> String? { nil }
-    func clear() {}
-    func simulatePaste() async throws {}
-}
-
-@MainActor
-private final class TestGlobalHotkeyService: GlobalHotkeyService {
-    var hotkeyTriggeredPublisher: AnyPublisher<String, Never> {
-        Empty().eraseToAnyPublisher()
-    }
-    func register(_ hotkey: HotkeyDefinition, handler: @escaping @Sendable () -> Void) throws {}
-    func unregister(_ identifier: String) {}
-    func unregisterAll() {}
-    func update(_ identifier: String, to newHotkey: HotkeyDefinition) throws {}
-    func getRegistered(_ identifier: String) -> HotkeyDefinition? { nil }
-    func isAvailable(_ hotkey: HotkeyDefinition) -> Bool { true }
-    func registerLongPress(
-        _ hotkey: HotkeyDefinition,
-        onPress: @escaping @concurrent @Sendable () async -> Void,
-        onRelease: @escaping @concurrent @Sendable () async -> Void
-    ) {}
-}
-
-@MainActor
-private final class RuntimeFixture {
-    let suite = "BlobTelemetryInstrumentationTests.\(UUID())"
-    let store: UserDefaultsPreferencesStore
-    let preferences: ProductTelemetryPreferences
-    let recorder: RuntimeTelemetryRecorder
-    private let recordedIdentities = Mutex<[UUID]>([])
-
-    init(
-        telemetryOperationObserver: (@Sendable (String) -> Void)? = nil,
-        telemetryFlushGate: (@Sendable () async -> Void)? = nil
-    ) {
-        recorder = RuntimeTelemetryRecorder(
-            operationObserver: telemetryOperationObserver,
-            flushGate: telemetryFlushGate
-        )
-        let defaults = UserDefaults(suiteName: suite)!
-        store = UserDefaultsPreferencesStore(defaults: defaults)
-        preferences = ProductTelemetryPreferences(store: store)
-    }
-
-    var identities: [UUID] { recordedIdentities.withLock { $0 } }
-
-    func makeSettingsViewModel(
-        notificationCenter: NotificationCenter
-    ) -> ProductTelemetrySettingsViewModel {
-        ProductTelemetrySettingsViewModel(
-            preferences: preferences,
-            onConsentChanged: { consent in
-                let (completion, continuation) = AsyncStream<Void>.makeStream()
-                notificationCenter.post(
-                    name: ProductTelemetrySettingsViewModel.consentDidChange,
-                    object: nil,
-                    userInfo: [
-                        "isConsented": consent,
-                        "transitionCompletion": continuation,
-                    ]
-                )
-                for await _ in completion {}
-            }
-        )
-    }
-
-    func makeContainer(
-        notificationCenter: NotificationCenter = .default
-    ) -> ServiceContainer {
-        ServiceContainer(
-            productTelemetryPreferences: preferences,
-            processEnvironment: [:],
-            processArguments: [],
-            productTelemetryConfiguration: { .enabled(.init(
-                endpoint: URL(string: "https://telemetry.example.invalid/container")!,
-                sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
-            )) },
-            productTelemetryBootstrapFactory: { [self] identity in
-                recordedIdentities.withLock { $0.append(identity) }
-                return .testing(
-                    configuration: .enabled(.init(
-                        endpoint: URL(string: "https://telemetry.example.invalid/container")!,
-                        sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
-                    )),
-                    host: .interactiveApplication,
-                    isConsented: true,
-                    makeService: { recorder.construct() }
-                )
-            },
-            productTelemetryNotificationCenter: notificationCenter
-        )
-    }
-
-    func remove() {
-        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
-    }
-}
-
-private final class RuntimeTelemetryRecorder: Sendable {
-    private struct State: Sendable {
-        var constructionCount = 0
-        var operations: [String] = []
-        var events: [TelemetryEvent] = []
-    }
-    private let state = Mutex(State())
-    private let operationObserver: (@Sendable (String) -> Void)?
-    private let flushGate: (@Sendable () async -> Void)?
-
-    init(
-        operationObserver: (@Sendable (String) -> Void)? = nil,
-        flushGate: (@Sendable () async -> Void)? = nil
-    ) {
-        self.operationObserver = operationObserver
-        self.flushGate = flushGate
-    }
-
-    var constructionCount: Int { state.withLock { $0.constructionCount } }
-    var operations: [String] { state.withLock { $0.operations } }
-    var events: [TelemetryEvent] { state.withLock { $0.events } }
-
-    func construct() -> any TelemetryService {
-        state.withLock {
-            $0.constructionCount += 1
-            $0.operations.append("construct")
-        }
-        return RuntimeTelemetryService(recorder: self)
-    }
-
-    func track(_ event: TelemetryEvent) {
-        state.withLock {
-            $0.events.append(event)
-            $0.operations.append("track \(event.name)")
-        }
-    }
-
-    func flush() async {
-        state.withLock { $0.operations.append("flush") }
-        await flushGate?()
-    }
-
-    func setEnabled(_ value: Bool) {
-        let operation = value ? "enable" : "disable"
-        state.withLock { $0.operations.append(operation) }
-        operationObserver?(operation)
-    }
-}
-
-private final class RuntimeTelemetryService: TelemetryService, Sendable {
-    private let recorder: RuntimeTelemetryRecorder
-    private let enabled = Mutex(true)
-
-    init(recorder: RuntimeTelemetryRecorder) {
-        self.recorder = recorder
-    }
-
-    var isEnabled: Bool {
-        get { enabled.withLock { $0 } }
-        set {
-            enabled.withLock { $0 = newValue }
-            recorder.setEnabled(newValue)
-        }
-    }
-
-    func track(_ event: TelemetryEvent) {
-        guard isEnabled else { return }
-        recorder.track(event)
-    }
-
-    func track(name: String, properties: [String: String]) {
-        track(TelemetryEvent(name: name, properties: properties))
-    }
-
-    func flush() async {
-        guard isEnabled else { return }
-        await recorder.flush()
-    }
-
-    func resetIdentifier() {}
 }

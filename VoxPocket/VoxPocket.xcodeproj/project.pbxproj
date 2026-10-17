@@ -47,11 +47,13 @@
 		B1AF0A1BDBFB57559A60E7B1 /* BlobTelemetryHostEligibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F54CBA5A2F23A9EF3C9E70 /* BlobTelemetryHostEligibility.swift */; };
 		B701330EDE330D71F4D078AE /* TelemetryLifecycleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A123D80112790CC0F07247 /* TelemetryLifecycleCoordinator.swift */; };
 		BB191F3459B42B9F95D1A3D9 /* DefaultStageTextModelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAAF347420C9E50C1C20E25 /* DefaultStageTextModelService.swift */; };
+		CCBDCE65C659F7DD0CFBAF45 /* ProductTelemetryAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603CD5351F7873845C8C7881 /* ProductTelemetryAssembly.swift */; };
 		D106C5B2E507C744805EFD01 /* QuickRecordingWindowLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */; };
 		D3931380CB615F0E567C48EA /* SingleInstanceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9271618B664CBCE26F3953EB /* SingleInstanceGuardTests.swift */; };
 		DE4CDB33A72CDAB46E009C9D /* WidgetUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1BBF52B228A0B16EC6FA6CF1 /* WidgetUI */; };
 		EE40B4FFE177EE0350CA9411 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007D223D190CA65066429E21 /* ContentView.swift */; };
 		EF64233609A8744936963A02 /* LLMAppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */; };
+		F2715607D12FC7E729118E78 /* BlobTelemetryInstrumentationTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6196FA98288F98EE02E7632 /* BlobTelemetryInstrumentationTestSupport.swift */; };
 		FED3603ADF4B4B697B1EEA9A /* BlobTelemetryConsentCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0384E185F7169AEF7D021111 /* BlobTelemetryConsentCompositionTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -114,6 +116,7 @@
 		4DD039F530CCACAA63257C89 /* StageModelRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StageModelRouting.swift; sourceTree = "<group>"; };
 		5408939FCB2A3EA54DA45BB5 /* VoxPocketLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketLogging.swift; sourceTree = "<group>"; };
 		5490994A8186D12391779CCD /* AppPersistenceStartupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPersistenceStartupTests.swift; sourceTree = "<group>"; };
+		603CD5351F7873845C8C7881 /* ProductTelemetryAssembly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductTelemetryAssembly.swift; sourceTree = "<group>"; };
 		6CFF112393D8CBDE0C341C68 /* BlobTelemetryPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryPolicyTests.swift; sourceTree = "<group>"; };
 		6E1123F8B038F5E5132BADB9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		73E018E9065109FF12437540 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -135,6 +138,7 @@
 		AF62A71944E1E1B0DE53C00F /* VoxPocketApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketApp.swift; sourceTree = "<group>"; };
 		B1B712E72C2083CF6273C87C /* StartRecordingIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartRecordingIntent.swift; sourceTree = "<group>"; };
 		B5F29C424186AA3BC9023F26 /* AppleUITesting */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AppleUITesting; path = ../../AppleUITesting; sourceTree = SOURCE_ROOT; };
+		B6196FA98288F98EE02E7632 /* BlobTelemetryInstrumentationTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryInstrumentationTestSupport.swift; sourceTree = "<group>"; };
 		BDE99DFE18C941D2ED2AE6D4 /* VoxPocketTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = VoxPocketTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C5555A4C6541D371123B761A /* VoxPocketWidgetExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VoxPocketWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C5849A59932F468AA0132586 /* VoxPocketLoggingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketLoggingTests.swift; sourceTree = "<group>"; };
@@ -224,6 +228,7 @@
 				8FAAF347420C9E50C1C20E25 /* DefaultStageTextModelService.swift */,
 				0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */,
 				8B67B4B611B0DDD00F6DC6EA /* MacOSAppScenes.swift */,
+				603CD5351F7873845C8C7881 /* ProductTelemetryAssembly.swift */,
 				A1ECDBBC78A8F624C19D4B1F /* ServiceContainer.swift */,
 				A8D178BE85E727F731B8B667 /* SettingsView.swift */,
 				2751A05FA4192D63C77510F9 /* SingleInstanceGuard.swift */,
@@ -282,6 +287,7 @@
 				0384E185F7169AEF7D021111 /* BlobTelemetryConsentCompositionTests.swift */,
 				39B8B4DD58755568CD305173 /* BlobTelemetryConsentTests.swift */,
 				89772BC7F823BAC86783E497 /* BlobTelemetryInstrumentationTests.swift */,
+				B6196FA98288F98EE02E7632 /* BlobTelemetryInstrumentationTestSupport.swift */,
 				6CFF112393D8CBDE0C341C68 /* BlobTelemetryPolicyTests.swift */,
 				D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */,
 				4BB27BCA736DF9F266FD879B /* RealtimeTranscriberConfigurationTests.swift */,
@@ -458,6 +464,7 @@
 				0BBD9AA8B029D150B42ADAAB /* BlobTelemetryConfigurationTests.swift in Sources */,
 				FED3603ADF4B4B697B1EEA9A /* BlobTelemetryConsentCompositionTests.swift in Sources */,
 				5D89F0261137B1ECA92C0AA6 /* BlobTelemetryConsentTests.swift in Sources */,
+				F2715607D12FC7E729118E78 /* BlobTelemetryInstrumentationTestSupport.swift in Sources */,
 				83C434A665D2A49402AAA93F /* BlobTelemetryInstrumentationTests.swift in Sources */,
 				4A1DE0A743A092ABA12E818D /* BlobTelemetryPolicyTests.swift in Sources */,
 				D106C5B2E507C744805EFD01 /* QuickRecordingWindowLifecycleTests.swift in Sources */,
@@ -484,6 +491,7 @@
 				BB191F3459B42B9F95D1A3D9 /* DefaultStageTextModelService.swift in Sources */,
 				EF64233609A8744936963A02 /* LLMAppConfig.swift in Sources */,
 				AE6D0DE9130BACC1EA35668F /* MacOSAppScenes.swift in Sources */,
+				CCBDCE65C659F7DD0CFBAF45 /* ProductTelemetryAssembly.swift in Sources */,
 				1A76D389C98E4BDD802CD409 /* ServiceContainer.swift in Sources */,
 				A612F4912D10756BBB403C54 /* SettingsView.swift in Sources */,
 				9340FF368FAC64D4889B5075 /* SingleInstanceGuard.swift in Sources */,

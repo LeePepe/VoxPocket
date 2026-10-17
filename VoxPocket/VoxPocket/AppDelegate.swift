@@ -105,7 +105,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         logger.debug("Application did finish launching")
+        guard !activateExistingInstanceIfNeeded() else { return }
+        scheduleStartup()
+    }
 
+    private func activateExistingInstanceIfNeeded() -> Bool {
         // 单实例保护：若已有 VoxPocket 实例在跑（例如已装的 /Applications 版 +
         // 从 Xcode DerivedData 启动的 Debug 版），激活已有实例并终止自己，
         // 避免两个实例都注册 Fn 全局热键导致按一次弹两个 panel。
@@ -130,9 +134,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 "self_pid": ProcessInfo.processInfo.processIdentifier
             ])
             NSApp.terminate(nil)
-            return
+            return true
         }
+        return false
+    }
 
+    private func scheduleStartup() {
         // 启动系统事件循环后再等待配置；服务和快捷键都不能抢在配置之前初始化。
         startupTask = Task { @MainActor [weak self] in
             guard let self, await startup.prepare(), !Task.isCancelled else { return }
@@ -153,10 +160,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             logger.debug("Initialization complete")
         }
-
-        // 隐藏 Dock 图标（可选）
-        // NSApp.setActivationPolicy(.accessory)
-
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
@@ -209,27 +212,33 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             for: .showPanelHotkey,
             default: Self.defaultShowPanelHotkey
         )
+        let quickRecordHotkey = await resolvedQuickRecordHotkey()
+        registerShowPanelHotkey(showPanelHotkey)
+        registerQuickRecordHotkey(quickRecordHotkey)
+    }
 
-        // Fn: 快速录音（按下开始 / 抬起结束）
-        var quickRecordHotkey = await preferences.getValue(
+    private func resolvedQuickRecordHotkey() async -> HotkeyDefinition {
+        var hotkey = await preferences.getValue(
             for: .quickRecordHotkey,
             default: Self.defaultQuickRecordHotkey
         )
-        if quickRecordHotkey.keyCode == UInt16(kVK_F6), quickRecordHotkey.modifiers == 0 {
-            quickRecordHotkey = Self.defaultQuickRecordHotkey
-            await preferences.setValue(quickRecordHotkey, for: .quickRecordHotkey)
+        if hotkey.keyCode == UInt16(kVK_F6), hotkey.modifiers == 0 {
+            hotkey = Self.defaultQuickRecordHotkey
+            await preferences.setValue(hotkey, for: .quickRecordHotkey)
         }
+        return hotkey
+    }
 
-        // 注册显示面板快捷键
+    private func registerShowPanelHotkey(_ hotkey: HotkeyDefinition) {
         do {
-            try hotkeyService.register(showPanelHotkey) { [weak self] in
+            try hotkeyService.register(hotkey) { [weak self] in
                 Task { @MainActor in
                     self?.handleShowPanelHotkey()
                 }
             }
             logger.log(.debug, "Registered show panel hotkey", context: [
                 "identifier": HotkeyIdentifier.showPopover,
-                "display": showPanelHotkey.displayString
+                "display": hotkey.displayString
             ])
         } catch {
             logger.log(.debug, "Failed to register show panel hotkey", context: [
@@ -237,10 +246,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 "error": error.localizedDescription
             ])
         }
+    }
 
-        // 注册快速录音快捷键（按下/抬起模式）
+    private func registerQuickRecordHotkey(_ hotkey: HotkeyDefinition) {
         hotkeyService.registerLongPress(
-            quickRecordHotkey,
+            hotkey,
             onPress: { [weak self] in
                 await self?.handleQuickRecordStart()
             },
@@ -250,7 +260,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         logger.log(.debug, "Registered quick record hotkey", context: [
             "identifier": HotkeyIdentifier.toggleRecording,
-            "display": quickRecordHotkey.displayString,
+            "display": hotkey.displayString,
             "mode": "press_release"
         ])
     }
@@ -291,105 +301,48 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// 处理快速录音开始（按下触发）
-    func enterQuickRecordStart() async {
-        await handleQuickRecordStart()
-    }
-
-    func enterQuickRecordStop() async {
-        await handleQuickRecordStop()
-    }
-
     private func handleQuickRecordStart() async {
         quickRecordStartCount += 1
         logger.log(.debug, "Quick record start triggered", context: ["call_count": quickRecordStartCount])
-
         #if DEBUG
-        let claimRecording = quickRecordTryStart ?? { self.serviceContainer.tryStartRecording(source: $0) }
-        let showQuickRecording = quickRecordShowWindow ?? { self.windowManager.showWindow(.quickRecording) }
-        let getQuickRecordingViewModel =
-            quickRecordViewModel ?? { self.windowManager.getQuickRecordingViewModel() }
-        let endQuickRecording = quickRecordEnd ?? { [weak self] in
-            guard let self else { return }
-            self.serviceContainer.endRecording()
-        }
-        let hideQuickRecording =
-            quickRecordHideWindow ?? { [weak self] in
-                guard let self else { return }
-                self.windowManager.hideWindow(.quickRecording)
-            }
+        let claim = quickRecordTryStart ?? { self.serviceContainer.tryStartRecording(source: $0) }
+        let show = quickRecordShowWindow ?? { self.windowManager.showWindow(.quickRecording) }
+        let model = quickRecordViewModel ?? { self.windowManager.getQuickRecordingViewModel() }
+        let end = quickRecordEnd ?? { [weak self] in self?.serviceContainer.endRecording() }
+        let hide = quickRecordHideWindow ?? { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
         #else
-        let claimRecording = { self.serviceContainer.tryStartRecording(source: $0) }
-        let showQuickRecording = { self.windowManager.showWindow(.quickRecording) }
-        let getQuickRecordingViewModel = { self.windowManager.getQuickRecordingViewModel() }
-        let endQuickRecording = { [weak self] in
-            guard let self else { return }
-            self.serviceContainer.endRecording()
-        }
-        let hideQuickRecording = { [weak self] in
-            guard let self else { return }
-            self.windowManager.hideWindow(.quickRecording)
-        }
+        let claim = { self.serviceContainer.tryStartRecording(source: $0) }
+        let show = { self.windowManager.showWindow(.quickRecording) }
+        let model = { self.windowManager.getQuickRecordingViewModel() }
+        let end = { [weak self] in self?.serviceContainer.endRecording() }
+        let hide = { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
         #endif
-
-        let performStart = { [self] in
-            guard claimRecording(.quickRecording) else {
-                return (
-                    didStart: false,
-                    status: getQuickRecordingViewModel()?.recorderStatus ?? .error
+        guard claim(.quickRecording) else { return }
+        show()
+        guard let viewModel = model() else { return }
+        viewModel.onComplete = { [weak self, weak viewModel] finalText in
+            Task { @MainActor in
+                let raw = viewModel?.rawTranscription ?? finalText
+                await self?.serviceContainer.initializePersistence()
+                try? await self?.serviceContainer.sessionUseCase.saveCompletedSession(
+                    title: nil, rawText: raw, refinedText: finalText
                 )
+                try? await Task.sleep(for: .seconds(1))
+                hide(); end()
             }
-
-            // 先创建面板；关闭回调必须在异步启动前就绪，避免快速松手的无结果回调丢失。
-            showQuickRecording()
-
-            // 设置完成回调：隐藏面板 + 清除录音状态
-            if let viewModel = getQuickRecordingViewModel() {
-                viewModel.onComplete = { [weak self, weak viewModel] finalText in
-                    Task { @MainActor in
-                        // 保存会话到持久化存储
-                        let raw = viewModel?.rawTranscription ?? finalText
-                        await self?.serviceContainer.initializePersistence()
-                        try? await self?.serviceContainer.sessionUseCase.saveCompletedSession(
-                            title: nil,
-                            rawText: raw,
-                            refinedText: finalText
-                        )
-
-                        try? await Task.sleep(for: .seconds(1))
-                        hideQuickRecording()
-                        endQuickRecording()
-                    }
-                }
-                viewModel.onNoResult = { [weak self] in
-                    Task { @MainActor in
-                        guard self != nil else { return }
-                        hideQuickRecording()
-                        endQuickRecording()
-                    }
-                }
-
-                await viewModel.startRecording()
-                return (true, viewModel.recorderStatus)
-            }
-            return (
-                false,
-                getQuickRecordingViewModel()?.recorderStatus ?? .error
-            )
         }
-
+        viewModel.onNoResult = { Task { @MainActor in hide(); end() } }
+        await viewModel.startRecording()
         #if canImport(LokiKit)
-        let telemetryResult = await performStart()
-        guard telemetryResult.didStart, telemetryResult.status != .error else { return }
+        guard viewModel.recorderStatus != .error else { return }
         ProductTelemetryNotificationBoundary.postQuickRecordStarted(
             to: productTelemetryNotificationCenter
         )
-        if telemetryResult.status != .listening {
+        if viewModel.recorderStatus != .listening {
             ProductTelemetryNotificationBoundary.postQuickRecordStopped(
                 to: productTelemetryNotificationCenter
             )
         }
-        #else
-        _ = await performStart()
         #endif
     }
 
@@ -397,94 +350,40 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleQuickRecordStop() async {
         quickRecordStopCount += 1
         logger.log(.debug, "Quick record stop triggered", context: ["call_count": quickRecordStopCount])
-
         #if DEBUG
-        let activeQuickRecordingSource =
-            quickRecordActiveSource ?? { self.serviceContainer.activeRecordingSource }
-        let getQuickRecordingViewModel =
-            quickRecordViewModel ?? { self.windowManager.getQuickRecordingViewModel() }
-        let endQuickRecording = quickRecordEnd ?? { [weak self] in
-            guard let self else { return }
-            self.serviceContainer.endRecording()
-        }
-        let hideQuickRecording =
-            quickRecordHideWindow ?? { [weak self] in
-                guard let self else { return }
-                self.windowManager.hideWindow(.quickRecording)
-            }
+        let source = quickRecordActiveSource ?? { self.serviceContainer.activeRecordingSource }
+        let model = quickRecordViewModel ?? { self.windowManager.getQuickRecordingViewModel() }
+        let end = quickRecordEnd ?? { [weak self] in self?.serviceContainer.endRecording() }
+        let hide = quickRecordHideWindow ?? { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
         #else
-        let activeQuickRecordingSource = { self.serviceContainer.activeRecordingSource }
-        let getQuickRecordingViewModel = { self.windowManager.getQuickRecordingViewModel() }
-        let endQuickRecording = { [weak self] in
-            guard let self else { return }
-            self.serviceContainer.endRecording()
-        }
-        let hideQuickRecording = { [weak self] in
-            guard let self else { return }
-            self.windowManager.hideWindow(.quickRecording)
-        }
+        let source = { self.serviceContainer.activeRecordingSource }
+        let model = { self.windowManager.getQuickRecordingViewModel() }
+        let end = { [weak self] in self?.serviceContainer.endRecording() }
+        let hide = { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
         #endif
-
-        let performStop = { [self] in
-            let activeSource = activeQuickRecordingSource()
-            guard activeSource == .quickRecording else {
-                logger.log(.debug, "Recording source mismatch on quick record stop", context: [
-                    "active_source": activeSource?.rawValue ?? "nil"
-                ])
-                return (
-                    shouldHandle: false,
-                    stoppedDuringStartup: false,
-                    wasListening: false,
-                    status: getQuickRecordingViewModel()?.recorderStatus ?? .idle
-                )
-            }
-
-            guard let viewModel = getQuickRecordingViewModel() else {
-                endQuickRecording()
-                return (
-                    false,
-                    false,
-                    false,
-                    getQuickRecordingViewModel()?.recorderStatus ?? .idle
-                )
-            }
-
-            let stoppedDuringStartup = viewModel.isStartingRecording
-            let wasListening = viewModel.recorderStatus == .listening
-            await viewModel.stopRecording()
-
-            if stoppedDuringStartup {
-                // 启动尚未完成，等待 ViewModel 在 start 完成后自动 stop 并通过回调清理
-                return (true, true, wasListening, viewModel.recorderStatus)
-            }
-
-            // 兜底清理：如果没有进入转录/优化流程，立即释放录音占用，避免状态卡死
-            switch viewModel.recorderStatus {
-            case .idle:
-                logger.debug("handleQuickRecordStop: fallback cleanup triggered, status=\(String(describing: viewModel.recorderStatus))")
-                endQuickRecording()
-                hideQuickRecording()
-            case .error:
-                // 释放录音占用以便 Fn 重试，但保留错误岛供用户复制已识别原文或关闭。
-                endQuickRecording()
-            case .listening, .transcribing, .refining, .done:
-                break
-            }
-            return (true, false, wasListening, viewModel.recorderStatus)
+        guard source() == .quickRecording else {
+            logger.debug("Recording source mismatch on quick record stop")
+            return
         }
-
+        guard let viewModel = model() else { end(); return }
+        let stoppedDuringStartup = viewModel.isStartingRecording
+        let wasListening = viewModel.recorderStatus == .listening
+        await viewModel.stopRecording()
+        guard !stoppedDuringStartup else { return }
+        switch viewModel.recorderStatus {
+        case .idle: end(); hide()
+        case .error: end()
+        case .listening, .transcribing, .refining, .done: break
+        }
         #if canImport(LokiKit)
-        let telemetryResult = await performStop()
-        guard telemetryResult.shouldHandle, !telemetryResult.stoppedDuringStartup else { return }
-        if telemetryResult.wasListening, telemetryResult.status != .listening {
+        if wasListening, viewModel.recorderStatus != .listening {
             ProductTelemetryNotificationBoundary.postQuickRecordStopped(
                 to: productTelemetryNotificationCenter
             )
         }
-        #else
-        _ = await performStop()
         #endif
     }
+
 }
 
 #endif

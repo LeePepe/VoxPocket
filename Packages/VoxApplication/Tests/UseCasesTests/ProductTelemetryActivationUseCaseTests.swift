@@ -57,27 +57,35 @@ struct ProductTelemetryActivationUseCaseTests {
             await events.record(.startupReturned)
         }
         let firstEvent = await events.first()
-        let operationsBeforeRelease = recorder.operations
-        let identitiesBeforeRelease = recorder.identities
-        let waiterCountBeforeRelease = await events.waiterCount
-
         if firstEvent != .waiterEntered {
             await gate.release()
             await transition.value
             await startup.value
         }
-
         #expect(firstEvent == .waiterEntered)
-        #expect(waiterCountBeforeRelease == 1)
-        #expect(operationsBeforeRelease == ["persist true"])
-        #expect(identitiesBeforeRelease.isEmpty)
-
+        await assertStartupIsDeferred(recorder: recorder, events: events)
         if firstEvent == .waiterEntered {
             await gate.release()
             await transition.value
             await startup.value
         }
+        await assertStartupCompletedOnce(recorder: recorder, events: events, useCase: useCase)
+    }
 
+    private func assertStartupIsDeferred(
+        recorder: ActivationRecorder,
+        events: StartupDeferralEvents
+    ) async {
+        #expect(await events.waiterCount == 1)
+        #expect(recorder.operations == ["persist true"])
+        #expect(recorder.identities.isEmpty)
+    }
+
+    private func assertStartupCompletedOnce(
+        recorder: ActivationRecorder,
+        events: StartupDeferralEvents,
+        useCase: DefaultProductTelemetryActivationUseCase
+    ) async {
         #expect(await events.waiterCount == 1)
         #expect(recorder.writes == [true])
         #expect(recorder.operations == [

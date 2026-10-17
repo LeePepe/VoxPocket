@@ -79,13 +79,31 @@ final class MacOSSettingsViewTests: XCTestCase {
         XCTAssertFalse(shortcuts.hasConflict)
     }
 
-    func testLoadingDoesNotShowTemporaryDefaultValues() async throws {
+    func testShortcutsLoadingDoesNotShowTemporaryDefaults() async throws {
+        try await assertLoadingDefaultsAreHidden(section: .shortcuts)
+    }
+
+    func testProviderLoadingDoesNotShowTemporaryDefaults() async throws {
+        try await assertLoadingDefaultsAreHidden(section: .text)
+    }
+
+    private func assertLoadingDefaultsAreHidden(
+        section: MacOSSettingsView.Section
+    ) async throws {
         let gate = SettingsLoadGate()
+        var providerLoad: (@MainActor (LLMProviderSettingsViewModel) async -> Void)?
+        var shortcutsLoad: (@MainActor (ShortcutsViewModel) async -> Void)?
+        if section == .text {
+            providerLoad = { _ in await gate.suspend() }
+        } else {
+            shortcutsLoad = { _ in await gate.suspend() }
+        }
         let view = MacOSSettingsView(
             providerSettings: LLMProviderSettingsViewModel(preferences: store),
             shortcuts: ShortcutsViewModel(preferences: store),
-            initialSection: .shortcuts,
-            loadShortcuts: { _ in await gate.suspend() }
+            initialSection: section,
+            loadProviderSettings: providerLoad,
+            loadShortcuts: shortcutsLoad
         )
         .environment(\.colorScheme, .light)
         let host = NSHostingView(rootView: view)
@@ -97,12 +115,15 @@ final class MacOSSettingsViewTests: XCTestCase {
         let bitmap = try capture(panel)
         let words = try await recognize(bitmap).joined()
         XCTAssertTrue(words.contains("正在加载设置"), "Synthetic loading OCR: \(words)")
-        XCTAssertFalse(words.contains("Azure"))
-        XCTAssertFalse(words.contains("F7"))
+        let temporaryDefaults = section == .shortcuts ? ["F7", "Fn"] : ["Azure"]
+        for value in temporaryDefaults {
+            XCTAssertFalse(words.contains(value))
+        }
         gate.release()
         if let directory = ProcessInfo.processInfo.environment["VOX_SETTINGS_RENDER_DIR"] {
             let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-            let url = URL(fileURLWithPath: directory).appendingPathComponent("settings-loading.png")
+            let url = URL(fileURLWithPath: directory)
+                .appendingPathComponent("settings-loading-\(section).png")
             try await Task.detached { try png.write(to: url) }.value
         }
     }
@@ -146,7 +167,7 @@ final class MacOSSettingsViewTests: XCTestCase {
         }
     }
 
-    func testTelemetryControlsLoadAndBindThroughProductionParents() async throws {
+    func testTelemetryControlsLoadAndBindThroughSettingsParent() async throws {
         var observedSettingsModels: [(ObjectIdentifier, Bool, Bool)] = []
         let observeSettings: @MainActor (ProductTelemetrySettingsViewModel) -> Void = {
             observedSettingsModels.append((ObjectIdentifier($0), $0.isLoaded, $0.isSendingUsageData))
@@ -166,10 +187,8 @@ final class MacOSSettingsViewTests: XCTestCase {
         let settingsHost = NSHostingView(rootView: settingsView)
         let settingsPanel = mount(settingsHost, height: 760)
         defer { settingsPanel.orderOut(nil) }
-
         try await waitUntil { retainedSettingsModel.isLoaded }
-        settingsHost.layoutSubtreeIfNeeded()
-        settingsPanel.displayIfNeeded()
+        settingsHost.layoutSubtreeIfNeeded(); settingsPanel.displayIfNeeded()
         try await waitUntil { observedSettingsModels.last?.1 == true }
         let replacementSettingsModel = ProductTelemetrySettingsViewModel(
             preferences: settingsPreferences,
@@ -195,12 +214,22 @@ final class MacOSSettingsViewTests: XCTestCase {
             guard let last = observedSettingsModels.last else { return false }
             return last.0 == ObjectIdentifier(retainedSettingsModel) && last.1 && last.2
         }
-        XCTAssertTrue(retainedSettingsModel.isSendingUsageData)
-        XCTAssertFalse(replacementSettingsModel.isLoaded)
+        await assertSettingsParentState(retainedSettingsModel, replacementSettingsModel)
+    }
+
+    private func assertSettingsParentState(
+        _ retained: ProductTelemetrySettingsViewModel,
+        _ replacement: ProductTelemetrySettingsViewModel
+    ) async {
+        XCTAssertTrue(retained.isSendingUsageData)
+        XCTAssertFalse(replacement.isLoaded)
         let settingsConsent = await ProductTelemetryPreferences(store: store).isConsented
         XCTAssertTrue(settingsConsent)
         XCTAssertNil(UserDefaults(suiteName: suite)?.data(forKey: "telemetry.product.installIdentity"))
+    }
 
+    func testTelemetryControlsLoadAndBindThroughMeParent() async throws {
+        await store.setValue(true, for: .productTelemetryConsent)
         var observedMeModels: [(ObjectIdentifier, Bool, Bool)] = []
         let observeMe: @MainActor (ProductTelemetrySettingsViewModel) -> Void = {
             observedMeModels.append((ObjectIdentifier($0), $0.isLoaded, $0.isSendingUsageData))
@@ -244,8 +273,15 @@ final class MacOSSettingsViewTests: XCTestCase {
             guard let last = observedMeModels.last else { return false }
             return last.0 == ObjectIdentifier(retainedMeModel) && last.1 && !last.2
         }
-        XCTAssertFalse(retainedMeModel.isSendingUsageData)
-        XCTAssertFalse(replacementMeModel.isLoaded)
+        await assertMeParentState(retainedMeModel, replacementMeModel)
+    }
+
+    private func assertMeParentState(
+        _ retained: ProductTelemetrySettingsViewModel,
+        _ replacement: ProductTelemetrySettingsViewModel
+    ) async {
+        XCTAssertFalse(retained.isSendingUsageData)
+        XCTAssertFalse(replacement.isLoaded)
         let meConsent = await ProductTelemetryPreferences(store: store).isConsented
         XCTAssertFalse(meConsent)
         XCTAssertNil(UserDefaults(suiteName: suite)?.data(forKey: "telemetry.product.installIdentity"))
@@ -255,54 +291,48 @@ final class MacOSSettingsViewTests: XCTestCase {
         enum SuspendedLoad: CaseIterable { case provider, shortcuts }
 
         for suspendedLoad in SuspendedLoad.allCases {
-            await store.setValue(true, for: .productTelemetryConsent)
-            let gate = SettingsLoadGate()
-            let preferences = ProductTelemetryPreferences(store: store)
-            let productTelemetry = ProductTelemetrySettingsViewModel(
-                preferences: preferences,
-                onConsentChanged: { await preferences.persistConsent($0) }
-            )
-            let providerLoad: (@MainActor (LLMProviderSettingsViewModel) async -> Void)?
-            if suspendedLoad == .provider {
-                providerLoad = { _ in await gate.suspend() }
-            } else {
-                providerLoad = nil
-            }
-            let shortcutsLoad: (@MainActor (ShortcutsViewModel) async -> Void)?
-            if suspendedLoad == .shortcuts {
-                shortcutsLoad = { _ in await gate.suspend() }
-            } else {
-                shortcutsLoad = nil
-            }
-            let view = MacOSSettingsView(
-                providerSettings: LLMProviderSettingsViewModel(preferences: store),
-                shortcuts: ShortcutsViewModel(preferences: store),
-                productTelemetry: productTelemetry,
-                initialSection: .privacy,
-                loadProviderSettings: providerLoad,
-                loadShortcuts: shortcutsLoad
-            )
-            let host = NSHostingView(rootView: view)
-            let panel = mount(host, height: 760)
-
-            await gate.waitUntilSuspended()
-            try await waitUntil { productTelemetry.isLoaded && productTelemetry.isSendingUsageData }
-            host.layoutSubtreeIfNeeded()
-            panel.displayIfNeeded()
-            let words = try await recognize(capture(panel)).joined()
-            XCTAssertTrue(words.localizedCaseInsensitiveContains("Send usage data"), "Mounted Privacy surface OCR: \(words)")
-
-            let privacySurface = ProductTelemetrySettingsView(viewModel: productTelemetry)
-            XCTAssertTrue(privacySurface.consentBinding.wrappedValue)
-            privacySurface.consentBinding.wrappedValue = false
-            try await waitUntil { productTelemetry.isLoaded && !productTelemetry.isSendingUsageData }
-            let persistedConsent = await ProductTelemetryPreferences(store: store).isConsented
-            XCTAssertFalse(persistedConsent)
-            XCTAssertNil(UserDefaults(suiteName: suite)?.data(forKey: "telemetry.product.installIdentity"))
-
-            gate.release()
-            panel.orderOut(nil)
+            try await assertPrivacyInteractivity(suspendingProvider: suspendedLoad == .provider)
         }
+    }
+
+    private func assertPrivacyInteractivity(suspendingProvider: Bool) async throws {
+        await store.setValue(true, for: .productTelemetryConsent)
+        let gate = SettingsLoadGate()
+        let preferences = ProductTelemetryPreferences(store: store)
+        let productTelemetry = ProductTelemetrySettingsViewModel(
+            preferences: preferences,
+            onConsentChanged: { await preferences.persistConsent($0) }
+        )
+        var providerLoad: (@MainActor (LLMProviderSettingsViewModel) async -> Void)?
+        var shortcutsLoad: (@MainActor (ShortcutsViewModel) async -> Void)?
+        if suspendingProvider {
+            providerLoad = { _ in await gate.suspend() }
+        } else {
+            shortcutsLoad = { _ in await gate.suspend() }
+        }
+        let view = MacOSSettingsView(
+            providerSettings: LLMProviderSettingsViewModel(preferences: store),
+            shortcuts: ShortcutsViewModel(preferences: store),
+            productTelemetry: productTelemetry,
+            initialSection: .privacy,
+            loadProviderSettings: providerLoad,
+            loadShortcuts: shortcutsLoad
+        )
+        let host = NSHostingView(rootView: view)
+        let panel = mount(host, height: 760)
+        defer { panel.orderOut(nil) }
+        await gate.waitUntilSuspended()
+        try await waitUntil { productTelemetry.isLoaded && productTelemetry.isSendingUsageData }
+        let words = try await recognize(capture(panel)).joined()
+        XCTAssertTrue(words.localizedCaseInsensitiveContains("Send usage data"))
+        let privacySurface = ProductTelemetrySettingsView(viewModel: productTelemetry)
+        XCTAssertTrue(privacySurface.consentBinding.wrappedValue)
+        privacySurface.consentBinding.wrappedValue = false
+        try await waitUntil { productTelemetry.isLoaded && !productTelemetry.isSendingUsageData }
+        let persistedConsent = await preferences.isConsented
+        XCTAssertFalse(persistedConsent)
+        XCTAssertNil(UserDefaults(suiteName: suite)?.data(forKey: "telemetry.product.installIdentity"))
+        gate.release()
     }
 
     private func render(section: MacOSSettingsView.Section, scheme: ColorScheme,
