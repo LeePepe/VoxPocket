@@ -89,6 +89,7 @@ struct BlobTelemetryInstrumentationTests {
         await hotkeys.release()
         await normal.waitForFirstCleanup()
         #expect(normal.recording.stopCallCount == 1)
+        #expect(normal.operations.first == "claim")
         assertQuickRecordOrder(normal.operations)
         withExtendedLifetime(launched.0) {}
     }

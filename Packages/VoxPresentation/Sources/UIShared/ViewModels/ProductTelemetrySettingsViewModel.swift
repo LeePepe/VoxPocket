@@ -11,24 +11,55 @@ public final class ProductTelemetrySettingsViewModel: ObservableObject {
 
     private let preferences: ProductTelemetryPreferences
     private let onConsentChanged: @MainActor @Sendable (Bool) async -> Void
-    private var requestGeneration: UInt64 = 0
+    private let notificationCenter: NotificationCenter
+    private let readConsent: @MainActor @Sendable () async -> Bool
+    private var consentObservation: Task<Void, Never>?
+    private var intentGeneration: UInt64 = 0
+    private var refreshGeneration: UInt64 = 0
 
-    public init(preferences: ProductTelemetryPreferences = ProductTelemetryPreferences()) {
-        self.preferences = preferences
-        onConsentChanged = {
+    public convenience init(
+        preferences: ProductTelemetryPreferences = ProductTelemetryPreferences()
+    ) {
+        self.init(
+            preferences: preferences,
+            notificationCenter: .default,
+            readConsent: { await preferences.isConsented },
+            onConsentChanged: {
             await ProductTelemetrySettingsViewModel.notifyConsentChanged(
                 $0,
                 notificationCenter: .default
             )
-        }
+            }
+        )
     }
 
-    public init(
+    public convenience init(
         preferences: ProductTelemetryPreferences,
         onConsentChanged: @escaping @MainActor @Sendable (Bool) async -> Void
     ) {
+        self.init(
+            preferences: preferences,
+            notificationCenter: .default,
+            readConsent: { await preferences.isConsented },
+            onConsentChanged: onConsentChanged
+        )
+    }
+
+    init(
+        preferences: ProductTelemetryPreferences,
+        notificationCenter: NotificationCenter,
+        readConsent: @escaping @MainActor @Sendable () async -> Bool,
+        onConsentChanged: @escaping @MainActor @Sendable (Bool) async -> Void
+    ) {
         self.preferences = preferences
+        self.notificationCenter = notificationCenter
+        self.readConsent = readConsent
         self.onConsentChanged = onConsentChanged
+        observeCommittedConsent()
+    }
+
+    deinit {
+        consentObservation?.cancel()
     }
 
     private static func notifyConsentChanged(
@@ -48,15 +79,48 @@ public final class ProductTelemetrySettingsViewModel: ObservableObject {
     }
 
     public func load() async {
-        isSendingUsageData = await preferences.isConsented
+        let generation = beginRefresh()
+        let intent = intentGeneration
+        let consent = await readConsent()
+        guard refreshGeneration == generation, intentGeneration == intent else { return }
+        isSendingUsageData = consent
         isLoaded = true
     }
 
     public func setSendingUsageData(_ isEnabled: Bool) async {
-        requestGeneration &+= 1
-        let request = requestGeneration
+        intentGeneration &+= 1
+        refreshGeneration &+= 1
+        let intent = intentGeneration
         await onConsentChanged(isEnabled)
-        guard requestGeneration == request else { return }
-        isSendingUsageData = isEnabled
+        let committed = await readConsent()
+        guard intentGeneration == intent, committed == isEnabled else { return }
+        refreshGeneration &+= 1
+        isSendingUsageData = committed
+        notificationCenter.post(name: Self.consentDidChange, object: nil)
+    }
+
+    private func observeCommittedConsent() {
+        consentObservation = Task { @MainActor [weak self, notificationCenter] in
+            for await notification in notificationCenter.notifications(
+                named: Self.consentDidChange
+            ) {
+                guard notification.userInfo == nil else { continue }
+                await self?.refreshCommittedConsent()
+            }
+        }
+    }
+
+    private func refreshCommittedConsent() async {
+        guard isLoaded else { return }
+        let generation = beginRefresh()
+        let intent = intentGeneration
+        let committed = await readConsent()
+        guard refreshGeneration == generation, intentGeneration == intent else { return }
+        isSendingUsageData = committed
+    }
+
+    private func beginRefresh() -> UInt64 {
+        refreshGeneration &+= 1
+        return refreshGeneration
     }
 }
