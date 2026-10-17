@@ -335,21 +335,34 @@ struct BlobTelemetryInstrumentationTests {
     }
 
     @Test func sameTurnFlushRequestIsAdmittedBeforeLaterAction() async throws {
-        let fixture = RuntimeFixture()
+        let flushGate = TelemetryFlushGate(targetEntry: 1)
+        let fixture = RuntimeFixture(telemetryFlushGate: flushGate.suspendTarget)
         defer { fixture.remove() }
         let center = NotificationCenter()
         let container = fixture.makeContainer(notificationCenter: center)
         let model = fixture.makeSettingsViewModel(notificationCenter: center)
+        let delegate = AppDelegate(
+            productTelemetryNotificationCenter: center,
+            startup: AppStartup {},
+            serviceContainer: container,
+            hotkeyService: TestGlobalHotkeyService(),
+            startupInitializePersistence: {},
+            startupScheduleQuickRecordingPrewarm: {}
+        )
 
         await model.setSendingUsageData(true)
-        let flushCompletion = Task {
-            await container.productTelemetryApplicationWillResignActive()
-        }
-        await Task.yield()
+        delegate.applicationWillResignActive(
+            Notification(name: Notification.Name("test.applicationWillResignActive"))
+        )
+        await flushGate.waitUntilEntered()
         container.recordProductAction(.settingsOpened)
 
-        await flushCompletion.value
-        await container.productTelemetryApplicationWillResignActive()
+        await flushGate.release()
+        await delegate.waitForPendingProductTelemetryResignActive()
+        delegate.applicationWillResignActive(
+            Notification(name: Notification.Name("test.applicationWillResignActive"))
+        )
+        await delegate.waitForPendingProductTelemetryResignActive()
 
         #expect(fixture.recorder.operations == [
             "construct", "flush", "track product.user_action", "flush"
@@ -394,6 +407,14 @@ struct BlobTelemetryInstrumentationTests {
         ])
         #expect(fixture.identities.count == 2)
         #expect(Set(fixture.identities).count == 1)
+        #expect(fixture.recorder.operations == [
+            "construct",
+            "track product.user_action",
+            "disable",
+            "enable",
+            "track product.user_action",
+            "flush",
+        ])
     }
 }
 

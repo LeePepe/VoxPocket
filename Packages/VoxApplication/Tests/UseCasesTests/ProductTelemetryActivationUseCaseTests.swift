@@ -130,6 +130,50 @@ struct ProductTelemetryActivationUseCaseTests {
         await startup.value
         #expect(!useCase.isReady)
     }
+
+    @Test func staleStartupCannotChangeFalseThenTrueWinnerSnapshot() async {
+        let checkpoint = AsyncGate()
+        let recorder = ActivationRecorder(consent: true)
+        let useCase = recorder.makeUseCase {
+            await checkpoint.suspendFirst()
+        }
+
+        let startup = Task { await useCase.activateAtStartupIfEligible(true) }
+        await checkpoint.waitUntilSuspended()
+        let disabling = useCase.beginConsentTransition(false, isEligible: true)
+        await disabling.value
+        let enabling = useCase.beginConsentTransition(true, isEligible: true)
+        let pendingWaiter = Task { await useCase.waitForPendingTransition() }
+        await enabling.value
+        await pendingWaiter.value
+
+        #expect(useCase.isReady)
+        #expect(recorder.writes == [false, true])
+        #expect(recorder.identities.count == 2)
+        #expect(Set(recorder.identities).count == 1)
+        #expect(recorder.operations == [
+            "read", "identity", "activate",
+            "deactivate", "persist false",
+            "persist true", "read", "identity", "activate",
+        ])
+        let winningReadiness = useCase.isReady
+        let winningConsent = recorder.consent
+        let winningWrites = recorder.writes
+        let winningIdentities = recorder.identities
+        let winningOperations = recorder.operations
+
+        await checkpoint.release()
+        await startup.value
+        await disabling.value
+        await enabling.value
+        await pendingWaiter.value
+
+        #expect(useCase.isReady == winningReadiness)
+        #expect(recorder.consent == winningConsent)
+        #expect(recorder.writes == winningWrites)
+        #expect(recorder.identities == winningIdentities)
+        #expect(recorder.operations == winningOperations)
+    }
     #endif
 
     @Test func failedActivationCanRetryWithoutCreatingAnotherPolicyWorker() async {
