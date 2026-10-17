@@ -45,11 +45,13 @@ public protocol ProductTelemetryActivationUseCase: AnyObject {
 public final class DefaultProductTelemetryActivationUseCase: ProductTelemetryActivationUseCase {
     #if DEBUG
     public typealias ActivationCheckpoint = @MainActor @Sendable () async -> Void
+    typealias PendingTransitionAwaiter = @MainActor @Sendable (Task<Void, Never>?) async -> Void
     #endif
 
     private let dependencies: ProductTelemetryActivationDependencies
     #if DEBUG
     private let activationCheckpoint: ActivationCheckpoint
+    private let pendingTransitionAwaiter: PendingTransitionAwaiter
     #endif
     public private(set) var isReady = false
     private var consentIntentGeneration: UInt64 = 0
@@ -59,6 +61,9 @@ public final class DefaultProductTelemetryActivationUseCase: ProductTelemetryAct
         self.dependencies = dependencies
         #if DEBUG
         activationCheckpoint = {}
+        pendingTransitionAwaiter = { capturedTask in
+            await capturedTask?.value
+        }
         #endif
     }
 
@@ -69,6 +74,19 @@ public final class DefaultProductTelemetryActivationUseCase: ProductTelemetryAct
     ) {
         self.dependencies = dependencies
         self.activationCheckpoint = activationCheckpoint
+        pendingTransitionAwaiter = { capturedTask in
+            await capturedTask?.value
+        }
+    }
+
+    init(
+        dependencies: ProductTelemetryActivationDependencies,
+        activationCheckpoint: @escaping ActivationCheckpoint,
+        pendingTransitionAwaiter: @escaping PendingTransitionAwaiter
+    ) {
+        self.dependencies = dependencies
+        self.activationCheckpoint = activationCheckpoint
+        self.pendingTransitionAwaiter = pendingTransitionAwaiter
     }
     #endif
 
@@ -114,7 +132,11 @@ public final class DefaultProductTelemetryActivationUseCase: ProductTelemetryAct
         while true {
             let observedIntent = consentIntentGeneration
             let explicitTransition = pendingTransition
+            #if DEBUG
+            await pendingTransitionAwaiter(explicitTransition)
+            #else
             await explicitTransition?.value
+            #endif
             guard observedIntent == consentIntentGeneration else { continue }
             await activateIfEligible(isEligible, intent: observedIntent)
             return

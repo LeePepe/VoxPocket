@@ -35,18 +35,52 @@ struct ProductTelemetryActivationUseCaseTests {
 
     @Test func startupDefersBehindExplicitTransition() async {
         let gate = AsyncGate()
+        let events = StartupDeferralEvents()
         let recorder = ActivationRecorder(consent: false, persistGate: gate.suspendFirst)
-        let useCase = recorder.makeUseCase()
+        let useCase = recorder.makeUseCase(
+            pendingTransitionAwaiter: { capturedTransition in
+                await events.record(.waiterEntered)
+                await capturedTransition?.value
+            }
+        )
 
         let transition = useCase.beginConsentTransition(true, isEligible: true)
         await gate.waitUntilSuspended()
-        let startup = Task { await useCase.activateAtStartupIfEligible(true) }
-        await Task.yield()
-        #expect(recorder.identities.isEmpty)
+        let startup = Task {
+            await useCase.activateAtStartupIfEligible(true)
+            await events.record(.startupReturned)
+        }
+        let firstEvent = await events.first()
+        let operationsBeforeRelease = recorder.operations
+        let identitiesBeforeRelease = recorder.identities
+        let waiterCountBeforeRelease = await events.waiterCount
 
-        await gate.release()
-        await transition.value
-        await startup.value
+        if firstEvent != .waiterEntered {
+            await gate.release()
+            await transition.value
+            await startup.value
+        }
+
+        #expect(firstEvent == .waiterEntered)
+        #expect(waiterCountBeforeRelease == 1)
+        #expect(operationsBeforeRelease == ["persist true"])
+        #expect(identitiesBeforeRelease.isEmpty)
+
+        if firstEvent == .waiterEntered {
+            await gate.release()
+            await transition.value
+            await startup.value
+        }
+
+        #expect(await events.waiterCount == 1)
+        #expect(recorder.writes == [true])
+        #expect(recorder.operations == [
+            "persist true",
+            "read", "identity", "activate",
+            "read", "identity", "activate",
+        ])
+        #expect(recorder.identities.count == 2)
+        #expect(Set(recorder.identities).count == 1)
         #expect(useCase.isReady)
     }
 
@@ -188,6 +222,16 @@ private final class ActivationRecorder {
             activationCheckpoint: activationCheckpoint
         )
     }
+
+    func makeUseCase(
+        pendingTransitionAwaiter: @escaping DefaultProductTelemetryActivationUseCase.PendingTransitionAwaiter
+    ) -> DefaultProductTelemetryActivationUseCase {
+        DefaultProductTelemetryActivationUseCase(
+            dependencies: makeDependencies(),
+            activationCheckpoint: {},
+            pendingTransitionAwaiter: pendingTransitionAwaiter
+        )
+    }
     #endif
 }
 
@@ -232,5 +276,32 @@ private actor AsyncGate {
     func release() {
         releaseWaiter?.resume()
         releaseWaiter = nil
+    }
+}
+
+private actor StartupDeferralEvents {
+    enum Event: Equatable {
+        case waiterEntered
+        case startupReturned
+    }
+
+    private var recorded: [Event] = []
+    private var firstWaiter: CheckedContinuation<Event, Never>?
+
+    var waiterCount: Int {
+        recorded.count { $0 == .waiterEntered }
+    }
+
+    func record(_ event: Event) {
+        recorded.append(event)
+        firstWaiter?.resume(returning: recorded[0])
+        firstWaiter = nil
+    }
+
+    func first() async -> Event {
+        if let first = recorded.first {
+            return first
+        }
+        return await withCheckedContinuation { firstWaiter = $0 }
     }
 }
