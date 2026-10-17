@@ -84,7 +84,7 @@ Valid configuration never implies consent. An excluded CLI/headless/test host re
 
 ## TelemetryLifecycleCoordinator
 
-App-lifetime coordinator backed by one dedicated serial non-main executor. PR02 introduces it on the old dependency version, lazily constructs the selected legacy provider off-main, and exposes only a `TelemetryService` facade to existing callers; PR03 then changes the provider pin without changing that seam. PR06 extends the same coordinator to own at most one live Blob service generation while consent is on; no second coordinator/executor is created.
+App-lifetime coordinator backed by one dedicated serial non-main executor. Atomic PR02 introduces it together with the exact-`0.2.0` provider selection on one final tree, lazily constructs the selected legacy provider off-main, and exposes only a `TelemetryService` facade to existing callers; there is no standalone PR03 or publishable old-`0.1.0` intermediate. PR06 extends the same coordinator to own at most one live Blob service generation while consent is on; no second coordinator/executor is created.
 
 State:
 
