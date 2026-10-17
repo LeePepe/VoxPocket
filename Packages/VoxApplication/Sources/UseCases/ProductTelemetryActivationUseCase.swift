@@ -44,7 +44,7 @@ public protocol ProductTelemetryActivationUseCase: AnyObject {
 @MainActor
 public final class DefaultProductTelemetryActivationUseCase: ProductTelemetryActivationUseCase {
     #if DEBUG
-    public typealias ActivationCheckpoint = @MainActor @Sendable () async -> Void
+    typealias ActivationCheckpoint = @MainActor @Sendable () async -> Void
     typealias PendingTransitionAwaiter = @MainActor @Sendable (Task<Void, Never>?) async -> Void
     #endif
 
@@ -68,7 +68,7 @@ public final class DefaultProductTelemetryActivationUseCase: ProductTelemetryAct
     }
 
     #if DEBUG
-    public init(
+    init(
         dependencies: ProductTelemetryActivationDependencies,
         activationCheckpoint: @escaping ActivationCheckpoint
     ) {

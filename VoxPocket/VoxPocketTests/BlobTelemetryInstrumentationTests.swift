@@ -20,27 +20,17 @@ struct BlobTelemetryInstrumentationTests {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
         let center = NotificationCenter()
-        let instrumentation = fixture.makeInstrumentation(notificationCenter: center)
+        let container = fixture.makeContainer(notificationCenter: center)
+        let model = fixture.makeSettingsViewModel(notificationCenter: center)
 
-        center.post(
-            name: ProductTelemetrySettingsViewModel.consentDidChange,
-            object: nil,
-            userInfo: ["isConsented": true]
-        )
-        await Task.yield()
-        await instrumentation.waitForPendingConsentChange()
+        await model.setSendingUsageData(true)
         center.post(name: ProductTelemetrySettingsViewModel.settingsDidOpen, object: nil)
         ProductTelemetryNotificationBoundary.postFullPanelOpened(to: center)
         await Task.yield()
-        center.post(
-            name: ProductTelemetrySettingsViewModel.consentDidChange,
-            object: nil,
-            userInfo: ["isConsented": false]
-        )
-        await Task.yield()
-        await instrumentation.waitForPendingConsentChange()
+        await model.setSendingUsageData(false)
         ProductTelemetryNotificationBoundary.postFullPanelOpened(to: center)
         await Task.yield()
+        await container.waitForPendingProductTelemetryConsentChange()
 
         #expect(fixture.recorder.events.compactMap { $0.properties["action"] } == [
             "settings_opened", "full_panel_opened"
@@ -48,38 +38,25 @@ struct BlobTelemetryInstrumentationTests {
         #expect(fixture.recorder.operations.contains("disable"))
     }
 
-    @Test func productionSettingsOptOutCancelsSuspendedEnableBeforeRuntimeEntry() async {
-        let persistenceGate = ConsentPersistenceGate(consent: true, entry: 1)
-        let fixture = RuntimeFixture(productTelemetryConsentWriteGate: persistenceGate.suspend)
+    @Test func productionSettingsOptOutStopsLaterRuntimeAdmission() async {
+        let fixture = RuntimeFixture()
         defer { fixture.remove() }
         let center = NotificationCenter()
-        let instrumentation = fixture.makeInstrumentation(notificationCenter: center)
-        let model = ProductTelemetrySettingsViewModel(
-            preferences: fixture.preferences,
-            notificationCenter: center
-        )
+        let container = fixture.makeContainer(notificationCenter: center)
+        let model = fixture.makeSettingsViewModel(notificationCenter: center)
 
-        let enable = Task { await model.setSendingUsageData(true) }
-        await persistenceGate.waitUntilSuspended()
-        let optOut = Task { await model.setSendingUsageData(false) }
-        await Task.yield()
-        await Task.yield()
-
+        await model.setSendingUsageData(true)
+        await model.setSendingUsageData(false)
         center.post(name: ProductTelemetrySettingsViewModel.settingsDidOpen, object: nil)
         ProductTelemetryNotificationBoundary.postFullPanelOpened(to: center)
-        await instrumentation.applicationWillResignActive()
-        #expect(fixture.recorder.operations.isEmpty)
-
-        await persistenceGate.release()
-        await enable.value
-        await optOut.value
-        await instrumentation.waitForPendingConsentChange()
+        await container.productTelemetryApplicationWillResignActive()
+        await container.waitForPendingProductTelemetryConsentChange()
 
         #expect(!model.isSendingUsageData)
         #expect(await fixture.preferences.isConsented == false)
-        #expect(fixture.recorder.constructionCount == 0)
+        #expect(fixture.recorder.constructionCount == 1)
         #expect(fixture.recorder.events.isEmpty)
-        #expect(fixture.recorder.operations.isEmpty)
+        #expect(fixture.recorder.operations == ["construct", "disable"])
     }
 
     @Test func productionQuickRecordBoundariesPreserveNormalAndRapidReleaseOrder() async {
@@ -87,8 +64,9 @@ struct BlobTelemetryInstrumentationTests {
         defer { fixture.remove() }
         _ = await fixture.preferences.setConsent(true)
         let center = NotificationCenter()
-        let instrumentation = fixture.makeInstrumentation(notificationCenter: center)
-        await instrumentation.completeStartup(startedAt: .now)
+        let container = fixture.makeContainer(notificationCenter: center)
+        await container.completeProductTelemetryStartup(startedAt: .now)
+        await container.waitForPendingProductTelemetryStartupCompletion()
         let normal = QuickRecordFixture()
         let normalDelegate = AppDelegate(
             productTelemetryNotificationCenter: center,
@@ -296,47 +274,16 @@ struct BlobTelemetryInstrumentationTests {
         await delegate.waitForPendingStartup()
     }
 
-    @Test func overlappingProductionSettingsChoicesSupersedeDelayedStartupAndAllComplete() async {
-        let activationGate = ActivationBootstrapGate()
-        let disableGate = TelemetryOperationGate(operation: "disable")
-        let fixture = RuntimeFixture(telemetryOperationObserver: { operation in
-            Task { await disableGate.observe(operation) }
-        })
+    @Test func productionSettingsTransitionsReuseIdentityAndAllComplete() async {
+        let fixture = RuntimeFixture()
         defer { fixture.remove() }
-        _ = await fixture.preferences.setConsent(true)
         let center = NotificationCenter()
-        let notificationGate = ConsentNotificationGate(notificationCenter: center)
-        defer { notificationGate.remove() }
-        let container = fixture.makeContainer(
-            activationCheckpoint: activationGate.suspendFirst,
-            notificationCenter: center
-        )
-        let delegate = AppDelegate(
-            productTelemetryNotificationCenter: center,
-            startup: AppStartup {},
-            serviceContainer: container,
-            hotkeyService: TestGlobalHotkeyService(),
-            startupInitializePersistence: {},
-            startupScheduleQuickRecordingPrewarm: {}
-        )
+        let container = fixture.makeContainer(notificationCenter: center)
+        let model = fixture.makeSettingsViewModel(notificationCenter: center)
 
-        delegate.applicationDidFinishLaunching(
-            Notification(name: NSApplication.didFinishLaunchingNotification)
-        )
-        await activationGate.waitUntilSuspended()
-
-        let model = ProductTelemetrySettingsViewModel(
-            preferences: fixture.preferences,
-            notificationCenter: center
-        )
-        let optOut = Task { await model.setSendingUsageData(false) }
-        await disableGate.waitUntilObserved()
-        #expect(fixture.recorder.operations == ["construct", "disable"])
-
-        let optIn = Task { await model.setSendingUsageData(true) }
-        await notificationGate.waitUntilOptInPosted()
-        await optOut.value
-        await optIn.value
+        await model.setSendingUsageData(true)
+        await model.setSendingUsageData(false)
+        await model.setSendingUsageData(true)
         await container.waitForPendingProductTelemetryConsentChange()
 
         container.recordProductAction(.settingsOpened)
@@ -352,9 +299,6 @@ struct BlobTelemetryInstrumentationTests {
             "construct", "disable", "enable", "track product.user_action", "flush"
         ])
 
-        await activationGate.release()
-        await delegate.waitForPendingStartup()
-
         #expect(fixture.recorder.operations == [
             "construct", "disable", "enable", "track product.user_action", "flush"
         ])
@@ -363,19 +307,20 @@ struct BlobTelemetryInstrumentationTests {
     @Test func startupAndActionsEmitOnlyAfterSuccessfulComposition() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
-        let runtime = fixture.makeInstrumentation()
+        let center = NotificationCenter()
+        let container = fixture.makeContainer(notificationCenter: center)
+        let model = fixture.makeSettingsViewModel(notificationCenter: center)
 
-        runtime.record(.settingsOpened)
-        await runtime.completeStartup(startedAt: .now)
+        container.recordProductAction(.settingsOpened)
+        await container.completeProductTelemetryStartup(startedAt: .now)
         #expect(fixture.recorder.operations.isEmpty)
 
-        await runtime.setConsent(true)
-        runtime.record(.settingsOpened)
-        runtime.record(.fullPanelOpened)
-        runtime.record(.quickRecordStarted)
-        runtime.record(.quickRecordStopped)
-        let flush = try #require(runtime.requestFlushIfReady())
-        await flush.value
+        await model.setSendingUsageData(true)
+        container.recordProductAction(.settingsOpened)
+        container.recordProductAction(.fullPanelOpened)
+        container.recordProductAction(.quickRecordStarted)
+        container.recordProductAction(.quickRecordStopped)
+        await container.productTelemetryApplicationWillResignActive()
 
         let events = fixture.recorder.events
         #expect(events.map(\.name) == [
@@ -392,15 +337,19 @@ struct BlobTelemetryInstrumentationTests {
     @Test func sameTurnFlushRequestIsAdmittedBeforeLaterAction() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
-        let runtime = fixture.makeInstrumentation()
+        let center = NotificationCenter()
+        let container = fixture.makeContainer(notificationCenter: center)
+        let model = fixture.makeSettingsViewModel(notificationCenter: center)
 
-        await runtime.setConsent(true)
-        let flushCompletion = try #require(runtime.requestFlushIfReady())
-        runtime.record(.settingsOpened)
+        await model.setSendingUsageData(true)
+        let flushCompletion = Task {
+            await container.productTelemetryApplicationWillResignActive()
+        }
+        await Task.yield()
+        container.recordProductAction(.settingsOpened)
 
         await flushCompletion.value
-        let flush = try #require(runtime.requestFlushIfReady())
-        await flush.value
+        await container.productTelemetryApplicationWillResignActive()
 
         #expect(fixture.recorder.operations == [
             "construct", "flush", "track product.user_action", "flush"
@@ -411,10 +360,10 @@ struct BlobTelemetryInstrumentationTests {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
         _ = await fixture.preferences.setConsent(true)
-        let runtime = fixture.makeInstrumentation()
+        let container = fixture.makeContainer()
 
-        await runtime.completeStartup(startedAt: .now)
-        await runtime.waitForPendingStartupCompletion()
+        await container.completeProductTelemetryStartup(startedAt: .now)
+        await container.waitForPendingProductTelemetryStartupCompletion()
 
         let event = try #require(fixture.recorder.events.first)
         #expect(event.name == "product.performance")
@@ -427,16 +376,17 @@ struct BlobTelemetryInstrumentationTests {
     @Test func disableStopsAdmissionUntilExplicitReenable() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }
-        let runtime = fixture.makeInstrumentation()
+        let center = NotificationCenter()
+        let container = fixture.makeContainer(notificationCenter: center)
+        let model = fixture.makeSettingsViewModel(notificationCenter: center)
 
-        await runtime.setConsent(true)
-        runtime.record(.quickRecordStarted)
-        await runtime.setConsent(false)
-        runtime.record(.quickRecordStopped)
-        await runtime.setConsent(true)
-        runtime.record(.quickRecordStopped)
-        let flush = try #require(runtime.requestFlushIfReady())
-        await flush.value
+        await model.setSendingUsageData(true)
+        container.recordProductAction(.quickRecordStarted)
+        await model.setSendingUsageData(false)
+        container.recordProductAction(.quickRecordStopped)
+        await model.setSendingUsageData(true)
+        container.recordProductAction(.quickRecordStopped)
+        await container.productTelemetryApplicationWillResignActive()
 
         #expect(fixture.recorder.constructionCount == 1)
         #expect(fixture.recorder.events.compactMap { $0.properties["action"] } == [
@@ -444,42 +394,6 @@ struct BlobTelemetryInstrumentationTests {
         ])
         #expect(fixture.identities.count == 2)
         #expect(Set(fixture.identities).count == 1)
-    }
-}
-
-@MainActor
-private final class ConsentNotificationGate {
-    private let notificationCenter: NotificationCenter
-    private var observer: NSObjectProtocol?
-    private var optInPosted = false
-    private var waiter: CheckedContinuation<Void, Never>?
-
-    init(notificationCenter: NotificationCenter) {
-        self.notificationCenter = notificationCenter
-        observer = notificationCenter.addObserver(
-            forName: ProductTelemetrySettingsViewModel.consentDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            MainActor.assumeIsolated {
-                guard notification.userInfo?["isConsented"] as? Bool == true else { return }
-                self?.optInPosted = true
-                self?.waiter?.resume()
-                self?.waiter = nil
-            }
-        }
-    }
-
-    func waitUntilOptInPosted() async {
-        guard !optInPosted else { return }
-        await withCheckedContinuation { waiter = $0 }
-    }
-
-    func remove() {
-        if let observer {
-            notificationCenter.removeObserver(observer)
-        }
-        observer = nil
     }
 }
 
@@ -590,94 +504,6 @@ private actor TelemetryFlushGate {
         released = true
         releaseWaiter?.resume()
         releaseWaiter = nil
-    }
-}
-
-private actor ConsentPersistenceGate {
-    private let consent: Bool
-    private let targetEntry: Int
-    private var entryCount = 0
-    private var suspended = false
-    private var suspensionWaiter: CheckedContinuation<Void, Never>?
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-    private var released = false
-
-    init(consent: Bool, entry: Int) {
-        self.consent = consent
-        targetEntry = entry
-    }
-
-    func suspend(_ consent: Bool) async {
-        guard consent == self.consent else { return }
-        entryCount += 1
-        guard entryCount == targetEntry else { return }
-        suspended = true
-        suspensionWaiter?.resume()
-        suspensionWaiter = nil
-        guard !released else { return }
-        await withCheckedContinuation { releaseWaiter = $0 }
-    }
-
-    func waitUntilSuspended() async {
-        guard !suspended else { return }
-        await withCheckedContinuation { suspensionWaiter = $0 }
-    }
-
-    func release() {
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
-    }
-}
-
-private actor ActivationBootstrapGate {
-    private var entryCount = 0
-    private var suspended = false
-    private var suspensionWaiter: CheckedContinuation<Void, Never>?
-    private var releaseWaiter: CheckedContinuation<Void, Never>?
-    private var released = false
-
-    func suspendFirst() async {
-        entryCount += 1
-        guard entryCount == 1 else { return }
-        suspended = true
-        suspensionWaiter?.resume()
-        suspensionWaiter = nil
-        guard !released else { return }
-        await withCheckedContinuation { releaseWaiter = $0 }
-    }
-
-    func waitUntilSuspended() async {
-        guard !suspended else { return }
-        await withCheckedContinuation { suspensionWaiter = $0 }
-    }
-
-    func release() {
-        released = true
-        releaseWaiter?.resume()
-        releaseWaiter = nil
-    }
-}
-
-private actor TelemetryOperationGate {
-    private let operation: String
-    private var observed = false
-    private var waiter: CheckedContinuation<Void, Never>?
-
-    init(operation: String) {
-        self.operation = operation
-    }
-
-    func observe(_ operation: String) {
-        guard operation == self.operation else { return }
-        observed = true
-        waiter?.resume()
-        waiter = nil
-    }
-
-    func waitUntilObserved() async {
-        guard !observed else { return }
-        await withCheckedContinuation { waiter = $0 }
     }
 }
 
@@ -793,7 +619,6 @@ private final class RuntimeFixture {
     private let recordedIdentities = Mutex<[UUID]>([])
 
     init(
-        productTelemetryConsentWriteGate: (@Sendable (Bool) async -> Void)? = nil,
         telemetryOperationObserver: (@Sendable (String) -> Void)? = nil,
         telemetryFlushGate: (@Sendable () async -> Void)? = nil
     ) {
@@ -802,60 +627,33 @@ private final class RuntimeFixture {
             flushGate: telemetryFlushGate
         )
         let defaults = UserDefaults(suiteName: suite)!
-        if let productTelemetryConsentWriteGate {
-            store = UserDefaultsPreferencesStore(
-                defaults: defaults,
-                productTelemetryConsentWriteGate: productTelemetryConsentWriteGate
-            )
-        } else {
-            store = UserDefaultsPreferencesStore(defaults: defaults)
-        }
+        store = UserDefaultsPreferencesStore(defaults: defaults)
         preferences = ProductTelemetryPreferences(store: store)
     }
 
     var identities: [UUID] { recordedIdentities.withLock { $0 } }
 
-    func makeInstrumentation(
-        host: BlobTelemetryHostKind = .interactiveApplication,
-        notificationCenter: NotificationCenter = .default
-    ) -> ProductTelemetryInstrumentation {
-        let coordinator = TelemetryLifecycleCoordinator(isEnabled: false) { NoopTelemetryService() }
-        let dependencies = ProductTelemetryActivationDependencies(
-            readConsent: { [self] in await preferences.isConsented },
-            persistConsent: { [self] in await preferences.persistConsent($0) },
-            installIdentityIfConsented: { [self] in
-                await preferences.installIdentityIfConsented()
-            },
-            activate: { [self] identity in
-                recordedIdentities.withLock { $0.append(identity) }
-                let bootstrap = BlobTelemetryBootstrap.testing(
-                    configuration: .enabled(.init(
-                        endpoint: URL(string: "https://telemetry.example.invalid/container")!,
-                        sasQuery: "sr=c&si=synthetic&spr=https&sig=fake"
-                    )),
-                    host: host,
-                    isConsented: true,
-                    makeService: { recorder.construct() }
+    func makeSettingsViewModel(
+        notificationCenter: NotificationCenter
+    ) -> ProductTelemetrySettingsViewModel {
+        ProductTelemetrySettingsViewModel(
+            preferences: preferences,
+            onConsentChanged: { consent in
+                let (completion, continuation) = AsyncStream<Void>.makeStream()
+                notificationCenter.post(
+                    name: ProductTelemetrySettingsViewModel.consentDidChange,
+                    object: nil,
+                    userInfo: [
+                        "isConsented": consent,
+                        "transitionCompletion": continuation,
+                    ]
                 )
-                return await coordinator.bootstrapBlob(bootstrap) == .ready
-            },
-            deactivate: { await coordinator.disableBlob() }
-        )
-        let activationUseCase = DefaultProductTelemetryActivationUseCase(
-            dependencies: dependencies
-        )
-        return ProductTelemetryInstrumentation(
-            activationUseCase: activationUseCase,
-            isEligible: { host.isEligibleForBlobTelemetry },
-            track: { coordinator.trackBlob($0) },
-            requestFlush: { coordinator.requestBlobFlush() },
-            notificationCenter: notificationCenter
+                for await _ in completion {}
+            }
         )
     }
 
     func makeContainer(
-        activationCheckpoint:
-            DefaultProductTelemetryActivationUseCase.ActivationCheckpoint? = nil,
         notificationCenter: NotificationCenter = .default
     ) -> ServiceContainer {
         ServiceContainer(
@@ -878,8 +676,7 @@ private final class RuntimeFixture {
                     makeService: { recorder.construct() }
                 )
             },
-            productTelemetryNotificationCenter: notificationCenter,
-            debugProductTelemetryActivationCheckpoint: activationCheckpoint
+            productTelemetryNotificationCenter: notificationCenter
         )
     }
 

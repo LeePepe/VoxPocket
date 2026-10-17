@@ -26,8 +26,6 @@ typealias ProductTelemetryConfigurationProvider =
     @MainActor @Sendable () -> BlobTelemetryConfiguration
 typealias ProductTelemetryBootstrapFactory =
     @MainActor @Sendable (UUID) -> BlobTelemetryBootstrap
-typealias ProductTelemetryActivationCheckpoint =
-    @MainActor @Sendable () async -> Void
 
 /// 服务容器
 ///
@@ -105,7 +103,7 @@ public final class ServiceContainer: ObservableObject {
 
     // MARK: - 初始化
 
-    convenience init(
+    init(
         productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment,
         processArguments: [String] = ProcessInfo.processInfo.arguments,
@@ -115,55 +113,6 @@ public final class ServiceContainer: ObservableObject {
         productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil,
         productTelemetryNotificationCenter: NotificationCenter = .default,
         productTelemetryHostOverride: BlobTelemetryHostKind? = nil
-    ) {
-        self.init(
-            productTelemetryPreferences: productTelemetryPreferences,
-            processEnvironment: processEnvironment,
-            processArguments: processArguments,
-            productTelemetryConfiguration: productTelemetryConfiguration,
-            productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
-            productTelemetryNotificationCenter: productTelemetryNotificationCenter,
-            productTelemetryHostOverride: productTelemetryHostOverride,
-            productTelemetryActivationCheckpoint: nil
-        )
-    }
-
-    #if DEBUG
-    convenience init(
-        productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
-        processEnvironment: [String: String] = ProcessInfo.processInfo.environment,
-        processArguments: [String] = ProcessInfo.processInfo.arguments,
-        productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider = {
-            BlobTelemetryConfiguration()
-        },
-        productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil,
-        productTelemetryNotificationCenter: NotificationCenter = .default,
-        debugProductTelemetryActivationCheckpoint:
-            ProductTelemetryActivationCheckpoint?,
-        productTelemetryHostOverride: BlobTelemetryHostKind? = nil
-    ) {
-        self.init(
-            productTelemetryPreferences: productTelemetryPreferences,
-            processEnvironment: processEnvironment,
-            processArguments: processArguments,
-            productTelemetryConfiguration: productTelemetryConfiguration,
-            productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
-            productTelemetryNotificationCenter: productTelemetryNotificationCenter,
-            productTelemetryHostOverride: productTelemetryHostOverride,
-            productTelemetryActivationCheckpoint: debugProductTelemetryActivationCheckpoint
-        )
-    }
-    #endif
-
-    private init(
-        productTelemetryPreferences: ProductTelemetryPreferences,
-        processEnvironment: [String: String],
-        processArguments: [String],
-        productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider,
-        productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory?,
-        productTelemetryNotificationCenter: NotificationCenter,
-        productTelemetryHostOverride: BlobTelemetryHostKind?,
-        productTelemetryActivationCheckpoint: ProductTelemetryActivationCheckpoint?
     ) {
         VoxPocketLogging.start()
         logger = PrintLogger(subsystem: "ServiceContainer")
@@ -199,23 +148,9 @@ public final class ServiceContainer: ObservableObject {
             },
             deactivate: { await telemetryCoordinator.disableBlob() }
         )
-        let activationUseCase: DefaultProductTelemetryActivationUseCase
-        #if DEBUG
-        if let productTelemetryActivationCheckpoint {
-            activationUseCase = DefaultProductTelemetryActivationUseCase(
-                dependencies: activationDependencies,
-                activationCheckpoint: productTelemetryActivationCheckpoint
-            )
-        } else {
-            activationUseCase = DefaultProductTelemetryActivationUseCase(
-                dependencies: activationDependencies
-            )
-        }
-        #else
-        activationUseCase = DefaultProductTelemetryActivationUseCase(
+        let activationUseCase = DefaultProductTelemetryActivationUseCase(
             dependencies: activationDependencies
         )
-        #endif
         productTelemetryInstrumentation = ProductTelemetryInstrumentation(
             activationUseCase: activationUseCase,
             isEligible: isProductTelemetryEligible,

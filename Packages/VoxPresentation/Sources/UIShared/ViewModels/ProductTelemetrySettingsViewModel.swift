@@ -31,21 +31,6 @@ public final class ProductTelemetrySettingsViewModel: ObservableObject {
         self.onConsentChanged = onConsentChanged
     }
 
-#if DEBUG
-    init(
-        preferences: ProductTelemetryPreferences,
-        notificationCenter: NotificationCenter
-    ) {
-        self.preferences = preferences
-        onConsentChanged = {
-            await ProductTelemetrySettingsViewModel.notifyConsentChanged(
-                $0,
-                notificationCenter: notificationCenter
-            )
-        }
-    }
-#endif
-
     private static func notifyConsentChanged(
         _ consent: Bool,
         notificationCenter: NotificationCenter

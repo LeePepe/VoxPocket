@@ -31,6 +31,12 @@ struct ProductTelemetryActivationUseCaseTests {
 
         #expect(recorder.writes == [true, false])
         #expect(!useCase.isReady)
+        #expect(recorder.identities.isEmpty)
+        #expect(recorder.operations == [
+            "persist true",
+            "deactivate",
+            "persist false",
+        ])
     }
 
     @Test func startupDefersBehindExplicitTransition() async {
