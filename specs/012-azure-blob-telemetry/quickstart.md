@@ -76,7 +76,24 @@ Use the implementation's credential-free CI helper/lane with fake values only. I
 5. prove no literal `$(` reference remains;
 6. avoid every network sender and credential log.
 
-Then regenerate with the repository-pinned XcodeGen command and require zero uncommitted generated-project diff.
+### Selected raw XcodeGen-output proof
+
+For the T009 implementation and any later verification run that selects a replacement raw output under this correction, use the already-installed generator and the existing repository entry; do not install or upgrade XcodeGen. Record the actual version and exact command as execution provenance, not as a repository version pin:
+
+```bash
+xcodegen --version
+shasum -a 256 VoxPocket/project.yml
+(cd VoxPocket && xcodegen generate --spec project.yml)
+shasum -a 256 VoxPocket/project.yml VoxPocket/VoxPocket.xcodeproj/project.pbxproj
+```
+
+Immediately retain an untracked task-local copy and SHA-256 of that selected raw `project.pbxproj`. Do not patch, normalize, canonicalize, or hand-edit the generated file. At candidate freeze, hash it again and use a byte comparison such as `cmp` against the retained raw copy; the final tracked file must be byte-identical to the selected raw output, and `project.yml` must match its pre-generation hash.
+
+Compare the tracked base and selected raw projects as complete parsed object/reference graphs. Account for only these additions: `ProductTelemetryAssembly.swift` in the existing app sources/target and `BlobTelemetryInstrumentationTestSupport.swift` in the existing test sources/target. Identify exactly two collision-free one-to-one UUID pairs by role, for the existing `Config.xcconfig` `PBXFileReference` and its config-only `VoxPocket` `PBXGroup`, and apply those identifier maps only in memory for comparison. Traverse each declaration and every incoming/outgoing reference, including all `children` occurrences and both Debug and Release `baseConfigurationReference` values. After those two memberships and two mappings are accounted for, require complete equality of `isa`/object type, file type, name/path, `sourceTree`, children and ordering, configurations, targets, build phases, build settings, and every other project field. Any missing/colliding/stale mapping, extra object/reference/order/field difference, or ninth implementation path stops and returns exact evidence to Team Lead; do not add a canonicalizer, repository script, or gate.
+
+A later raw generation may mint different UUIDs. If it is selected, repeat the full provenance, hash, byte-equality, and graph-equivalence proof; never report rerun zero-diff or byte idempotency. The proof may inspect `project.yml`, PBX structure, hashes, and generator metadata only. It must not read or report real `Config.xcconfig`, `Secrets.xcconfig`, private configuration, endpoint, SAS, or credential contents.
+
+After this distinct generation proof, still run the unsigned synthetic Release/processed-plist checks above, App consumer compilation, real App XCTest, and exact-head required CI. None substitutes for another.
 
 ## 4. TestFlight credential-path proof
 
