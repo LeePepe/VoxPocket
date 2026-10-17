@@ -74,7 +74,7 @@ LokiKitBlobSAS = $(TELEMETRY_BLOB_SAS)
 
 ## Concurrency and lifecycle contract
 
-- One app-lifetime lifecycle coordinator is backed by a dedicated serial non-main executor. PR02 introduces it on the old provider version to lazily construct the selected legacy provider and expose only a `TelemetryService` facade; PR03 changes only the dependency/current truth; PR06 extends the same coordinator to own at most one live Blob adapter/dedicated-store generation while consent is on.
+- One app-lifetime lifecycle coordinator is backed by a dedicated serial non-main executor. The canonical `tasks.md` graph introduces it together with exact shared-telemetry `0.2.0` in atomic PR02; there is no standalone PR03 or publishable old-`0.1.0` intermediate. PR06 extends the same coordinator to own at most one live Blob adapter/dedicated-store generation while consent is on.
 - The coordinator is the sole underlying entry for legacy provider construction/`track`/`flush` and Blob construction/product `track`/lifecycle `flush`. `@MainActor` code submits commands asynchronously and never calls synchronous provider persistence directly. Legacy flush barriers all earlier track submissions, and concurrent flush requests join rather than compete.
 - Blob construction omits the `maxDiskBytes` argument and therefore accepts the provider default. Decision 2A exempts only SDK-owned, internally synchronized, content-free `telemetry.heartbeat` startup/daily work initiated by the bundle initializer. The exemption does not permit product-emitted heartbeat, another store owner, host bypass, or synchronous persistence on `@MainActor`.
 - Startup records `product.performance(operation: app_launch, duration_ms: ...)`, then requests flush.
