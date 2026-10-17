@@ -113,6 +113,7 @@ public final class ServiceContainer: ObservableObject {
             BlobTelemetryConfiguration()
         },
         productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil,
+        productTelemetryNotificationCenter: NotificationCenter = .default,
         productTelemetryHostOverride: BlobTelemetryHostKind? = nil
     ) {
         self.init(
@@ -121,6 +122,7 @@ public final class ServiceContainer: ObservableObject {
             processArguments: processArguments,
             productTelemetryConfiguration: productTelemetryConfiguration,
             productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
+            productTelemetryNotificationCenter: productTelemetryNotificationCenter,
             productTelemetryHostOverride: productTelemetryHostOverride,
             productTelemetryActivationCheckpoint: nil
         )
@@ -135,6 +137,7 @@ public final class ServiceContainer: ObservableObject {
             BlobTelemetryConfiguration()
         },
         productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil,
+        productTelemetryNotificationCenter: NotificationCenter = .default,
         debugProductTelemetryActivationCheckpoint:
             ProductTelemetryActivationCheckpoint?,
         productTelemetryHostOverride: BlobTelemetryHostKind? = nil
@@ -145,6 +148,7 @@ public final class ServiceContainer: ObservableObject {
             processArguments: processArguments,
             productTelemetryConfiguration: productTelemetryConfiguration,
             productTelemetryBootstrapFactory: productTelemetryBootstrapFactory,
+            productTelemetryNotificationCenter: productTelemetryNotificationCenter,
             productTelemetryHostOverride: productTelemetryHostOverride,
             productTelemetryActivationCheckpoint: debugProductTelemetryActivationCheckpoint
         )
@@ -157,6 +161,7 @@ public final class ServiceContainer: ObservableObject {
         processArguments: [String],
         productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider,
         productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory?,
+        productTelemetryNotificationCenter: NotificationCenter,
         productTelemetryHostOverride: BlobTelemetryHostKind?,
         productTelemetryActivationCheckpoint: ProductTelemetryActivationCheckpoint?
     ) {
@@ -215,7 +220,8 @@ public final class ServiceContainer: ObservableObject {
             activationUseCase: activationUseCase,
             isEligible: isProductTelemetryEligible,
             track: { telemetryCoordinator.trackBlob($0) },
-            requestFlush: { telemetryCoordinator.requestBlobFlush() }
+            requestFlush: { telemetryCoordinator.requestBlobFlush() },
+            notificationCenter: productTelemetryNotificationCenter
         )
         let azureConfig = Self.makeAzureFoundryConfig()
         #if os(macOS)

@@ -307,7 +307,10 @@ struct BlobTelemetryInstrumentationTests {
         let center = NotificationCenter()
         let notificationGate = ConsentNotificationGate(notificationCenter: center)
         defer { notificationGate.remove() }
-        let container = fixture.makeContainer(activationCheckpoint: activationGate.suspendFirst)
+        let container = fixture.makeContainer(
+            activationCheckpoint: activationGate.suspendFirst,
+            notificationCenter: center
+        )
         let delegate = AppDelegate(
             productTelemetryNotificationCenter: center,
             startup: AppStartup {},
@@ -852,7 +855,8 @@ private final class RuntimeFixture {
 
     func makeContainer(
         activationCheckpoint:
-            DefaultProductTelemetryActivationUseCase.ActivationCheckpoint? = nil
+            DefaultProductTelemetryActivationUseCase.ActivationCheckpoint? = nil,
+        notificationCenter: NotificationCenter = .default
     ) -> ServiceContainer {
         ServiceContainer(
             productTelemetryPreferences: preferences,
@@ -874,6 +878,7 @@ private final class RuntimeFixture {
                     makeService: { recorder.construct() }
                 )
             },
+            productTelemetryNotificationCenter: notificationCenter,
             debugProductTelemetryActivationCheckpoint: activationCheckpoint
         )
     }
