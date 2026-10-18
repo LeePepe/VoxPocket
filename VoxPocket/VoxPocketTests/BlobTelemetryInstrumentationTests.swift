@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Combine
 import CoreModels
@@ -534,3 +535,4 @@ private final class QuickRecordFixture {
         operationRecorder.record("hide")
     }
 }
+#endif

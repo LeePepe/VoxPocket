@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import Testing
-#if !SWIFT_PACKAGE
+#if os(macOS) && !SWIFT_PACKAGE
 import LokiKit
 import Preferences
 #endif
@@ -122,8 +122,8 @@ struct AppStartupTests {
         #expect(completions == 1)
     }
 
-    // 轻量 SwiftPM 启动探针不包含真实容器；这些集成断言由 App XCTest 执行。
-    #if !SWIFT_PACKAGE
+    // 真实容器夹具仅限 macOS App XCTest；轻量 SwiftPM 启动探针不包含它们。
+    #if os(macOS) && !SWIFT_PACKAGE
     @Test func persistedConsentStartsOncePerFreshLifetimeAfterConfiguration() async throws {
         let fixture = RuntimeFixture()
         defer { fixture.remove() }

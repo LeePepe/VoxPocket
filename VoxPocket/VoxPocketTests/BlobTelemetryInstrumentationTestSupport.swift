@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Combine
 import CoreModels
@@ -409,3 +410,4 @@ final class RuntimeTelemetryService: TelemetryService, Sendable {
 
     func resetIdentifier() {}
 }
+#endif
