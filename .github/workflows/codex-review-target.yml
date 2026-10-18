@@ -26,6 +26,7 @@ jobs:
     # the pin change merges only with Owner code-owner review (see AGENTS.md Delivery).
     uses: LeePepe/shared-ci/.github/workflows/codex-review.yml@6e354f476bc53d68f0f09fc231d5cd938466af9c
     with:
+      max-diff-bytes: 300000
       codex-launcher: python3 scripts/ci/review-raven.py
       codex-bin: /opt/homebrew/bin/codex
       # Human Owner account (never an App/bot): its unedited PR comments naming the
