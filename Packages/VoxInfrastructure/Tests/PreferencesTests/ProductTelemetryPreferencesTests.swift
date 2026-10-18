@@ -28,6 +28,39 @@ struct ProductTelemetryPreferencesTests {
         #expect(fixture.persistedIdentity == identity)
     }
 
+    @Test func persistingConsentNeverRequestsOrCreatesIdentity() async {
+        let fixture = Fixture()
+        let recorder = IdentityRecorder()
+        let preferences = ProductTelemetryPreferences(
+            store: fixture.store,
+            identityGenerator: { recorder.record(UUID()) }
+        )
+
+        await preferences.persistConsent(true)
+
+        #expect(await preferences.isConsented)
+        #expect(recorder.identities.isEmpty)
+        #expect(fixture.persistedIdentity == nil)
+    }
+
+    @Test func provisioningIdentityDoesNotRewritePersistedConsent() async {
+        let writes = ConsentWriteRecorder()
+        let fixture = Fixture(productTelemetryConsentWriteGate: writes.record)
+        let generated = UUID()
+        let preferences = ProductTelemetryPreferences(
+            store: fixture.store,
+            identityGenerator: { generated }
+        )
+        await preferences.persistConsent(true)
+        writes.reset()
+
+        let identity = await preferences.installIdentityIfConsented()
+
+        #expect(identity == generated)
+        #expect(fixture.persistedIdentity == generated)
+        #expect(writes.values.isEmpty)
+    }
+
     @Test func firstOptInPersistsOneIdentityAndEveryLaterOptInReusesIt() async {
         let fixture = Fixture()
         let recorder = IdentityRecorder()
@@ -109,12 +142,37 @@ private final class Fixture {
         return try? JSONDecoder().decode(UUID.self, from: data)
     }
 
-    init() {
+    init(
+        productTelemetryConsentWriteGate: (@Sendable (Bool) async -> Void)? = nil
+    ) {
         let suite = "ProductTelemetryPreferencesTests.\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         self.suite = suite
-        store = UserDefaultsPreferencesStore(defaults: defaults)
+        if let productTelemetryConsentWriteGate {
+            store = UserDefaultsPreferencesStore(
+                defaults: defaults,
+                productTelemetryConsentWriteGate: productTelemetryConsentWriteGate
+            )
+        } else {
+            store = UserDefaultsPreferencesStore(defaults: defaults)
+        }
+    }
+}
+
+private final class ConsentWriteRecorder: Sendable {
+    private let recordedValues = Mutex<[Bool]>([])
+
+    var values: [Bool] {
+        recordedValues.withLock { $0 }
+    }
+
+    func record(_ value: Bool) {
+        recordedValues.withLock { $0.append(value) }
+    }
+
+    func reset() {
+        recordedValues.withLock { $0.removeAll() }
     }
 }
 

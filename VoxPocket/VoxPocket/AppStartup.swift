@@ -7,13 +7,30 @@ import OSLog
 final class AppStartup: ObservableObject {
     enum Phase: Equatable { case loading, ready, failed }
 
-    static let shared = AppStartup(loadConfiguration: LLMAppConfig.loadRuntimeConfiguration)
+    static let shared: AppStartup = {
+        #if os(iOS)
+        let launchStartedAt = ContinuousClock.now
+        return AppStartup(
+            configurationReady: {
+                await ServiceContainer.shared.completeProductTelemetryStartup(startedAt: launchStartedAt)
+            },
+            loadConfiguration: LLMAppConfig.loadRuntimeConfiguration
+        )
+        #else
+        return AppStartup(loadConfiguration: LLMAppConfig.loadRuntimeConfiguration)
+        #endif
+    }()
 
     @Published private(set) var phase: Phase = .loading
     private let loadConfiguration: @MainActor () async throws -> Void
+    private let configurationReady: @MainActor () async -> Void
     private var preparation: Task<Bool, Never>?
 
-    init(loadConfiguration: @escaping @MainActor () async throws -> Void) {
+    init(
+        configurationReady: @escaping @MainActor () async -> Void = {},
+        loadConfiguration: @escaping @MainActor () async throws -> Void
+    ) {
+        self.configurationReady = configurationReady
         self.loadConfiguration = loadConfiguration
     }
 
@@ -26,6 +43,7 @@ final class AppStartup: ObservableObject {
                 phase = .ready
                 Logger(subsystem: "com.leepepe.voxpocket", category: "AppStartup")
                     .info("Configuration ready; app services may start")
+                await configurationReady()
                 return true
             } catch {
                 phase = .failed

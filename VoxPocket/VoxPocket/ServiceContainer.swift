@@ -83,6 +83,10 @@ public final class ServiceContainer: ObservableObject {
     // MARK: - 遥测
 
     public let telemetryService: any TelemetryService
+    private let telemetryCoordinator: TelemetryLifecycleCoordinator
+    private let productTelemetryPreferences: ProductTelemetryPreferences
+    private var productTelemetryInstrumentation: ProductTelemetryInstrumentation!
+    private var pendingProductTelemetryRecordingCompletion: Task<Void, Never>?
 
     // MARK: - 状态跟踪
 
@@ -94,100 +98,60 @@ public final class ServiceContainer: ObservableObject {
 
     // MARK: - 初始化
 
-    private init() {
-        VoxPocketLogging.start()
-        logger = PrintLogger(subsystem: "ServiceContainer")
-        telemetryService = Self.makeTelemetryService()
+    init(
+        productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
+        processEnvironment: [String: String] = ProcessInfo.processInfo.environment, processArguments: [String] = ProcessInfo.processInfo.arguments,
+        productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider = { BlobTelemetryConfiguration() },
+        productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil, productTelemetryNotificationCenter: NotificationCenter = .default,
+        productTelemetryHostOverride: BlobTelemetryHostKind? = nil
+    ) {
+        VoxPocketLogging.start(); logger = PrintLogger(subsystem: "ServiceContainer")
+        let telemetryCoordinator = Self.makeTelemetryService()
+        self.telemetryCoordinator = telemetryCoordinator; telemetryService = telemetryCoordinator
+        let productTelemetry = ProductTelemetryAssembly.make(
+            preferences: productTelemetryPreferences, environment: processEnvironment, arguments: processArguments,
+            configuration: productTelemetryConfiguration, bootstrapFactory: productTelemetryBootstrapFactory,
+            notificationCenter: productTelemetryNotificationCenter, hostOverride: productTelemetryHostOverride, coordinator: telemetryCoordinator
+        )
+        self.productTelemetryPreferences = productTelemetry.preferences; productTelemetryInstrumentation = productTelemetry.instrumentation
         let azureConfig = Self.makeAzureFoundryConfig()
         #if os(macOS)
         let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings)
-        let configuredLLM = textModels.main
-        let configuredQuickLLM = textModels.quick
-        quickLLMService = configuredQuickLLM
+        let configuredLLM = textModels.main; let configuredQuickLLM = textModels.quick
+        quickLLMService = configuredQuickLLM; llmService = configuredLLM
         #else
         let configuredLLM = DefaultLLMService(azureFoundryConfig: azureConfig)
-        #endif
         llmService = configuredLLM
-
-        // 初始化基础服务（按 LLMAppConfig.defaultTranscriberProvider 选择转录器）
-        switch LLMAppConfig.defaultTranscriberProvider {
-        case .localWhisperKit:
-            let whisper = Self.makeLocalWhisperTranscriber(preloadOnStart: true)
-            transcriber = LoadingFallbackTranscriptionCoordinator(
-                primary: whisper,
-                fallback: AppleSpeechTranscriber()
-            )
-            localModelLoadingObservable = whisper
-        case .hybridLocalWhisper:
-            let hybrid = Self.makeHybridLocalWhisperTranscriber(preloadOnStart: true)
-            transcriber = hybrid
-            localModelLoadingObservable = hybrid
-        default:
-            transcriber = Self.makeTranscriber(preloadOnStart: true, beforeSession: { settings in
-                #if os(macOS)
-                configuredLLM.configure(settings)
-                #endif
-            })
-            localModelLoadingObservable = nil
-        }
+        #endif
+        #if os(macOS)
+        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber { configuredLLM.configure($0) }
+        #else
+        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber()
+        #endif
 #if os(macOS)
-        clipboardService = MacOSClipboardService.shared
-        accessibilityService = MacOSAccessibilityService.shared
-        hotkeyService = MacOSGlobalHotkeyService.shared
-        claudeInboxService = MacOSClaudeInboxService.shared
+        clipboardService = MacOSClipboardService.shared; accessibilityService = MacOSAccessibilityService.shared
+        hotkeyService = MacOSGlobalHotkeyService.shared; claudeInboxService = MacOSClaudeInboxService.shared
 #endif
-
-        // 初始化 Use Cases
-        editingUseCase = DefaultEditingUseCase()
-        recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber, telemetry: telemetryService)
+        editingUseCase = DefaultEditingUseCase(); historyUseCase = DefaultHistoryUseCase(editing: editingUseCase); recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber, telemetry: telemetryService)
         transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase, telemetry: telemetryService)
-        historyUseCase = DefaultHistoryUseCase(editing: editingUseCase)
         refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase, telemetry: telemetryService)
-
-        streamingInputCoordinator = DefaultStreamingInputCoordinator(
-            editing: editingUseCase,
-            transcription: transcriptionUseCase,
-            refinement: refinementUseCase
-        )
-
-        // 启动时先用内存实现，避免 ModelContainer 创建阻塞 UI
-        sessionUseCase = ProxySessionUseCase(backing: InMemorySessionUseCase())
-
-        // Deep Link 路由
+        streamingInputCoordinator = DefaultStreamingInputCoordinator(editing: editingUseCase, transcription: transcriptionUseCase, refinement: refinementUseCase)
+        let productTelemetryInstrumentation = self.productTelemetryInstrumentation!; sessionUseCase = ProxySessionUseCase(
+            backing: InMemorySessionUseCase()) { await productTelemetryInstrumentation.sessionDidComplete() }
         deepLinkRouter = DefaultDeepLinkRouter()
-
 #if os(macOS)
-        // 快速录音使用独立 coordinator，避免主编辑器和快速录音串流/状态互相污染。
-        // 本地 Whisper engine 在底层共享，不会重复下载同一模型。
-        quickTranscriber = Self.makeQuickTranscriber(beforeSession: { settings in
-            configuredQuickLLM.configure(settings)
-        })
-        quickEditingUseCase = DefaultEditingUseCase()
-        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService)
-        quickTranscriptionUseCase = DefaultTranscriptionUseCase(
-            coordinator: quickTranscriber,
-            editing: quickEditingUseCase,
-            telemetry: telemetryService
-        )
-        quickRefinementUseCase = DefaultRefinementUseCase(
-            llmService: configuredQuickLLM,
-            editing: quickEditingUseCase,
-            telemetry: telemetryService
-        )
-        quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(
-            editing: quickEditingUseCase,
-            transcription: quickTranscriptionUseCase,
-            refinement: quickRefinementUseCase
-        )
+        quickTranscriber = Self.makeQuickTranscriber { configuredQuickLLM.configure($0) }; quickEditingUseCase = DefaultEditingUseCase()
+        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService); quickTranscriptionUseCase = DefaultTranscriptionUseCase(coordinator: quickTranscriber, editing: quickEditingUseCase, telemetry: telemetryService); quickRefinementUseCase = DefaultRefinementUseCase(llmService: configuredQuickLLM, editing: quickEditingUseCase, telemetry: telemetryService)
+        quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(editing: quickEditingUseCase, transcription: quickTranscriptionUseCase, refinement: quickRefinementUseCase)
 #endif
+        finishInitialization()
+    }
 
-        // 为所有多识别器 Transcriber 统一注入 LLM 合并器
+    private func finishInitialization() {
         injectMergerIfNeeded(into: transcriber)
-#if os(macOS)
+        #if os(macOS)
         injectMergerIfNeeded(into: quickTranscriber)
-#endif
-
-        #if !os(macOS)
+        #else
         configureLLMService()
         observeProviderPreferenceChanges()
         Task { [weak self] in
@@ -195,8 +159,31 @@ public final class ServiceContainer: ObservableObject {
             await self?.applyAnalysisSettingsPreference()
         }
         #endif
-
         logger.debug("Initialized")
+    }
+
+    private static func makePrimaryTranscriber(
+        beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
+    ) -> (any TranscriptionCoordinator, (any ModelLoadingObservable)?) {
+        switch LLMAppConfig.defaultTranscriberProvider {
+        case .localWhisperKit:
+            let whisper = makeLocalWhisperTranscriber(preloadOnStart: true)
+            return (
+                LoadingFallbackTranscriptionCoordinator(
+                    primary: whisper,
+                    fallback: AppleSpeechTranscriber()
+                ),
+                whisper
+            )
+        case .hybridLocalWhisper:
+            let hybrid = makeHybridLocalWhisperTranscriber(preloadOnStart: true)
+            return (hybrid, hybrid)
+        default:
+            return (
+                makeTranscriber(preloadOnStart: true, beforeSession: beforeSession),
+                nil
+            )
+        }
     }
 
     private func observeProviderPreferenceChanges() {
@@ -326,13 +313,28 @@ public final class ServiceContainer: ObservableObject {
     ) {
         let provider = preferredProvider
             ?? LLMAppConfig.defaultProvider
+        let (config, optionsCount) = Self.makeProviderConfig(provider)
+        do {
+            try llmService.setProvider(config)
+            logger.log(.debug, "Configured LLM provider", context: [
+                "provider": provider.rawValue,
+                "options_count": optionsCount
+            ])
+        } catch {
+            logger.log(.debug, "LLM configuration failed; using fallback", context: [
+                "provider": provider.rawValue,
+                "error": error.localizedDescription
+            ])
+        }
+    }
 
+    private static func makeProviderConfig(
+        _ provider: LLMProviderType
+    ) -> (LLMProviderConfig, Int) {
         var options: [String: String] = LLMAppConfig.analysisOptions()
-
         let modelIdentifier: String
         let apiKey: String?
         let baseURL: URL?
-
         switch provider {
         case .azureFoundry:
             if let deployment = Self.makeAzureFoundryDeployment() {
@@ -357,7 +359,6 @@ public final class ServiceContainer: ObservableObject {
             apiKey = nil
             baseURL = nil
         }
-
         let config = LLMProviderConfig(
             providerType: provider,
             apiKey: apiKey,
@@ -365,19 +366,7 @@ public final class ServiceContainer: ObservableObject {
             modelIdentifier: modelIdentifier,
             options: options
         )
-
-        do {
-            try llmService.setProvider(config)
-            logger.log(.debug, "Configured LLM provider", context: [
-                "provider": provider.rawValue,
-                "options_count": options.count
-            ])
-        } catch {
-            logger.log(.debug, "LLM configuration failed; using fallback", context: [
-                "provider": provider.rawValue,
-                "error": error.localizedDescription
-            ])
-        }
+        return (config, options.count)
     }
 
     private static func readAzureFoundryAPIKey() -> String? {
@@ -411,7 +400,7 @@ public final class ServiceContainer: ObservableObject {
     /// Debug 默认连接本地 Docker Loki（`http://localhost:3100/loki/api/v1/push`）。
     /// Release 须通过 `LOKI_ENDPOINT` 环境变量显式指定，否则回退到 Noop。
     /// 可通过 `LOKI_TOKEN` 提供 Bearer token（Grafana Cloud）。
-    private static func makeTelemetryService() -> any TelemetryService {
+    private static func makeTelemetryService() -> TelemetryLifecycleCoordinator {
         let env = ProcessInfo.processInfo.environment
 
         let endpoint: URL
@@ -445,6 +434,50 @@ public final class ServiceContainer: ObservableObject {
                 authToken: authToken
             )
         }
+    }
+
+    static let uiTestHostEnvironmentKey = "VOXPOCKET_UI_TEST_HOST"
+
+    static func classifyBlobTelemetryHost(
+        environment: [String: String],
+        arguments: [String]
+    ) -> BlobTelemetryHostKind {
+        if environment[uiTestHostEnvironmentKey] == "1"
+            && arguments.contains("--vox-ui-test-host") {
+            return .test
+        }
+        if environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCTestBundlePath"] != nil
+            || environment["XCTestSessionIdentifier"] != nil {
+            return .test
+        }
+        return .interactiveApplication
+    }
+
+    static var blobTelemetryStoreDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("VoxPocket", isDirectory: true)
+            .appendingPathComponent("ProductTelemetry", isDirectory: true)
+    }
+
+    func completeProductTelemetryStartup(startedAt: ContinuousClock.Instant) async {
+        await productTelemetryInstrumentation.completeStartup(startedAt: startedAt)
+    }
+
+    func waitForPendingProductTelemetryStartupCompletion() async {
+        await productTelemetryInstrumentation.waitForPendingStartupCompletion()
+    }
+
+    func recordProductAction(_ action: BlobProductAction) {
+        productTelemetryInstrumentation.record(action)
+    }
+
+    func productTelemetryApplicationWillResignActive() async {
+        await productTelemetryInstrumentation.applicationWillResignActive()
+    }
+
+    func waitForPendingProductTelemetryConsentChange() async {
+        await productTelemetryInstrumentation.waitForPendingConsentChange()
     }
 
     // MARK: - 延迟持久化初始化
@@ -551,6 +584,18 @@ public final class ServiceContainer: ObservableObject {
         logger.debug("Recording ended")
         let svc = telemetryService
         Task { await svc.flush() }
+        let productTelemetryInstrumentation = productTelemetryInstrumentation!
+        pendingProductTelemetryRecordingCompletion = Task {
+            await productTelemetryInstrumentation.recordingDidComplete()
+        }
+    }
+
+    func waitForPendingProductTelemetryRecordingCompletion() async {
+        await pendingProductTelemetryRecordingCompletion?.value
+    }
+
+    func waitForPendingProductTelemetrySessionCompletion() async {
+        await productTelemetryInstrumentation.waitForPendingSessionCompletion()
     }
 }
 
@@ -571,13 +616,18 @@ public enum RecordingSource: String {
 public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
 
     private var backing: SessionUseCase
+    private let onCompletedSession: @Sendable () async -> Void
     private var sessionsSubscription: AnyCancellable?
     private var currentSessionSubscription: AnyCancellable?
     private let sessionsRelay = CurrentValueSubject<[Session], Error>([])
     private let currentSessionRelay = CurrentValueSubject<Session?, Never>(nil)
 
-    init(backing: SessionUseCase) {
+    init(
+        backing: SessionUseCase,
+        onCompletedSession: @escaping @Sendable () async -> Void = {}
+    ) {
         self.backing = backing
+        self.onCompletedSession = onCompletedSession
         rebindPublisher()
     }
 
@@ -648,6 +698,12 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
 
     @discardableResult
     public func saveCompletedSession(title: String?, rawText: String, refinedText: String) async throws -> Session {
-        try await backing.saveCompletedSession(title: title, rawText: rawText, refinedText: refinedText)
+        let session = try await backing.saveCompletedSession(
+            title: title,
+            rawText: rawText,
+            refinedText: refinedText
+        )
+        await onCompletedSession()
+        return session
     }
 }

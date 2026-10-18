@@ -172,8 +172,45 @@ final class TelemetryLifecycleCoordinator: TelemetryService, Sendable {
         await worker.flush(.blob)
     }
 
+    func requestBlobFlush() -> Task<Void, Never> {
+        worker.requestFlush(.blob)
+    }
+
     func disableBlob() async {
         await worker.disableBlob()
+    }
+}
+
+private final class TelemetryFlushCompletion: Sendable {
+    private struct State: Sendable {
+        var isComplete = false
+        var waiters: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private let state = Mutex(State())
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let isComplete = state.withLock { state in
+                guard !state.isComplete else { return true }
+                state.waiters.append(continuation)
+                return false
+            }
+            if isComplete {
+                continuation.resume()
+            }
+        }
+    }
+
+    func complete() {
+        let waiters = state.withLock { state in
+            guard !state.isComplete else { return [CheckedContinuation<Void, Never>]() }
+            state.isComplete = true
+            let waiters = state.waiters
+            state.waiters.removeAll()
+            return waiters
+        }
+        waiters.forEach { $0.resume() }
     }
 }
 
@@ -198,12 +235,12 @@ private final class TelemetryLifecycleWorker: Sendable {
 
     private enum PendingAdmission: Sendable {
         case operation(Operation)
-        case flush(FlushKind, [CheckedContinuation<Void, Never>])
+        case flush(FlushKind, [TelemetryFlushCompletion])
     }
 
     private struct ActiveFlush: Sendable {
         let kind: FlushKind
-        var waiters: [CheckedContinuation<Void, Never>]
+        var waiters: [TelemetryFlushCompletion]
     }
 
     private struct State: Sendable {
@@ -252,30 +289,34 @@ private final class TelemetryLifecycleWorker: Sendable {
     }
 
     func flush(_ kind: FlushKind) async {
-        await withCheckedContinuation { continuation in
-            queue.async { [self] in
-                let shouldStartFlush = state.withLock { state in
-                    guard let activeFlush = state.activeFlush else {
-                        state.activeFlush = ActiveFlush(kind: kind, waiters: [continuation])
-                        return true
-                    }
+        await requestFlush(kind).value
+    }
 
-                    if state.pendingAdmissions.isEmpty, activeFlush.kind == kind {
-                        state.activeFlush?.waiters.append(continuation)
-                    } else if case .flush(let pendingKind, var waiters) = state.pendingAdmissions.last,
-                              pendingKind == kind {
-                        waiters.append(continuation)
-                        state.pendingAdmissions[state.pendingAdmissions.count - 1] = .flush(kind, waiters)
-                    } else {
-                        state.pendingAdmissions.append(.flush(kind, [continuation]))
-                    }
-                    return false
+    func requestFlush(_ kind: FlushKind) -> Task<Void, Never> {
+        let completion = TelemetryFlushCompletion()
+        queue.async { [self] in
+            let shouldStartFlush = state.withLock { state in
+                guard let activeFlush = state.activeFlush else {
+                    state.activeFlush = ActiveFlush(kind: kind, waiters: [completion])
+                    return true
                 }
-                flushAdmissionObserver()
-                guard shouldStartFlush else { return }
-                startFlush(kind)
+
+                if state.pendingAdmissions.isEmpty, activeFlush.kind == kind {
+                    state.activeFlush?.waiters.append(completion)
+                } else if case .flush(let pendingKind, var waiters) = state.pendingAdmissions.last,
+                          pendingKind == kind {
+                    waiters.append(completion)
+                    state.pendingAdmissions[state.pendingAdmissions.count - 1] = .flush(kind, waiters)
+                } else {
+                    state.pendingAdmissions.append(.flush(kind, [completion]))
+                }
+                return false
             }
+            flushAdmissionObserver()
+            guard shouldStartFlush else { return }
+            startFlush(kind)
         }
+        return Task { await completion.wait() }
     }
 
     func bootstrapBlob(
@@ -381,7 +422,7 @@ private final class TelemetryLifecycleWorker: Sendable {
             state.activeFlush = nil
             return waiters
         }
-        waiters.forEach { $0.resume() }
+        waiters.forEach { $0.complete() }
         processPendingAdmissions()
     }
 

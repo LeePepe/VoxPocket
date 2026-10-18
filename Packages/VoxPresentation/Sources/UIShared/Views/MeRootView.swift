@@ -5,15 +5,21 @@ struct MeRootView: View {
     let status: RecorderStatus
     var onDeleteAllHistory: (() -> Void)?
     var localModelLoadingStatus: LocalModelLoadingStatus?
+    @StateObject private var productTelemetry: ProductTelemetrySettingsViewModel
+    private let observeProductTelemetryControl: (@MainActor (ProductTelemetrySettingsViewModel) -> Void)?
 
     init(
         status: RecorderStatus = .idle,
         onDeleteAllHistory: (() -> Void)? = nil,
-        localModelLoadingStatus: LocalModelLoadingStatus? = nil
+        localModelLoadingStatus: LocalModelLoadingStatus? = nil,
+        productTelemetry: ProductTelemetrySettingsViewModel = ProductTelemetrySettingsViewModel(),
+        observeProductTelemetryControl: (@MainActor (ProductTelemetrySettingsViewModel) -> Void)? = nil
     ) {
         self.status = status
         self.onDeleteAllHistory = onDeleteAllHistory
         self.localModelLoadingStatus = localModelLoadingStatus
+        _productTelemetry = StateObject(wrappedValue: productTelemetry)
+        self.observeProductTelemetryControl = observeProductTelemetryControl
     }
 
     var body: some View {
@@ -28,7 +34,7 @@ struct MeRootView: View {
 #if os(macOS)
                 ShortcutsCard()
 #endif
-                PrivacyCard(onDeleteAllHistory: onDeleteAllHistory)
+                privacyCard
                 DiagnosticsCard()
                 AboutCard()
             }
@@ -36,6 +42,23 @@ struct MeRootView: View {
             .padding(.vertical, 24)
         }
         .background(BackgroundAtmosphere(status: status))
+        .onAppear {
+            NotificationCenter.default.post(
+                name: ProductTelemetrySettingsViewModel.settingsDidOpen,
+                object: nil
+            )
+        }
+    }
+
+    var privacyCard: some View {
+        PrivacyCard(
+            onDeleteAllHistory: onDeleteAllHistory,
+            productTelemetry: productTelemetry
+        )
+        .onAppear { observeProductTelemetryControl?(productTelemetry) }
+        .onChange(of: productTelemetry.isSendingUsageData) {
+            observeProductTelemetryControl?(productTelemetry)
+        }
     }
 }
 
@@ -172,7 +195,15 @@ struct LLMProviderCard: View {
 
 struct PrivacyCard: View {
     var onDeleteAllHistory: (() -> Void)?
+    @ObservedObject var productTelemetry: ProductTelemetrySettingsViewModel
     @State private var showDeleteConfirmation = false
+
+    var consentBinding: Binding<Bool> {
+        Binding(
+            get: { productTelemetry.isSendingUsageData },
+            set: { value in Task { await productTelemetry.setSendingUsageData(value) } }
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -182,6 +213,10 @@ struct PrivacyCard: View {
 
             SettingRow(title: "数据保留", value: "30 days")
             SettingRow(title: "导出数据", value: "Ready")
+
+            Toggle("Send usage data", isOn: consentBinding)
+                .disabled(!productTelemetry.isLoaded)
+                .accessibilityIdentifier("vox.me.sendUsageData")
 
             Button {
                 showDeleteConfirmation = true
@@ -207,6 +242,7 @@ struct PrivacyCard: View {
             }
         }
         .modifier(CardStyle())
+        .task { await productTelemetry.load() }
     }
 }
 
