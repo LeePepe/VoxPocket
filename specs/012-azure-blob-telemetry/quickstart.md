@@ -2,27 +2,11 @@
 
 Run from the repository root on the exact candidate. No command in this document provisions Azure, adds a GitHub secret, signs/uploads TestFlight, or prints a credential.
 
-## 1. Land the ordered CI → runtime → dependency safety chain
+## 1. Follow the canonical atomic PR02 task graph
 
-PR01 changes only `.github/workflows/ci.yml` to run the existing macOS `VoxPocketTests` target after XcodeGen with signing disabled. Verify the current suite and repository gates pass before proceeding.
+`tasks.md` is the single executable topology: after PR01, atomic PR02 combines T005 with T002–T004/T013 on one final exact-`0.2.0` tree. There is no standalone PR03 and no publishable old-`0.1.0` intermediate. Run the task-local verification recorded there rather than recreating the dependency sequence in this quickstart. PR04/PR05 may proceed independently after PR00; PR06 waits for atomic PR02 plus PR04/PR05.
 
-PR02, still on the old shared-telemetry version, introduces the shared dedicated serial non-main coordinator. From an `@MainActor` test, submit `track A`, `track B`, then await `flush`; the underlying factory/spy must record `construct → A → B → flush`, maximum concurrency one, and `Thread.isMainThread == false` for every operation. A structural regression must find no raw-provider bypass, and PR01's required CI must execute the test.
-
-PR03 then uses SwiftPM exact version selection everywhere:
-
-```text
-exact: "0.2.0"
-```
-
-Immediately before publication, verify annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` still peels to `903f4b9bc01cfcfeba3ce96e13519d841781b40a`. Record both OIDs as integrity evidence only, never as a manifest revision selector or fallback. PR03 atomically updates all three package manifests, both guards, and every current exact-version authority/projection enumerated in `tasks.md` T002–T004/T013. It contains no runtime source/test adaptation or required-CI wiring. The old-selection search is scoped to that current-truth list; `spec.md` and `research.md` retain explicitly historical baseline evidence.
-
-From the exact shared-telemetry checkout, validate the public consumer contract:
-
-```sh
-python3 sdks/swift/scripts/external_consumer.py --version 0.2.0
-```
-
-After reviewed PR00 lands, the ordered PR01→PR02→PR03 safety chain and the independent PR04/PR05 privacy repairs may proceed in parallel. PR06 starts only after PR03–PR05 merge.
+Any PR02→standalone-PR03 split found in older evidence is historical only and must not be executed.
 
 Do not pass `maxDiskBytes` to either legacy Loki or future Blob construction. The accepted pinned-provider default is 50 MiB of persisted source JSON plus Blob sidecars, with whole-oldest-batch eviction, oversized-event rejection, and durable loss accounting. Before a rollback, stop producers, prevent old/new writer overlap, make storage writable, and finish pending paired eviction cleanup with the `0.2.0` capacity-aware reader; preserve its ledger and retained files. Already evicted events are unrecoverable. These are intentional migration semantics, not a provider test copied into VoxPocket.
 
@@ -91,7 +75,9 @@ Immediately retain an untracked task-local copy and SHA-256 of that selected raw
 
 Compare the tracked base and selected raw projects as complete parsed object/reference graphs. Account for only these additions: `ProductTelemetryAssembly.swift` in the existing app sources/target and `BlobTelemetryInstrumentationTestSupport.swift` in the existing test sources/target. Identify exactly two collision-free one-to-one UUID pairs by role, for the existing `Config.xcconfig` `PBXFileReference` and its config-only `VoxPocket` `PBXGroup`, and apply those identifier maps only in memory for comparison. Traverse each declaration and every incoming/outgoing reference, including all `children` occurrences and both Debug and Release `baseConfigurationReference` values. After those two memberships and two mappings are accounted for, require complete equality of `isa`/object type, file type, name/path, `sourceTree`, children and ordering, configurations, targets, build phases, build settings, and every other project field. Any missing/colliding/stale mapping, extra object/reference/order/field difference, or extra path within that historical subset stops and returns exact evidence to Team Lead; do not add a canonicalizer, repository script, or gate.
 
-The separately authorized package-only increment is exactly `Packages/VoxPresentation/Sources/UIShared/ViewModels/ProductTelemetrySettingsViewModel.swift` plus `Packages/VoxPresentation/Tests/UISharedTests/ProductTelemetrySettingsViewModelTests.swift`. It requires no project membership or XcodeGen proof. A third incremental path, membership change, or extra historical-subset path stops for a new planning decision.
+The separately authorized consent-peer Package increment is exactly `Packages/VoxPresentation/Sources/UIShared/ViewModels/ProductTelemetrySettingsViewModel.swift` plus `Packages/VoxPresentation/Tests/UISharedTests/ProductTelemetrySettingsViewModelTests.swift`; a third path in that increment stops. Round 5 separately authorizes exactly `VoxPocket/VoxPocket/AppStartup.swift`, `VoxPocket/VoxPocketTests/AppStartupTests.swift`, and `scripts/tests/test_startup_interaction.py` for the iOS persisted-consent startup lifecycle and its executable/source-binding proof; a fourth Round 5 path stops. All five already exist, require no project membership or XcodeGen proof, and leave the historical eight-path generated-project subset unchanged. Any membership change, fourteenth unique T009 path, or extra historical-subset path stops for a new planning decision.
+
+For Round 5, gate configuration without sleep, assert zero telemetry work before release, then execute the real container/Application startup path. Model relaunch with fresh `AppStartup` and container generations over one isolated persisted store; require the same UUID, exactly one completion per lifetime even with concurrent `prepare()` callers, and the existing `construct → track product.performance → flush` order. The source harness must bind the actual iOS shared-startup completion but remains source evidence only. VoxApplication Package tests, macOS-hosted App XCTest, iOS App compilation, synthetic Release/plist evidence, and exact-head CI remain separate; the current iOS lane does not execute `VoxPocketTests`.
 
 A later raw generation may mint different UUIDs. If it is selected, repeat the full provenance, hash, byte-equality, and graph-equivalence proof; never report rerun zero-diff or byte idempotency. The proof may inspect `project.yml`, PBX structure, hashes, and generator metadata only. It must not read or report real `Config.xcconfig`, `Secrets.xcconfig`, private configuration, endpoint, SAS, or credential contents.
 
