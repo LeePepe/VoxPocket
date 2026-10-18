@@ -221,15 +221,16 @@ struct AppStartupTests {
         #expect(await fixture.preferences.isConsented == false)
     }
 
-    @Test(arguments: BlobTelemetryHostKind.allCases.filter { $0 != .interactiveApplication })
-    func excludedHostStartupCompletionPerformsNoTelemetryWork(_ host: BlobTelemetryHostKind) async throws {
-        let fixture = RuntimeFixture()
-        defer { fixture.remove() }
-        await fixture.preferences.persistConsent(true)
-        try await prepareInactiveTelemetry(fixture) {
-            excludedHostContainer(fixture, host: host)
+    @Test func excludedHostsStartupCompletionPerformsNoTelemetryWork() async throws {
+        for host in BlobTelemetryHostKind.allCases where host != .interactiveApplication {
+            let fixture = RuntimeFixture()
+            defer { fixture.remove() }
+            await fixture.preferences.persistConsent(true)
+            try await prepareInactiveTelemetry(fixture) {
+                excludedHostContainer(fixture, host: host)
+            }
+            #expect(await fixture.preferences.isConsented)
         }
-        #expect(await fixture.preferences.isConsented)
     }
 
     private func prepareInactiveTelemetry(
