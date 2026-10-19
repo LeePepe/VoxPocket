@@ -2,6 +2,7 @@
 import Testing
 import AppKit
 import PlatformUI
+import UIShared
 @testable import VoxPocket
 
 @Suite(.serialized)

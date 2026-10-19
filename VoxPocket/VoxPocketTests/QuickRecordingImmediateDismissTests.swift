@@ -2,6 +2,7 @@
 import Foundation
 import PlatformUI
 import Testing
+import UIShared
 @testable import VoxPocket
 
 @MainActor
