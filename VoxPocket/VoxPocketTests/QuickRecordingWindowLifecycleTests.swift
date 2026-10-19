@@ -1,6 +1,7 @@
 #if os(macOS)
 import Testing
 import AppKit
+import Dispatch
 import PlatformUI
 import UIShared
 @testable import VoxPocket
@@ -25,6 +26,10 @@ struct QuickRecordingWindowLifecycleTests {
         defer { manager.closeWindow(.quickRecording) }
         manager.showWindow(.quickRecording)
         let model = requireNotNil(manager.getQuickRecordingViewModel())
+        // 先排空初始化时 receive(on: .main) 入队的 idle 状态。
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { continuation.resume() }
+        }
         model.recorderStatus = .listening
 
         #expect(manager.dismissQuickRecordingWindow())

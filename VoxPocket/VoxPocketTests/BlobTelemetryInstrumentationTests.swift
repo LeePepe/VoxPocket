@@ -71,6 +71,8 @@ struct BlobTelemetryInstrumentationTests {
         await assertNormalQuickRecord(center: center, container: container)
         await assertFailedQuickRecord(center: center, container: container)
         await assertRapidRelease(center: center, container: container)
+        // 等待已入队的遥测写入完成，再检查完整事件顺序。
+        await container.productTelemetryApplicationWillResignActive()
         #expect(fixture.recorder.events.compactMap { $0.properties["action"] } == [
             "quick_record_started", "quick_record_stopped",
             "quick_record_started", "quick_record_stopped"
