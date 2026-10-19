@@ -162,6 +162,54 @@ final class SelectableTranscriptionTests: XCTestCase {
         }
     }
 
+    func testPendingOldCompletionCannotDiscardNewEligibleSession() async throws {
+        let gate = FakeSelectionGate()
+        let cancelled = expectation(description: "old release is awaiting cancelled startup")
+        let firstSelection = Mutex(true)
+        let probe = QuickRecordingEffectProbe()
+        let source = QuickRecordingTestProvider.batch.make(probe)
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) {
+            let first = firstSelection.withLock { first in defer { first = false }; return first }
+            if first {
+                await withTaskCancellationHandler { await gate.wait() } onCancel: { cancelled.fulfill() }
+                throw QuickRecordingReleaseError.unsupported
+            }
+            return source
+        }
+        try router.prepareQuickRecording()
+        let starting = Task { try await router.start(language: .current) }
+        await gate.entered()
+        let old = try router.freezeQuickRecordingRelease()
+        XCTAssertFalse(old.hasRecognizedSpeech)
+        let executor = PausedQuickReleaseExecutor()
+        defer { executor.resume() }
+        let completing = Task(executorPreference: executor) { try await router.completeQuickRecordingRelease(old) }
+        await executor.runNext()
+        await fulfillment(of: [cancelled], timeout: 1)
+        await gate.release()
+        if case .success = await starting.result { XCTFail("Old startup must fail") }
+
+        // A 的完成仍排队；先让 B 启动、收到 Apple 文本并冻结资格。
+        try router.prepareQuickRecording()
+        try await router.start(language: .current)
+        probe.send("synthetic eligible Apple")
+        let next = try router.freezeQuickRecordingRelease()
+        XCTAssertNotEqual(next.sessionID, old.sessionID)
+        XCTAssertTrue(next.hasRecognizedSpeech)
+        executor.resume()
+        try await completing.value
+        XCTAssertTrue(router.isTranscribing)
+        XCTAssertTrue(source.isTranscribing)
+        for effect in ["stop", "cancelApple", "cancelRealtime", "removeAudio", "endApple", "batch"] {
+            XCTAssertEqual(probe.count(effect), 0, "Old completion affected new session: \(effect)")
+        }
+        XCTAssertEqual(try router.freezeQuickRecordingRelease(), next)
+        try await router.completeQuickRecordingRelease(next)
+        XCTAssertEqual(probe.count("endApple"), 1)
+        XCTAssertEqual(probe.count("batch"), 1)
+        XCTAssertEqual(probe.count("stop"), 1)
+    }
+
     func testSystemSpeechFinalCanArriveAfterStopReturns() async throws {
         let fake = FakeSelectableTranscriber()
         let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: fake) { fake }
@@ -296,4 +344,50 @@ private actor FakeSelectionGate {
         await withCheckedContinuation { observers.append($0) }
     }
     func release() { waiting?.resume(); waiting = nil }
+}
+
+/// 只控制旧 complete 的执行器；启动失败和新录音继续使用正常执行器。
+private final class PausedQuickReleaseExecutor: TaskExecutor {
+    private struct State {
+        var jobs: [UnownedJob] = []
+        var waiter: CheckedContinuation<UnownedJob, Never>?
+        var resumed = false
+    }
+    private let state = Mutex(State())
+
+    func enqueue(_ job: consuming ExecutorJob) {
+        let job = UnownedJob(job)
+        let action = state.withLock { state -> (Bool, CheckedContinuation<UnownedJob, Never>?) in
+            if state.resumed { return (true, nil) }
+            if let waiter = state.waiter { state.waiter = nil; return (false, waiter) }
+            state.jobs.append(job)
+            return (false, nil)
+        }
+        if action.0 { schedule(job) } else { action.1?.resume(returning: job) }
+    }
+
+    func runNext() async {
+        let job = await withCheckedContinuation { continuation in
+            let ready = state.withLock { state -> UnownedJob? in
+                if !state.jobs.isEmpty { return state.jobs.removeFirst() }
+                state.waiter = continuation
+                return nil
+            }
+            if let ready { continuation.resume(returning: ready) }
+        }
+        job.runSynchronously(on: asUnownedTaskExecutor())
+    }
+
+    func resume() {
+        let jobs = state.withLock { state in
+            state.resumed = true
+            defer { state.jobs.removeAll() }
+            return state.jobs
+        }
+        jobs.forEach(schedule)
+    }
+
+    private func schedule(_ job: UnownedJob) {
+        Task.detached { job.runSynchronously(on: self.asUnownedTaskExecutor()) }
+    }
 }

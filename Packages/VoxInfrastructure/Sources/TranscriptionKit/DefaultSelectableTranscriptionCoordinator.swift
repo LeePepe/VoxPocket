@@ -163,10 +163,14 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
         defer { clear(snapshot.sessionID, keepResults: snapshot.hasRecognizedSpeech) }
         if !snapshot.hasRecognizedSpeech { pending.1?.cancel() }
         if let task = pending.1 { _ = await task.result }
-        let source = stateLock.withLock { state in
-            (state.active as? any QuickRecordingReleaseControlling, state.sourceRelease)
+        let source = stateLock.withLock { state -> (any QuickRecordingReleaseControlling, QuickRecordingReleaseSnapshot)? in
+            // 启动失败可能已清掉旧会话；不能把旧决定转发给随后启动的新会话。
+            guard state.id == snapshot.sessionID,
+                  let capability = state.active as? any QuickRecordingReleaseControlling,
+                  let frozen = state.sourceRelease else { return nil }
+            return (capability, frozen)
         }
-        guard let capability = source.0, let frozen = source.1 else { return }
+        guard let (capability, frozen) = source else { return }
         try await capability.completeQuickRecordingRelease(.init(sessionID: frozen.sessionID,
                                                                  hasRecognizedSpeech: snapshot.hasRecognizedSpeech))
     }
