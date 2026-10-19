@@ -18,6 +18,30 @@ struct QuickRecordingWindowLifecycleTests {
     }
 
     @MainActor
+    @Test func releaseDismissalKeepsListeningModelUntilTerminalClose() async {
+        let manager = WindowManager.shared
+        manager.closeWindow(.quickRecording)
+        defer { manager.closeWindow(.quickRecording) }
+        manager.showWindow(.quickRecording)
+        let model = requireNotNil(manager.getQuickRecordingViewModel())
+        model.recorderStatus = .listening
+
+        #expect(manager.dismissQuickRecordingWindow())
+        #expect(manager.windowVisibility[.quickRecording] == false)
+        #expect(!NSApp.windows.contains { $0 is QuickRecordingPanel && $0.isVisible })
+        #expect(manager.getQuickRecordingViewModel() === model)
+        for _ in 0..<100 { await Task.yield() }
+        #expect(model.recorderStatus == .listening)
+        #expect(!manager.dismissQuickRecordingWindow())
+
+        model.recorderStatus = .idle
+        manager.closeWindow(.quickRecording)
+        #expect(manager.getQuickRecordingViewModel() == nil)
+        manager.showWindow(.quickRecording)
+        #expect(manager.getQuickRecordingViewModel() !== model)
+    }
+
+    @MainActor
     @Test func quickRecordingWindowIsRecreatedAfterHide() {
         let windowManager = WindowManager.shared
 

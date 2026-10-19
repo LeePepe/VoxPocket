@@ -164,7 +164,8 @@ struct BlobTelemetryInstrumentationTests {
             quickRecordEnd: fixture.end,
             quickRecordShowWindow: fixture.show,
             quickRecordViewModel: fixture.getViewModel,
-            quickRecordHideWindow: fixture.hide
+            quickRecordHideWindow: fixture.hide,
+            quickRecordDismissWindow: fixture.dismiss
         )
         delegate.applicationDidFinishLaunching(
             Notification(name: NSApplication.didFinishLaunchingNotification)
@@ -529,6 +530,11 @@ private final class QuickRecordFixture {
     func getViewModel() -> QuickRecordingViewModel? {
         operationRecorder.record("get")
         return viewModel
+    }
+
+    func dismiss() -> Bool {
+        operationRecorder.record("dismiss")
+        return true
     }
 
     func hide() {

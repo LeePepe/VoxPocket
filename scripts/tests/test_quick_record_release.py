@@ -21,20 +21,25 @@ def main():
     delegate = (root / "VoxPocket/VoxPocket/AppDelegate.swift").read_text()
     window = (root / "VoxPocket/VoxPocket/WindowManager.swift").read_text()
     fixture = (root / "scripts/tests/quick_record_release_probe.swift").read_text()
-    handlers = "\n".join(method(delegate, signature) for signature in [
-        "private func handleQuickRecordStart() async",
-        "private func handleQuickRecordStop() async",
-    ])
+    handlers = delegate.split("// QUICK_RECORD_HANDLERS_BEGIN", 1)[1].split(
+        "// QUICK_RECORD_HANDLERS_END", 1)[0]
     fixture = fixture.replace("// PRODUCTION_HANDLERS", handlers)
+    fixture = fixture.replace("// PRODUCTION_SESSION", method(
+        delegate, "private struct QuickRecordingSession"))
+    catalog = (root / "Packages/VoxInfrastructure/Sources/TranscriptionKit/"
+               "VoxPocketTelemetryEventName.swift").read_text()
+    fixture = fixture.replace("// PRODUCTION_EVENT_NAMES", method(
+        catalog, "public enum VoxPocketTelemetryEventName"))
     fixture = fixture.replace("// PRODUCTION_WINDOW_START", method(
         window, "public func showQuickRecordingAndStart() async"))
     with tempfile.TemporaryDirectory(prefix="vox-fn-release-") as temporary:
         source = Path(temporary) / "probe.swift"
         binary = Path(temporary) / "probe"
         source.write_text(fixture)
-        subprocess.run(["swiftc", "-parse-as-library", "-swift-version", "6",
-                        str(source), "-o", str(binary)], check=True, timeout=60)
-        subprocess.run([str(binary)], check=True, timeout=15)
+        for flags in [[], ["-D", "DEBUG"]]:
+            subprocess.run(["swiftc", "-parse-as-library", "-swift-version", "6", *flags,
+                            str(source), "-o", str(binary)], check=True, timeout=60)
+            subprocess.run([str(binary)], check=True, timeout=15)
 
 
 if __name__ == "__main__":

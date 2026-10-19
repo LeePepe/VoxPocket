@@ -146,6 +146,15 @@ public final class WindowManager: ObservableObject {
         }
     }
 
+    /// 松手时仅隐藏视觉面板，后台终态关闭前保留模型，不触发 willClose 的录音取消。
+    @discardableResult
+    public func dismissQuickRecordingWindow() -> Bool {
+        guard let panel = windows[.quickRecording], panel.isVisible else { return false }
+        panel.orderOut(nil)
+        windowVisibility[.quickRecording] = false
+        return true
+    }
+
     /// 隐藏窗口
     public func hideWindow(_ type: WindowType) {
         if type == .quickRecording {

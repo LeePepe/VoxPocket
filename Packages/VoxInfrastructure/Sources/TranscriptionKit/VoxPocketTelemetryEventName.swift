@@ -1,5 +1,7 @@
 /// VoxPocket 拥有的遥测事件名称。
 public enum VoxPocketTelemetryEventName: String, Sendable {
+    case quickRecordFnReleased = "quick_record.fn_released"
+    case quickRecordPanelClosed = "quick_record.panel_closed"
     case recordingStarted = "recording.started"
     case recordingStopped = "recording.stopped"
     case recordingDuration = "recording.duration"

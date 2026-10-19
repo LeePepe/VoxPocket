@@ -119,16 +119,25 @@ final class QuickRecordRecordingUseCase: RecordingUseCase, @unchecked Sendable {
     private let startError: Error?
     private let startGate: QuickRecordStartGate?
     private let operationRecorder: QuickRecordOperationRecorder
+    private let stopGate: QuickRecordStartGate?
+    private let stopError: Error?
+    private let onStop: (@Sendable () -> Void)?
     private let counts = Mutex((start: 0, stop: 0))
 
     init(
         startError: Error?,
         startGate: QuickRecordStartGate?,
-        operationRecorder: QuickRecordOperationRecorder
+        operationRecorder: QuickRecordOperationRecorder,
+        stopGate: QuickRecordStartGate? = nil,
+        stopError: Error? = nil,
+        onStop: (@Sendable () -> Void)? = nil
     ) {
         self.startError = startError
         self.startGate = startGate
         self.operationRecorder = operationRecorder
+        self.stopGate = stopGate
+        self.stopError = stopError
+        self.onStop = onStop
     }
 
     var startCallCount: Int { counts.withLock { $0.start } }
@@ -147,6 +156,9 @@ final class QuickRecordRecordingUseCase: RecordingUseCase, @unchecked Sendable {
     func stopRecording() async throws {
         counts.withLock { $0.stop += 1 }
         operationRecorder.record("stop")
+        if let stopGate { await stopGate.suspendStart() }
+        if let stopError { throw stopError }
+        onStop?()
         stateSubject.send(.idle)
     }
 
@@ -183,6 +195,12 @@ final class QuickRecordTranscriptionUseCase: TranscriptionUseCase, @unchecked Se
 
     func setLanguage(_ locale: Locale) {
         state.withLock { $0.language = locale }
+    }
+
+    func sendFinalText(_ text: String) {
+        finalResult.send(TranscriptionResult(
+            text: text, type: .final, confidence: nil, timestamp: Date(), locale: currentLanguage
+        ))
     }
 
     func commitCurrentTranscription() async throws {}

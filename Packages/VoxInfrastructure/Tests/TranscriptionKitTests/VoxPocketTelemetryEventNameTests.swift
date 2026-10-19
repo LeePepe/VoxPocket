@@ -6,6 +6,8 @@ struct VoxPocketTelemetryEventNameTests {
     func publicNamesPreserveExactRawValues() {
         // 期望值独立写成字面量，不从生产定义生成。
         let expected: [(VoxPocketTelemetryEventName, String)] = [
+            (.quickRecordFnReleased, "quick_record.fn_released"),
+            (.quickRecordPanelClosed, "quick_record.panel_closed"),
             (.recordingStarted, "recording.started"),
             (.recordingStopped, "recording.stopped"),
             (.recordingDuration, "recording.duration"),
@@ -28,7 +30,7 @@ struct VoxPocketTelemetryEventNameTests {
             #expect(requireSendable(event).rawValue == rawValue)
         }
 
-        #expect(Set(expected.map { $0.0.rawValue }).count == 14)
+        #expect(Set(expected.map { $0.0.rawValue }).count == 16)
         #expect(VoxPocketTelemetryEventName(rawValue: "unknown.telemetry.event") == nil)
     }
 
