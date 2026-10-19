@@ -32,6 +32,7 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
 
     private let logger: Logger
     private let recording = HybridRecordingLifecycle()
+    private let sessionEffects: QuickRecordingSessionEffects?
 
     // MARK: - 多识别器结果合并
 
@@ -56,7 +57,17 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
                                            logger: PrintLogger(subsystem: "WhisperEngine"))
         self.logger = logger
         self.realtimeConfig = realtimeConfig
+        self.sessionEffects = nil
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
+        super.init()
+    }
+
+    init(whisperConfig: AzureWhisperConfig, effects: QuickRecordingSessionEffects) {
+        recorder = MicrophoneRecorder()
+        whisperEngine = WhisperEngine(config: whisperConfig)
+        realtimeConfig = nil
+        logger = PrintLogger(subsystem: "HybridWhisperTranscriber")
+        sessionEffects = effects
         super.init()
     }
 }
@@ -88,19 +99,48 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         logger.info("start() language: \(language.identifier)")
 
         let id = try recording.begin(locale: language)
-        do { try await startRecording(language: language, id: id) }
+        do {
+            if let sessionEffects {
+                try await sessionEffects.start(id, language) { [weak self] result in
+                    self?.receiveAppleResult(result, id: id)
+                }
+                try recording.didStart(id)
+                captureStateSubject.send(.recording)
+            } else {
+                try await startRecording(language: language, id: id)
+            }
+        }
         catch {
-            if case .cancelStart(let session) = recording.requestStop() { session.realtime?.cancel() }
-            let file = await MainActor.run { self.stopRecorder() }
-            await Self.removeAudio(file)
+            if let snapshot = recording.session(id) { try? await discardRecording(snapshot) }
             recording.complete(id)
             throw error
         }
     }
 
     private func startRecording(language: Locale, id: UUID) async throws {
+        try await authorizeSpeech()
+        try Task.checkCancellation()
+        guard recording.isStarting(id) else { throw CancellationError() }
+        let speechRecognizer = try recognizer(language: language)
+        recognitionTask?.finish()
+        recognitionTask = nil
+        let request = DefaultAppleSpeechRequestFactory.makeRequest()
+        recognitionRequest = request
+        let realtime = makeRealtime(language: language, id: id)
+        try recording.attach(realtime.0, id: id, cancelRealtime: realtime.1)
+        try await recorder.startIfAllowed(shouldStart: { [recording] in recording.isStarting(id) }) { buffer in
+            request.append(buffer)
+            realtime.0?.append(buffer)
+        }
+        try Task.checkCancellation()
+        startAppleTask(speechRecognizer, request: request, language: language, id: id)
+        realtime.0?.start(language: language.language.languageCode?.identifier ?? "zh")
+        try recording.didStart(id)
+        captureStateSubject.send(.recording)
+        logger.info("Recording + Apple Speech started")
+    }
 
-        // 请求语音识别权限
+    private func authorizeSpeech() async throws {
         let speechAuthorized = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
@@ -110,10 +150,9 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             throw NSError(domain: "HybridWhisperTranscriber", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
         }
-        try Task.checkCancellation()
-        guard recording.isStarting(id) else { throw CancellationError() }
+    }
 
-        // 更新 recognizer locale
+    private func recognizer(language: Locale) throws -> SFSpeechRecognizer {
         if speechRecognizer?.locale.language.languageCode != language.language.languageCode {
             speechRecognizer = SFSpeechRecognizer(locale: language)
         }
@@ -122,43 +161,31 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                           userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
         }
 
-        // 清理旧任务
-        recognitionTask?.finish()
-        recognitionTask = nil
+        return speechRecognizer
+    }
 
-        // 创建识别请求
-        let request = DefaultAppleSpeechRequestFactory.makeRequest()
-        recognitionRequest = request
-        let pipeline = realtimeConfig.map { config in
-            let session = DefaultRealtimeTranscriptionSession(config: config) { [weak self] text in
-                self?.receiveCloudText(text, id: id, locale: language)
-            }
-            return RealtimeAudioPipeline(session: session) { [weak self] in
+    private func makeRealtime(language: Locale, id: UUID)
+        -> (RealtimeAudioPipeline?, (@Sendable () async -> Void)?) {
+        guard let config = realtimeConfig else { return (nil, nil) }
+        let session = DefaultRealtimeTranscriptionSession(config: config) { [weak self] text in
+            self?.receiveCloudText(text, id: id, locale: language)
+        }
+        let pipeline = RealtimeAudioPipeline(session: session) { [weak self] in
                 guard let self, let text = self.recording.restoreApplePreview(id), !text.isEmpty else { return }
                 self.liveResultSubject.send(TranscriptionResult(text: text, type: .partial, confidence: nil,
                                                                timestamp: Date(), locale: language))
-            }
         }
-        try recording.attach(pipeline, id: id)
+        return (pipeline, { await cancelQuickRecordingRealtime(pipeline, session: session) })
+    }
 
-        // 启动录音：buffer 同步喂给 Apple Speech，同时写入 WAV 文件（由 MicrophoneRecorder 负责）
-        try await recorder.startIfAllowed(shouldStart: { [recording] in recording.isStarting(id) }) { buffer in
-            request.append(buffer)
-            pipeline?.append(buffer)
-        }
-        try Task.checkCancellation()
-
-        // 启动 Apple Speech 识别任务
-        recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
+    private func startAppleTask(_ recognizer: SFSpeechRecognizer, request: SFSpeechAudioBufferRecognitionRequest,
+                                language: Locale, id: UUID) {
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
 
             if let result {
-                let text = result.bestTranscription.formattedString
-                let publish = self.recording.receiveApple(text, id: id)
-                guard publish else { return }
-
                 let transcriptionResult = TranscriptionResult(
-                    text: text,
+                    text: result.bestTranscription.formattedString,
                     type: result.isFinal ? .final : .partial,
                     confidence: result.isFinal
                         ? Double(result.bestTranscription.segments.last?.confidence ?? 0)
@@ -166,8 +193,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                     timestamp: Date(),
                     locale: language
                 )
-                self.liveResultSubject.send(transcriptionResult)
-                self.logger.debug("Apple Speech: isFinal=\(result.isFinal), chars=\(text.count)")
+                self.receiveAppleResult(transcriptionResult, id: id)
             }
 
             if let error {
@@ -175,10 +201,11 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                 self.logger.error("Apple Speech failed, code=\(e.code)")
             }
         }
-        pipeline?.start(language: language.language.languageCode?.identifier ?? "zh")
-        try recording.didStart(id)
-        captureStateSubject.send(.recording)
-        logger.info("Recording + Apple Speech started")
+    }
+
+    private func receiveAppleResult(_ result: TranscriptionResult, id: UUID) {
+        guard recording.receiveApple(result.text, id: id) else { return }
+        liveResultSubject.send(result)
     }
 
     public func stop() async {
@@ -189,13 +216,17 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             await recording.waitForCleanup(session.id)
         case .finish(let session):
             await finishRecording(session)
+        case .discard(let session):
+            try? await discardRecording(session)
+            recording.complete(session.id)
         }
     }
 
     private func finishRecording(_ snapshot: HybridRecordingLifecycle.Session) async {
         defer { recording.complete(snapshot.id) }
-        recognitionRequest?.endAudio()
-        let fileURL = await MainActor.run { self.stopRecorder() }
+        if let sessionEffects { sessionEffects.endAppleAudio() }
+        else { recognitionRequest?.endAudio() }
+        let fileURL = await stopCapture()
         let appleSpeechText = snapshot.appleText
 
         guard let fileURL else {
@@ -208,24 +239,12 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         guard snapshot.shouldFinalize else {
             snapshot.realtime?.cancel()
             logger.info("Apple Speech had no content → skipping Whisper")
-            await Self.removeAudio(fileURL)
+            try? await removeAudio(fileURL)
             return
         }
 
         do {
-            let whisperText: String
-            if let realtime = snapshot.realtime {
-                whisperText = try await RealtimeASRFinalizer.resolve {
-                    let text = try await realtime.finish()
-                    self.logger.info("ASR completed, actual_path=realtime, chars=\(text.count)")
-                    return text
-                } fallback: {
-                    self.logger.warning("Realtime ASR unavailable; actual_path=batch_fallback")
-                    return try await self.whisperEngine.transcribe(fileURL: fileURL, language: snapshot.locale)
-                }
-            } else {
-                whisperText = try await whisperEngine.transcribe(fileURL: fileURL, language: snapshot.locale)
-            }
+            let whisperText = try await transcribe(snapshot, fileURL: fileURL)
             let useMerger = merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText
             if useMerger { logger.info("Merging Apple Speech + Whisper via LLM") }
 
@@ -244,7 +263,45 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             logger.error("ASR finalization failed")
         }
 
-        await Self.removeAudio(fileURL)
+        try? await removeAudio(fileURL)
+    }
+
+    private func transcribe(_ snapshot: HybridRecordingLifecycle.Session, fileURL: URL) async throws -> String {
+        if let sessionEffects { return try await sessionEffects.finalize(snapshot.locale) }
+        guard let realtime = snapshot.realtime else {
+            return try await whisperEngine.transcribe(fileURL: fileURL, language: snapshot.locale)
+        }
+        return try await RealtimeASRFinalizer.resolve {
+            let text = try await realtime.finish()
+            self.logger.info("ASR completed, actual_path=realtime, chars=\(text.count)")
+            return text
+        } fallback: {
+            self.logger.warning("Realtime ASR unavailable; actual_path=batch_fallback")
+            return try await self.whisperEngine.transcribe(fileURL: fileURL, language: snapshot.locale)
+        }
+    }
+
+    private func stopCapture() async -> URL? {
+        if let sessionEffects {
+            let url = await sessionEffects.stopCapture()
+            sessionEffects.cancelApple()
+            captureStateSubject.send(.idle)
+            return url
+        }
+        return await MainActor.run { self.stopRecorder() }
+    }
+
+    private func discardRecording(_ snapshot: HybridRecordingLifecycle.Session) async throws {
+        let file = await stopCapture()
+        if let sessionEffects { await sessionEffects.cancelRealtime() }
+        else if let cancel = snapshot.cancelRealtime { await cancel() }
+        else { snapshot.realtime?.cancel() }
+        try await removeAudio(file)
+    }
+
+    private func removeAudio(_ file: URL?) async throws {
+        if let sessionEffects { try await sessionEffects.removeAudio(file) }
+        else { await Self.removeAudio(file) }
     }
 
     public func pause() {
@@ -259,7 +316,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
 
     // MARK: - Private
 
-    private func receiveCloudText(_ text: String, id: UUID, locale: Locale) {
+    func receiveCloudText(_ text: String, id: UUID, locale: Locale) {
         let active = recording.receiveCloud(text, id: id)
         guard active, !text.isEmpty else { return }
         liveResultSubject.send(TranscriptionResult(text: text, type: .partial, confidence: nil,
@@ -279,6 +336,28 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         recognitionTask = nil
         captureStateSubject.send(.idle)
         return url
+    }
+}
+
+extension HybridWhisperTranscriber: QuickRecordingReleaseControlling {
+    public func prepareQuickRecording() throws { try recording.prepareQuickRecording() }
+
+    public func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot {
+        try recording.freezeQuickRecordingRelease()
+    }
+
+    public func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        if snapshot.hasRecognizedSpeech { await recording.waitForStartup(snapshot.sessionID) }
+        switch recording.claimQuickRelease(snapshot) {
+        case .none: return
+        case .cancelStart(let session):
+            await recording.waitForCleanup(session.id)
+        case .finish(let session):
+            await finishRecording(session)
+        case .discard(let session):
+            defer { recording.complete(session.id) }
+            try await discardRecording(session)
+        }
     }
 }
 

@@ -8,6 +8,7 @@ import Synchronization
 /// Apple Speech Framework 转录协调器
 ///
 /// 使用 `MicrophoneRecorder` 采集音频，`SFSpeechRecognizer` 实时识别文字。
+/// Combine 桥接沿用 unchecked Sendable；会话资格及身份由 Mutex 生命周期保护。
 public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Dependencies
@@ -25,7 +26,8 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - State
 
-    private let _isTranscribing = Mutex(false)
+    private let recording = HybridRecordingLifecycle()
+    private let sessionEffects: QuickRecordingSessionEffects?
     private let logger: Logger
 
     // MARK: - Sub-services
@@ -38,6 +40,7 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
     public override init() {
         self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
         self.logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
+        self.sessionEffects = nil
         super.init()
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         logger.debug("init with default locale zh-Hans")
@@ -46,9 +49,17 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
     public init(locale: Locale, logger: Logger = PrintLogger(subsystem: "AppleSpeechTranscriber")) {
         self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
         self.logger = logger
+        self.sessionEffects = nil
         super.init()
         self.speechRecognizer = SFSpeechRecognizer(locale: locale)
         logger.debug("init with locale: \(locale.identifier)")
+    }
+
+    init(effects: QuickRecordingSessionEffects) {
+        recorder = MicrophoneRecorder()
+        logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
+        sessionEffects = effects
+        super.init()
     }
 }
 
@@ -72,18 +83,54 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
     }
 
     public var isTranscribing: Bool {
-        _isTranscribing.withLock { $0 }
+        recording.isRecording
     }
 
     public func start(language: Locale) async throws {
         logger.info("start() language: \(language.identifier)")
 
-        if _isTranscribing.withLock({ $0 }) {
+        if recording.isRecording {
             logger.warning("Already transcribing, stopping first")
             await stop()
         }
+        let id = try recording.begin(locale: language)
+        do {
+            if let sessionEffects {
+                try await sessionEffects.start(id, language) { [weak self] result in
+                    self?.receiveAppleResult(result, id: id)
+                }
+                try recording.didStart(id)
+                captureStateSubject.send(.recording)
+            } else {
+                try await startRecording(language: language, id: id)
+            }
+        } catch {
+            try? await discardRecording(id)
+            recording.complete(id)
+            throw error
+        }
+    }
 
-        // 请求语音识别权限
+    private func startRecording(language: Locale, id: UUID) async throws {
+        try await authorizeSpeech()
+        try Task.checkCancellation()
+        guard recording.isStarting(id) else { throw CancellationError() }
+        let recognizer = try recognizer(language: language)
+        recognitionTask?.finish()
+        recognitionTask = nil
+        let request = DefaultAppleSpeechRequestFactory.makeRequest()
+        recognitionRequest = request
+        try await recorder.startIfAllowed(shouldStart: { [recording] in recording.isStarting(id) }) { buffer in
+            request.append(buffer)
+        }
+        try Task.checkCancellation()
+        startAppleTask(recognizer, request: request, language: language, id: id)
+        try recording.didStart(id)
+        captureStateSubject.send(.recording)
+        logger.info("Recording + recognition started")
+    }
+
+    private func authorizeSpeech() async throws {
         let speechAuthorized = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
@@ -94,7 +141,9 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
         }
 
-        // 更新 recognizer locale
+    }
+
+    private func recognizer(language: Locale) throws -> SFSpeechRecognizer {
         if speechRecognizer?.locale.language.languageCode != language.language.languageCode {
             speechRecognizer = SFSpeechRecognizer(locale: language)
         }
@@ -103,26 +152,13 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                           userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
         }
 
-        // 清理旧任务
-        recognitionTask?.finish()
-        recognitionTask = nil
+        return speechRecognizer
+    }
 
-        // 创建识别请求
-        let request = DefaultAppleSpeechRequestFactory.makeRequest()
-        recognitionRequest = request
-
-        // 启动录音，将 buffer 实时送给识别请求
-        try await recorder.start { buffer in
-            request.append(buffer)
-        }
-
-        captureStateSubject.send(.recording)
-        _isTranscribing.withLock { $0 = true }
-        logger.info("Recording + recognition started")
-
-        // 启动识别任务
-        recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
+    private func startAppleTask(_ recognizer: SFSpeechRecognizer, request: SFSpeechAudioBufferRecognitionRequest,
+                                language: Locale, id: UUID) {
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            guard let self, self.recording.acceptsAppleResult(id) else { return }
 
             if let result {
                 let transcriptionResult = TranscriptionResult(
@@ -134,12 +170,8 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                     timestamp: Date(),
                     locale: language
                 )
-                self.liveResultSubject.send(transcriptionResult)
-                if result.isFinal {
-                    self.finalResultSubject.send(transcriptionResult)
-                    // 任务自然完成，清理 task
-                    self.recognitionTask = nil
-                }
+                self.receiveAppleResult(transcriptionResult, id: id)
+                if result.isFinal { self.recognitionTask = nil }
             }
 
             if let error {
@@ -155,16 +187,58 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         }
     }
 
+    private func receiveAppleResult(_ result: TranscriptionResult, id: UUID) {
+        _ = recording.receiveApple(result.text, id: id, retainText: false)
+        guard recording.acceptsAppleResult(id) else { return }
+        liveResultSubject.send(result)
+        if result.isFinal { finalResultSubject.send(result) }
+    }
+
     public func stop() async {
-        logger.info("stop() called")
-        // 先停录音，再告知识别器音频结束
-        // 不立即 cancel recognitionTask，让其自然完成并返回 isFinal 结果
-        recorder.stop()
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
+        switch recording.requestStop() {
+        case .none: return
+        case .cancelStart(let session): await recording.waitForCleanup(session.id)
+        case .finish(let session): await finishRecording(session.id)
+        case .discard(let session):
+            try? await discardRecording(session.id)
+            recording.complete(session.id)
+        }
+    }
+
+    private func finishRecording(_ id: UUID) async {
+        let file = await stopCapture(discard: false)
+        try? await removeAudio(file)
+        recording.complete(id, keepResults: true)
+    }
+
+    private func discardRecording(_ id: UUID) async throws {
+        let file = await stopCapture(discard: true)
+        try await removeAudio(file)
+    }
+
+    private func stopCapture(discard: Bool) async -> URL? {
+        let file: URL?
+        if let sessionEffects {
+            file = await sessionEffects.stopCapture()
+            if discard { sessionEffects.cancelApple() }
+            else { sessionEffects.endAppleAudio() }
+        } else {
+            file = await MainActor.run {
+                let file = self.recorder.stop()
+                if discard { self.recognitionTask?.cancel(); self.recognitionTask = nil }
+                else { self.recognitionRequest?.endAudio() }
+                self.recognitionRequest = nil
+                return file
+            }
+        }
         captureStateSubject.send(.idle)
-        _isTranscribing.withLock { $0 = false }
-        logger.debug("stop() done")
+        return file
+    }
+
+    private func removeAudio(_ file: URL?) async throws {
+        if let sessionEffects { try await sessionEffects.removeAudio(file); return }
+        guard let file else { return }
+        await Task.detached { try? FileManager.default.removeItem(at: file) }.value
     }
 
     public func pause() {
@@ -177,6 +251,26 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         captureStateSubject.send(.recording)
     }
 
+}
+
+extension AppleSpeechTranscriber: QuickRecordingReleaseControlling {
+    public func prepareQuickRecording() throws { try recording.prepareQuickRecording() }
+
+    public func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot {
+        try recording.freezeQuickRecordingRelease()
+    }
+
+    public func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        if snapshot.hasRecognizedSpeech { await recording.waitForStartup(snapshot.sessionID) }
+        switch recording.claimQuickRelease(snapshot) {
+        case .none: return
+        case .cancelStart(let session): await recording.waitForCleanup(session.id)
+        case .finish(let session): await finishRecording(session.id)
+        case .discard(let session):
+            defer { recording.complete(session.id) }
+            try await discardRecording(session.id)
+        }
+    }
 }
 
 // MARK: - Internal AudioCaptureService

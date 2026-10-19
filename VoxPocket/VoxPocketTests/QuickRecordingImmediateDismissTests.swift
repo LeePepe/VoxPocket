@@ -80,7 +80,8 @@ struct QuickRecordingImmediateDismissTests {
         await startGate.release()
         await start.value
         fixture.expectClean()
-        #expect(fixture.recording.stopCallCount == (startFails ? 0 : 1))
+        #expect(fixture.recording.stopCallCount == 0)
+        #expect(fixture.recording.discardCallCount == 1)
         #expect(fixture.clipboard.pasteCount == 0)
         #expect(fixture.saved.isEmpty)
     }
@@ -94,9 +95,39 @@ struct QuickRecordingImmediateDismissTests {
         await fixture.hotkeys.release()
         fixture.expectClean()
         assertTimingEvents(fixture)
-        #expect(fixture.recording.stopCallCount == 1)
+        #expect(fixture.recording.stopCallCount == (stopFails ? 1 : 0))
+        #expect(fixture.recording.discardCallCount == (stopFails ? 0 : 1))
         #expect(fixture.saved.isEmpty)
         #expect(fixture.clipboard.pasteCount == 0)
+    }
+
+    @Test func emptyAppleReleaseRetainsOwnershipUntilDiscardAndSuppressesLateOutput() async throws {
+        let discard = QuickRecordStartGate()
+        let fixture = ImmediateDismissFixture(stopGate: discard, hasResult: false)
+        defer { fixture.remove() }
+        await fixture.launch()
+        await fixture.hotkeys.press()
+        let release = Task { await fixture.hotkeys.release() }
+        try await waitForDismissBoundary { fixture.recording.discardCallCount == 1 }
+        fixture.expectHiddenAndBusy()
+        assertTimingEvents(fixture)
+        fixture.recording.recognizeApple("late Apple")
+        fixture.transcription.sendFinalText("late cloud final")
+        await fixture.hotkeys.release()
+        await fixture.hotkeys.press()
+        #expect(fixture.recording.startCallCount == 1)
+        #expect(fixture.events.count == 2)
+        #expect(!fixture.refinement.isWaiting)
+        #expect(fixture.saved.isEmpty)
+        await discard.release()
+        await release.value
+        fixture.expectClean()
+        #expect(fixture.recording.stopCallCount == 0)
+        #expect(fixture.recording.discardCallCount == 1)
+        #expect(!fixture.refinement.isWaiting)
+        #expect(fixture.clipboard.copied.isEmpty)
+        #expect(fixture.clipboard.pasteCount == 0)
+        #expect(fixture.saved.isEmpty)
     }
 
     @Test func startupErrorWithoutReleaseAndMissingModelCleanImmediately() async {

@@ -33,6 +33,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
             }
         }
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("识别原文")
         try await Task.sleep(for: .milliseconds(20))
         coordinator.send("已润色的句子。")
@@ -55,6 +56,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         )
 
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("你好")
 
         try? await Task.sleep(nanoseconds: 3_100_000_000)
@@ -120,6 +122,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         )
 
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("实时转写尾部")
 
         await viewModel.stopRecording()
@@ -143,11 +146,13 @@ final class QuickRecordingViewModelTests: XCTestCase {
         recording.onStop = {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 80_000_000)
-                transcription.sendLiveText("你好世界")
+                recording.recognizeApple("synthetic Apple partial")
+        transcription.sendLiveText("你好世界")
             }
         }
 
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("你好世")
 
         await viewModel.stopRecording()
@@ -176,6 +181,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         }
 
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("你好世")
 
         await viewModel.stopRecording()
@@ -201,6 +207,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         )
 
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("你好世界")
 
         let startedAt = Date()
@@ -249,6 +256,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         )
 
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("再看一下为什么有时候没有能够成功添加标点符号")
 
         await viewModel.stopRecording()
@@ -276,7 +284,8 @@ final class QuickRecordingViewModelTests: XCTestCase {
         await viewModel.stopRecording()
         await startTask.value
 
-        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertEqual(recording.discardCallCount, 1)
     }
 
     func testImmediateReleaseCleansUpNeverCompletingTranscriptionAndCanRestart() async {
@@ -298,12 +307,13 @@ final class QuickRecordingViewModelTests: XCTestCase {
         await viewModel.stopRecording()
         await fulfillment(of: [stopped], timeout: 1)
         start.cancel()
-        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertEqual(recording.discardCallCount, 1)
         XCTAssertEqual(dismissals, 1)
         XCTAssertEqual(viewModel.recorderStatus, .idle)
         XCTAssertEqual(coordinator.cancelCallCount, 1)
         XCTAssertFalse(coordinator.isStreaming)
-        XCTAssertEqual(transcription.finalCancellationCount, 1)
+        XCTAssertEqual(transcription.finalCancellationCount, 0)
         XCTAssertNil(clipboard.copiedText)
         await viewModel.startRecording()
         XCTAssertTrue(coordinator.isStreaming)
@@ -336,13 +346,14 @@ final class QuickRecordingViewModelTests: XCTestCase {
         gate.continuation.finish()
         await fulfillment(of: [finished], timeout: 1)
         start.cancel()
-        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertEqual(recording.discardCallCount, 1)
         XCTAssertEqual(dismissals, 1)
         XCTAssertFalse(coordinator.isStreaming)
         XCTAssertFalse(viewModel.isStartingRecording)
     }
 
-    func testSynchronousFinalWithoutPartialIsPreservedOnRelease() async {
+    func testFinalWithoutAppleEvidenceIsDiscardedOnRelease() async {
         let recording = FakeRecordingUseCase()
         let transcription = FakeTranscriptionUseCase()
         let coordinator = FakeQuickStreamingCoordinator()
@@ -355,10 +366,12 @@ final class QuickRecordingViewModelTests: XCTestCase {
         viewModel.onNoResult = { dismissals += 1 }
         await viewModel.startRecording()
         await viewModel.stopRecording()
-        XCTAssertEqual(viewModel.rawTranscription, "有效音频的终稿")
-        XCTAssertEqual(viewModel.recorderStatus, .done)
-        XCTAssertEqual(clipboard.copiedText, "有效音频的终稿。")
-        XCTAssertEqual(dismissals, 0)
+        XCTAssertTrue(viewModel.rawTranscription.isEmpty)
+        XCTAssertEqual(viewModel.recorderStatus, .idle)
+        XCTAssertNil(clipboard.copiedText)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertEqual(recording.discardCallCount, 1)
+        XCTAssertEqual(dismissals, 1)
     }
 
     func testStopFailureCancelsStreamingAndReleasesFinalSubscription() async {
@@ -370,6 +383,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
                                                refinementUseCase: FakeRefinementUseCase(), clipboardService: FakeClipboardService(),
                                                streamingCoordinator: coordinator)
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         await viewModel.stopRecording()
         XCTAssertEqual(viewModel.recorderStatus, .error)
         XCTAssertFalse(coordinator.isStreaming)
@@ -402,7 +416,8 @@ final class QuickRecordingViewModelTests: XCTestCase {
         await viewModel.startRecording()
         await viewModel.cancelFromPanel()
         await viewModel.cancelFromPanel()
-        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertEqual(recording.discardCallCount, 1)
         XCTAssertEqual(dismissals, 1)
         XCTAssertEqual(viewModel.recorderStatus, .idle)
     }
@@ -423,6 +438,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         let completed = expectation(description: "完成回调")
         viewModel.onComplete = { _ in completed.fulfill() }
         await viewModel.startRecording()
+        recording.recognizeApple("synthetic Apple partial")
         transcription.sendLiveText("识别原文")
         try await Task.sleep(for: .milliseconds(20))
         await viewModel.stopRecording()
@@ -432,6 +448,114 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.displayedTranscription, "已整理。")
         XCTAssertEqual(viewModel.elapsedRecordingTime(at: Date()),
                        viewModel.elapsedRecordingTime(at: Date().addingTimeInterval(60)))
+    }
+
+    func testEmptyReleaseWaitsForDiscardIgnoresCloudUIAndLateCallbacks() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let clipboard = FakeClipboardService()
+        let gate = AsyncStream<Void>.makeStream()
+        let entered = expectation(description: "discard entered")
+        recording.onDiscard = { entered.fulfill(); for await _ in gate.stream { break } }
+        let model = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                           refinementUseCase: FakeRefinementUseCase(), clipboardService: clipboard,
+                                           streamingCoordinator: coordinator)
+        var noResults = 0, completions = 0
+        model.onNoResult = { noResults += 1 }
+        model.onComplete = { _ in completions += 1 }
+        await model.startRecording()
+        recording.recognizeApple(" \n\t")
+        transcription.sendLiveText("synthetic cloud preview")
+        model.liveTranscription = "synthetic queued UI text"
+        let release = Task { await model.stopRecording() }
+        await fulfillment(of: [entered], timeout: 1)
+        XCTAssertEqual(noResults, 0)
+        XCTAssertEqual(model.recorderStatus, .transcribing)
+        recording.recognizeApple("late Apple")
+        transcription.sendFinalText("late final")
+        coordinator.send("late refinement")
+        model.copyRecognizedText()
+        await model.stopRecording()
+        gate.continuation.finish()
+        await release.value
+        XCTAssertEqual(recording.freezeCallCount, 1)
+        XCTAssertEqual(recording.discardCallCount, 1)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertEqual(noResults, 1)
+        XCTAssertEqual(completions, 0)
+        XCTAssertTrue(model.rawTranscription.isEmpty)
+        XCTAssertTrue(model.refinedText.isEmpty)
+        XCTAssertNil(clipboard.copiedText)
+        XCTAssertEqual(transcription.finalCancellationCount, 0)
+    }
+
+    func testAppleEvidenceBeforeQueuedUIUpdatePreservesEligibleFinalAndStickyLatch() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let clipboard = FakeClipboardService()
+        recording.onStop = { transcription.sendFinalText("synthetic final") }
+        let model = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                           refinementUseCase: FakeRefinementUseCase(), clipboardService: clipboard,
+                                           streamingCoordinator: coordinator)
+        await model.startRecording()
+        recording.recognizeApple("synthetic Apple")
+        recording.recognizeApple(" \n")
+        XCTAssertTrue(model.liveTranscription.isEmpty)
+        await model.stopRecording()
+        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(recording.discardCallCount, 0)
+        XCTAssertEqual(model.rawTranscription, "synthetic final")
+        XCTAssertEqual(clipboard.copiedText, "synthetic final。")
+    }
+
+    func testDeferredStartupReleaseNeverUpgradesOnLaterAppleResult() async {
+        let recording = FakeRecordingUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let entered = expectation(description: "streaming initialization entered")
+        let gate = AsyncStream<Void>.makeStream()
+        coordinator.onStart = { entered.fulfill(); for await _ in gate.stream { break } }
+        let model = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: FakeTranscriptionUseCase(),
+                                           refinementUseCase: FakeRefinementUseCase(), clipboardService: FakeClipboardService(),
+                                           streamingCoordinator: coordinator)
+        let start = Task { await model.startRecording() }
+        await fulfillment(of: [entered], timeout: 1)
+        await model.stopRecording()
+        recording.recognizeApple("late Apple")
+        await model.stopRecording()
+        gate.continuation.finish()
+        await start.value
+        XCTAssertEqual(recording.freezeCallCount, 1)
+        XCTAssertEqual(recording.discardCallCount, 1)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        XCTAssertFalse(coordinator.isStreaming)
+    }
+
+    func testEligibleAppleReleaseDuringStreamingStartupCompletesAfterInitialization() async {
+        let recording = FakeRecordingUseCase()
+        let transcription = FakeTranscriptionUseCase()
+        let coordinator = FakeQuickStreamingCoordinator()
+        let clipboard = FakeClipboardService()
+        let entered = expectation(description: "streaming initialization entered")
+        let gate = AsyncStream<Void>.makeStream()
+        coordinator.onStart = { entered.fulfill(); for await _ in gate.stream { break } }
+        recording.onStop = { transcription.sendFinalText("eligible final") }
+        let model = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
+                                           refinementUseCase: FakeRefinementUseCase(), clipboardService: clipboard,
+                                           streamingCoordinator: coordinator)
+        let start = Task { await model.startRecording() }
+        await fulfillment(of: [entered], timeout: 1)
+        recording.recognizeApple("early Apple")
+        await model.stopRecording()
+        XCTAssertEqual(recording.freezeCallCount, 1)
+        XCTAssertEqual(recording.stopCallCount, 0)
+        gate.continuation.finish()
+        await start.value
+        XCTAssertEqual(recording.stopCallCount, 1)
+        XCTAssertEqual(recording.discardCallCount, 0)
+        XCTAssertEqual(recording.freezeCallCount, 1)
+        XCTAssertEqual(clipboard.copiedText, "eligible final。")
     }
 
     private func makeViewModel() -> QuickRecordingViewModel {
@@ -444,11 +568,50 @@ final class QuickRecordingViewModelTests: XCTestCase {
     }
 }
 
-private final class FakeRecordingUseCase: RecordingUseCase, @unchecked Sendable {
+private final class FakeRecordingUseCase: QuickRecordingUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
     private let startDelayNanoseconds: UInt64
     private(set) var stopCallCount = 0
+    private struct ReleaseState {
+        var id = UUID()
+        var eligible = false
+        var frozen: QuickRecordingReleaseSnapshot?
+        var discardCount = 0
+        var freezeCount = 0
+    }
+    private let release = Mutex(ReleaseState())
+    var discardCallCount: Int { release.withLock { $0.discardCount } }
+    var freezeCallCount: Int { release.withLock { $0.freezeCount } }
+    private let discardHook = Mutex<(@Sendable () async -> Void)?>(nil)
+    var onDiscard: (@Sendable () async -> Void)? {
+        get { discardHook.withLock { $0 } }
+        set { discardHook.withLock { $0 = newValue } }
+    }
+
+    func prepareQuickRecording() throws {
+        release.withLock { $0.id = UUID(); $0.eligible = false; $0.frozen = nil }
+    }
+    func recognizeApple(_ text: String) {
+        release.withLock { if $0.frozen == nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            $0.eligible = true
+        } }
+    }
+    func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot {
+        release.withLock {
+            $0.freezeCount += 1
+            if let frozen = $0.frozen { return frozen }
+            let frozen = QuickRecordingReleaseSnapshot(sessionID: $0.id, hasRecognizedSpeech: $0.eligible)
+            $0.frozen = frozen
+            return frozen
+        }
+    }
+    func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        if snapshot.hasRecognizedSpeech { try await stopRecording(); return }
+        release.withLock { $0.discardCount += 1 }
+        await onDiscard?()
+        stateSubject.send(.idle)
+    }
     var onStop: (@Sendable () -> Void)?
     var stopError: Error?
 

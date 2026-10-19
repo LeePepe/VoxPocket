@@ -60,6 +60,8 @@ public final class QuickRecordingViewModel: ObservableObject {
     private var isProcessing: Bool = false
     private var isStartingRecordingInternal: Bool = false
     private var shouldStopAfterStart: Bool = false
+    private var releaseSnapshot: QuickRecordingReleaseSnapshot?
+    private var isDiscardingRelease = false
 
     public var isStartingRecording: Bool {
         isStartingRecordingInternal
@@ -92,7 +94,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     public func copyRecognizedText() {
-        guard !liveTranscription.isEmpty else { return }
+        guard !isDiscardingRelease, !liveTranscription.isEmpty else { return }
         clipboardService.copy(liveTranscription)
     }
 
@@ -147,7 +149,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         transcriptionUseCase.liveTextPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
-                guard let self else { return }
+                guard let self, !self.isDiscardingRelease else { return }
                 // 收尾时识别服务可能先清空临时流；已显示文字要保留到最终结果到达。
                 if self.isProcessing && text.isEmpty { return }
                 self.liveTranscription = text
@@ -168,7 +170,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         if let coordinator = streamingCoordinator {
             coordinator.refinedVoiceTextPublisher
                 .sink { [weak self] text in
-                    guard let self else { return }
+                    guard let self, !self.isDiscardingRelease else { return }
                     // send() 从 MainActor 发出，直接更新 refinedText
                     self.refinedText = text
                     if !text.isEmpty && self.isProcessing {
@@ -193,8 +195,58 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
         isStartingRecordingInternal = true
         shouldStopAfterStart = false
+        releaseSnapshot = nil
+        isDiscardingRelease = false
 
-        // 重置状态
+        resetRecordingState()
+
+        do {
+            try await startPreparedRecording()
+            isStartingRecordingInternal = false
+
+            if shouldStopAfterStart {
+                shouldStopAfterStart = false
+                await stopRecording()
+            }
+        } catch {
+            await cleanupFailedStart()
+            isStartingRecordingInternal = false
+            shouldStopAfterStart = false
+            if isDiscardingRelease {
+                recorderStatus = .idle
+                onNoResult?()
+            } else {
+                errorMessage = error.localizedDescription
+                recorderStatus = .error
+                logger.warning("Start recording failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func startPreparedRecording() async throws {
+        guard let control = recordingUseCase as? any QuickRecordingUseCase else {
+            throw VoxError.transcriptionFailed(reason: "Quick recording release control unavailable")
+        }
+        try control.prepareQuickRecording()
+        try await recordingUseCase.startRecording()
+        recorderStatus = .listening
+        sessionStartTime = Date()
+        logger.debug("Recording started")
+        if let coordinator = streamingCoordinator, !isDiscardingRelease {
+            await coordinator.startStreaming()
+            if isDiscardingRelease { coordinator.cancel() }
+        }
+    }
+
+    private func cleanupFailedStart() async {
+        cancelPendingProcessing()
+        guard let control = recordingUseCase as? any QuickRecordingUseCase,
+              let snapshot = releaseSnapshot ?? (try? control.freezeQuickRecordingRelease()) else { return }
+        let discard = QuickRecordingReleaseSnapshot(sessionID: snapshot.sessionID, hasRecognizedSpeech: false)
+        try? await control.completeQuickRecordingRelease(discard)
+    }
+
+    private func resetRecordingState() {
         liveTranscription = ""
         refinedText = ""
         rawTranscription = ""
@@ -203,126 +255,97 @@ public final class QuickRecordingViewModel: ObservableObject {
         sessionStartTime = nil
         recordingStopTime = nil
         transcriptionUseCase.clearLiveText()
-
-        do {
-            try await recordingUseCase.startRecording()
-            recorderStatus = .listening
-            sessionStartTime = Date()
-            logger.debug("Recording started")
-
-            // 流式模式：启动协调器（设置语音锚点、激活快照门控）
-            if let coordinator = streamingCoordinator {
-                await coordinator.startStreaming()
-            }
-            isStartingRecordingInternal = false
-
-            if shouldStopAfterStart {
-                shouldStopAfterStart = false
-                await stopRecording()
-            }
-        } catch {
-            isStartingRecordingInternal = false
-            shouldStopAfterStart = false
-            errorMessage = error.localizedDescription
-            recorderStatus = .error
-            logger.warning("Start recording failed: \(error.localizedDescription)")
-        }
     }
 
-    /// 停止录音并启动优化流程
+    /// Freeze Apple-source eligibility before any suspension, including deferred startup.
     public func stopRecording() async {
-        if isStartingRecordingInternal {
-            shouldStopAfterStart = true
-            logger.debug("Stop requested while start is in progress")
-            return
-        }
-
-        guard recorderStatus == .listening else {
-            logger.debug("Stop recording ignored because recorder is not listening")
-            return
-        }
-
-        isProcessing = true
-        recordingStopTime = Date()
-        recorderStatus = .transcribing
-
-        // 先让出一次主线程执行片段，确保 receive(on: .main) 排队的 liveText 更新
-        // 在“停止前快照”之前有机会落地，避免误判为无语音内容。
-        await Task.yield()
-
-        // await 之前 snapshot Apple Speech 是否已有内容。
-        // 不能在 await 之后检查 liveTranscription：Apple Speech 结束时可能抛出错误，
-        // DefaultTranscriptionUseCase 的 catch block 会发 ""，Combine 的
-        // receive(on: .main) 会在 await 恢复时把 liveTranscription 覆盖为 ""，
-        // 导致误判为无内容、触发 onNoResult、提前关窗、丢弃 Whisper 结果。
-        let hadSpeechBeforeStop = !liveTranscription.isEmpty
-        let liveTranscriptionSnapshot = liveTranscription
-        let finalResult = QuickRecordingFinalResultWaiter(publisher: transcriptionUseCase.finalResultPublisher)
-        defer { finalResult.cancel() }
-
+        guard isStartingRecordingInternal || recorderStatus == .listening, !isProcessing else { return }
         do {
-            try await recordingUseCase.stopRecording()
-
-            // 无 partial 时仅接纳底层 stop 期间已返回的终稿，不额外等待空会话。
-            let capturedFinal = finalResult.capturedText ?? ""
-            if !hadSpeechBeforeStop && capturedFinal.isEmpty {
-                streamingCoordinator?.cancel()
-                recorderStatus = .idle
-                isProcessing = false
-                logger.debug("stopRecording: no speech content before stop → calling onNoResult")
-                onNoResult?()
+            if releaseSnapshot == nil {
+                guard let control = recordingUseCase as? any QuickRecordingUseCase else {
+                    throw VoxError.transcriptionFailed(reason: "Quick recording release control unavailable")
+                }
+                releaseSnapshot = try control.freezeQuickRecordingRelease()
+                if releaseSnapshot?.hasRecognizedSpeech == false {
+                    isDiscardingRelease = true
+                    cancelPendingProcessing()
+                }
+            }
+            if isStartingRecordingInternal {
+                shouldStopAfterStart = true
                 return
             }
-
-            rawTranscription = capturedFinal.isEmpty
-                ? await waitForCompletedTranscription(finalResultTask: finalResult.task, liveSnapshot: liveTranscriptionSnapshot)
-                : capturedFinal
-            let now = Date()
-            transcriptionEndTime = now
-            liveTranscription = rawTranscription
-            logger.log(.debug, "Recording stopped", context: [
-                "transcription_length": rawTranscription.count
-            ])
-            if let start = sessionStartTime {
-                let durationMs = Int(now.timeIntervalSince(start) * 1000)
-                telemetryService?.track(
-                    name: VoxPocketTelemetryEventName.transcriptionCompleted.rawValue,
-                    properties: [
-                        "duration_ms": String(durationMs),
-                        "char_count": String(rawTranscription.count),
-                        "source": "quick"
-                    ]
-                )
-            }
-
-            guard !rawTranscription.isEmpty else {
-                streamingCoordinator?.cancel()
-                recorderStatus = .idle
-                isProcessing = false
-                logger.debug("stopRecording: rawTranscription empty → calling onNoResult")
-                onNoResult?()
-                return
-            }
-
-            recorderStatus = .refining
-
-            if let coordinator = streamingCoordinator {
-                // 流式模式：等待协调器完成最后一次精炼
-                await coordinator.stopStreaming()
-                let outputText = ensureSentenceTerminator(refinedText.isEmpty ? rawTranscription : refinedText)
-                await completeWithText(outputText)
+            guard let snapshot = releaseSnapshot else { return }
+            isProcessing = true
+            recordingStopTime = Date()
+            recorderStatus = .transcribing
+            if snapshot.hasRecognizedSpeech {
+                try await finishEligibleRecording(snapshot)
             } else {
-                // 非流式模式：提交转录后统一精炼
-                // 将转录文本提交到 EditingUseCase，供 RefinementUseCase 读取
-                try await transcriptionUseCase.commitCurrentTranscription()
-                await performRefinement()
+                try await discardEmptyRecording(snapshot)
             }
         } catch {
-            streamingCoordinator?.cancel()
+            cancelPendingProcessing()
             errorMessage = error.localizedDescription
             recorderStatus = .error
             isProcessing = false
         }
+    }
+
+    private func discardEmptyRecording(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        guard let control = recordingUseCase as? any QuickRecordingUseCase else { return }
+        try await control.completeQuickRecordingRelease(snapshot)
+        recorderStatus = .idle
+        isProcessing = false
+        logger.debug("Quick recording discarded without Apple speech")
+        onNoResult?()
+    }
+
+    private func finishEligibleRecording(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        guard let control = recordingUseCase as? any QuickRecordingUseCase else { return }
+        let liveSnapshot = liveTranscription
+        let finalResult = QuickRecordingFinalResultWaiter(publisher: transcriptionUseCase.finalResultPublisher)
+        defer { finalResult.cancel() }
+        try await control.completeQuickRecordingRelease(snapshot)
+        let captured = finalResult.capturedText ?? ""
+        rawTranscription = captured.isEmpty
+            ? await waitForCompletedTranscription(finalResultTask: finalResult.task, liveSnapshot: liveSnapshot)
+            : captured
+        recordTranscriptionCompletion()
+        guard !rawTranscription.isEmpty else {
+            streamingCoordinator?.cancel()
+            recorderStatus = .idle
+            isProcessing = false
+            onNoResult?()
+            return
+        }
+        recorderStatus = .refining
+        if let coordinator = streamingCoordinator {
+            await coordinator.stopStreaming()
+            await completeWithText(ensureSentenceTerminator(refinedText.isEmpty ? rawTranscription : refinedText))
+        } else {
+            try await transcriptionUseCase.commitCurrentTranscription()
+            await performRefinement()
+        }
+    }
+
+    private func recordTranscriptionCompletion() {
+        let now = Date()
+        transcriptionEndTime = now
+        liveTranscription = rawTranscription
+        logger.log(.debug, "Recording stopped", context: ["transcription_length": rawTranscription.count])
+        if let start = sessionStartTime {
+            telemetryService?.track(name: VoxPocketTelemetryEventName.transcriptionCompleted.rawValue,
+                                   properties: ["duration_ms": String(Int(now.timeIntervalSince(start) * 1000)),
+                                                "char_count": String(rawTranscription.count), "source": "quick"])
+        }
+    }
+
+    private func cancelPendingProcessing() {
+        streamingTask?.cancel()
+        streamingTask = nil
+        streamingCoordinator?.cancel()
+        refinementUseCase.cancel()
     }
 
     public func cancelRecording() async {
@@ -331,8 +354,10 @@ public final class QuickRecordingViewModel: ObservableObject {
         streamingCoordinator?.cancel()
         refinementUseCase.cancel()
 
-        if recorderStatus == .listening {
-            try? await recordingUseCase.stopRecording()
+        if recorderStatus == .listening, let control = recordingUseCase as? any QuickRecordingUseCase,
+           let snapshot = try? control.freezeQuickRecordingRelease() {
+            let discard = QuickRecordingReleaseSnapshot(sessionID: snapshot.sessionID, hasRecognizedSpeech: false)
+            try? await control.completeQuickRecordingRelease(discard)
         }
 
         recorderStatus = .idle
@@ -483,6 +508,7 @@ public final class QuickRecordingViewModel: ObservableObject {
 
     /// 复制到剪贴板、模拟粘贴、触发完成回调
     private func completeWithText(_ text: String) async {
+        guard !isDiscardingRelease else { return }
         completeCallCount += 1
         logger.log(.debug, "completeWithText called", context: [
             "call_count": completeCallCount,

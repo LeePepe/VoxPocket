@@ -5,6 +5,163 @@ import XCTest
 @testable import TranscriptionKit
 
 final class SelectableTranscriptionTests: XCTestCase {
+    func testQuickReleaseBeforeRouterStartNeverRunsSelection() async throws {
+        let probe = QuickRecordingEffectProbe()
+        let source = QuickRecordingTestProvider.apple.make(probe)
+        let selections = Mutex(0)
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) {
+            selections.withLock { $0 += 1 }; return source
+        }
+        try router.prepareQuickRecording()
+        let frozen = try router.freezeQuickRecordingRelease()
+        do { try await router.start(language: .current); XCTFail("Released startup must cancel") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        try await router.completeQuickRecordingRelease(frozen)
+        XCTAssertEqual(selections.withLock { $0 }, 0)
+        XCTAssertEqual(probe.count("start"), 0)
+        try router.prepareQuickRecording()
+    }
+
+    func testEligibleQuickAppleRetainsFinalAndOldRouterTokenCannotStopNextSession() async throws {
+        let probe = QuickRecordingEffectProbe()
+        let source = QuickRecordingTestProvider.apple.make(probe)
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        let finals = Mutex(0)
+        let subscription = router.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { _ in
+            finals.withLock { $0 += 1 }
+        })
+        defer { subscription.cancel() }
+        try router.prepareQuickRecording()
+        try await router.start(language: .current)
+        probe.send("synthetic apple")
+        let old = try router.freezeQuickRecordingRelease()
+        try await router.completeQuickRecordingRelease(old)
+        probe.send("synthetic delayed final", type: .final)
+        XCTAssertEqual(finals.withLock { $0 }, 1)
+        try router.prepareQuickRecording()
+        try await router.start(language: .current)
+        probe.send("stale synthetic apple", type: .final, index: 0)
+        try await router.completeQuickRecordingRelease(old)
+        XCTAssertTrue(router.isTranscribing)
+        let next = try router.freezeQuickRecordingRelease()
+        XCTAssertFalse(next.hasRecognizedSpeech)
+        try await router.completeQuickRecordingRelease(next)
+        XCTAssertEqual(finals.withLock { $0 }, 1)
+    }
+
+    func testQuickRouterRemainsOccupiedUntilDiscardCleanupCompletes() async throws {
+        let gate = QuickRecordingEffectGate()
+        let probe = QuickRecordingEffectProbe(cleanupGate: gate)
+        let source = QuickRecordingTestProvider.apple.make(probe)
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        try router.prepareQuickRecording()
+        try await router.start(language: .current)
+        let frozen = try router.freezeQuickRecordingRelease()
+        let completing = Task { try await router.completeQuickRecordingRelease(frozen) }
+        await gate.entered()
+        XCTAssertThrowsError(try router.prepareQuickRecording())
+        await gate.release()
+        try await completing.value
+        try router.prepareQuickRecording()
+    }
+
+    func testQuickRouterForwardsFrozenSourceDecisionAndSealsDiscardedOutput() async throws {
+        for provider in QuickRecordingTestProvider.allCases {
+            let probe = QuickRecordingEffectProbe(realtime: provider == .realtime)
+            let source = provider.make(probe)
+            let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+            let finals = Mutex(0)
+            let subscription = router.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { _ in
+                finals.withLock { $0 += 1 }
+            })
+            try router.prepareQuickRecording()
+            try await router.start(language: .current)
+            let frozen = try router.freezeQuickRecordingRelease()
+            probe.send("late synthetic apple", type: .final)
+            try await router.completeQuickRecordingRelease(frozen)
+            probe.send("late synthetic final", type: .final)
+            XCTAssertEqual(finals.withLock { $0 }, 0)
+            XCTAssertEqual(probe.count("batch"), 0)
+            XCTAssertEqual(probe.count("endApple"), 0)
+            XCTAssertEqual(probe.count("stop"), 1)
+            subscription.cancel()
+        }
+    }
+
+    func testQuickReleaseDuringSelectionNeverStartsChosenSource() async throws {
+        let probe = QuickRecordingEffectProbe()
+        let source = QuickRecordingTestProvider.apple.make(probe)
+        let gate = FakeSelectionGate()
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) {
+            await gate.wait(); return source
+        }
+        try router.prepareQuickRecording()
+        let starting = Task { try await router.start(language: .current) }
+        await gate.entered()
+        let frozen = try router.freezeQuickRecordingRelease()
+        let completing = Task { try await router.completeQuickRecordingRelease(frozen) }
+        await gate.release()
+        _ = await starting.result
+        try await completing.value
+        XCTAssertEqual(probe.count("start"), 0)
+        XCTAssertEqual(probe.count("endApple"), 0)
+        XCTAssertFalse(router.isTranscribing)
+        try router.prepareQuickRecording()
+    }
+
+    func testQuickEligibleDecisionCanBeExplicitlyDiscardedThroughRouter() async throws {
+        let probe = QuickRecordingEffectProbe()
+        let source = QuickRecordingTestProvider.apple.make(probe)
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        try router.prepareQuickRecording()
+        try await router.start(language: .current)
+        probe.send("synthetic apple")
+        let frozen = try router.freezeQuickRecordingRelease()
+        XCTAssertTrue(frozen.hasRecognizedSpeech)
+        try await router.completeQuickRecordingRelease(.init(sessionID: frozen.sessionID, hasRecognizedSpeech: false))
+        XCTAssertEqual(probe.count("cancelApple"), 1)
+        XCTAssertEqual(probe.count("endApple"), 0)
+    }
+
+    func testQuickUnsupportedSourceFailsWithoutStartingOrNormalStop() async throws {
+        let source = FakeSelectableTranscriber()
+        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        try router.prepareQuickRecording()
+        do { try await router.start(language: .current); XCTFail("Expected unsupported capability") }
+        catch { XCTAssertTrue(error is QuickRecordingReleaseError) }
+        XCTAssertEqual(source.startCount.withLock { $0 }, 0)
+        XCTAssertEqual(source.stopCount.withLock { $0 }, 0)
+        try router.prepareQuickRecording()
+    }
+
+    func testSupportedQuickStartupFailureCleansAndAllowsImmediateNextSession() async throws {
+        for provider in QuickRecordingTestProvider.allCases {
+            let failed = QuickRecordingEffectProbe(startFails: true)
+            let failedSource = provider.make(failed)
+            let selection = Mutex<any TranscriptionCoordinator>(failedSource)
+            let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: failedSource) {
+                selection.withLock { $0 }
+            }
+            try router.prepareQuickRecording()
+            do { try await router.start(language: .current); XCTFail("Expected startup failure") }
+            catch { XCTAssertTrue(error is QuickRecordingReleaseError) }
+            XCTAssertEqual(failed.count("stop"), 1)
+            XCTAssertEqual(failed.count("cancelApple"), 1)
+            XCTAssertEqual(failed.count("removeAudio"), 1)
+            XCTAssertEqual(failed.count("endApple"), 0)
+            XCTAssertEqual(failed.count("batch"), 0)
+            let next = QuickRecordingEffectProbe()
+            selection.withLock { $0 = provider.make(next) }
+            try router.prepareQuickRecording()
+            try await router.start(language: .current)
+            failed.send("stale Apple", type: .final)
+            let frozen = try router.freezeQuickRecordingRelease()
+            XCTAssertFalse(frozen.hasRecognizedSpeech)
+            try await router.completeQuickRecordingRelease(frozen)
+            XCTAssertEqual(next.count("stop"), 1)
+        }
+    }
+
     func testSystemSpeechFinalCanArriveAfterStopReturns() async throws {
         let fake = FakeSelectableTranscriber()
         let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: fake) { fake }
@@ -90,6 +247,7 @@ private final class FakeSelectableTranscriber: TranscriptionCoordinator, AudioCa
     SpeechRecognitionService, @unchecked Sendable {
     private let running = Mutex(false)
     let startCount = Mutex(0)
+    let stopCount = Mutex(0)
     private let live = PassthroughSubject<TranscriptionResult, Error>()
     private let final = PassthroughSubject<TranscriptionResult, Error>()
     var audioCaptureService: any AudioCaptureService { self }
@@ -108,7 +266,7 @@ private final class FakeSelectableTranscriber: TranscriptionCoordinator, AudioCa
         startCount.withLock { $0 += 1 }
         running.withLock { $0 = true }
     }
-    func stop() async { running.withLock { $0 = false } }
+    func stop() async { stopCount.withLock { $0 += 1 }; running.withLock { $0 = false } }
     func pause() {}
     func resume() {}
     func startCapture() async throws {}

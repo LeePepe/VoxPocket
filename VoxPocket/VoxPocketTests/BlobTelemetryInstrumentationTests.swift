@@ -91,7 +91,8 @@ struct BlobTelemetryInstrumentationTests {
         #expect(normal.viewModel.recorderStatus == .listening)
         await hotkeys.release()
         await normal.waitForFirstCleanup()
-        #expect(normal.recording.stopCallCount == 1)
+        #expect(normal.recording.stopCallCount == 0)
+        #expect(normal.recording.discardCallCount == 1)
         #expect(normal.operations.first == "claim")
         assertQuickRecordOrder(normal.operations)
         withExtendedLifetime(launched.0) {}
@@ -127,13 +128,14 @@ struct BlobTelemetryInstrumentationTests {
         await startTask.value
         await rapid.waitForFirstCleanup()
         #expect(rapid.recording.startCallCount == 1)
-        #expect(rapid.recording.stopCallCount == 1)
+        #expect(rapid.recording.stopCallCount == 0)
+        #expect(rapid.recording.discardCallCount == 1)
         assertQuickRecordOrder(rapid.operations)
         withExtendedLifetime(launched.0) {}
     }
 
     private func assertQuickRecordOrder(_ operations: [String]) {
-        let expected = ["claim", "show", "get", "active", "get", "stop"]
+        let expected = ["claim", "show", "get", "active", "get", "discard"]
         var nextIndex = operations.startIndex
         for operation in expected {
             guard let index = operations[nextIndex...].firstIndex(of: operation) else {

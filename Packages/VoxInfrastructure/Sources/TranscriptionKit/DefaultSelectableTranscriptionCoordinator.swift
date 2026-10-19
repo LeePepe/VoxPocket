@@ -5,7 +5,7 @@ import Synchronization
 /// Combine 桥接需要 unchecked Sendable；所有跨任务状态和订阅由 Mutex 保护。
 /// 每次 start 读取一次选择，录音/收尾期间固定同一引擎，订阅方无需重新绑定。
 public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoordinator,
-    AudioCaptureService, SpeechRecognitionService, @unchecked Sendable {
+    AudioCaptureService, SpeechRecognitionService, QuickRecordingReleaseControlling, @unchecked Sendable {
     /// Combine 的取消令牌桥接；数组不可变，只允许取消，不暴露非 Sendable 令牌。
     private final class Subscriptions: @unchecked Sendable {
         private let values: [AnyCancellable]
@@ -13,12 +13,17 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
         func cancel() { values.forEach { $0.cancel() } }
     }
     private struct State {
-        enum Phase { case idle, starting, recording, stopping }
+        enum Phase { case idle, prepared, starting, recording, stopping }
         var phase: Phase = .idle
         var id = UUID()
         var active: (any TranscriptionCoordinator)?
         var startup: Task<Void, Error>?
         var subscriptions: Subscriptions?
+        var isQuick = false
+        var release: QuickRecordingReleaseSnapshot?
+        var sourceRelease: QuickRecordingReleaseSnapshot?
+        var releaseClaimed = false
+        var muted = false
     }
     private let stateLock = Mutex(State())
     private let factory: @Sendable () async throws -> any TranscriptionCoordinator
@@ -49,12 +54,16 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
 
     public func start(language: Locale) async throws {
         let prepared = try stateLock.withLock { state in
-            guard state.phase == .idle else { throw RealtimeTranscriptionError.protocolRejected }
+            guard state.phase == .idle || state.phase == .prepared else {
+                throw RealtimeTranscriptionError.protocolRejected
+            }
+            guard state.release?.hasRecognizedSpeech != false else { throw CancellationError() }
             // 旧订阅在锁外取消，避免 Combine 取消回调重入同一把锁。
             let old = (state.active, state.subscriptions)
             state.active = nil; state.subscriptions = nil
             state.phase = .starting
-            let id = UUID(); state.id = id
+            if !state.isQuick { state.id = UUID(); state.muted = false }
+            let id = state.id
             let task = Task { try await self.startSession(id: id, language: language) }
             state.startup = task
             return (task, old)
@@ -70,17 +79,96 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
             let chosen = try await factory()
             coordinator = chosen
             try Task.checkCancellation()
-            stateLock.withLock { $0.active = chosen }
+            try attach(chosen, id: id)
             let subscriptions = bind(chosen, id: id)
             stateLock.withLock { $0.subscriptions = subscriptions }
             try await chosen.start(language: language)
             try Task.checkCancellation()
-            stateLock.withLock { $0.phase = .recording; $0.startup = nil }
+            stateLock.withLock {
+                guard $0.id == id else { return }
+                $0.phase = .recording; $0.startup = nil
+            }
         } catch {
-            await coordinator?.stop()
-            clear(id)
+            if stateLock.withLock({ $0.id == id && $0.isQuick }) {
+                await failQuickStartup(id: id)
+            } else {
+                await coordinator?.stop()
+                clear(id)
+            }
             throw error
         }
+    }
+
+    private func attach(_ chosen: any TranscriptionCoordinator, id: UUID) throws {
+        try stateLock.withLock { state in
+            guard state.id == id, state.phase == .starting,
+                  state.release?.hasRecognizedSpeech != false else { throw CancellationError() }
+            if state.isQuick {
+                guard let source = chosen as? any QuickRecordingReleaseControlling else {
+                    throw QuickRecordingReleaseError.unsupported
+                }
+                try source.prepareQuickRecording()
+            }
+            state.active = chosen
+        }
+    }
+
+    private func failQuickStartup(id: UUID) async {
+        defer { clear(id) }
+        let active = stateLock.withLock { state -> (any TranscriptionCoordinator)? in
+            guard state.id == id else { return nil }
+            state.startup = nil; state.phase = .stopping; state.muted = true
+            return state.active
+        }
+        guard let source = active as? any QuickRecordingReleaseControlling,
+              let frozen = try? source.freezeQuickRecordingRelease() else { return }
+        let discard = QuickRecordingReleaseSnapshot(sessionID: frozen.sessionID, hasRecognizedSpeech: false)
+        try? await source.completeQuickRecordingRelease(discard)
+    }
+
+    public func prepareQuickRecording() throws {
+        let old = try stateLock.withLock { state in
+            guard state.phase == .idle else { throw RealtimeTranscriptionError.protocolRejected }
+            let old = state.subscriptions
+            state = State()
+            state.phase = .prepared; state.isQuick = true
+            return old
+        }
+        old?.cancel()
+    }
+
+    public func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot {
+        try stateLock.withLock { state in
+            guard state.isQuick else { throw QuickRecordingReleaseError.noPreparedSession }
+            if let frozen = state.release { return frozen }
+            let source = state.active as? any QuickRecordingReleaseControlling
+            let sourceRelease = try source?.freezeQuickRecordingRelease()
+            let frozen = QuickRecordingReleaseSnapshot(sessionID: state.id,
+                                                       hasRecognizedSpeech: sourceRelease?.hasRecognizedSpeech == true)
+            state.sourceRelease = sourceRelease; state.release = frozen
+            state.muted = !frozen.hasRecognizedSpeech
+            return frozen
+        }
+    }
+
+    public func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        let pending = stateLock.withLock { state -> (Bool, Task<Void, Error>?) in
+            guard state.id == snapshot.sessionID, let frozen = state.release, !state.releaseClaimed,
+                  !snapshot.hasRecognizedSpeech || frozen.hasRecognizedSpeech else { return (false, nil) }
+            state.releaseClaimed = true; state.phase = .stopping
+            state.muted = !snapshot.hasRecognizedSpeech
+            return (true, state.startup)
+        }
+        guard pending.0 else { return }
+        defer { clear(snapshot.sessionID, keepResults: snapshot.hasRecognizedSpeech) }
+        if !snapshot.hasRecognizedSpeech { pending.1?.cancel() }
+        if let task = pending.1 { _ = await task.result }
+        let source = stateLock.withLock { state in
+            (state.active as? any QuickRecordingReleaseControlling, state.sourceRelease)
+        }
+        guard let capability = source.0, let frozen = source.1 else { return }
+        try await capability.completeQuickRecordingRelease(.init(sessionID: frozen.sessionID,
+                                                                 hasRecognizedSpeech: snapshot.hasRecognizedSpeech))
     }
 
     public func stop() async {
@@ -90,7 +178,7 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
             case .recording:
                 state.phase = .stopping
                 return (nil, state.active, state.id)
-            case .idle, .stopping: return (nil, nil, state.id)
+            case .prepared, .idle, .stopping: return (nil, nil, state.id)
             }
         }
         if let startup = snapshot.0 {
@@ -125,7 +213,7 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
 
     private func isCurrent(_ id: UUID) -> Bool {
         // Apple Speech.stop 返回后才可能发出终稿；保留这一代直到下一次 start。
-        stateLock.withLock { $0.id == id && $0.active != nil }
+        stateLock.withLock { $0.id == id && $0.active != nil && !$0.muted }
     }
 
     private func bind(_ chosen: any TranscriptionCoordinator, id: UUID) -> Subscriptions {
@@ -153,7 +241,8 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
     private func clear(_ id: UUID, keepResults: Bool = false) {
         let result = stateLock.withLock { state -> (Bool, Subscriptions?, (any TranscriptionCoordinator)?) in
             guard state.id == id else { return (false, nil, nil) }
-            state.phase = .idle; state.startup = nil
+            state.phase = .idle; state.startup = nil; state.isQuick = false
+            state.release = nil; state.sourceRelease = nil; state.releaseClaimed = false
             if keepResults { return (true, nil, nil) }
             let old = (state.subscriptions, state.active)
             state.subscriptions = nil; state.active = nil

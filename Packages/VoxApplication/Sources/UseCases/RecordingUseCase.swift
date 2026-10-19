@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import TranscriptionKit
 
 /// 录音状态
 public enum RecordingState: Equatable, Sendable {
@@ -80,3 +81,6 @@ public protocol RecordingUseCase: AnyObject, Sendable {
     /// - Returns: 是否获得权限
     func requestPermission() async -> Bool
 }
+
+/// Session-bound release control used only by Fn quick recording.
+public protocol QuickRecordingUseCase: RecordingUseCase, QuickRecordingReleaseControlling {}

@@ -86,7 +86,8 @@ final class ImmediateDismissFixture {
             startError: startFails ? Failure.synthetic : nil, startGate: startGate,
             operationRecorder: QuickRecordOperationRecorder(), stopGate: stopGate,
             stopError: stopFails ? Failure.synthetic : nil,
-            onStop: { if hasResult { transcription.sendFinalText("synthetic raw") } }
+            onStop: { if hasResult { transcription.sendFinalText("synthetic raw") } },
+            appleTextOnStart: (hasResult || stopFails) ? "synthetic Apple partial" : nil
         )
         model = QuickRecordingViewModel(recordingUseCase: recording, transcriptionUseCase: transcription,
                                        refinementUseCase: refinement, clipboardService: clipboard)

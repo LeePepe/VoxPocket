@@ -5,6 +5,43 @@ import XCTest
 @testable import TranscriptionKit
 
 final class HybridRecordingLifecycleTests: XCTestCase {
+    func testQuickAppleLatchAcceptsStartingAndRemainsTrueAfterWhitespace() throws {
+        let lifecycle = HybridRecordingLifecycle()
+        try lifecycle.prepareQuickRecording()
+        let id = try lifecycle.begin(locale: .current)
+        XCTAssertTrue(lifecycle.receiveApple(" \n", id: id))
+        XCTAssertTrue(lifecycle.receiveApple("synthetic apple", id: id))
+        try lifecycle.didStart(id)
+        XCTAssertTrue(lifecycle.receiveCloud("synthetic cloud", id: id))
+        XCTAssertFalse(lifecycle.receiveApple("\t", id: id))
+        XCTAssertTrue(try lifecycle.freezeQuickRecordingRelease().hasRecognizedSpeech)
+        lifecycle.complete(id)
+    }
+
+    func testQuickCloudAndUsableAudioDoNotSupplyAppleEligibility() throws {
+        let lifecycle = HybridRecordingLifecycle()
+        try lifecycle.prepareQuickRecording()
+        let id = try lifecycle.begin(locale: .current)
+        let config = try AzureRealtimeTranscriptionConfig(endpoint: URL(string: "https://example.invalid")!,
+                                                          apiKey: "fixture", deployment: "live")
+        let pipeline = RealtimeAudioPipeline(session: DefaultRealtimeTranscriptionSession(config: config, onPartial: { _ in }))
+        try lifecycle.attach(pipeline, id: id)
+        pipeline.append(audio(frames: 4800))
+        try lifecycle.didStart(id)
+        XCTAssertTrue(lifecycle.receiveCloud("synthetic cloud", id: id))
+        XCTAssertTrue(pipeline.hasMinimumAudio)
+        let frozen = try lifecycle.freezeQuickRecordingRelease()
+        XCTAssertFalse(frozen.hasRecognizedSpeech)
+        XCTAssertFalse(lifecycle.receiveApple("late synthetic apple", id: id))
+        XCTAssertNil(lifecycle.restoreApplePreview(id))
+        XCTAssertEqual(try lifecycle.freezeQuickRecordingRelease(), frozen)
+        let forgedUpgrade = QuickRecordingReleaseSnapshot(sessionID: id, hasRecognizedSpeech: true)
+        guard case .none = lifecycle.claimQuickRelease(forgedUpgrade) else { return XCTFail("Must not upgrade") }
+        guard case .discard = lifecycle.claimQuickRelease(frozen) else { return XCTFail("Expected discard") }
+        pipeline.cancel()
+        lifecycle.complete(id)
+    }
+
     func testStopDuringPermissionWaitPreventsStartAndWaitsForCleanup() async throws {
         let lifecycle = HybridRecordingLifecycle()
         let id = try lifecycle.begin(locale: Locale(identifier: "zh-Hans"))
