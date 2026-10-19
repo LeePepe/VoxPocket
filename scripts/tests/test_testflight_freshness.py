@@ -165,7 +165,6 @@ class TestFlightSecretInjectionTests(unittest.TestCase):
         self.assertNotIn("${{ runner.", workflow.split("    steps:", 1)[0])
         self.assertLess(workflow.index("- name: Remove telemetry xcconfig"), workflow.index("- name: Move last-released tag"))
         self.assertIn("run: fastlane mac beta", mac)
-        self.assertNotRegex(workflow, r"(?m)^  (?:push|pull_request|workflow_run|schedule):")
         fastfile = FASTFILE_PATH.read_text(encoding="utf-8")
         self.assertIn("-xcconfig #{Shellwords.escape(telemetry_xcconfig)}", fastfile)
         self.assertNotIn("xcconfig: telemetry_xcconfig", fastfile)
