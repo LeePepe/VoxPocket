@@ -144,10 +144,48 @@ jobs:
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: "6"
         run: fastlane ios beta
 
+      - name: Prepare telemetry xcconfig
+        if: steps.gate.outputs.release == 'true'
+        env:
+          TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
+          TELEMETRY_BLOB_ENDPOINT: ${{ secrets.TELEMETRY_BLOB_ENDPOINT }}
+          TELEMETRY_BLOB_SAS: ${{ secrets.TELEMETRY_BLOB_SAS }}
+        run: |
+          set -euo pipefail
+          set +x
+          umask 077
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import stat
+
+          keys = ("TELEMETRY_BLOB_ENDPOINT", "TELEMETRY_BLOB_SAS")
+          values = [os.environ.get(key, "") for key in keys]
+          if not all(re.fullmatch(r"[A-Za-z0-9%&=+._~:/?-]+", value) for value in values):
+              raise SystemExit("Telemetry settings are missing or unsafe for xcconfig")
+          path = Path(os.environ["TELEMETRY_XCCONFIG_PATH"])
+          temp = Path(os.environ["RUNNER_TEMP"]).resolve()
+          if path.parent.resolve() != temp or temp.is_relative_to(Path(os.environ["GITHUB_WORKSPACE"]).resolve()):
+              raise SystemExit("Telemetry xcconfig must be outside the checkout in runner temp")
+          try:
+              fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              with os.fdopen(fd, "w", encoding="utf-8") as config:
+                  os.fchmod(config.fileno(), 0o600)
+                  if stat.S_IMODE(os.fstat(config.fileno()).st_mode) != 0o600:
+                      raise ValueError()
+                  for key, value in zip(keys, values):
+                      # xcconfig 中的 // 是注释；空变量展开后还原 URL 的双斜线。
+                      config.write(key + " = " + value.replace("//", "/$()/") + "\n")
+          except (OSError, ValueError):
+              raise SystemExit("Telemetry xcconfig preparation failed") from None
+          PY
+
       - name: fastlane macOS beta
         if: steps.gate.outputs.release == 'true'
         working-directory: repo
         env:
+          TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
@@ -155,6 +193,16 @@ jobs:
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: "120"
           FASTLANE_XCODEBUILD_SETTINGS_RETRIES: "6"
         run: fastlane mac beta
+
+      - name: Remove telemetry xcconfig
+        if: always()
+        # 同一确定性路径独立求值；准备步骤中途失败也不依赖其输出。
+        env:
+          TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
+        run: |
+          set -euo pipefail
+          set +x
+          rm -f -- "$TELEMETRY_XCCONFIG_PATH"
 
       - name: Move last-released tag
         if: steps.gate.outputs.release == 'true'

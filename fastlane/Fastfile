@@ -56,6 +56,27 @@ def next_build_number(api_key, platform: "ios")
   nb
 end
 
+# 仅接收 runner-temp 文件路径；不读取配置内容，也不将值拼入可打印参数。
+def with_telemetry_xcconfig
+  path = ENV["TELEMETRY_XCCONFIG_PATH"].to_s
+  temp = ENV["RUNNER_TEMP"].to_s
+  unless !path.empty? && !temp.empty? && File.directory?(temp) &&
+         File.realpath(File.dirname(File.expand_path(path))) == File.realpath(temp) && !File.symlink?(path) && File.file?(path)
+    UI.user_error!("Telemetry xcconfig must be a regular runner-temp file")
+  end
+  unless File.stat(path).uid == Process.uid
+    UI.user_error!("Telemetry xcconfig must belong to the runner")
+  end
+  begin
+    unless (File.stat(path).mode & 0o7777) == 0o600
+      UI.user_error!("Telemetry xcconfig must have mode 0600")
+    end
+    yield path
+  ensure
+    File.delete(path) if File.exist?(path)
+  end
+end
+
 # lane 只上传并等待 Apple 处理；测试组分发由 App Store Connect 的配置管理。
 
 platform :ios do
@@ -122,64 +143,70 @@ end
 platform :mac do
   desc "Build and upload a macOS build to TestFlight (internal testing)"
   lane :beta do
-    api_key = asc_api_key
-    regenerate_project
-    next_build = next_build_number(api_key, platform: "osx")
+    with_telemetry_xcconfig do |telemetry_xcconfig|
+      api_key = asc_api_key
+      regenerate_project
+      next_build = next_build_number(api_key, platform: "osx")
 
-    # macOS 只有主 app（无 widget，widget 仅 iOS）。拉取/创建并安装当前运行适用的 macOS App Store profile。
-    # force: true 确保拉取最新可用 profile，不指定固定 provisioning_name。
-    get_provisioning_profile(
-      api_key: api_key,
-      app_identifier: APP_IDENTIFIER,
-      team_id: TEAM_ID,
-      platform: "macos",
-      force: true,
-      skip_install: false
-    )
+      # macOS 只有主 app（无 widget，widget 仅 iOS）。拉取/创建并安装当前运行适用的 macOS App Store profile。
+      # force: true 确保拉取最新可用 profile，不指定固定 provisioning_name。
+      get_provisioning_profile(
+        api_key: api_key,
+        app_identifier: APP_IDENTIFIER,
+        team_id: TEAM_ID,
+        platform: "macos",
+        force: true,
+        skip_install: false
+      )
 
-    profile_name = lane_context[SharedValues::SIGH_NAME]
-    if profile_name.to_s.strip.empty?
-      UI.user_error!("macOS provisioning profile name for #{APP_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
+      profile_name = lane_context[SharedValues::SIGH_NAME]
+      if profile_name.to_s.strip.empty?
+        UI.user_error!("macOS provisioning profile name for #{APP_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
+      end
+
+      escaped_profile = Shellwords.escape(profile_name)
+
+      pkg_path = build_app(
+        project: XCODEPROJ,
+        scheme: SCHEME,
+        configuration: "Release",
+        destination: "generic/platform=macOS",
+        # gym 对多平台 target 按 sdk 选择 PKG/IPA；destination 本身不足以选中 PKG。
+        sdk: "macosx",
+        # 仅 archive 使用此命令；xcconfig 选项还会传给可打印的依赖解析/设置检测。
+        # 在 tee/formatter 前丢弃两路输出，失败或 verbose 时也不能重放配置值。
+        xcodebuild_command: "xcodebuild -xcconfig #{Shellwords.escape(telemetry_xcconfig)} > /dev/null 2>&1",
+        suppress_xcode_output: true,
+        export_method: "app-store",
+        export_team_id: TEAM_ID,
+        xcargs: "-quiet CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID} VOXPOCKET_MAC_PROFILE_SPECIFIER=#{escaped_profile}",
+        export_options: {
+          manageAppVersionAndBuildNumber: false,
+          signingStyle: "manual",
+          teamID: TEAM_ID,
+          # macOS App Store 的 .pkg 用 installer 证书签名。使用通用选择器 Mac Installer Distribution。
+          installerSigningCertificate: "Mac Installer Distribution",
+          provisioningProfiles: {
+            APP_IDENTIFIER => profile_name
+          }
+        },
+        output_directory: ENV.fetch("RUNNER_TEMP", "/tmp"),
+        clean: true
+      )
+
+      unless pkg_path && File.extname(pkg_path) == ".pkg" && File.file?(pkg_path)
+        UI.user_error!("macOS export did not produce the expected .pkg; refusing TestFlight upload")
+      end
+
+      upload_to_testflight(
+        api_key: api_key,
+        app_identifier: APP_IDENTIFIER,
+        app_platform: "osx",
+        pkg: pkg_path,
+        skip_waiting_for_build_processing: false,
+        skip_submission: true,
+        distribute_external: false
+      )
     end
-
-    escaped_profile = Shellwords.escape(profile_name)
-
-    pkg_path = build_app(
-      project: XCODEPROJ,
-      scheme: SCHEME,
-      configuration: "Release",
-      destination: "generic/platform=macOS",
-      # gym 对多平台 target 按 sdk 选择 PKG/IPA；destination 本身不足以选中 PKG。
-      sdk: "macosx",
-      export_method: "app-store",
-      export_team_id: TEAM_ID,
-      xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID} VOXPOCKET_MAC_PROFILE_SPECIFIER=#{escaped_profile}",
-      export_options: {
-        manageAppVersionAndBuildNumber: false,
-        signingStyle: "manual",
-        teamID: TEAM_ID,
-        # macOS App Store 的 .pkg 用 installer 证书签名。使用通用选择器 Mac Installer Distribution。
-        installerSigningCertificate: "Mac Installer Distribution",
-        provisioningProfiles: {
-          APP_IDENTIFIER => profile_name
-        }
-      },
-      output_directory: ENV.fetch("RUNNER_TEMP", "/tmp"),
-      clean: true
-    )
-
-    unless pkg_path && File.extname(pkg_path) == ".pkg" && File.file?(pkg_path)
-      UI.user_error!("macOS export did not produce the expected .pkg; refusing TestFlight upload")
-    end
-
-    upload_to_testflight(
-      api_key: api_key,
-      app_identifier: APP_IDENTIFIER,
-      app_platform: "osx",
-      pkg: pkg_path,
-      skip_waiting_for_build_processing: false,
-      skip_submission: true,
-      distribute_external: false
-    )
   end
 end

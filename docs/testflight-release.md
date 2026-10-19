@@ -1,6 +1,6 @@
 # TestFlight release
 
-Last-Reviewed: 2026-10-16
+Last-Reviewed: 2026-10-19
 
 Delivery rules are in `AGENTS.md` → Red lines (TestFlight only; iOS TestFlight needs separate
 Owner authorization). This page records the approved policy and the current
@@ -14,6 +14,37 @@ Owner authorization). This page records the approved policy and the current
 - **Build number**: `latest_testflight_build_number(platform: "osx") + 1` for macOS, across marketing versions. Each platform uses its own latest build number, so platforms cannot collide. `MARKETING_VERSION` lives in `VoxPocket/project.yml` (`settings.base`); bump it manually there. `CURRENT_PROJECT_VERSION` is a single base source, injected at archive time by fastlane `xcargs` — never hardcoded per target.
 - **Signing**: Release configs use **manual** signing + explicit `Apple Distribution` + App Store provisioning profiles (per-SDK for the multiplatform target). macOS fetches/installs its profile in-run without a fixed name, injects `VOXPOCKET_MAC_PROFILE_SPECIFIER` into archive, reuses it for export, and signs packages with `Mac Installer Distribution`. Debug stays Automatic for local dev.
 - **Required GitHub Secrets**: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, `KEYCHAIN_PASSWORD` (`GITHUB_TOKEN` is built-in).
+- **Telemetry GitHub Actions secrets**: the authorized macOS archive also requires both
+  `TELEMETRY_BLOB_ENDPOINT` and `TELEMETRY_BLOB_SAS`. Missing, empty, or xcconfig-unsafe
+  input fails before archive; ordinary credential-free Debug/Release development stays disabled.
+  Only the preparation step receives these values. It writes one untracked file directly in
+  `RUNNER_TEMP` with verified mode `0600`; URL slashes use empty-variable expansion so xcconfig
+  comment parsing preserves HTTPS. Fastlane receives only `TELEMETRY_XCCONFIG_PATH` and passes
+  that path through `-xcconfig` in Gym's archive-only `xcodebuild_command`. The project/detection
+  `xcconfig` option stays unset: dependency resolution, build-settings detection and export
+  never receive the file. The archive uses `-quiet` and discards stdout/stderr before Gym's
+  log tee and formatter; failure/verbose replay therefore has no secret output to print.
+  This deliberately sacrifices raw archive diagnostics. Values never belong in `xcargs`,
+  inline environment assignments, messages, logs, or attached artifacts. Fastlane `ensure`
+  removes the file on success, error, or interruption; workflow `always()` removes it as a
+  fallback, including cancellation or preparation failure, before the existing release marker.
+  Preparation, Fastlane and cleanup each compute the same run/attempt-specific path in
+  step-level environment settings, where the Actions `runner` context is valid. Cleanup
+  remains independent of preparation outputs, including when file creation fails partway.
+- **Owner provisioning**: the PR09 body carries the exact placeholder-only operator commands
+  from `specs/012-azure-blob-telemetry/plan.md`. The Owner creates a key-authenticated stored
+  access policy with create-only permission `c` and explicit UTC expiry, then generates an
+  HTTPS-only container service SAS bound to that policy and pipes it directly into the SAS
+  Actions secret. Authorization/expiry come from the policy; any explicit SAS `sp` must be
+  exactly `c`. The endpoint secret is entered interactively. Agents never generate, inspect,
+  copy, persist, or provision real values. Do not put real cloud identifiers in Git.
+- **Release and consent**: this change retains the current manual `workflow_dispatch`, checkout,
+  signing, numbering, upload, macOS scope, disabled iOS lane, and release tags. Provisioning
+  secrets does not authorize dispatch; the existing manual run still requires an explicit Owner
+  request. It also does not grant telemetry consent: the tester separately opts in through
+  “Send usage data”. T012 production proof remains pending until all prerequisites and that
+  separate authorization/consent exist; evidence is limited to build number, run/revision and
+  blob name, without payloads, identifiers, or credentials.
 - **One-time人工前置**: ASC App record (iOS + macOS platforms), the `.widget` App ID, and a TestFlight internal group named exactly `Internal` (or set `TESTFLIGHT_GROUPS`).
 
 <!-- SPECKIT START -->
