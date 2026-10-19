@@ -130,6 +130,26 @@ class TestFlightSecretInjectionTests(unittest.TestCase):
                 self.assert_clean_logs(prepared.stdout + prepared.stderr + cleaned.stdout + cleaned.stderr)
                 self.assertEqual(0, self.run_step("Remove telemetry xcconfig").returncode)
 
+    def test_cleanup_finds_file_after_partial_preparation_failure(self):
+        # 独占创建后、写入内容/确认权限前注入失败。
+        injection = self.temp / "example-python-startup"
+        injection.mkdir()
+        (injection / "sitecustomize.py").write_text(
+            "import os\n"
+            "def example_failure(*args):\n"
+            "    raise OSError('example synthetic preparation failure')\n"
+            "os.fchmod = example_failure\n")
+        prepared = self.run_step("Prepare telemetry xcconfig", {**self.environment, "PYTHONPATH": str(injection)})
+        self.assertNotEqual(0, prepared.returncode)
+        self.assertIn("Telemetry xcconfig preparation failed", prepared.stderr)
+        self.assertTrue(self.path.is_file())
+        self.assertEqual(0o600, stat.S_IMODE(self.path.stat().st_mode))
+        # 清理步骤独立定义路径，不依赖准备步骤导出成功。
+        cleaned = self.run_step("Remove telemetry xcconfig")
+        self.assertEqual(0, cleaned.returncode, cleaned.stderr)
+        self.assertFalse(self.path.exists())
+        self.assert_clean_logs(prepared.stdout + prepared.stderr + cleaned.stdout + cleaned.stderr)
+
     def test_secrets_are_scoped_to_prepare_step_and_only_path_reaches_fastlane(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         prepare = workflow_step("Prepare telemetry xcconfig")
@@ -139,11 +159,17 @@ class TestFlightSecretInjectionTests(unittest.TestCase):
             self.assertEqual(1, workflow.count("${{ secrets." + key + " }}"))
             self.assertNotIn(key, mac)
         self.assertIn("steps.gate.outputs.release == 'true'", prepare)
-        self.assertIn("${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig", workflow)
+        path_env = "TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig"
+        for name in ("Prepare telemetry xcconfig", "fastlane macOS beta", "Remove telemetry xcconfig"):
+            self.assertIn(path_env, workflow_step(name))
+        self.assertNotIn("${{ runner.", workflow.split("    steps:", 1)[0])
         self.assertLess(workflow.index("- name: Remove telemetry xcconfig"), workflow.index("- name: Move last-released tag"))
         self.assertIn("run: fastlane mac beta", mac)
         self.assertNotRegex(workflow, r"(?m)^  (?:push|pull_request|workflow_run|schedule):")
-        self.assertIn("xcconfig: telemetry_xcconfig", FASTFILE_PATH.read_text(encoding="utf-8"))
+        fastfile = FASTFILE_PATH.read_text(encoding="utf-8")
+        self.assertIn("-xcconfig #{Shellwords.escape(telemetry_xcconfig)}", fastfile)
+        self.assertNotIn("xcconfig: telemetry_xcconfig", fastfile)
+        self.assertIn("> /dev/null 2>&1", fastfile)
 
 
 class TestFlightFreshnessTests(unittest.TestCase):

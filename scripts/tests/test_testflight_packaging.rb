@@ -20,6 +20,59 @@ UI = FastlaneCore::UI
 SYNTHETIC_ENDPOINT = "https://example-pr09-log-sentinel.invalid/example-container".freeze
 SYNTHETIC_SAS = "sv=2023-11-03&sr=c&si=example-pr09-create-only&spr=https&sig=FAKE%2BPR09%2Fsentinel%3D".freeze
 
+# 外部工具故意在 -quiet 下仍输出设置/错误，验证重定向及失败日志重放。
+SYNTHETIC_XCODE_TOOL = <<~'RUBY'.freeze
+  require "json"
+  require "shellwords"
+  require "cgi"
+  require "fileutils"
+  if File.basename($PROGRAM_NAME) == "xcodebuild"
+    File.open(ENV.fetch("EXAMPLE_COMMANDS"), "a") { |log| log.puts(JSON.generate(ARGV)) }
+    stage = if ARGV.include?("-resolvePackageDependencies")
+              "resolve"
+            elsif ARGV.include?("-showBuildSettings")
+              "settings"
+            elsif ARGV.include?("archive")
+              "archive"
+            elsif ARGV.include?("-exportArchive")
+              "export"
+            elsif ARGV == ["-version"]
+              puts "Xcode 26.0\nBuild version 17A000"
+              exit
+            else
+              abort "Unexpected synthetic xcodebuild invocation"
+            end
+    if ARGV.include?("-xcconfig")
+      values = File.readlines(ARGV.fetch(ARGV.index("-xcconfig") + 1)).map do |line|
+        line.split(" = ", 2).last.strip.gsub("/$()/", "//")
+      end
+      values.each do |value|
+        [value, Shellwords.escape(value), CGI.escape(value), CGI.escapeURIComponent(value),
+         CGI.unescape(value)].uniq.each do |form|
+          puts "    EXAMPLE_SETTING = #{form}"
+          warn "error: synthetic diagnostic #{form}"
+        end
+      end
+    end
+    puts "    PRODUCT_NAME = example-pr09"
+    puts "    EXECUTABLE_NAME = example-pr09"
+    puts "    SUPPORTED_PLATFORMS = macosx iphoneos iphonesimulator"
+    puts "    PLATFORM_NAME = macosx"
+    puts "    PRODUCT_TYPE = com.apple.product-type.application"
+    puts "    SDKROOT = example-macosx"
+    exit 65 if ENV["EXAMPLE_FAILURE"] == stage
+    if stage == "archive"
+      path = ARGV.fetch(ARGV.index("-archivePath") + 1)
+      FileUtils.mkdir_p(File.join(path, "Products/Applications/example-pr09.app"))
+    elsif stage == "export"
+      path = ARGV.fetch(ARGV.index("-exportPath") + 1)
+      File.write(File.join(path, "example-pr09.pkg"), "synthetic package; not an application")
+    end
+  elsif !%w[security xattr xcpretty].include?(File.basename($PROGRAM_NAME))
+    abort "Unexpected synthetic tool"
+  end
+RUBY
+
 def telemetry_step(name)
   YAML.load_file(File.join(ROOT, ".github/workflows/testflight.yml"))
       .fetch("jobs").fetch("release").fetch("steps").find { |step| step["name"] == name }
@@ -382,11 +435,109 @@ class TestFlightPackagingTests < Minitest::Test
     end
   end
 
+  def with_synthetic_xcode_tools
+    tools = File.join(@directory, "example-tools")
+    FileUtils.mkdir_p(tools)
+    %w[xcodebuild security xattr xcpretty].each do |name|
+      path = File.join(tools, name)
+      File.write(path, "#!#{RbConfig.ruby}\n" + SYNTHETIC_XCODE_TOOL)
+      File.chmod(0o700, path)
+    end
+    keys = %w[PATH EXAMPLE_COMMANDS EXAMPLE_FAILURE]
+    previous = ENV.values_at(*keys)
+    verbose = FastlaneCore::Globals.verbose?
+    ENV["PATH"] = tools + File::PATH_SEPARATOR + ENV.fetch("PATH")
+    ENV["EXAMPLE_COMMANDS"] = File.join(@directory, "example-commands.jsonl")
+    spawn = FastlaneCore::FastlanePty.method(:spawn)
+    export = "/usr/bin/xcrun #{Gym::PackageCommandGeneratorXcode7.wrap_xcodebuild.shellescape}"
+    # 仅替换 export 的外部执行边界，真实命令生成/执行器及错误处理全部保留。
+    FastlaneCore::FastlanePty.define_singleton_method(:spawn) do |command, &block|
+      command = command.sub(export, File.join(tools, "xcodebuild").shellescape) if command.start_with?(export)
+      spawn.call(command, &block)
+    end
+    yield
+  ensure
+    FastlaneCore::FastlanePty.define_singleton_method(:spawn, spawn) if spawn
+    keys&.zip(previous || []).each { |key, value| ENV[key] = value }
+    FastlaneCore::Globals.verbose = verbose unless verbose.nil?
+  end
+
+  # 保留真实 Manager、初始化、Project 检测、归档/export 和错误处理。
+  def initialize_detect_and_archive(options)
+    config = FastlaneCore::Configuration.create(Gym::Options.available_options, options.merge(
+      project: File.join(ROOT, options.fetch(:project)),
+      archive_path: File.join(@directory, "example.xcarchive"),
+      buildlog_path: @directory, xcodebuild_formatter: ""
+    ))
+    result = Gym::Manager.new.work(config)
+    assert_instance_of FastlaneCore::Project, Gym.project
+    assert_equal "example-pr09", Gym.project.build_settings(key: "PRODUCT_NAME")
+    assert_equal ".pkg", File.extname(result)
+    assert File.file?(result)
+  end
+
+  def assert_safe_real_gym_run(failure)
+    ENV["EXAMPLE_FAILURE"] = failure
+    File.write(ENV.fetch("EXAMPLE_COMMANDS"), "")
+    lane = FixtureLane.new(artifact("VoxPocket.pkg"))
+    lane.before_build = method(:initialize_detect_and_archive)
+    error = nil
+    stdout, stderr = capture_subprocess_io do
+      begin
+        lane.run(:mac)
+      rescue FastlaneCore::Interface::FastlaneError, FastlaneCore::Interface::FastlaneBuildFailure => exception
+        error = exception
+        warn exception.full_message
+      end
+    end
+    command_log = File.read(ENV.fetch("EXAMPLE_COMMANDS"))
+    commands = command_log.lines.map { |line| JSON.parse(line) }
+    logs = Dir[File.join(@directory, "*.log")].map { |path| File.read(path) }.join
+    assert_no_sentinels(stdout + stderr + logs + command_log + lane.prepare_output.to_s)
+    assert_equal false, lane.telemetry_remaining
+    if %w[resolve archive export].include?(failure)
+      refute_nil error
+      assert_nil lane.upload_options
+    else
+      assert_nil error
+      refute_nil lane.upload_options
+    end
+    assert commands.any? { |args| args.include?("-resolvePackageDependencies") }
+    commands.select { |args| args.include?("-resolvePackageDependencies") || args.include?("-showBuildSettings") }.each do |args|
+      refute_includes args, "-xcconfig"
+    end
+    return if failure == "resolve"
+    assert commands.any? { |args| args.include?("-showBuildSettings") }
+    archive = commands.find { |args| args.include?("archive") }
+    refute_nil archive
+    assert_equal lane.telemetry_path, archive.fetch(archive.index("-xcconfig") + 1)
+    assert_equal 1, archive.count("-xcconfig")
+    assert_includes archive, "-quiet"
+    return if failure == "archive"
+    exported = commands.find { |args| args.include?("-exportArchive") }
+    refute_nil exported
+    refute_includes exported, "-xcconfig"
+  end
+
+  def test_real_gym_detection_and_archive_never_log_synthetic_settings
+    with_synthetic_xcode_tools do
+      [false, true].each do |verbose_output|
+        FastlaneCore::Globals.verbose = verbose_output
+        [nil, "resolve", "settings", "archive", "export"].each do |failure|
+          assert_safe_real_gym_run(failure)
+        end
+      end
+    end
+  end
+
   def test_mac_release_logs_and_real_gym_arguments_contain_only_xcconfig_path
     lane = FixtureLane.new(artifact("VoxPocket.pkg"))
     lane.before_build = proc do |options|
       assert_equal 0o600, File.stat(lane.telemetry_path).mode & 0o7777
-      assert_equal lane.telemetry_path, options[:xcconfig]
+      refute options.key?(:xcconfig), "Project detection must not receive the secret xcconfig"
+      build_command = Shellwords.split(options.fetch(:xcodebuild_command))
+      assert_equal lane.telemetry_path, build_command.fetch(build_command.index("-xcconfig") + 1)
+      refute_includes Shellwords.split(options.fetch(:xcargs)), "-xcconfig"
       assert_equal "Release", options[:configuration]
       assert_equal true, options[:suppress_xcode_output]
       assert_includes Shellwords.split(options[:xcargs]), "-quiet"
@@ -398,7 +549,7 @@ class TestFlightPackagingTests < Minitest::Test
       Gym.project = FastlaneCore::Project.new(options.merge(project: File.join(ROOT, options[:project])))
       Gym.instance_variable_set(:@config, options.merge(
         archive_path: File.join(@directory, "example.xcarchive"),
-        buildlog_path: @directory, app_name: "example-pr09", xcodebuild_command: "xcodebuild",
+        buildlog_path: @directory, app_name: "example-pr09",
         xcodebuild_formatter: ""
       ))
       Gym.cache = {}
@@ -408,6 +559,7 @@ class TestFlightPackagingTests < Minitest::Test
       assert_equal 1, args.count("-xcconfig")
       assert_includes args, "-quiet"
       assert_includes command, "> /dev/null"
+      assert_includes command, "> /dev/null 2>&1 -scheme"
       assert_no_sentinels(command)
       assert_no_sentinels(options.inspect)
       FastlaneCore::PrintTable.print_values(config: options, title: "Synthetic Release options")

@@ -37,8 +37,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 60
-    env:
-      TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
     steps:
       - name: Checkout VoxPocket
         uses: actions/checkout@v4
@@ -149,6 +147,7 @@ jobs:
       - name: Prepare telemetry xcconfig
         if: steps.gate.outputs.release == 'true'
         env:
+          TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
           TELEMETRY_BLOB_ENDPOINT: ${{ secrets.TELEMETRY_BLOB_ENDPOINT }}
           TELEMETRY_BLOB_SAS: ${{ secrets.TELEMETRY_BLOB_SAS }}
         run: |
@@ -186,6 +185,7 @@ jobs:
         if: steps.gate.outputs.release == 'true'
         working-directory: repo
         env:
+          TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
@@ -196,6 +196,9 @@ jobs:
 
       - name: Remove telemetry xcconfig
         if: always()
+        # 同一确定性路径独立求值；准备步骤中途失败也不依赖其输出。
+        env:
+          TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
         run: |
           set -euo pipefail
           set +x

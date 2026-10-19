@@ -173,7 +173,9 @@ platform :mac do
         destination: "generic/platform=macOS",
         # gym 对多平台 target 按 sdk 选择 PKG/IPA；destination 本身不足以选中 PKG。
         sdk: "macosx",
-        xcconfig: telemetry_xcconfig,
+        # 仅 archive 使用此命令；xcconfig 选项还会传给可打印的依赖解析/设置检测。
+        # 在 tee/formatter 前丢弃两路输出，失败或 verbose 时也不能重放配置值。
+        xcodebuild_command: "xcodebuild -xcconfig #{Shellwords.escape(telemetry_xcconfig)} > /dev/null 2>&1",
         suppress_xcode_output: true,
         export_method: "app-store",
         export_team_id: TEAM_ID,

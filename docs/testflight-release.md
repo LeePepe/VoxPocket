@@ -20,10 +20,17 @@ Owner authorization). This page records the approved policy and the current
   Only the preparation step receives these values. It writes one untracked file directly in
   `RUNNER_TEMP` with verified mode `0600`; URL slashes use empty-variable expansion so xcconfig
   comment parsing preserves HTTPS. Fastlane receives only `TELEMETRY_XCCONFIG_PATH` and passes
-  that path through `-xcconfig`, with quiet Xcode output. Values never belong in `xcargs`,
+  that path through `-xcconfig` in Gym's archive-only `xcodebuild_command`. The project/detection
+  `xcconfig` option stays unset: dependency resolution, build-settings detection and export
+  never receive the file. The archive uses `-quiet` and discards stdout/stderr before Gym's
+  log tee and formatter; failure/verbose replay therefore has no secret output to print.
+  This deliberately sacrifices raw archive diagnostics. Values never belong in `xcargs`,
   inline environment assignments, messages, logs, or attached artifacts. Fastlane `ensure`
   removes the file on success, error, or interruption; workflow `always()` removes it as a
   fallback, including cancellation or preparation failure, before the existing release marker.
+  Preparation, Fastlane and cleanup each compute the same run/attempt-specific path in
+  step-level environment settings, where the Actions `runner` context is valid. Cleanup
+  remains independent of preparation outputs, including when file creation fails partway.
 - **Owner provisioning**: the PR09 body carries the exact placeholder-only operator commands
   from `specs/012-azure-blob-telemetry/plan.md`. The Owner creates a key-authenticated stored
   access policy with create-only permission `c` and explicit UTC expiry, then generates an
