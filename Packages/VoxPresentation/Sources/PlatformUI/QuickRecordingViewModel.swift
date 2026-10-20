@@ -54,6 +54,9 @@ public final class QuickRecordingViewModel: ObservableObject {
     /// 无识别结果回调（如空转录）
     public var onNoResult: (() -> Void)?
 
+    /// 当前 session 的识别阶段已结束；不携带用户文本。
+    public var onRecognitionEnded: (() -> Void)?
+
     // MARK: - 内部状态
 
     public private(set) var rawTranscription: String = ""
@@ -62,6 +65,9 @@ public final class QuickRecordingViewModel: ObservableObject {
     private var shouldStopAfterStart: Bool = false
     private var releaseSnapshot: QuickRecordingReleaseSnapshot?
     private var isDiscardingRelease = false
+    private var finalResultCapture: QuickRecordingFinalResultWaiter?
+    private var releasePreparationError: Error?
+    private var recognitionEnded = false
 
     public var isStartingRecording: Bool {
         isStartingRecordingInternal
@@ -196,6 +202,9 @@ public final class QuickRecordingViewModel: ObservableObject {
         isStartingRecordingInternal = true
         shouldStopAfterStart = false
         releaseSnapshot = nil
+        releasePreparationError = nil
+        recognitionEnded = false
+        cancelFinalResultCapture()
         isDiscardingRelease = false
 
         resetRecordingState()
@@ -209,6 +218,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                 await stopRecording()
             }
         } catch {
+            notifyRecognitionEnded()
             await cleanupFailedStart()
             isStartingRecordingInternal = false
             shouldStopAfterStart = false
@@ -228,6 +238,9 @@ public final class QuickRecordingViewModel: ObservableObject {
             throw VoxError.transcriptionFailed(reason: "Quick recording release control unavailable")
         }
         try control.prepareQuickRecording()
+        finalResultCapture = QuickRecordingFinalResultWaiter(
+            publisher: transcriptionUseCase.finalResultPublisher, armImmediately: false
+        )
         try await recordingUseCase.startRecording()
         recorderStatus = .listening
         sessionStartTime = Date()
@@ -257,24 +270,41 @@ public final class QuickRecordingViewModel: ObservableObject {
         transcriptionUseCase.clearLiveText()
     }
 
-    /// Freeze Apple-source eligibility before any suspension, including deferred startup.
+    /// 同步冻结一次 Apple 资格；供 Fn handler 在任何 await 或任务调度前调用。
+    @discardableResult
+    public func prepareQuickRecordingRelease() -> Bool {
+        if let releaseSnapshot { return releaseSnapshot.hasRecognizedSpeech }
+        guard releasePreparationError == nil,
+              isStartingRecordingInternal || recorderStatus == .listening, !isProcessing else { return false }
+        do {
+            guard let control = recordingUseCase as? any QuickRecordingUseCase else {
+                throw VoxError.transcriptionFailed(reason: "Quick recording release control unavailable")
+            }
+            let snapshot = try control.freezeQuickRecordingRelease()
+            releaseSnapshot = snapshot
+            if snapshot.hasRecognizedSpeech {
+                finalResultCapture?.armDeadline()
+            } else {
+                isDiscardingRelease = true
+                cancelPendingProcessing()
+            }
+            return snapshot.hasRecognizedSpeech
+        } catch {
+            releasePreparationError = error
+            cancelFinalResultCapture()
+            return false
+        }
+    }
+
     public func stopRecording() async {
         guard isStartingRecordingInternal || recorderStatus == .listening, !isProcessing else { return }
         do {
-            if releaseSnapshot == nil {
-                guard let control = recordingUseCase as? any QuickRecordingUseCase else {
-                    throw VoxError.transcriptionFailed(reason: "Quick recording release control unavailable")
-                }
-                releaseSnapshot = try control.freezeQuickRecordingRelease()
-                if releaseSnapshot?.hasRecognizedSpeech == false {
-                    isDiscardingRelease = true
-                    cancelPendingProcessing()
-                }
-            }
+            prepareQuickRecordingRelease()
             if isStartingRecordingInternal {
                 shouldStopAfterStart = true
                 return
             }
+            if let releasePreparationError { throw releasePreparationError }
             guard let snapshot = releaseSnapshot else { return }
             isProcessing = true
             recordingStopTime = Date()
@@ -285,6 +315,7 @@ public final class QuickRecordingViewModel: ObservableObject {
                 try await discardEmptyRecording(snapshot)
             }
         } catch {
+            notifyRecognitionEnded()
             cancelPendingProcessing()
             errorMessage = error.localizedDescription
             recorderStatus = .error
@@ -304,13 +335,16 @@ public final class QuickRecordingViewModel: ObservableObject {
     private func finishEligibleRecording(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
         guard let control = recordingUseCase as? any QuickRecordingUseCase else { return }
         let liveSnapshot = liveTranscription
-        let finalResult = QuickRecordingFinalResultWaiter(publisher: transcriptionUseCase.finalResultPublisher)
-        defer { finalResult.cancel() }
+        guard let finalResult = finalResultCapture else { throw CancellationError() }
+        defer { cancelFinalResultCapture() }
         try await control.completeQuickRecordingRelease(snapshot)
+        try Task.checkCancellation()
         let captured = finalResult.capturedText ?? ""
         rawTranscription = captured.isEmpty
             ? await waitForCompletedTranscription(finalResultTask: finalResult.task, liveSnapshot: liveSnapshot)
             : captured
+        try Task.checkCancellation()
+        notifyRecognitionEnded()
         recordTranscriptionCompletion()
         guard !rawTranscription.isEmpty else {
             streamingCoordinator?.cancel()
@@ -341,7 +375,20 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
     }
 
+    private func cancelFinalResultCapture() {
+        finalResultCapture?.cancel()
+        finalResultCapture = nil
+    }
+
+    private func notifyRecognitionEnded() {
+        cancelFinalResultCapture()
+        guard !recognitionEnded else { return }
+        recognitionEnded = true
+        onRecognitionEnded?()
+    }
+
     private func cancelPendingProcessing() {
+        cancelFinalResultCapture()
         streamingTask?.cancel()
         streamingTask = nil
         streamingCoordinator?.cancel()
@@ -349,6 +396,7 @@ public final class QuickRecordingViewModel: ObservableObject {
     }
 
     public func cancelRecording() async {
+        notifyRecognitionEnded()
         streamingTask?.cancel()
         streamingTask = nil
         streamingCoordinator?.cancel()
@@ -377,7 +425,10 @@ public final class QuickRecordingViewModel: ObservableObject {
         liveSnapshot: String = "",
         settleMaxWait: TimeInterval = 0.8
     ) async -> String {
-        if let finalText = await finalResultTask.value {
+        let finalText = await withTaskCancellationHandler {
+            await finalResultTask.value
+        } onCancel: { finalResultTask.cancel() }
+        if let finalText {
             logger.debug("waitForCompletedTranscription: got finalResult (length=\(finalText.count))")
             return finalText
         }
@@ -401,6 +452,7 @@ public final class QuickRecordingViewModel: ObservableObject {
         let deadline = Date().addingTimeInterval(maxWait)
 
         while Date() < deadline {
+            guard !Task.isCancelled else { return "" }
             try? await Task.sleep(for: .seconds(pollInterval))
 
             if liveTranscription != lastSnapshot {

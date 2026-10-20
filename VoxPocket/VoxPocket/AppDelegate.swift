@@ -49,11 +49,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickRecordDismissWindow: (@MainActor @Sendable () -> Bool)?
     private let quickRecordSaveSession: (@MainActor @Sendable (String, String) async throws -> Void)?
     private let quickRecordTrack: (@MainActor @Sendable (String, [String: String]) -> Void)?
+    var quickRecordRecognitionTimeout = QuickRecordingReleaseLifecycle.recognitionTimeout
     private var quickRecordingSession: QuickRecordingSession?
     private struct QuickRecordingSession {
         let id: UUID
         let viewModel: QuickRecordingViewModel
-        var released = false
+        let releaseLifecycle: QuickRecordingReleaseLifecycle
         var completing = false
     }
     private var startupTask: Task<Void, Never>?
@@ -332,7 +333,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             endQuickRecording()
             return
         }
-        let session = QuickRecordingSession(id: UUID(), viewModel: viewModel)
+        let session = QuickRecordingSession(
+            id: UUID(), viewModel: viewModel,
+            releaseLifecycle: QuickRecordingReleaseLifecycle(timeout: quickRecordRecognitionTimeout)
+        )
         quickRecordingSession = session
         installQuickRecordingCallbacks(session)
         await viewModel.startRecording()
@@ -352,20 +356,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         quickRecordStopCount += 1
         logger.log(.debug, "Quick record stop triggered", context: ["call_count": quickRecordStopCount])
         guard activeQuickRecordingSource() == .quickRecording,
-              var session = quickRecordingSession, !session.released else { return }
+              let session = quickRecordingSession, !session.releaseLifecycle.isReleased else { return }
         guard let viewModel = currentQuickRecordingViewModel(), viewModel === session.viewModel else {
             finishQuickRecording(session.id)
             return
         }
-        session.released = true
-        quickRecordingSession = session
-        trackQuickRecording(.quickRecordFnReleased, sessionID: session.id)
-        if dismissQuickRecordingWindow() {
-            let elapsed = releasedAt.duration(to: .now).components
-            let milliseconds = max(0, Double(elapsed.seconds) * 1_000
-                + Double(elapsed.attoseconds) / 1_000_000_000_000_000)
-            trackQuickRecording(.quickRecordPanelClosed, sessionID: session.id,
-                                properties: ["duration_ms": String(milliseconds)])
+        let eligible = viewModel.prepareQuickRecordingRelease()
+        let sessionID = session.id
+        session.releaseLifecycle.release(at: releasedAt)
+        trackQuickRecording(.quickRecordFnReleased, sessionID: sessionID)
+        if eligible {
+            session.releaseLifecycle.armWatchdog { [weak self] in self?.hideQuickRecordingPanel(sessionID) }
+        } else {
+            hideQuickRecordingPanel(sessionID)
         }
         let stoppedDuringStartup = viewModel.isStartingRecording
         let wasListening = viewModel.recorderStatus == .listening
@@ -392,6 +395,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? await self.saveQuickRecording(rawText: rawText, finalText: finalText)
             }
         }
+        session.viewModel.onRecognitionEnded = { [weak self] in self?.hideQuickRecordingPanel(sessionID) }
         session.viewModel.onNoResult = { [weak self] in
             guard let self, let current = self.quickRecordingSession,
                   current.id == sessionID, !current.completing else { return }
@@ -401,11 +405,21 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func finishQuickRecording(_ sessionID: UUID) {
         guard let session = quickRecordingSession, session.id == sessionID else { return }
+        hideQuickRecordingPanel(sessionID)
+        session.releaseLifecycle.cancel()
         quickRecordingSession = nil
+        session.viewModel.onRecognitionEnded = nil
         session.viewModel.onComplete = nil
         session.viewModel.onNoResult = nil
         closeQuickRecordingWindow()
         endQuickRecording()
+    }
+
+    private func hideQuickRecordingPanel(_ sessionID: UUID) {
+        guard let session = quickRecordingSession, session.id == sessionID,
+              let milliseconds = session.releaseLifecycle.hide(dismiss: { dismissQuickRecordingWindow() }) else { return }
+        trackQuickRecording(.quickRecordPanelClosed, sessionID: sessionID,
+                            properties: ["duration_ms": String(milliseconds)])
     }
 
     private func claimQuickRecording() -> Bool {

@@ -313,7 +313,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.recorderStatus, .idle)
         XCTAssertEqual(coordinator.cancelCallCount, 1)
         XCTAssertFalse(coordinator.isStreaming)
-        XCTAssertEqual(transcription.finalCancellationCount, 0)
+        XCTAssertEqual(transcription.finalCancellationCount, 1)
         XCTAssertNil(clipboard.copiedText)
         await viewModel.startRecording()
         XCTAssertTrue(coordinator.isStreaming)
@@ -487,7 +487,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertTrue(model.rawTranscription.isEmpty)
         XCTAssertTrue(model.refinedText.isEmpty)
         XCTAssertNil(clipboard.copiedText)
-        XCTAssertEqual(transcription.finalCancellationCount, 0)
+        XCTAssertEqual(transcription.finalCancellationCount, 1)
     }
 
     func testAppleEvidenceBeforeQueuedUIUpdatePreservesEligibleFinalAndStickyLatch() async {
@@ -568,7 +568,7 @@ final class QuickRecordingViewModelTests: XCTestCase {
     }
 }
 
-private final class FakeRecordingUseCase: QuickRecordingUseCase, @unchecked Sendable {
+final class FakeRecordingUseCase: QuickRecordingUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
     private let startDelayNanoseconds: UInt64
@@ -612,6 +612,11 @@ private final class FakeRecordingUseCase: QuickRecordingUseCase, @unchecked Send
         await onDiscard?()
         stateSubject.send(.idle)
     }
+    private let startHook = Mutex<(@Sendable () async -> Void)?>(nil)
+    var onStart: (@Sendable () async -> Void)? {
+        get { startHook.withLock { $0 } }
+        set { startHook.withLock { $0 = newValue } }
+    }
     var onStop: (@Sendable () -> Void)?
     var stopError: Error?
 
@@ -624,6 +629,7 @@ private final class FakeRecordingUseCase: QuickRecordingUseCase, @unchecked Send
     var audioLevelPublisher: AnyPublisher<Float, Never> { levelSubject.eraseToAnyPublisher() }
 
     func startRecording() async throws {
+        await onStart?()
         if startDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: startDelayNanoseconds)
         }
@@ -644,7 +650,7 @@ private final class FakeRecordingUseCase: QuickRecordingUseCase, @unchecked Send
     func requestPermission() async -> Bool { true }
 }
 
-private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked Sendable {
+final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked Sendable {
     private let liveTextSubject = CurrentValueSubject<String, Never>("")
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let finalCancellations = Mutex(0)
@@ -683,7 +689,7 @@ private final class FakeTranscriptionUseCase: TranscriptionUseCase, @unchecked S
     }
 }
 
-private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendable {
+final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RefinementState, Never>(.idle)
     private let streamedChunks: [String]
 
@@ -728,7 +734,7 @@ private final class FakeRefinementUseCase: RefinementUseCase, @unchecked Sendabl
     }
 }
 
-private final class FakeClipboardService: ClipboardService, @unchecked Sendable {
+final class FakeClipboardService: ClipboardService, @unchecked Sendable {
     private(set) var copiedText: String?
     var hasText: Bool { false }
     func copy(_ text: String) { copiedText = text }
@@ -738,17 +744,22 @@ private final class FakeClipboardService: ClipboardService, @unchecked Sendable 
 }
 
 /// 测试仅从 MainActor 发送；unchecked 仅桥接 Combine subject 的 Sendable 缺失。
-private final class FakeQuickStreamingCoordinator: StreamingInputCoordinator, @unchecked Sendable {
+final class FakeQuickStreamingCoordinator: StreamingInputCoordinator, @unchecked Sendable {
     private let subject = CurrentValueSubject<String, Never>("")
     private struct State {
         var isStreaming = false
         var cancelCallCount = 0
         var onStart: (@Sendable () async -> Void)?
+        var onStop: (@Sendable () async -> Void)?
     }
     private let state = Mutex(State())
     var onStart: (@Sendable () async -> Void)? {
         get { state.withLock { $0.onStart } }
         set { state.withLock { $0.onStart = newValue } }
+    }
+    var onStop: (@Sendable () async -> Void)? {
+        get { state.withLock { $0.onStop } }
+        set { state.withLock { $0.onStop = newValue } }
     }
     var isStreaming: Bool { state.withLock { $0.isStreaming } }
     var cancelCallCount: Int { state.withLock { $0.cancelCallCount } }
@@ -759,7 +770,10 @@ private final class FakeQuickStreamingCoordinator: StreamingInputCoordinator, @u
         await onStart?()
         state.withLock { $0.isStreaming = true }
     }
-    func stopStreaming() async { state.withLock { $0.isStreaming = false } }
+    func stopStreaming() async {
+        await onStop?()
+        state.withLock { $0.isStreaming = false }
+    }
     func cancel() { state.withLock { $0.isStreaming = false; $0.cancelCallCount += 1 } }
 }
 #endif

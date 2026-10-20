@@ -77,15 +77,17 @@ final class ImmediateDismissFixture {
     var events: [(String, [String: String], Bool)] = []
     var saved: [(String, String)] = []
     var saveFails = false
+    private var dismissalWaiter: CheckedContinuation<Void, Never>?
 
     init(startGate: QuickRecordStartGate? = nil, stopGate: QuickRecordStartGate? = nil,
-         startFails: Bool = false, stopFails: Bool = false, hasResult: Bool = true) {
+         startFails: Bool = false, stopFails: Bool = false, hasResult: Bool = true,
+         stopError: Error? = nil) {
         let transcription = QuickRecordTranscriptionUseCase()
         self.transcription = transcription
         recording = QuickRecordRecordingUseCase(
             startError: startFails ? Failure.synthetic : nil, startGate: startGate,
             operationRecorder: QuickRecordOperationRecorder(), stopGate: stopGate,
-            stopError: stopFails ? Failure.synthetic : nil,
+            stopError: stopError ?? (stopFails ? Failure.synthetic : nil),
             onStop: { if hasResult { transcription.sendFinalText("synthetic raw") } },
             appleTextOnStart: (hasResult || stopFails) ? "synthetic Apple partial" : nil
         )
@@ -93,7 +95,7 @@ final class ImmediateDismissFixture {
                                        refinementUseCase: refinement, clipboardService: clipboard)
     }
 
-    func launch() async {
+    func launch(recognitionTimeout: Duration? = nil) async {
         let delegate = AppDelegate(
             productTelemetryNotificationCenter: NotificationCenter(), startup: AppStartup {},
             serviceContainer: runtime.makeContainer(), hotkeyService: hotkeys,
@@ -107,7 +109,11 @@ final class ImmediateDismissFixture {
             quickRecordViewModel: { [self] in model },
             quickRecordHideWindow: { [self] in visible = false; model = nil; closes += 1 },
             quickRecordDismissWindow: { [self] in
-                let wasVisible = visible; visible = false; return wasVisible
+                let wasVisible = visible
+                visible = false
+                dismissalWaiter?.resume()
+                dismissalWaiter = nil
+                return wasVisible
             },
             quickRecordSaveSession: { [self] raw, final in
                 saved.append((raw, final)); await saveGate.suspendStart()
@@ -115,12 +121,26 @@ final class ImmediateDismissFixture {
             },
             quickRecordTrack: { [self] name, properties in events.append((name, properties, visible)) }
         )
+        if let recognitionTimeout { delegate.quickRecordRecognitionTimeout = recognitionTimeout }
         self.delegate = delegate
         delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         await delegate.waitForPendingStartup()
     }
 
     func remove() { delegate = nil; runtime.remove() }
+
+    func waitForVisualDismissal() async {
+        guard visible else { return }
+        await withCheckedContinuation { dismissalWaiter = $0 }
+    }
+
+    func expectVisibleAndBusy() {
+        #expect(visible)
+        #expect(source == .quickRecording)
+        #expect(model != nil)
+        #expect(closes == 0)
+        #expect(ends == 0)
+    }
 
     func expectHiddenAndBusy() {
         #expect(!visible)
@@ -135,6 +155,21 @@ final class ImmediateDismissFixture {
         #expect(closes == 1)
         #expect(ends == 1)
     }
+}
+
+@MainActor
+func assertQuickRecordTimingEvents(_ fixture: ImmediateDismissFixture) {
+    #expect(fixture.events.map(\.0) == ["quick_record.fn_released", "quick_record.panel_closed"])
+    guard fixture.events.count == 2 else { return }
+    let release = fixture.events[0], close = fixture.events[1]
+    #expect(release.2)
+    #expect(!close.2)
+    #expect(Set(release.1.keys) == ["source", "session_id"])
+    #expect(Set(close.1.keys) == ["source", "session_id", "duration_ms"])
+    #expect(release.1["source"] == "quick" && close.1["source"] == "quick")
+    #expect(release.1["session_id"] == close.1["session_id"])
+    #expect(UUID(uuidString: release.1["session_id"] ?? "") != nil)
+    #expect((Double(close.1["duration_ms"] ?? "") ?? -1) >= 0)
 }
 
 @MainActor

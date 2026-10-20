@@ -23,6 +23,9 @@ def main():
     fixture = (root / "scripts/tests/quick_record_release_probe.swift").read_text()
     handlers = delegate.split("// QUICK_RECORD_HANDLERS_BEGIN", 1)[1].split(
         "// QUICK_RECORD_HANDLERS_END", 1)[0]
+    lifecycle = (root / "Packages/VoxPresentation/Sources/PlatformUI/"
+                 "QuickRecordingReleaseLifecycle.swift").read_text()
+    fixture = fixture.replace("// PRODUCTION_RELEASE_LIFECYCLE", lifecycle)
     fixture = fixture.replace("// PRODUCTION_HANDLERS", handlers)
     fixture = fixture.replace("// PRODUCTION_SESSION", method(
         delegate, "private struct QuickRecordingSession"))

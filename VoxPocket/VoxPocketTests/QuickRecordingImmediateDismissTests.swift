@@ -9,7 +9,7 @@ import UIShared
 @Suite(.serialized, .timeLimit(.minutes(1)))
 struct QuickRecordingImmediateDismissTests {
     @Test(arguments: [false, true])
-    func hiddenBackgroundPipelinePreservesPasteSaveAndSessionIsolation(saveFails: Bool) async throws {
+    func recognitionBoundaryThenHiddenPipelinePreservesPasteSaveAndSessionIsolation(saveFails: Bool) async throws {
         let stop = QuickRecordStartGate()
         let fixture = ImmediateDismissFixture(stopGate: stop)
         defer { fixture.remove() }
@@ -18,18 +18,20 @@ struct QuickRecordingImmediateDismissTests {
         await fixture.hotkeys.press()
         let model = try #require(fixture.model)
         let oldComplete = model.onComplete, oldNoResult = model.onNoResult
+        let oldRecognitionEnded = model.onRecognitionEnded
         let release = Task { await fixture.hotkeys.release() }
         try await waitForDismissBoundary { fixture.recording.stopCallCount == 1 }
-        fixture.expectHiddenAndBusy()
-        assertTimingEvents(fixture)
+        fixture.expectVisibleAndBusy()
+        #expect(fixture.events.map(\.0) == ["quick_record.fn_released"])
         await fixture.hotkeys.release()
         await fixture.hotkeys.press()
         #expect(fixture.recording.startCallCount == 1)
-        #expect(fixture.events.count == 2)
+        #expect(fixture.events.count == 1)
         await stop.release()
         await release.value
         try await waitForDismissBoundary { fixture.refinement.isWaiting }
         fixture.expectHiddenAndBusy()
+        assertQuickRecordTimingEvents(fixture)
         fixture.refinement.finish()
         try await waitForDismissBoundary { fixture.clipboard.pasteCount == 1 }
         fixture.expectHiddenAndBusy()
@@ -46,17 +48,18 @@ struct QuickRecordingImmediateDismissTests {
         #expect(fixture.saved.first?.0 == "synthetic raw")
         #expect(fixture.saved.first?.1 == "synthetic refined。")
         await assertStaleCallbacksPreserveNextSession(fixture, model: model,
-                                                    complete: oldComplete, noResult: oldNoResult)
+                                                    complete: oldComplete, noResult: oldNoResult,
+                                                    recognitionEnded: oldRecognitionEnded)
     }
 
     private func assertStaleCallbacksPreserveNextSession(
         _ fixture: ImmediateDismissFixture, model: QuickRecordingViewModel,
-        complete: ((String) -> Void)?, noResult: (() -> Void)?
+        complete: ((String) -> Void)?, noResult: (() -> Void)?, recognitionEnded: (() -> Void)?
     ) async {
         fixture.model = model
         model.recorderStatus = .idle
         await fixture.hotkeys.press()
-        complete?("stale"); noResult?()
+        complete?("stale"); noResult?(); recognitionEnded?()
         #expect(fixture.visible)
         #expect(fixture.source == .quickRecording)
         #expect(fixture.closes == 1)
@@ -76,7 +79,7 @@ struct QuickRecordingImmediateDismissTests {
         await fixture.hotkeys.release()
         fixture.expectHiddenAndBusy()
         #expect(fixture.recording.stopCallCount == 0)
-        assertTimingEvents(fixture)
+        assertQuickRecordTimingEvents(fixture)
         await startGate.release()
         await start.value
         fixture.expectClean()
@@ -94,7 +97,7 @@ struct QuickRecordingImmediateDismissTests {
         await fixture.hotkeys.press()
         await fixture.hotkeys.release()
         fixture.expectClean()
-        assertTimingEvents(fixture)
+        assertQuickRecordTimingEvents(fixture)
         #expect(fixture.recording.stopCallCount == (stopFails ? 1 : 0))
         #expect(fixture.recording.discardCallCount == (stopFails ? 0 : 1))
         #expect(fixture.saved.isEmpty)
@@ -110,7 +113,7 @@ struct QuickRecordingImmediateDismissTests {
         let release = Task { await fixture.hotkeys.release() }
         try await waitForDismissBoundary { fixture.recording.discardCallCount == 1 }
         fixture.expectHiddenAndBusy()
-        assertTimingEvents(fixture)
+        assertQuickRecordTimingEvents(fixture)
         fixture.recording.recognizeApple("late Apple")
         fixture.transcription.sendFinalText("late cloud final")
         await fixture.hotkeys.release()
@@ -173,18 +176,5 @@ struct QuickRecordingImmediateDismissTests {
         #expect(fixture.ends == 0)
     }
 
-    private func assertTimingEvents(_ fixture: ImmediateDismissFixture) {
-        #expect(fixture.events.map(\.0) == ["quick_record.fn_released", "quick_record.panel_closed"])
-        guard fixture.events.count == 2 else { return }
-        let release = fixture.events[0], close = fixture.events[1]
-        #expect(release.2)
-        #expect(!close.2)
-        #expect(Set(release.1.keys) == ["source", "session_id"])
-        #expect(Set(close.1.keys) == ["source", "session_id", "duration_ms"])
-        #expect(release.1["source"] == "quick" && close.1["source"] == "quick")
-        #expect(release.1["session_id"] == close.1["session_id"])
-        #expect(UUID(uuidString: release.1["session_id"] ?? "") != nil)
-        #expect((Double(close.1["duration_ms"] ?? "") ?? -1) >= 0)
-    }
 }
 #endif

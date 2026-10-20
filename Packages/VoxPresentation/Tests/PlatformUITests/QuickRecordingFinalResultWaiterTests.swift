@@ -79,6 +79,42 @@ final class QuickRecordingFinalResultWaiterTests: XCTestCase {
         XCTAssertNil(waiter.capturedText)
     }
 
+    func testCaptureDoesNotSpendDeadlineWhileHeldAndKeepsEarlyFinal() async throws {
+        let subject = PassthroughSubject<TranscriptionResult, Error>()
+        let waiter = QuickRecordingFinalResultWaiter(
+            publisher: subject.eraseToAnyPublisher(), timeout: .milliseconds(10), armImmediately: false
+        )
+        try await Task.sleep(for: .milliseconds(30))
+        subject.send(result("提前终稿"))
+        waiter.armDeadline()
+        XCTAssertEqual(waiter.capturedText, "提前终稿")
+        await assertResult("提前终稿", from: waiter)
+    }
+
+    func testDelayedArmTimesOutOnceAndLateOrDuplicateFinalCannotReplaceCapture() async {
+        let subject = PassthroughSubject<TranscriptionResult, Error>()
+        let cancellations = Counter()
+        let publisher = subject.handleEvents(receiveCancel: { cancellations.increment() }).eraseToAnyPublisher()
+        let waiter = QuickRecordingFinalResultWaiter(publisher: publisher, timeout: .milliseconds(10), armImmediately: false)
+        waiter.armDeadline()
+        waiter.armDeadline()
+        await assertResult(nil, from: waiter)
+        subject.send(result("迟到终稿"))
+        XCTAssertNil(waiter.capturedText)
+        XCTAssertEqual(cancellations.value, 1)
+    }
+
+    func testFirstFinalSurvivesDuplicateAndIdempotentCancellation() async {
+        let subject = PassthroughSubject<TranscriptionResult, Error>()
+        let waiter = QuickRecordingFinalResultWaiter(publisher: subject.eraseToAnyPublisher(), armImmediately: false)
+        subject.send(result("第一终稿"))
+        subject.send(result("第二终稿"))
+        await assertResult("第一终稿", from: waiter)
+        waiter.cancel()
+        waiter.cancel()
+        XCTAssertEqual(waiter.capturedText, "第一终稿")
+    }
+
     private func assertResult(_ expected: String?, from waiter: QuickRecordingFinalResultWaiter) async {
         let finished = expectation(description: "Final wait finishes promptly")
         let check = Task {

@@ -21,7 +21,9 @@ final class QuickRecordingFinalResultWaiter {
         }
         private let state = Mutex(State())
         var text: String? { state.withLock { $0.text } }
-        func receive(_ text: String) { state.withLock { $0.text = text } }
+        func receive(_ text: String) {
+            state.withLock { if !$0.terminated { $0.text = text } }
+        }
         func install(_ token: Subscription) {
             let rejected = state.withLock { value -> Subscription? in
                 guard !value.terminated else { return token }
@@ -43,10 +45,17 @@ final class QuickRecordingFinalResultWaiter {
     private let capture: Capture
     private let continuation: AsyncThrowingStream<String, Error>.Continuation
     let task: Task<String?, Never>
+    private let timeout: Duration
+    private var deadlineTask: Task<Void, Never>?
 
     var capturedText: String? { capture.text }
 
-    init(publisher: AnyPublisher<TranscriptionResult, Error>, timeout: Duration = .seconds(15)) {
+    init(
+        publisher: AnyPublisher<TranscriptionResult, Error>,
+        timeout: Duration = QuickRecordingReleaseLifecycle.recognitionTimeout,
+        armImmediately: Bool = true
+    ) {
+        self.timeout = timeout
         let pair = AsyncThrowingStream<String, Error>.makeStream(bufferingPolicy: .bufferingNewest(1))
         continuation = pair.continuation
         let capture = Capture()
@@ -65,25 +74,26 @@ final class QuickRecordingFinalResultWaiter {
         })
         capture.install(Subscription(token))
         task = Task {
-            await withTaskGroup(of: String?.self) { group in
-                group.addTask {
-                    do {
-                        for try await text in pair.stream { return text.isEmpty ? nil : text }
-                    } catch { return nil }
-                    return nil
-                }
-                group.addTask {
-                    try? await Task.sleep(for: timeout)
-                    return nil
-                }
-                let text = await group.next() ?? nil
-                group.cancelAll()
-                return text
-            }
+            do {
+                for try await text in pair.stream { return text.isEmpty ? nil : text }
+            } catch { return nil }
+            return nil
+        }
+        if armImmediately { armDeadline() }
+    }
+
+    /// 捕获可以早于 release；等待预算只能从 release 开始且不可重置。
+    func armDeadline() {
+        guard deadlineTask == nil else { return }
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        deadlineTask = Task { [continuation] in
+            do { try await Task.sleep(until: deadline, clock: .continuous) } catch { return }
+            continuation.finish()
         }
     }
 
     func cancel() {
+        deadlineTask?.cancel()
         capture.cancel()
         continuation.finish()
         task.cancel()
