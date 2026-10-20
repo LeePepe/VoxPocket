@@ -3,6 +3,7 @@ import Foundation
 import PlatformUI
 import Testing
 import UIShared
+@testable import VoxPocket
 
 @MainActor
 @Suite(.serialized, .timeLimit(.minutes(1)))
