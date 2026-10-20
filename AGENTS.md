@@ -34,8 +34,8 @@ a root cause elsewhere is a new task.
 
 ## Protocol
 
-Follow `LeePepe/shared-ci@6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/agent-protocol.md`
-(https://github.com/LeePepe/shared-ci/blob/6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/agent-protocol.md).
+Follow `LeePepe/shared-ci@88c09b3f68ceea82a4ca979c689e3dc50266ee10/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/88c09b3f68ceea82a4ca979c689e3dc50266ee10/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
 Plan-Review Loop (mandatory for any implementation plan, spec or plan change; a test-only
@@ -120,7 +120,7 @@ repository-contract deviation; it creates no broader exception.
 
 ## Dependencies
 These are the current pins; they change only through Owner-reviewed PRs.
-- `shared-ci` `6e354f476bc53d68f0f09fc231d5cd938466af9c` — https://github.com/LeePepe/shared-ci/blob/6e354f476bc53d68f0f09fc231d5cd938466af9c/ai/
+- `shared-ci` `88c09b3f68ceea82a4ca979c689e3dc50266ee10` — https://github.com/LeePepe/shared-ci/blob/88c09b3f68ceea82a4ca979c689e3dc50266ee10/ai/
 - LokiKit from LeePepe/shared-telemetry exact `0.2.0` (annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` → commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`), exact-version selectors in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag integrity guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.2.0/ai/
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
