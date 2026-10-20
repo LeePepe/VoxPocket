@@ -71,6 +71,8 @@ struct BlobTelemetryInstrumentationTests {
         await assertNormalQuickRecord(center: center, container: container)
         await assertFailedQuickRecord(center: center, container: container)
         await assertRapidRelease(center: center, container: container)
+        // 等待已入队的遥测写入完成，再检查完整事件顺序。
+        await container.productTelemetryApplicationWillResignActive()
         #expect(fixture.recorder.events.compactMap { $0.properties["action"] } == [
             "quick_record_started", "quick_record_stopped",
             "quick_record_started", "quick_record_stopped"
@@ -89,7 +91,8 @@ struct BlobTelemetryInstrumentationTests {
         #expect(normal.viewModel.recorderStatus == .listening)
         await hotkeys.release()
         await normal.waitForFirstCleanup()
-        #expect(normal.recording.stopCallCount == 1)
+        #expect(normal.recording.stopCallCount == 0)
+        #expect(normal.recording.discardCallCount == 1)
         #expect(normal.operations.first == "claim")
         assertQuickRecordOrder(normal.operations)
         withExtendedLifetime(launched.0) {}
@@ -125,13 +128,14 @@ struct BlobTelemetryInstrumentationTests {
         await startTask.value
         await rapid.waitForFirstCleanup()
         #expect(rapid.recording.startCallCount == 1)
-        #expect(rapid.recording.stopCallCount == 1)
+        #expect(rapid.recording.stopCallCount == 0)
+        #expect(rapid.recording.discardCallCount == 1)
         assertQuickRecordOrder(rapid.operations)
         withExtendedLifetime(launched.0) {}
     }
 
     private func assertQuickRecordOrder(_ operations: [String]) {
-        let expected = ["claim", "show", "get", "active", "get", "stop"]
+        let expected = ["claim", "show", "get", "active", "get", "discard"]
         var nextIndex = operations.startIndex
         for operation in expected {
             guard let index = operations[nextIndex...].firstIndex(of: operation) else {
@@ -164,7 +168,8 @@ struct BlobTelemetryInstrumentationTests {
             quickRecordEnd: fixture.end,
             quickRecordShowWindow: fixture.show,
             quickRecordViewModel: fixture.getViewModel,
-            quickRecordHideWindow: fixture.hide
+            quickRecordHideWindow: fixture.hide,
+            quickRecordDismissWindow: fixture.dismiss
         )
         delegate.applicationDidFinishLaunching(
             Notification(name: NSApplication.didFinishLaunchingNotification)
@@ -529,6 +534,11 @@ private final class QuickRecordFixture {
     func getViewModel() -> QuickRecordingViewModel? {
         operationRecorder.record("get")
         return viewModel
+    }
+
+    func dismiss() -> Bool {
+        operationRecorder.record("dismiss")
+        return true
     }
 
     func hide() {

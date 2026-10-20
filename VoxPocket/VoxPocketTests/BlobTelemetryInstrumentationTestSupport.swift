@@ -113,26 +113,67 @@ final class QuickRecordOperationRecorder: Sendable {
 }
 
 // Combine subjects provide the immutable publisher bridge; mutable counters are Mutex-protected.
-final class QuickRecordRecordingUseCase: RecordingUseCase, @unchecked Sendable {
+final class QuickRecordRecordingUseCase: QuickRecordingUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
     private let startError: Error?
     private let startGate: QuickRecordStartGate?
     private let operationRecorder: QuickRecordOperationRecorder
-    private let counts = Mutex((start: 0, stop: 0))
+    private let stopGate: QuickRecordStartGate?
+    private let stopError: Error?
+    private let onStop: (@Sendable () -> Void)?
+    private let counts = Mutex((start: 0, stop: 0, discard: 0))
+    private let appleTextOnStart: String?
+    private struct ReleaseState {
+        var id = UUID()
+        var eligible = false
+        var frozen: QuickRecordingReleaseSnapshot?
+    }
+    private let release = Mutex(ReleaseState())
 
     init(
         startError: Error?,
         startGate: QuickRecordStartGate?,
-        operationRecorder: QuickRecordOperationRecorder
+        operationRecorder: QuickRecordOperationRecorder,
+        stopGate: QuickRecordStartGate? = nil,
+        stopError: Error? = nil,
+        onStop: (@Sendable () -> Void)? = nil,
+        appleTextOnStart: String? = nil
     ) {
         self.startError = startError
         self.startGate = startGate
         self.operationRecorder = operationRecorder
+        self.stopGate = stopGate
+        self.stopError = stopError
+        self.onStop = onStop
+        self.appleTextOnStart = appleTextOnStart
     }
 
     var startCallCount: Int { counts.withLock { $0.start } }
     var stopCallCount: Int { counts.withLock { $0.stop } }
+    var discardCallCount: Int { counts.withLock { $0.discard } }
+    func prepareQuickRecording() throws { release.withLock { $0 = ReleaseState() } }
+    func recognizeApple(_ text: String) {
+        release.withLock {
+            if $0.frozen == nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { $0.eligible = true }
+        }
+    }
+    func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot {
+        release.withLock {
+            if let frozen = $0.frozen { return frozen }
+            let frozen = QuickRecordingReleaseSnapshot(sessionID: $0.id, hasRecognizedSpeech: $0.eligible)
+            $0.frozen = frozen
+            return frozen
+        }
+    }
+    func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        if snapshot.hasRecognizedSpeech { try await stopRecording(); return }
+        counts.withLock { $0.discard += 1 }
+        operationRecorder.record("discard")
+        if let stopGate { await stopGate.suspendStart() }
+        stateSubject.send(.idle)
+        if let stopError { throw stopError }
+    }
     var state: RecordingState { stateSubject.value }
     var statePublisher: AnyPublisher<RecordingState, Never> { stateSubject.eraseToAnyPublisher() }
     var audioLevelPublisher: AnyPublisher<Float, Never> { levelSubject.eraseToAnyPublisher() }
@@ -141,12 +182,16 @@ final class QuickRecordRecordingUseCase: RecordingUseCase, @unchecked Sendable {
         counts.withLock { $0.start += 1 }
         if let startGate { await startGate.suspendStart() }
         if let startError { throw startError }
+        if let appleTextOnStart { recognizeApple(appleTextOnStart) }
         stateSubject.send(.recording(duration: 0))
     }
 
     func stopRecording() async throws {
         counts.withLock { $0.stop += 1 }
         operationRecorder.record("stop")
+        if let stopGate { await stopGate.suspendStart() }
+        if let stopError { throw stopError }
+        onStop?()
         stateSubject.send(.idle)
     }
 
@@ -183,6 +228,12 @@ final class QuickRecordTranscriptionUseCase: TranscriptionUseCase, @unchecked Se
 
     func setLanguage(_ locale: Locale) {
         state.withLock { $0.language = locale }
+    }
+
+    func sendFinalText(_ text: String) {
+        finalResult.send(TranscriptionResult(
+            text: text, type: .final, confidence: nil, timestamp: Date(), locale: currentLanguage
+        ))
     }
 
     func commitCurrentTranscription() async throws {}

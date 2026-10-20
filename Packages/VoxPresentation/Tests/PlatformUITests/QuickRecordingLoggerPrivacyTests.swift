@@ -42,6 +42,7 @@ final class QuickRecordingLoggerPrivacyTests: XCTestCase {
         // 走完整快捷录音流水线:
         // start → 灌入 sentinel liveText → stop (触发 finalResult 分支及各 fallback 日志) → refinement 流入 sentinelRefined → completeWithText
         await viewModel.startRecording()
+        recording.recognizeApple(Self.sentinelTranscription)
         transcription.sendLiveText(Self.sentinelTranscription)
         transcription.sendFinalText(Self.sentinelTranscription)
         await viewModel.stopRecording()
@@ -51,6 +52,7 @@ final class QuickRecordingLoggerPrivacyTests: XCTestCase {
 
         // 至少要有一条 log 被记录, 否则说明未跑到关键路径, 测试会假绿。
         XCTAssertFalse(capture.entries.isEmpty, "no log entries captured — path did not execute")
+        XCTAssertEqual(clipboard.copiedText, Self.sentinelRefined + "。", "eligible completion must execute")
 
         // 断言哨兵短语从未出现在 message 或任何 context value 里。
         for entry in capture.entries {
@@ -132,7 +134,7 @@ private final class CapturingLogger: LokiKit.Logger {
 
 /// `@unchecked Sendable` justified: Combine bridging — all state is held in Combine subjects
 /// (`CurrentValueSubject`), which provide their own thread-safety.
-private final class FakeRecordingUseCaseP: RecordingUseCase, @unchecked Sendable {
+private final class FakeRecordingUseCaseP: QuickRecordingUseCase, @unchecked Sendable {
     private let stateSubject = CurrentValueSubject<RecordingState, Never>(.idle)
     private let levelSubject = CurrentValueSubject<Float, Never>(0)
 
@@ -140,6 +142,22 @@ private final class FakeRecordingUseCaseP: RecordingUseCase, @unchecked Sendable
     var statePublisher: AnyPublisher<RecordingState, Never> { stateSubject.eraseToAnyPublisher() }
     var audioLevelPublisher: AnyPublisher<Float, Never> { levelSubject.eraseToAnyPublisher() }
 
+    private let release = Mutex(QuickRecordingReleaseSnapshot(sessionID: UUID(), hasRecognizedSpeech: false))
+    func prepareQuickRecording() throws {
+        release.withLock { $0 = QuickRecordingReleaseSnapshot(sessionID: UUID(), hasRecognizedSpeech: false) }
+    }
+    func recognizeApple(_ text: String) {
+        release.withLock {
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                $0 = QuickRecordingReleaseSnapshot(sessionID: $0.sessionID, hasRecognizedSpeech: true)
+            }
+        }
+    }
+    func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot { release.withLock { $0 } }
+    func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        if snapshot.hasRecognizedSpeech { try await stopRecording() }
+        else { stateSubject.send(.idle) }
+    }
     func startRecording() async throws { stateSubject.send(.recording(duration: 0)) }
     func stopRecording() async throws { stateSubject.send(.idle) }
     func pauseRecording() { stateSubject.send(.paused(duration: 0)) }

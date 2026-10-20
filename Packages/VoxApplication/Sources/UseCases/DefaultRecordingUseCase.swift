@@ -3,11 +3,12 @@ import Combine
 import LokiKit
 import TranscriptionKit
 import CoreModels
+import Synchronization
 
 /// 录音用例默认实现
 ///
 /// 桥接 `TranscriptionCoordinator` 到 `RecordingUseCase` 协议。
-public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendable {
+public final class DefaultRecordingUseCase: QuickRecordingUseCase, @unchecked Sendable {
 
     private let primaryCoordinator: TranscriptionCoordinator
     private let fallbackCoordinator: (any TranscriptionCoordinator)?
@@ -20,6 +21,12 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     private var recordingStartTime: Date?
     private let activeSelectionLock = NSLock()
     private var activeSelection: ActiveSelection = .primary
+    private struct QuickSession {
+        let coordinator: any TranscriptionCoordinator
+        let control: any QuickRecordingReleaseControlling
+        var snapshot: QuickRecordingReleaseSnapshot?
+    }
+    private let quickSession = Mutex<QuickSession?>(nil)
 
     public var state: RecordingState { stateSubject.value }
 
@@ -49,7 +56,7 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
     }
 
     public func startRecording() async throws {
-        let coordinator = try resolveCoordinatorForStart()
+        let coordinator = try quickSession.withLock { $0?.coordinator } ?? resolveCoordinatorForStart()
         let language = self.language
         try await operationGate.withExclusiveAccess { [weak self] in
             guard let self else { return }
@@ -59,17 +66,55 @@ public final class DefaultRecordingUseCase: RecordingUseCase, @unchecked Sendabl
         }
     }
 
+    public func prepareQuickRecording() throws {
+        let coordinator = try resolveCoordinatorForStart()
+        guard let control = coordinator as? any QuickRecordingReleaseControlling else {
+            throw VoxError.transcriptionFailed(reason: "Quick recording release control unavailable")
+        }
+        try control.prepareQuickRecording()
+        setActiveSelection(selection(for: coordinator))
+        quickSession.withLock { $0 = QuickSession(coordinator: coordinator, control: control) }
+    }
+
+    public func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot {
+        try quickSession.withLock { session in
+            guard var current = session else { throw VoxError.transcriptionFailed(reason: "Quick recording session unavailable") }
+            if let snapshot = current.snapshot { return snapshot }
+            let snapshot = try current.control.freezeQuickRecordingRelease()
+            current.snapshot = snapshot
+            session = current
+            return snapshot
+        }
+    }
+
+    public func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        guard let current = quickSession.withLock({ $0 }), current.snapshot?.sessionID == snapshot.sessionID,
+              current.snapshot?.hasRecognizedSpeech == true || !snapshot.hasRecognizedSpeech else { return }
+        try await operationGate.withExclusiveAccess {
+            guard self.quickSession.withLock({ $0?.snapshot?.sessionID == snapshot.sessionID }) else { return }
+            defer {
+                self.quickSession.withLock { if $0?.snapshot?.sessionID == snapshot.sessionID { $0 = nil } }
+                self.recordingStartTime = nil
+            }
+            try await current.control.completeQuickRecordingRelease(snapshot)
+            if snapshot.hasRecognizedSpeech { self.trackRecordingStopped() }
+        }
+    }
+
     public func stopRecording() async throws {
         let coordinator = currentCoordinator()
         await operationGate.withExclusiveAccess { [weak self] in
             await coordinator.stop()
             guard let self else { return }
-            let duration = self.recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
-            self.recordingStartTime = nil
-            self.telemetry.track(name: VoxPocketTelemetryEventName.recordingStopped.rawValue, properties: [
-                "duration_s": String(format: "%.1f", duration)
-            ])
+            self.trackRecordingStopped()
         }
+    }
+
+    private func trackRecordingStopped() {
+        let duration = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
+        recordingStartTime = nil
+        telemetry.track(name: VoxPocketTelemetryEventName.recordingStopped.rawValue,
+                        properties: ["duration_s": String(format: "%.1f", duration)])
     }
 
     public func pauseRecording() {

@@ -15,6 +15,7 @@ import UIShared
 import UseCases
 import Preferences
 import LokiKit
+import TranscriptionKit
 
 /// macOS 应用代理
 ///
@@ -45,6 +46,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickRecordShowWindow: (@MainActor @Sendable () -> Void)?
     private let quickRecordViewModel: (@MainActor @Sendable () -> QuickRecordingViewModel?)?
     private let quickRecordHideWindow: (@MainActor @Sendable () -> Void)?
+    private let quickRecordDismissWindow: (@MainActor @Sendable () -> Bool)?
+    private let quickRecordSaveSession: (@MainActor @Sendable (String, String) async throws -> Void)?
+    private let quickRecordTrack: (@MainActor @Sendable (String, [String: String]) -> Void)?
+    private var quickRecordingSession: QuickRecordingSession?
+    private struct QuickRecordingSession {
+        let id: UUID
+        let viewModel: QuickRecordingViewModel
+        var released = false
+        var completing = false
+    }
     private var startupTask: Task<Void, Never>?
     private var resignActiveTask: Task<Void, Never>?
     private let launchStartedAt = ContinuousClock.now
@@ -67,6 +78,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         quickRecordShowWindow = nil
         quickRecordViewModel = nil
         quickRecordHideWindow = nil
+        quickRecordDismissWindow = nil
+        quickRecordSaveSession = nil
+        quickRecordTrack = nil
         super.init()
     }
 
@@ -83,7 +97,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         quickRecordEnd: (@MainActor @Sendable () -> Void)? = nil,
         quickRecordShowWindow: (@MainActor @Sendable () -> Void)? = nil,
         quickRecordViewModel: (@MainActor @Sendable () -> QuickRecordingViewModel?)? = nil,
-        quickRecordHideWindow: (@MainActor @Sendable () -> Void)? = nil
+        quickRecordHideWindow: (@MainActor @Sendable () -> Void)? = nil,
+        quickRecordDismissWindow: (@MainActor @Sendable () -> Bool)? = nil,
+        quickRecordSaveSession: (@MainActor @Sendable (String, String) async throws -> Void)? = nil,
+        quickRecordTrack: (@MainActor @Sendable (String, [String: String]) -> Void)? = nil
     ) {
         self.productTelemetryNotificationCenter = productTelemetryNotificationCenter
         self.startup = startup
@@ -98,6 +115,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         self.quickRecordShowWindow = quickRecordShowWindow
         self.quickRecordViewModel = quickRecordViewModel
         self.quickRecordHideWindow = quickRecordHideWindow
+        self.quickRecordDismissWindow = quickRecordDismissWindow
+        self.quickRecordSaveSession = quickRecordSaveSession
+        self.quickRecordTrack = quickRecordTrack
         super.init()
     }
 
@@ -300,90 +320,164 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // QUICK_RECORD_HANDLERS_BEGIN
     /// 处理快速录音开始（按下触发）
     private func handleQuickRecordStart() async {
         quickRecordStartCount += 1
         logger.log(.debug, "Quick record start triggered", context: ["call_count": quickRecordStartCount])
-        #if DEBUG
-        let claim = quickRecordTryStart ?? { self.serviceContainer.tryStartRecording(source: $0) }
-        let show = quickRecordShowWindow ?? { self.windowManager.showWindow(.quickRecording) }
-        let model = quickRecordViewModel ?? { self.windowManager.getQuickRecordingViewModel() }
-        let end = quickRecordEnd ?? { [weak self] in self?.serviceContainer.endRecording() }
-        let hide = quickRecordHideWindow ?? { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
-        #else
-        let claim = { self.serviceContainer.tryStartRecording(source: $0) }
-        let show = { self.windowManager.showWindow(.quickRecording) }
-        let model = { self.windowManager.getQuickRecordingViewModel() }
-        let end = { [weak self] in self?.serviceContainer.endRecording() }
-        let hide = { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
-        #endif
-        guard claim(.quickRecording) else { return }
-        show()
-        guard let viewModel = model() else { return }
-        viewModel.onComplete = { [weak self, weak viewModel] finalText in
-            Task { @MainActor in
-                let raw = viewModel?.rawTranscription ?? finalText
-                await self?.serviceContainer.initializePersistence()
-                try? await self?.serviceContainer.sessionUseCase.saveCompletedSession(
-                    title: nil, rawText: raw, refinedText: finalText
-                )
-                try? await Task.sleep(for: .seconds(1))
-                hide(); end()
-            }
+        guard claimQuickRecording() else { return }
+        showQuickRecordingWindow()
+        guard let viewModel = currentQuickRecordingViewModel() else {
+            closeQuickRecordingWindow()
+            endQuickRecording()
+            return
         }
-        viewModel.onNoResult = { Task { @MainActor in hide(); end() } }
+        let session = QuickRecordingSession(id: UUID(), viewModel: viewModel)
+        quickRecordingSession = session
+        installQuickRecordingCallbacks(session)
         await viewModel.startRecording()
-        #if canImport(LokiKit)
-        guard viewModel.recorderStatus != .error else { return }
-        ProductTelemetryNotificationBoundary.postQuickRecordStarted(
-            to: productTelemetryNotificationCenter
-        )
-        if viewModel.recorderStatus != .listening {
-            ProductTelemetryNotificationBoundary.postQuickRecordStopped(
-                to: productTelemetryNotificationCenter
-            )
+        if viewModel.recorderStatus == .error {
+            finishQuickRecording(session.id)
+            return
         }
-        #endif
+        ProductTelemetryNotificationBoundary.postQuickRecordStarted(to: productTelemetryNotificationCenter)
+        if viewModel.recorderStatus != .listening {
+            ProductTelemetryNotificationBoundary.postQuickRecordStopped(to: productTelemetryNotificationCenter)
+        }
     }
 
     /// 处理快速录音结束（释放触发）
     private func handleQuickRecordStop() async {
+        let releasedAt = ContinuousClock.now
         quickRecordStopCount += 1
         logger.log(.debug, "Quick record stop triggered", context: ["call_count": quickRecordStopCount])
-        #if DEBUG
-        let source = quickRecordActiveSource ?? { self.serviceContainer.activeRecordingSource }
-        let model = quickRecordViewModel ?? { self.windowManager.getQuickRecordingViewModel() }
-        let end = quickRecordEnd ?? { [weak self] in self?.serviceContainer.endRecording() }
-        let hide = quickRecordHideWindow ?? { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
-        #else
-        let source = { self.serviceContainer.activeRecordingSource }
-        let model = { self.windowManager.getQuickRecordingViewModel() }
-        let end = { [weak self] in self?.serviceContainer.endRecording() }
-        let hide = { [weak self] in self?.windowManager.hideWindow(.quickRecording) }
-        #endif
-        guard source() == .quickRecording else {
-            logger.debug("Recording source mismatch on quick record stop")
+        guard activeQuickRecordingSource() == .quickRecording,
+              var session = quickRecordingSession, !session.released else { return }
+        guard let viewModel = currentQuickRecordingViewModel(), viewModel === session.viewModel else {
+            finishQuickRecording(session.id)
             return
         }
-        guard let viewModel = model() else { end(); return }
+        session.released = true
+        quickRecordingSession = session
+        trackQuickRecording(.quickRecordFnReleased, sessionID: session.id)
+        if dismissQuickRecordingWindow() {
+            let elapsed = releasedAt.duration(to: .now).components
+            let milliseconds = max(0, Double(elapsed.seconds) * 1_000
+                + Double(elapsed.attoseconds) / 1_000_000_000_000_000)
+            trackQuickRecording(.quickRecordPanelClosed, sessionID: session.id,
+                                properties: ["duration_ms": String(milliseconds)])
+        }
         let stoppedDuringStartup = viewModel.isStartingRecording
         let wasListening = viewModel.recorderStatus == .listening
         await viewModel.stopRecording()
-        guard !stoppedDuringStartup else { return }
-        switch viewModel.recorderStatus {
-        case .idle: end(); hide()
-        case .error: end()
-        case .listening, .transcribing, .refining, .done: break
+        if !stoppedDuringStartup, viewModel.recorderStatus == .idle || viewModel.recorderStatus == .error {
+            finishQuickRecording(session.id)
         }
-        #if canImport(LokiKit)
         if wasListening, viewModel.recorderStatus != .listening {
-            ProductTelemetryNotificationBoundary.postQuickRecordStopped(
-                to: productTelemetryNotificationCenter
-            )
+            ProductTelemetryNotificationBoundary.postQuickRecordStopped(to: productTelemetryNotificationCenter)
         }
-        #endif
     }
 
-}
+    private func installQuickRecordingCallbacks(_ session: QuickRecordingSession) {
+        let sessionID = session.id
+        session.viewModel.onComplete = { [weak self, weak viewModel = session.viewModel] finalText in
+            guard let self, var current = self.quickRecordingSession,
+                  current.id == sessionID, !current.completing else { return }
+            current.completing = true
+            self.quickRecordingSession = current
+            let rawText = viewModel?.rawTranscription ?? finalText
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                defer { self.finishQuickRecording(sessionID) }
+                try? await self.saveQuickRecording(rawText: rawText, finalText: finalText)
+            }
+        }
+        session.viewModel.onNoResult = { [weak self] in
+            guard let self, let current = self.quickRecordingSession,
+                  current.id == sessionID, !current.completing else { return }
+            self.finishQuickRecording(sessionID)
+        }
+    }
 
+    private func finishQuickRecording(_ sessionID: UUID) {
+        guard let session = quickRecordingSession, session.id == sessionID else { return }
+        quickRecordingSession = nil
+        session.viewModel.onComplete = nil
+        session.viewModel.onNoResult = nil
+        closeQuickRecordingWindow()
+        endQuickRecording()
+    }
+
+    private func claimQuickRecording() -> Bool {
+        #if DEBUG
+        if let quickRecordTryStart { return quickRecordTryStart(.quickRecording) }
+        #endif
+        return serviceContainer.tryStartRecording(source: .quickRecording)
+    }
+
+    private func activeQuickRecordingSource() -> RecordingSource? {
+        #if DEBUG
+        if let quickRecordActiveSource { return quickRecordActiveSource() }
+        #endif
+        return serviceContainer.activeRecordingSource
+    }
+
+    private func currentQuickRecordingViewModel() -> QuickRecordingViewModel? {
+        #if DEBUG
+        if let quickRecordViewModel { return quickRecordViewModel() }
+        #endif
+        return windowManager.getQuickRecordingViewModel()
+    }
+
+    private func showQuickRecordingWindow() {
+        #if DEBUG
+        if let quickRecordShowWindow { quickRecordShowWindow(); return }
+        #endif
+        windowManager.showWindow(.quickRecording)
+    }
+
+    private func dismissQuickRecordingWindow() -> Bool {
+        #if DEBUG
+        if let quickRecordDismissWindow { return quickRecordDismissWindow() }
+        #endif
+        return windowManager.dismissQuickRecordingWindow()
+    }
+
+    private func closeQuickRecordingWindow() {
+        #if DEBUG
+        if let quickRecordHideWindow { quickRecordHideWindow(); return }
+        #endif
+        windowManager.hideWindow(.quickRecording)
+    }
+
+    private func endQuickRecording() {
+        #if DEBUG
+        if let quickRecordEnd { quickRecordEnd(); return }
+        #endif
+        serviceContainer.endRecording()
+    }
+
+    private func saveQuickRecording(rawText: String, finalText: String) async throws {
+        #if DEBUG
+        if let quickRecordSaveSession { try await quickRecordSaveSession(rawText, finalText); return }
+        #endif
+        await serviceContainer.initializePersistence()
+        try await serviceContainer.sessionUseCase.saveCompletedSession(
+            title: nil, rawText: rawText, refinedText: finalText
+        )
+    }
+
+    private func trackQuickRecording(
+        _ event: VoxPocketTelemetryEventName,
+        sessionID: UUID,
+        properties: [String: String] = [:]
+    ) {
+        let metrics = properties.merging(["source": "quick", "session_id": sessionID.uuidString]) { _, fixed in fixed }
+        #if DEBUG
+        if let quickRecordTrack { quickRecordTrack(event.rawValue, metrics); return }
+        #endif
+        serviceContainer.telemetryService.track(name: event.rawValue, properties: metrics)
+    }
+    // QUICK_RECORD_HANDLERS_END
+}
 #endif

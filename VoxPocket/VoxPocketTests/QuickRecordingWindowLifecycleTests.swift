@@ -1,7 +1,9 @@
 #if os(macOS)
 import Testing
 import AppKit
+import Dispatch
 import PlatformUI
+import UIShared
 @testable import VoxPocket
 
 @Suite(.serialized)
@@ -15,6 +17,34 @@ struct QuickRecordingWindowLifecycleTests {
         #expect(windowManager.getQuickRecordingViewModel() == nil)
         #expect(windowManager.windowVisibility[.quickRecording] == false)
         #expect(!NSApp.windows.contains { $0 is QuickRecordingPanel && $0.isVisible })
+    }
+
+    @MainActor
+    @Test func releaseDismissalKeepsListeningModelUntilTerminalClose() async {
+        let manager = WindowManager.shared
+        manager.closeWindow(.quickRecording)
+        defer { manager.closeWindow(.quickRecording) }
+        manager.showWindow(.quickRecording)
+        let model = requireNotNil(manager.getQuickRecordingViewModel())
+        // 先排空初始化时 receive(on: .main) 入队的 idle 状态。
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        model.recorderStatus = .listening
+
+        #expect(manager.dismissQuickRecordingWindow())
+        #expect(manager.windowVisibility[.quickRecording] == false)
+        #expect(!NSApp.windows.contains { $0 is QuickRecordingPanel && $0.isVisible })
+        #expect(manager.getQuickRecordingViewModel() === model)
+        for _ in 0..<100 { await Task.yield() }
+        #expect(model.recorderStatus == .listening)
+        #expect(!manager.dismissQuickRecordingWindow())
+
+        model.recorderStatus = .idle
+        manager.closeWindow(.quickRecording)
+        #expect(manager.getQuickRecordingViewModel() == nil)
+        manager.showWindow(.quickRecording)
+        #expect(manager.getQuickRecordingViewModel() !== model)
     }
 
     @MainActor
