@@ -18,6 +18,7 @@ final class FakeAppDelegate {
     let quickRecordDismissWindow: (@MainActor @Sendable () -> Bool)? = nil
     let quickRecordSaveSession: (@MainActor @Sendable (String, String) async throws -> Void)? = nil
     let quickRecordTrack: (@MainActor @Sendable (String, [String: String]) -> Void)? = nil
+    var quickRecordRecognitionTimeout = QuickRecordingReleaseLifecycle.recognitionTimeout
     private var quickRecordingSession: QuickRecordingSession?
     // PRODUCTION_SESSION
     func press() async { await handleQuickRecordStart() }
@@ -25,6 +26,7 @@ final class FakeAppDelegate {
     // PRODUCTION_HANDLERS
 }
 
+// PRODUCTION_RELEASE_LIFECYCLE
 // PRODUCTION_EVENT_NAMES
 enum FakeWindowType: String { case quickRecording, fullPanel }
 typealias RecordingSource = FakeWindowType
@@ -129,6 +131,8 @@ typealias QuickRecordingViewModel = FakeQuickRecordingViewModel
 final class FakeQuickRecordingViewModel {
     var onComplete: ((String) -> Void)?
     var onNoResult: (() -> Void)?
+    var onRecognitionEnded: (() -> Void)?
+    private var frozen: Bool?
     var rawTranscription = ""
     var recorderStatus = FakeRecorderStatus.idle
     var isStartingRecording = false
@@ -146,29 +150,36 @@ final class FakeQuickRecordingViewModel {
     var callbacksReadyAtStart = false
 
     func startRecording() async {
-        callbacksReadyAtStart = onComplete != nil && onNoResult != nil
+        callbacksReadyAtStart = onComplete != nil && onNoResult != nil && onRecognitionEnded != nil
         isStartingRecording = true
         await withCheckedContinuation { startContinuation = $0 }
         isStartingRecording = false
-        if startFails { recorderStatus = .error; return }
+        if startFails { recorderStatus = .error; onRecognitionEnded?(); return }
         recorderStatus = .listening
         if shouldStopAfterStart { await stopRecording() }
     }
     func finishStarting() { startContinuation?.resume(); startContinuation = nil }
+    func prepareQuickRecordingRelease() -> Bool {
+        if let frozen { return frozen }
+        frozen = hasResult
+        return hasResult
+    }
     func stopRecording() async {
+        _ = prepareQuickRecordingRelease()
         if isStartingRecording { shouldStopAfterStart = true; return }
         guard recorderStatus == .listening else { return }
         stopCount += 1
         recorderStatus = .transcribing
         if let stopGate { await stopGate.wait() }
-        if stopFails { recorderStatus = .error; return }
-        guard hasResult else {
+        if stopFails { recorderStatus = .error; onRecognitionEnded?(); return }
+        guard frozen == true else {
             recorderStatus = .idle
             noResultCount += 1
             onNoResult?()
             return
         }
         rawTranscription = "synthetic raw"
+        onRecognitionEnded?()
         recorderStatus = .refining
         Task { await self.finishRefinement() }
     }
@@ -196,6 +207,15 @@ struct QuickRecordReleaseProbe {
         throw ProbeFailure(message: "Timed out waiting for deterministic boundary")
     }
     @MainActor
+    static func waitForPanelHidden(_ delegate: FakeAppDelegate, context: String) async throws {
+        // 观察真实 hide；独立计时任务不保证先于另一个 sleep 的恢复执行。
+        let observationDeadline = ContinuousClock.now.advanced(by: .seconds(1))
+        while delegate.windowManager.isVisible {
+            try require(ContinuousClock.now < observationDeadline, "\(context): Timed out observing watchdog hide")
+            await Task.yield()
+        }
+    }
+    @MainActor
     static func start(_ delegate: FakeAppDelegate) async throws -> FakeQuickRecordingViewModel {
         let task = Task { await delegate.press() }
         try await waitUntil { delegate.windowManager.getQuickRecordingViewModel()?.startContinuation != nil }
@@ -205,8 +225,8 @@ struct QuickRecordReleaseProbe {
         return model
     }
     @MainActor
-    static func assertHiddenAndBusy(_ delegate: FakeAppDelegate) throws {
-        try require(!delegate.windowManager.isVisible, "Panel must be hidden before background boundary")
+    static func assertHiddenAndBusy(_ delegate: FakeAppDelegate, context: String = #function) throws {
+        try require(!delegate.windowManager.isVisible, "\(context): Panel must be hidden before background boundary")
         try require(delegate.serviceContainer.activeRecordingSource == .quickRecording,
                     "Background work must retain recording ownership")
         try require(delegate.windowManager.getQuickRecordingViewModel() != nil,
@@ -263,10 +283,11 @@ struct QuickRecordReleaseProbe {
         delegate.serviceContainer.sessionUseCase.gate = save
         delegate.serviceContainer.sessionUseCase.shouldFail = saveFails
         let oldCompletion = model.onComplete, oldNoResult = model.onNoResult
+        let oldRecognition = model.onRecognitionEnded
         let release = Task { await delegate.release() }
         try await waitUntil { stop.entered }
-        try assertHiddenAndBusy(delegate)
-        try assertEvents(delegate, count: 1)
+        try require(delegate.windowManager.isVisible, "Eligible panel remains visible while recognition is suspended")
+        try require(delegate.serviceContainer.telemetryService.events.count == 1, "Only release before recognition")
         await delegate.release()
         await delegate.press()
         try require(delegate.windowManager.showCount == 1, "Reject overlap while background is active")
@@ -292,11 +313,48 @@ struct QuickRecordReleaseProbe {
         try require(delegate.windowManager.closeCount == 1 && delegate.serviceContainer.endCount == 1,
                     "Terminal cleanup exactly once, including save failure")
         _ = try await start(delegate)
-        oldCompletion?("stale completion"); oldNoResult?()
+        oldCompletion?("stale completion"); oldNoResult?(); oldRecognition?()
         try require(delegate.windowManager.isVisible, "Old callbacks must not close next session")
         await delegate.release()
         try assertClean(delegate)
         try assertEvents(delegate, count: 2)
+    }
+    @MainActor
+    static func exerciseWatchdog(duringStart: Bool) async throws {
+        let delegate = FakeAppDelegate()
+        delegate.quickRecordRecognitionTimeout = .milliseconds(10)
+        let starting = Task { await delegate.press() }
+        try await waitUntil { delegate.windowManager.getQuickRecordingViewModel()?.startContinuation != nil }
+        let model = delegate.windowManager.getQuickRecordingViewModel()!
+        model.hasResult = true
+        let stop = ProbeGate(), refine = ProbeGate()
+        model.stopGate = stop; model.refinementGate = refine
+        if !duringStart { model.finishStarting(); await starting.value }
+        let release = Task { await delegate.release() }
+        try await waitUntil { model.shouldStopAfterStart || stop.entered }
+        try require(delegate.windowManager.isVisible, "Eligible panel stays visible until recognition or deadline")
+        let context = "watchdog(duringStart: \(duringStart))"
+        try await waitForPanelHidden(delegate, context: context)
+        try require(!stop.released && !refine.entered && !refine.released,
+                    "\(context): Recognition and refinement must remain suspended until hide")
+        try require(!duringStart || model.startContinuation != nil,
+                    "\(context): Startup must remain suspended until hide")
+        try require(model.pasteCount == 0 && delegate.serviceContainer.sessionUseCase.saves.isEmpty,
+                    "\(context): No output may advance while observing hide")
+        try assertHiddenAndBusy(delegate, context: context)
+        try assertEvents(delegate, count: 1)
+        let duration = delegate.serviceContainer.telemetryService.events[1].properties["duration_ms"] ?? ""
+        try require((Double(duration) ?? -1) >= 10, "Watchdog duration includes recognition wait")
+        if duringStart { model.finishStarting(); try await waitUntil { stop.entered } }
+        stop.open()
+        await starting.value; await release.value
+        try await waitUntil { refine.entered }
+        try assertHiddenAndBusy(delegate)
+        refine.open()
+        try await waitUntil { delegate.serviceContainer.activeRecordingSource == nil }
+        try assertClean(delegate)
+        try require(model.pasteCount == 1, "Watchdog does not cancel background output")
+        try assertEvents(delegate, count: 1)
     }
     @MainActor
     static func exerciseErrors() async throws {
@@ -353,9 +411,12 @@ struct QuickRecordReleaseProbe {
         print("PASS: ordinary empty recording still dismisses")
         try assertEvents(delegate, count: 3)
         try await exerciseBackgroundCompletion(saveFails: false)
-        print("PASS: suspended stop, refinement, paste and save stay hidden; outputs and ownership preserved")
+        print("PASS: eligible waits for recognition; refinement, paste and save stay hidden; outputs and ownership preserved")
         try await exerciseBackgroundCompletion(saveFails: true)
         print("PASS: save failure cleans once; stale callbacks cannot close next recording")
+        try await exerciseWatchdog(duringStart: true)
+        try await exerciseWatchdog(duringStart: false)
+        print("PASS: independent watchdog hides hung startup/provider; ownership and later output retained")
         try await exerciseErrors()
         print("PASS: startup and stop errors hide, release ownership and permit retry")
         try await exerciseRejectedAndMissing()
