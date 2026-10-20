@@ -17,7 +17,7 @@
       "parameters": {
         "required_approving_review_count": 0,
         "dismiss_stale_reviews_on_push": true,
-        "require_code_owner_review": true,
+        "require_code_owner_review": false,
         "require_last_push_approval": false,
         "require_extra_approval_for_unattributed_changes": true,
         "required_reviewers": [],

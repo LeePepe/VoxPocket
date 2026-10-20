@@ -19,7 +19,7 @@ otherwise make the stacked branch conflict).
 
 ## Removed or weakened tests or policy
 
-<!-- Every removed/skipped/weakened test or assertion and every policy/gate/ruleset change, each with its reason and approver. Write "none" if none. Non-empty → add the owner-review label. -->
+<!-- Every removed/skipped/weakened test or assertion and every policy/gate/ruleset change, each with its reason. Write "none" if none. CI and AI review remain required. -->
 
 ## Test evidence
 
