@@ -93,7 +93,7 @@ class TestFlightScheduleTests(unittest.TestCase):
         force = self.triggers.split("      force:\n", 1)[1]
         self.assertIn("        type: boolean", force)
         self.assertIn("        default: false", force)
-        self.assertIn('if [ "$FORCE" = "true" ] || [ "$LATEST" != "$RELEASED" ]; then', self.release)
+        self.assertIn('if [ "${FORCE:-false}" = "true" ] || [ "$LATEST" != "$RELEASED" ]; then', self.release)
         self.assertIn("steps.gate.outputs.release == 'true'", self.release)
 
     def test_release_still_uses_main_without_interrupting_uploads(self):
@@ -122,7 +122,7 @@ class TestFlightScheduleTests(unittest.TestCase):
         self.assertIn("        if: ${{ false }}", self.step("fastlane iOS beta"))
         self.assertIn("run: fastlane mac beta", self.step("fastlane macOS beta"))
 
-    def run_gate(self, event, marker, force=False, platform="macos"):
+    def run_gate(self, event, marker, force=False, platform="macos", omit_force=False):
         context = self.context(event, force=force, platform=platform)
         self.assertTrue(expression_value(self.guard, context))
         gate = self.step("Decide whether to release")
@@ -134,6 +134,8 @@ class TestFlightScheduleTests(unittest.TestCase):
             expression, = re.findall(r"^          " + key + r": \$\{\{ (.+) \}\}$", gate, re.M)
             result = expression_value(expression, context)
             environment[key] = str(result).lower() if isinstance(result, bool) else result
+        if omit_force:
+            environment.pop("FORCE", None)
         with tempfile.TemporaryDirectory(prefix="example-tf-gate-") as directory:
             def git(*args):
                 return subprocess.run(["git", *args], cwd=directory, env=environment,
@@ -174,6 +176,14 @@ class TestFlightScheduleTests(unittest.TestCase):
                 result, outputs, candidate = self.run_gate(event, "same", force=True)
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertEqual({"latest": candidate, "release": expected}, outputs)
+
+    def test_actual_gate_defaults_missing_force_to_false(self):
+        for event in ("schedule", "workflow_dispatch"):
+            for marker, expected in (("same", "false"), ("older", "true")):
+                with self.subTest(event=event, marker=marker):
+                    result, outputs, candidate = self.run_gate(event, marker, force=True, omit_force=True)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual({"latest": candidate, "release": expected}, outputs)
 
     def test_actual_gate_defaults_schedule_to_macos_and_rejects_ios(self):
         result, outputs, candidate = self.run_gate("schedule", "older", platform=None)

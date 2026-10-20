@@ -70,8 +70,8 @@ jobs:
           LATEST="$(git rev-parse HEAD)"
           RELEASED="$(git rev-parse -q --verify refs/tags/testflight/macos-last-released || echo none)"
           echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
-          echo "HEAD=$LATEST  last-released=$RELEASED  force=$FORCE"
-          if [ "$FORCE" = "true" ] || [ "$LATEST" != "$RELEASED" ]; then
+          echo "HEAD=$LATEST  last-released=$RELEASED  force=${FORCE:-false}"
+          if [ "${FORCE:-false}" = "true" ] || [ "$LATEST" != "$RELEASED" ]; then
             echo "release=true" >> "$GITHUB_OUTPUT"
             echo "→ 有新提交（或 force）：将 build + 上传"
           else
