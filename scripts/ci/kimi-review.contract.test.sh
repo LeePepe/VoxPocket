@@ -60,9 +60,9 @@ if [ -f "$ROOT/scripts/rulesets/main-protection.json" ]; then
       | .parameters.required_status_checks[].context' "$ROOT/scripts/rulesets/main-protection.json" | sort)"
     [ -n "$agents_checks" ] && [ "$agents_checks" = "$mirror_checks" ] || {
         echo "AGENTS.md required checks differ from scripts/rulesets/main-protection.json" >&2; exit 1; }
-    # CODEOWNERS gates important paths (G): code-owner review on, no extra approvals.
+    # Code-owner review is disabled, with no approving reviews required.
     jq -e '.rules[]? | select(.type=="pull_request") | .parameters
-      | select(.require_code_owner_review == true and .required_approving_review_count == 0)' \
+      | select(.require_code_owner_review == false and .required_approving_review_count == 0)' \
       "$ROOT/scripts/rulesets/main-protection.json" >/dev/null
 fi
 

@@ -34,8 +34,8 @@ a root cause elsewhere is a new task.
 
 ## Protocol
 
-Follow `LeePepe/shared-ci@88c09b3f68ceea82a4ca979c689e3dc50266ee10/ai/agent-protocol.md`
-(https://github.com/LeePepe/shared-ci/blob/88c09b3f68ceea82a4ca979c689e3dc50266ee10/ai/agent-protocol.md).
+Follow `LeePepe/shared-ci@46c88fbae98b03dc6cf2e23c2e5a19c48ff68fe4/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/46c88fbae98b03dc6cf2e23c2e5a19c48ff68fe4/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
 Plan-Review Loop (mandatory for any implementation plan, spec or plan change; a test-only
@@ -83,7 +83,7 @@ Merging to `main` requires (must match the live ruleset `main protection`, mirro
 - `App target`
 - `Lint & policy`
 
-The ruleset requires CODEOWNERS review (0 extra approvals), dismisses stale reviews on push,
+The ruleset requires no code-owner review or approving reviews, dismisses stale reviews on push,
 and requires an up-to-date branch (`strict`, Owner decision 2026-10-15), so PR CI tests exactly
 what lands on `main`; after merge is CD. `quality / aggregate`
 fails unless every lane passed on the PR head SHA (and the PR body is complete), and stale
@@ -119,8 +119,8 @@ The constitution's 2026-10-16 `loki02v1` amendment records the sole approved
 repository-contract deviation; it creates no broader exception.
 
 ## Dependencies
-These are the current pins; they change only through Owner-reviewed PRs.
-- `shared-ci` `88c09b3f68ceea82a4ca979c689e3dc50266ee10` — https://github.com/LeePepe/shared-ci/blob/88c09b3f68ceea82a4ca979c689e3dc50266ee10/ai/
+These are the current pins; changes require CI and AI review on the PR head.
+- `shared-ci` `46c88fbae98b03dc6cf2e23c2e5a19c48ff68fe4` — https://github.com/LeePepe/shared-ci/blob/46c88fbae98b03dc6cf2e23c2e5a19c48ff68fe4/ai/
 - LokiKit from LeePepe/shared-telemetry exact `0.2.0` (annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` → commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`), exact-version selectors in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag integrity guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.2.0/ai/
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
@@ -128,13 +128,11 @@ These are the current pins; they change only through Owner-reviewed PRs.
 
 - One task → one branch + worktree → one PR using `.github/pull_request_template.md`.
 - Done = required checks green on the PR head SHA; a new push invalidates old evidence.
-- PR Manager merges with the GitHub App identity once required checks and approvals pass;
-  no GITHUB_TOKEN auto-merge. CODEOWNERS paths (`.github/**`,
-  policy/schemas/gates, AGENTS.md, constitution, dependency pins) need Owner approval, which
-  the ruleset enforces (code-owner review required); add the `owner-review` label to them.
-  AI review does not block these changes for missing approval evidence: approval is enforced
-  by the ruleset, not by the reviewer. It still reviews their content (e.g. pins stay full SHAs
-  and consistent with the protocol pointer).
+- Enable auto-merge when a non-Draft PR opens. PR Manager follows it through merged-state
+  readback with the GitHub App identity once required checks and AI review pass on the exact
+  head; no GITHUB_TOKEN auto-merge. Owner or code-owner approval is not a merge prerequisite.
+  Important paths (`.github/**`, policy/schemas/gates, AGENTS.md, constitution, dependency pins)
+  still require content review (e.g. pins stay full SHAs and consistent with the protocol pointer).
 - Code tasks report the commit, verification and PR. For an authorized TestFlight run,
   report version/build number, run link and distribution warnings. Keep existing local
   artifacts; do not clean them up automatically.
