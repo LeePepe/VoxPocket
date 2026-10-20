@@ -1,7 +1,7 @@
 name: testflight
 
-# 仅通过 workflow_dispatch 手动构建 main 并上传 macOS TestFlight；iOS TestFlight 需 Owner 另行授权。
-# 自动发布已暂停。force=true 可忽略“无新提交”检查；发布标记仍记录成功版本。
+# 每 12 小时构建 main 并上传 macOS TestFlight，保留 workflow_dispatch 手动回退。
+# 仅手动 force=true 可忽略“无新提交”检查；iOS TestFlight 需 Owner 另行授权。
 #
 # 跑在 self-hosted runner（macmini-local，与 VitalStride 同一台物理机）：Apple
 # Distribution 证书已在登录钥匙串。签名走 project.yml 的 manual + App Store profile。
@@ -10,6 +10,8 @@ name: testflight
 # push tag 不触发 ci.yml（其 push 过滤是 branches:[main]），无副作用。
 
 on:
+  schedule:
+    - cron: '17 5,17 * * *' # Asia/Shanghai 01:17、13:17
   workflow_dispatch:
     inputs:
       force:
@@ -34,7 +36,7 @@ jobs:
   release:
     name: Build & upload to TestFlight
     # Fork guard form required by shared-ci workflow-lint for self-hosted jobs (no PR trigger here).
-    if: github.event_name == 'workflow_dispatch' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository)
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 60
     steps:
@@ -58,6 +60,7 @@ jobs:
         working-directory: repo
         env:
           RELEASE_PLATFORM: ${{ inputs.platform || 'macos' }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
         run: |
           set -euo pipefail
           if [ "$RELEASE_PLATFORM" != "macos" ]; then
@@ -66,7 +69,6 @@ jobs:
           fi
           LATEST="$(git rev-parse HEAD)"
           RELEASED="$(git rev-parse -q --verify refs/tags/testflight/macos-last-released || echo none)"
-          FORCE="${{ github.event.inputs.force }}"
           echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
           echo "HEAD=$LATEST  last-released=$RELEASED  force=$FORCE"
           if [ "$FORCE" = "true" ] || [ "$LATEST" != "$RELEASED" ]; then
