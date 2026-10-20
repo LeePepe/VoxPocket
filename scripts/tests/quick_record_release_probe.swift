@@ -207,6 +207,15 @@ struct QuickRecordReleaseProbe {
         throw ProbeFailure(message: "Timed out waiting for deterministic boundary")
     }
     @MainActor
+    static func waitForPanelHidden(_ delegate: FakeAppDelegate, context: String) async throws {
+        // 观察真实 hide；独立计时任务不保证先于另一个 sleep 的恢复执行。
+        let observationDeadline = ContinuousClock.now.advanced(by: .seconds(1))
+        while delegate.windowManager.isVisible {
+            try require(ContinuousClock.now < observationDeadline, "\(context): Timed out observing watchdog hide")
+            await Task.yield()
+        }
+    }
+    @MainActor
     static func start(_ delegate: FakeAppDelegate) async throws -> FakeQuickRecordingViewModel {
         let task = Task { await delegate.press() }
         try await waitUntil { delegate.windowManager.getQuickRecordingViewModel()?.startContinuation != nil }
@@ -216,8 +225,8 @@ struct QuickRecordReleaseProbe {
         return model
     }
     @MainActor
-    static func assertHiddenAndBusy(_ delegate: FakeAppDelegate) throws {
-        try require(!delegate.windowManager.isVisible, "Panel must be hidden before background boundary")
+    static func assertHiddenAndBusy(_ delegate: FakeAppDelegate, context: String = #function) throws {
+        try require(!delegate.windowManager.isVisible, "\(context): Panel must be hidden before background boundary")
         try require(delegate.serviceContainer.activeRecordingSource == .quickRecording,
                     "Background work must retain recording ownership")
         try require(delegate.windowManager.getQuickRecordingViewModel() != nil,
@@ -324,8 +333,15 @@ struct QuickRecordReleaseProbe {
         let release = Task { await delegate.release() }
         try await waitUntil { model.shouldStopAfterStart || stop.entered }
         try require(delegate.windowManager.isVisible, "Eligible panel stays visible until recognition or deadline")
-        try await Task.sleep(for: .milliseconds(30))
-        try assertHiddenAndBusy(delegate)
+        let context = "watchdog(duringStart: \(duringStart))"
+        try await waitForPanelHidden(delegate, context: context)
+        try require(!stop.released && !refine.entered && !refine.released,
+                    "\(context): Recognition and refinement must remain suspended until hide")
+        try require(!duringStart || model.startContinuation != nil,
+                    "\(context): Startup must remain suspended until hide")
+        try require(model.pasteCount == 0 && delegate.serviceContainer.sessionUseCase.saves.isEmpty,
+                    "\(context): No output may advance while observing hide")
+        try assertHiddenAndBusy(delegate, context: context)
         try assertEvents(delegate, count: 1)
         let duration = delegate.serviceContainer.telemetryService.events[1].properties["duration_ms"] ?? ""
         try require((Double(duration) ?? -1) >= 10, "Watchdog duration includes recognition wait")

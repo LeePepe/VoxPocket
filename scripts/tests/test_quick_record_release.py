@@ -39,7 +39,8 @@ def main():
         source = Path(temporary) / "probe.swift"
         binary = Path(temporary) / "probe"
         source.write_text(fixture)
-        for flags in [[], ["-D", "DEBUG"]]:
+        for mode, flags in [("Release", []), ("Debug", ["-D", "DEBUG"])]:
+            print(f"Production quick-record handler probe: {mode}", flush=True)
             subprocess.run(["swiftc", "-parse-as-library", "-swift-version", "6", *flags,
                             str(source), "-o", str(binary)], check=True, timeout=60)
             subprocess.run([str(binary)], check=True, timeout=15)
