@@ -18,5 +18,5 @@ concurrency:
 
 jobs:
   kimi-review:
-    # shared-ci v0.7.3; same full SHA as the AGENTS.md protocol pointer.
-    uses: LeePepe/shared-ci/.github/workflows/kimi-review.yml@46c88fbae98b03dc6cf2e23c2e5a19c48ff68fe4
+    # shared-ci v0.8.0; same full SHA as the AGENTS.md protocol pointer.
+    uses: LeePepe/shared-ci/.github/workflows/kimi-review.yml@fd8a187ef4872aa1aa69c4e9afec9782183cc02d
