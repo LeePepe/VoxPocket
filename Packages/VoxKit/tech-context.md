@@ -1,19 +1,21 @@
 ---
+id: VoxKit
 layer: VoxKit
-role: 独立语音 SDK(VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow)
-owns: ["Packages/VoxKit/**"]
+owns: [Packages/VoxKit/**]
 depends_on: []
-gate: {check: "python3 scripts/gates/check_frontmatter.py"}
-red_lines:
-  - 严禁读取环境变量、UserDefaults、Bundle、Keychain 或未注入路径(R1)
-  - 严禁依赖 LokiKit、shared-telemetry 或任何外部遥测库(R2)
-  - 日志与遥测只允许 StaticString 消息与类型化 VoxLogField,严禁包含语音、转写或精炼文本(R3)
-  - 公共 API 只允许 async/await 与 AsyncStream/AsyncThrowingStream,严禁暴露 Combine 或逃逸回调(R4)
-  - 严禁包含产品名路径(VoxPocket)、内部工单号或非 example Azure 主机名(R5)
+gate: {build: "swift build --package-path Packages/VoxKit --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxKit --explicit-target-dependency-import-check error", check: "Packages/VoxKit/scripts/redlines/check.sh --self-test"}
+red_lines: ["R1 SDK has no environment, file, configuration, defaults, bundle, or keychain reads; storage is injected", "R2 no LokiKit, shared-telemetry, or external path dependencies", "R3 StaticString structured logging and telemetry carry metrics/labels only; canary tests prove no content leaks", "R4 public APIs use async/await and AsyncStream/AsyncThrowingStream; no Combine or escaping callbacks", "R5 no product-name paths, internal issue IDs, or non-example Azure hosts"]
+roles:
+  Types: [VoxCore]
+  Config: [VoxStorageLocations]
+  Service: [VoxLogger, VoxTelemetry]
+test: swift test --package-path Packages/VoxKit --explicit-target-dependency-import-check error
+targets: [VoxCore, VoxCoreTests]
+Last-Reviewed: 2026-11-05
 ---
 
 # VoxKit Tech Context
 
-Last-Reviewed: 2026-11-05
-
-VoxKit 是零宿主耦合的独立 SwiftPM 语音与精炼 SDK 层。
+`VoxKit` is the standalone SDK boundary. `VoxCore` contains dependency-free public
+contracts and safe value types; hosts inject credentials, logging, telemetry, and storage.
+The package must remain independent from VoxDomain, LokiKit, shared-telemetry, and the app.

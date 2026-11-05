@@ -87,6 +87,8 @@ policy() {
         echo "[verify] gitleaks not installed; secret scan left to CI"
     fi
     no_transcript_in_logs
+    Packages/VoxKit/scripts/redlines/check.sh --self-test
+    Packages/VoxKit/scripts/redlines/check.sh
 }
 
 # Privacy (constitution IV): transcript/refined text must never reach logs.
@@ -117,7 +119,16 @@ heavy_app_build() {
 
 case "$mode" in
     policy) policy; echo "[verify] ok: policy"; exit 0 ;;
-    layer) fetch_deps; run_layer "$layer"; echo "[verify] ok: $layer"; exit 0 ;;
+    layer)
+        fetch_deps
+        run_layer "$layer"
+        if [ "$layer" = "VoxKit" ]; then
+            Packages/VoxKit/scripts/redlines/check.sh --self-test
+            Packages/VoxKit/scripts/redlines/check.sh
+        fi
+        echo "[verify] ok: $layer"
+        exit 0
+        ;;
     all)
         policy
         fetch_deps

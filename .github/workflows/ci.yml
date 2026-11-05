@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxUITesting]
+        package: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxUITesting, VoxKit]
     steps:
       - name: Checkout VoxPocket
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -61,7 +61,6 @@ jobs:
       - name: Layer gates (swift build + swift test)
         working-directory: repo
         run: scripts/verify --layer ${{ matrix.package }}
-
   # ---- REQUIRED: app target — xcodegen + xcodebuild (no signing) ----
   app:
     name: App target
