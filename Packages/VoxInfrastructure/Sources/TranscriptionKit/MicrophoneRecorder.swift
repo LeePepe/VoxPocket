@@ -20,7 +20,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         var interruptedFileURL: URL?
         var notificationTokens: [NSObjectProtocol] = []
     }
-    private let lifecycleState = Mutex(State())
+    private let lock = Mutex(State())
 
     private let audioLevelSubject = AsyncValueRelay<Float>(0)
     private let captureStateSubject = AsyncValueRelay<AudioCaptureState>(.idle)
@@ -55,11 +55,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
     }
 
-    deinit {
-        lifecycleState.withLock { state in
-            state.notificationTokens.forEach(NotificationCenter.default.removeObserver)
-        }
-    }
+    deinit { lock.withLock { $0.notificationTokens.forEach(NotificationCenter.default.removeObserver) } }
 
     // MARK: - Permissions
 
@@ -100,7 +96,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         // 用户音频只在应用数据目录暂存；目录创建不占用主线程。
         let store = temporaryAudioStore
         let tempURL = try await Task.detached { try store.makeRecordingFileURL() }.value
-        lifecycleState.withLock { $0.tempFileURL = tempURL }
+        lock.withLock { $0.tempFileURL = tempURL }
 
         // Tap callback must be defined OUTSIDE MainActor.run so it does not inherit
         // MainActor isolation. AVAudioEngine calls it on the realtime audio thread;
@@ -110,7 +106,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         // Sendable: AVAudioEngine retains this callback; configuration stays on MainActor.
         nonisolated(unsafe) let tapBlock: (AVAudioPCMBuffer, AVAudioTime) -> Void = { [weak self] buffer, _ in
             guard let self else { return }
-            self.lifecycleState.withLock { state in
+            self.lock.withLock { state in
                 try? state.audioFile?.write(from: buffer)
             }
             let level = self.rmsLevel(buffer: buffer)
@@ -120,7 +116,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
 
         // AVAudioEngine node configuration must run on the main thread.
         try await MainActor.run {
-            try lifecycleState.withLock {
+            try lock.withLock {
                 guard shouldStart() else { throw CancellationError() }
                 let inputNode = audioEngine.inputNode
                 audioEngine.stop()
@@ -146,7 +142,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
     /// - Returns: 临时 WAV 文件 URL，调用方负责在使用完毕后删除。无录音时返回 nil。
     @discardableResult
     public func stop() -> URL? {
-        let url = lifecycleState.withLock { state -> URL? in
+        let url = lock.withLock { state -> URL? in
             guard let url = state.tempFileURL else {
                 defer { state.interruptedFileURL = nil }
                 return state.interruptedFileURL
@@ -167,18 +163,12 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
     }
 
     public func pause() {
-        lifecycleState.withLock { _ in
-            audioEngine.pause()
-            captureStateSubject.send(.paused)
-        }
+        lock.withLock { _ in audioEngine.pause(); captureStateSubject.send(.paused) }
         logger.debug("Paused")
     }
 
     public func resume() {
-        lifecycleState.withLock { _ in
-            try? audioEngine.start()
-            captureStateSubject.send(.recording)
-        }
+        lock.withLock { _ in try? audioEngine.start(); captureStateSubject.send(.recording) }
         logger.debug("Resumed")
     }
 
@@ -186,7 +176,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
 
     private func installAudioSessionObservers() {
         #if os(iOS)
-        lifecycleState.withLock { state in
+        lock.withLock { state in
             guard state.notificationTokens.isEmpty else { return }
             let center = NotificationCenter.default
             state.notificationTokens = [
@@ -208,7 +198,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
 
     #if os(iOS)
     private func stopForInterruption() {
-        lifecycleState.withLock { state in
+        lock.withLock { state in
             guard let file = state.tempFileURL else { return }
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)

@@ -74,7 +74,7 @@ final class CombineBridgeTests: XCTestCase {
 
     func testSpeechRecognitionServiceFailsAfterCoordinatorRelease() {
         let service: any SpeechRecognitionService = CombineTranscriptionCoordinator.wrap(ProbeSource(session: ProbeSession())).speechRecognitionService
-        let failure = expectation(description: "result publisher failure")
+        let failure = expectation(description: "failure")
         _ = service.resultPublisher.sink(receiveCompletion: { if case .failure = $0 { failure.fulfill() } }, receiveValue: { _ in })
         wait(for: [failure], timeout: 1)
     }
