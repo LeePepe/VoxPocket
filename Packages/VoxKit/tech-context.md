@@ -3,6 +3,7 @@ layer: VoxKit
 role: 独立语音 SDK(VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow)
 owns: ["Packages/VoxKit/**"]
 depends_on: []
+gate: {check: "python3 scripts/gates/check_frontmatter.py"}
 red_lines:
   - 严禁读取环境变量、UserDefaults、Bundle、Keychain 或未注入路径(R1)
   - 严禁依赖 LokiKit、shared-telemetry 或任何外部遥测库(R2)
