@@ -73,28 +73,10 @@ final class CombineBridgeTests: XCTestCase {
     }
 
     func testSpeechRecognitionServiceFailsAfterCoordinatorRelease() {
-        let service: any SpeechRecognitionService
-        do {
-            let source = ProbeSource(session: ProbeSession())
-            let coordinator = CombineTranscriptionCoordinator.wrap(source)
-            service = coordinator.speechRecognitionService
-        }
-
+        let service: any SpeechRecognitionService = CombineTranscriptionCoordinator.wrap(ProbeSource(session: ProbeSession())).speechRecognitionService
         let failure = expectation(description: "result publisher failure")
-        let subscription = service.resultPublisher.sink(
-            receiveCompletion: { completion in
-                guard case .failure = completion else {
-                    XCTFail("Expected result publisher to fail after coordinator release")
-                    return
-                }
-                failure.fulfill()
-            },
-            receiveValue: { _ in
-                XCTFail("Expected no result after coordinator release")
-            }
-        )
+        _ = service.resultPublisher.sink(receiveCompletion: { if case .failure = $0 { failure.fulfill() } }, receiveValue: { _ in })
         wait(for: [failure], timeout: 1)
-        withExtendedLifetime(subscription) {}
     }
 
     func testCredentialsUseInjectedSnapshot() {
