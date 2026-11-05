@@ -1,4 +1,5 @@
 import Foundation
+import TranscriptionKit
 import VoxCore
 import VoxKitBridge
 
