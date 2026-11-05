@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Foundation
 import AVFoundation
 import Synchronization
@@ -183,7 +185,7 @@ final class HybridRecordingLifecycleTests: XCTestCase {
     }
 
     func testCancelledCaptureDoesNotAskForHardwarePermission() async {
-        let recorder = MicrophoneRecorder()
+        let recorder = MicrophoneRecorder(storageLocations: testStorageLocations)
         do { try await recorder.startIfAllowed(shouldStart: { false }); XCTFail("Expected cancellation") }
         catch { XCTAssertTrue(error is CancellationError) }
         XCTAssertNil(recorder.stop())

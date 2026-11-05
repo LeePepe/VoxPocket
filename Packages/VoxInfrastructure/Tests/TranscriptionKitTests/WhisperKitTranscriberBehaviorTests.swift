@@ -1,32 +1,32 @@
-import VoxCore
+import TranscriptionKitCombine
 import Foundation
-import LokiKit
+import VoxCore
 import XCTest
 @testable import TranscriptionKit
 
 final class WhisperKitTranscriberBehaviorTests: XCTestCase {
     func testProviderTypeIsWhisper() {
-        let sut = WhisperKitTranscriber(
+        let sut = CombineTranscriptionCoordinator.wrap(WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
             logger: NoopVoxLogger(),
-            recorder: MicrophoneRecorder(),
+            recorder: MicrophoneRecorder(logger: NoopVoxLogger(), storageLocations: testStorageLocations),
             telemetry: NoopVoxTelemetry(),
             engineFactory: { _, _ in FakeLocalWhisperEngine() }
-        )
+        ))
         XCTAssertEqual(sut.speechRecognitionService.providerType, .whisper)
     }
 
     func testStartThenStopChangesState() async throws {
-        let sut = WhisperKitTranscriber(
+        let sut = CombineTranscriptionCoordinator.wrap(WhisperKitTranscriber(
             config: .default,
             logger: NoopVoxLogger(),
-            recorder: MicrophoneRecorder(),
+            recorder: MicrophoneRecorder(logger: NoopVoxLogger(), storageLocations: testStorageLocations),
             telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in FakeLocalWhisperEngine() },
             autoPreload: true
-        )
+        ))
 
         try await sut.start(language: Locale(identifier: "zh-Hans"))
         XCTAssertTrue(sut.isTranscribing)
@@ -37,16 +37,16 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
 
     func testStopKeepsBestPartialWhenLaterUpdateRegressesToShorterText() async throws {
         let engine = ScriptedLocalWhisperEngine()
-        let sut = WhisperKitTranscriber(
+        let sut = CombineTranscriptionCoordinator.wrap(WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
             logger: NoopVoxLogger(),
-            recorder: MicrophoneRecorder(),
+            recorder: MicrophoneRecorder(logger: NoopVoxLogger(), storageLocations: testStorageLocations),
             telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in engine },
             autoPreload: false
-        )
+        ))
 
         var finalTexts: [String] = []
         let cancellable = sut.finalResultPublisher.sink(
@@ -60,21 +60,22 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
         await engine.emitPartial("这个模型不错")
         await sut.stop()
 
+        await assertEventually { finalTexts.last == "这个模型不错但是加载时间太久了有没有什么不错的" }
         XCTAssertEqual(finalTexts.last, "这个模型不错但是加载时间太久了有没有什么不错的")
     }
 
     func testLiveResultStripsWaitingForSpeechPlaceholder() async throws {
         let engine = ScriptedLocalWhisperEngine()
-        let sut = WhisperKitTranscriber(
+        let sut = CombineTranscriptionCoordinator.wrap(WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
             logger: NoopVoxLogger(),
-            recorder: MicrophoneRecorder(),
+            recorder: MicrophoneRecorder(logger: NoopVoxLogger(), storageLocations: testStorageLocations),
             telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in engine },
             autoPreload: false
-        )
+        ))
 
         var liveTexts: [String] = []
         let cancellable = sut.liveResultPublisher.sink(
@@ -86,6 +87,7 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
         try await sut.start(language: Locale(identifier: "zh-Hans"))
         await engine.emitPartial("这个模型不错 Waiting for speech...")
 
+        await assertEventually { liveTexts.last == "这个模型不错" }
         XCTAssertEqual(liveTexts.last, "这个模型不错")
     }
 }

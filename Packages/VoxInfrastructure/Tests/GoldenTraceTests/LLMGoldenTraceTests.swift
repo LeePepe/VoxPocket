@@ -1,3 +1,4 @@
+import TranscriptionKitCombine
 import VoxCore
 import Foundation
 import Synchronization

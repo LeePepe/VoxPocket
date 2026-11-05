@@ -1,8 +1,6 @@
-import VoxCore
 import AVFoundation
-import Combine
 import Foundation
-import LokiKit
+import VoxCore
 import Speech
 import Synchronization
 
@@ -22,48 +20,38 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Publishers
 
-    private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
+    let sessionRelay = SpeechSessionRelay()
+    fileprivate let captureStateSubject = AsyncValueRelay<AudioCaptureState>(.idle)
 
     // MARK: - State
 
     private let recording = HybridRecordingLifecycle()
     private let sessionEffects: QuickRecordingSessionEffects?
-    private let logger: Logger
+    private let temporaryAudioStore: TemporaryAudioStore?
+    private let logger: any VoxLogger
 
     // MARK: - Sub-services
 
-    private lazy var _audioCaptureService: AppleAudioCapture = AppleAudioCapture(transcriber: self)
-    private lazy var _speechRecognitionService: AppleSpeechRecognition = AppleSpeechRecognition(transcriber: self)
 
     // MARK: - Init
 
-    public override init() {
-        self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
-        self.speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
-        self.speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
-        self.logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
-        self.sessionEffects = nil
-        super.init()
-        logger.debug("init with default locale zh-Hans")
-    }
-
-    public init(locale: Locale, logger: Logger = PrintLogger(subsystem: "AppleSpeechTranscriber")) {
-        self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
-        self.speechRecognizerProvider = SystemSpeechRecognizer(locale: locale)
-        self.speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
+    public init(locale: Locale = Locale(identifier: "zh-Hans"), logger: any VoxLogger = NoopVoxLogger(),
+                storageLocations: VoxStorageLocations) {
+        recorder = MicrophoneRecorder(logger: logger, storageLocations: storageLocations)
+        speechRecognizerProvider = SystemSpeechRecognizer(locale: locale)
+        speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         self.logger = logger
-        self.sessionEffects = nil
+        temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
+        sessionEffects = nil
         super.init()
-        logger.debug("init with locale: \(locale.identifier)")
     }
 
     init(effects: QuickRecordingSessionEffects) {
-        recorder = MicrophoneRecorder()
+        recorder = SyntheticAudioBufferSource()
+        temporaryAudioStore = nil
         speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
-        logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
+        logger = NoopVoxLogger()
         sessionEffects = effects
         super.init()
     }
@@ -71,7 +59,9 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
     internal init(recorder: any AudioBufferSource,
                   speechRecognizer: any SpeechRecognizing,
                   speechAuthorizationProvider: any SpeechAuthorizationProviding,
-                  logger: Logger = PrintLogger(subsystem: "AppleSpeechTranscriber")) {
+                  logger: any VoxLogger = NoopVoxLogger(),
+                  storageLocations: VoxStorageLocations) {
+        self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
         self.recorder = recorder
         self.speechRecognizerProvider = speechRecognizer
         self.speechAuthorizationProvider = speechAuthorizationProvider
@@ -83,29 +73,34 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
 // MARK: - TranscriptionCoordinator
 
-extension AppleSpeechTranscriber: TranscriptionCoordinator {
+extension AppleSpeechTranscriber: SpeechAvailabilityProviding, SessionDriving {
 
-    public var audioCaptureService: AudioCaptureService { _audioCaptureService }
-    public var speechRecognitionService: SpeechRecognitionService { _speechRecognitionService }
+    var finishesRelayOnStopReturn: Bool { false }
 
-    public var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        finalResultSubject.eraseToAnyPublisher()
+    public var isSpeechAvailable: Bool { hasSpeechPermission && speechRecognizerProvider.isAvailable }
+    public var providerKind: ASRProviderType { .apple }
+    public var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }
+    public var isActive: Bool { isTranscribing }
+    public var hasMicrophonePermission: Bool { recorder.hasPermission }
+    public var hasSpeechPermission: Bool { speechAuthorizationProvider.speechAuthorizationStatus == .authorized }
+    public func requestMicrophonePermission() async -> Bool { await recorder.requestPermission() }
+    public func requestSpeechPermission() async -> Bool { await speechAuthorizationProvider.requestSpeechAuthorization() }
+    public func captureStates() -> AsyncStream<AudioCaptureState> { captureStateSubject.stream() }
+    public func audioLevels() -> AsyncStream<Float> { recorder.audioLevels() }
+    func captureDeviceStates() -> AsyncStream<AudioCaptureState> { recorder.captureStates() }
+    func interruptCapture() async {
+        await stop()
+        captureStateSubject.send(.interrupted)
+        sessionRelay.send(.state(.interrupted))
     }
 
-    public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        liveResultSubject.eraseToAnyPublisher()
-    }
-
-    public var audioLevelPublisher: AnyPublisher<Float, Never> {
-        recorder.audioLevelPublisher
-    }
 
     public var isTranscribing: Bool {
         recording.isRecording
     }
 
     public func start(language: Locale) async throws {
-        logger.info("start() language: \(language.identifier)")
+        logger.info("start()", fields: [.label("language", .source("locale"))])
 
         if recording.isRecording {
             logger.warning("Already transcribing, stopping first")
@@ -118,7 +113,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                     self?.receiveAppleResult(result, id: id)
                 }
                 try recording.didStart(id)
-                captureStateSubject.send(.recording)
+                captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
             } else {
                 try await startRecording(language: language, id: id)
             }
@@ -151,11 +146,11 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             _ = recorder.stop()
             recognitionRequest = nil
             recognitionTask = nil
-            captureStateSubject.send(.idle)
+            captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
             throw error
         }
         try recording.didStart(id)
-        captureStateSubject.send(.recording)
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
         logger.info("Recording + recognition started")
     }
 
@@ -181,7 +176,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             if let error = update.error {
                 let e = error as NSError
                 if e.code == 301 || e.code == NSURLErrorCancelled { self.logger.debug("Recognition task ended") }
-                else { self.logger.error("Recognition error: \(e.domain) \(e.code)") }
+                else { self.logger.error("Recognition error", fields: [.int("error_code", e.code)]) }
                 self.recognitionTask = nil
             }
         }
@@ -190,8 +185,8 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
     private func receiveAppleResult(_ result: TranscriptionResult, id: UUID) {
         _ = recording.receiveApple(result.text, id: id, retainText: false)
         guard recording.acceptsAppleResult(id) else { return }
-        liveResultSubject.send(result)
-        if result.isFinal { finalResultSubject.send(result) }
+        sessionRelay.send(.partial(result))
+        if result.isFinal { sessionRelay.send(.final(result)) }
     }
 
     public func stop() async {
@@ -231,24 +226,25 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                 return file
             }
         }
-        captureStateSubject.send(.idle)
+        captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
         return file
     }
 
     private func removeAudio(_ file: URL?) async throws {
         if let sessionEffects { try await sessionEffects.removeAudio(file); return }
         guard let file else { return }
-        await Task.detached { try? FileManager.default.removeItem(at: file) }.value
+        let store = temporaryAudioStore
+        await Task.detached { try? store?.remove(file) }.value
     }
 
     public func pause() {
         recorder.pause()
-        captureStateSubject.send(.paused)
+        captureStateSubject.send(.paused); sessionRelay.send(.state(.paused))
     }
 
     public func resume() {
         recorder.resume()
-        captureStateSubject.send(.recording)
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
     }
 
 }
@@ -271,60 +267,4 @@ extension AppleSpeechTranscriber: QuickRecordingReleaseControlling {
             try await discardRecording(session.id)
         }
     }
-}
-
-// MARK: - Internal AudioCaptureService
-
-private final class AppleAudioCapture: AudioCaptureService, @unchecked Sendable {
-    private weak var transcriber: AppleSpeechTranscriber?
-    init(transcriber: AppleSpeechTranscriber) { self.transcriber = transcriber }
-
-    var state: AudioCaptureState { transcriber?.captureStateSubject.value ?? .idle }
-
-    var statePublisher: AnyPublisher<AudioCaptureState, Never> {
-        transcriber?.captureStateSubject.eraseToAnyPublisher() ?? Just(.idle).eraseToAnyPublisher()
-    }
-
-    var audioLevelPublisher: AnyPublisher<Float, Never> {
-        transcriber?.audioLevelPublisher ?? Just(0).eraseToAnyPublisher()
-    }
-
-    func startCapture() async throws {}
-    func stopCapture() async {}
-    func pauseCapture() { transcriber?.pause() }
-    func resumeCapture() { transcriber?.resume() }
-
-    func requestPermission() async -> Bool {
-        await transcriber?.recorder.requestPermission() ?? false
-    }
-
-    var hasPermission: Bool { transcriber?.recorder.hasPermission ?? false }
-}
-
-// MARK: - Internal SpeechRecognitionService
-
-private final class AppleSpeechRecognition: SpeechRecognitionService, @unchecked Sendable {
-    private weak var transcriber: AppleSpeechTranscriber?
-    init(transcriber: AppleSpeechTranscriber) { self.transcriber = transcriber }
-
-    var providerType: ASRProviderType { .apple }
-
-    var resultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        transcriber?.liveResultPublisher
-            ?? Fail(error: NSError(domain: "", code: -1)).eraseToAnyPublisher()
-    }
-
-    func startRecognition(language: Locale) async throws {}
-    func stopRecognition() async {}
-
-    func checkAvailability() async -> Bool {
-        transcriber?.speechAuthorizationProvider.speechAuthorizationStatus == .authorized
-            && transcriber?.speechRecognizerProvider.isAvailable == true
-    }
-
-    func requestPermission() async -> Bool {
-        await transcriber?.speechAuthorizationProvider.requestSpeechAuthorization() ?? false
-    }
-
-    var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }
 }

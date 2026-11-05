@@ -1,4 +1,6 @@
 import Foundation
+import VoxCore
+import VoxKitBridge
 import Preferences
 import TranscriptionKit
 import LLMKit
@@ -7,32 +9,37 @@ import LLMKit
 @MainActor
 enum StageModelRouting {
     static func makeTranscriber(
-        environment: [String: String], preferences: any PreferencesStore,
+        environment: [String: String], preferences: any PreferencesStore, sdk: SDKHostConfiguration,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
-    ) -> any TranscriptionCoordinator {
-        DefaultSelectableTranscriptionCoordinator(permissionCoordinator: AppleSpeechTranscriber()) {
-            let settings = await StageModelSettings.load(from: preferences)
-            return try await MainActor.run {
-                try Task.checkCancellation()
-                return prepareSession(settings: settings, environment: environment, beforeSession: beforeSession)
-            }
-        }
+    ) -> any SpeechSessionSource {
+        DefaultSelectableTranscriptionCoordinator(
+            permissionCoordinator: AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations),
+            factory: StageSpeechSessionFactory(environment: environment, preferences: preferences,
+                sdk: sdk, beforeSession: beforeSession))
     }
 
     static func prepareSession(settings: StageModelSettings, environment: [String: String],
-                               beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)?) -> any TranscriptionCoordinator {
+                               beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)?, sdk: SDKHostConfiguration? = nil) -> any SpeechSessionSource {
+        let sdk = sdk ?? defaultSDK(environment: environment)
         beforeSession?(settings)
-        return resolveTranscriber(settings: settings, environment: environment)
+        return resolveTranscriber(settings: settings, environment: environment, sdk: sdk)
     }
 
-    static func resolveTranscriber(settings: StageModelSettings, environment: [String: String]) -> any TranscriptionCoordinator {
+    static func resolveTranscriber(settings: StageModelSettings, environment: [String: String], sdk: SDKHostConfiguration? = nil) -> any SpeechSessionSource {
+        let sdk = sdk ?? defaultSDK(environment: environment)
         let selected = resolvedSpeechModel(settings: settings, environment: environment)
         guard selected != .appleSpeech,
-              let batch = LLMAppConfig.transcriptionConfig(environment: environment) else { return AppleSpeechTranscriber() }
+              let batch = LLMAppConfig.transcriptionConfig(environment: environment) else { return AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations) }
         let realtime = selected == .realtime
             ? LLMAppConfig.realtimeTranscriptionConfig(environment: environment, deploymentOverride: settings.realtimeDeployment)
             : nil
-        return HybridWhisperTranscriber(whisperConfig: batch, realtimeConfig: realtime)
+        return HybridWhisperTranscriber(whisperConfig: batch, realtimeConfig: realtime, logger: sdk.logger, storageLocations: sdk.storageLocations)
+    }
+
+    private static func defaultSDK(environment: [String: String]) -> SDKHostConfiguration {
+        SDKHostConfiguration(storageLocations: SDKHostConfiguration.storageLocations(),
+            logger: NoopVoxLogger(), telemetry: NoopVoxTelemetry(),
+            credentials: SDKHostConfiguration.credentials(environment: environment))
     }
 
     static func resolvedSpeechModel(settings: StageModelSettings, environment: [String: String]) -> SpeechModelSelection {
@@ -76,5 +83,20 @@ enum StageModelRouting {
             textConfigured: textConfigured,
             textModelName: textConfigured ? environment["AZURE_FOUNDRY_MODEL"] ?? "默认文本模型" : ""
         )
+    }
+}
+
+private struct StageSpeechSessionFactory: SpeechSessionFactory {
+    let environment: [String: String]
+    let preferences: any PreferencesStore
+    let sdk: SDKHostConfiguration
+    let beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)?
+    func makeSource() async throws -> any SpeechSessionSource {
+        let settings = await StageModelSettings.load(from: preferences)
+        return try await MainActor.run {
+            try Task.checkCancellation()
+            return StageModelRouting.prepareSession(settings: settings, environment: environment,
+                beforeSession: beforeSession, sdk: sdk)
+        }
     }
 }

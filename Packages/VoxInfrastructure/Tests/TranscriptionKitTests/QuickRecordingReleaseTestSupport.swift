@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Foundation
 import Synchronization
 @testable import TranscriptionKit
@@ -76,10 +78,10 @@ final class QuickRecordingEffectProbe: Sendable {
 enum QuickRecordingTestProvider: CaseIterable {
     case apple, batch, realtime
 
-    func make(_ probe: QuickRecordingEffectProbe) -> any TranscriptionCoordinator & QuickRecordingReleaseControlling {
-        if self == .apple { return AppleSpeechTranscriber(effects: probe.effects) }
+    func make(_ probe: QuickRecordingEffectProbe, merger: (any TranscriptionMerger)? = nil) -> any TranscriptionCoordinator & QuickRecordingReleaseControlling {
+        if self == .apple { return CombineTranscriptionCoordinator.wrap(AppleSpeechTranscriber(effects: probe.effects)) }
         let config = AzureWhisperConfig(endpoint: URL(string: "https://example.invalid/transcriptions")!, apiKey: "fixture")
-        return HybridWhisperTranscriber(whisperConfig: config, effects: probe.effects)
+        return CombineTranscriptionCoordinator.wrap(HybridWhisperTranscriber(whisperConfig: config, effects: probe.effects, merger: merger))
     }
 }
 

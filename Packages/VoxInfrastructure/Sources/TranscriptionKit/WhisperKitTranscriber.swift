@@ -1,8 +1,5 @@
-import VoxCore
-@_exported import VoxKitBridge
-import Combine
 import Foundation
-import LokiKit
+import VoxCore
 import Synchronization
 
 #if canImport(WhisperKit)
@@ -12,7 +9,7 @@ import WhisperKit
 /// WhisperKit 本地转录协调器
 ///
 /// 流式模式：录音期间持续发布 partial，停止时发布 final。
-public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
+public final class WhisperKitTranscriber: Sendable {
 
     // MARK: - Dependencies
 
@@ -26,14 +23,10 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Publishers
 
-    private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     let sessionRelay = SpeechSessionRelay()
-    private let captureRelay = AsyncValueRelay<AudioCaptureState>(.idle)
-    private let levelRelay = AsyncValueRelay<Float>(0)
-    private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
-    fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
-    private let _modelLoadingStateSubject = CurrentValueSubject<ModelLoadingState, Never>(.idle)
+    private let audioLevelSubject = AsyncValueRelay<Float>(0)
+    fileprivate let captureStateSubject = AsyncValueRelay<AudioCaptureState>(.idle)
+    private let _modelLoadingStateSubject = AsyncValueRelay<ModelLoadingState>(.idle)
 
     // MARK: - State
 
@@ -41,25 +34,29 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     private let _engine = Mutex<(any LocalWhisperEngine)?>(nil)
     private let _latestPartialText = Mutex("")
     private let _startedAt = Mutex<Date?>(nil)
-    private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
+    private let locale = Mutex(Locale(identifier: "zh-Hans"))
+    private var recordingLocale: Locale {
+        get { locale.withLock { $0 } }
+        set { locale.withLock { $0 = newValue } }
+    }
 
     /// 后台预加载任务（与录音无关，app 启动时独立运行）
     private let _preloadTask = Mutex<Task<Void, Error>?>(nil)
 
     // MARK: - Sub-services
 
-    private lazy var _audioCaptureService: WhisperKitAudioCapture = WhisperKitAudioCapture(transcriber: self)
-    private lazy var _speechRecognitionService: WhisperKitSpeechRecognition = WhisperKitSpeechRecognition(transcriber: self)
 
     // MARK: - Init
+
 
     public init(
         config: LocalWhisperKitConfig,
         logger: any VoxLogger = NoopVoxLogger(),
-        recorder: MicrophoneRecorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriber.Mic")),
+        recorder: MicrophoneRecorder? = nil,
         telemetry: any VoxTelemetry = NoopVoxTelemetry(),
         storageLocations: VoxStorageLocations
     ) {
+        let recorder = recorder ?? MicrophoneRecorder(logger: logger, storageLocations: storageLocations)
         self.engineFactory = { SharedLocalWhisperEngineHandle(config: $0, logger: $1, storageLocations: storageLocations) }
         self.config = config
         self.logger = logger
@@ -67,7 +64,6 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
         self.telemetry = telemetry
         self.permissionRequester = { await recorder.requestPermission() }
         self.hasPermissionProvider = { recorder.hasPermission }
-        super.init()
         if config.preloadOnStart {
             startBackgroundPreload()
         }
@@ -90,7 +86,6 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
         self.permissionRequester = permissionRequester ?? { await recorder.requestPermission() }
         self.hasPermissionProvider = hasPermissionProvider ?? { recorder.hasPermission }
         self.engineFactory = engineFactory
-        super.init()
         if autoPreload && config.preloadOnStart {
             startBackgroundPreload()
         }
@@ -99,7 +94,7 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     /// 后台下载并加载模型，与录音流程完全解耦
     @discardableResult
     private func startBackgroundPreload() -> Task<Void, Error>? {
-        _preloadTask.withLock { pending -> Task<Void, Error>? in
+        _preloadTask.withLock { pending in
             if _engine.withLock({ $0 }) != nil { return nil }
             if let pending { return pending }
             _modelLoadingStateSubject.send(.loading)
@@ -180,13 +175,13 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
 // MARK: - ModelLoadingObservable
 
-extension WhisperKitTranscriber: ModelLoadingObservable {
+extension WhisperKitTranscriber: ModelLoadingStateProviding {
     public var modelLoadingState: ModelLoadingState {
         _modelLoadingStateSubject.value
     }
 
-    public var modelLoadingStatePublisher: AnyPublisher<ModelLoadingState, Never> {
-        _modelLoadingStateSubject.eraseToAnyPublisher()
+    public func modelLoadingStates() -> AsyncStream<ModelLoadingState> {
+        _modelLoadingStateSubject.stream()
     }
 }
 
@@ -198,22 +193,17 @@ extension WhisperKitTranscriber: ModelPreloadControlling {
 
 // MARK: - TranscriptionCoordinator
 
-extension WhisperKitTranscriber: TranscriptionCoordinator {
+extension WhisperKitTranscriber: SessionDriving {
 
-    public var audioCaptureService: AudioCaptureService { _audioCaptureService }
-    public var speechRecognitionService: SpeechRecognitionService { _speechRecognitionService }
-
-    public var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        finalResultSubject.eraseToAnyPublisher()
-    }
-
-    public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        liveResultSubject.eraseToAnyPublisher()
-    }
-
-    public var audioLevelPublisher: AnyPublisher<Float, Never> {
-        audioLevelSubject.eraseToAnyPublisher()
-    }
+    public var providerKind: ASRProviderType { .whisper }
+    public var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
+    public var isActive: Bool { isTranscribing }
+    public var hasMicrophonePermission: Bool { hasPermissionProvider() }
+    public var hasSpeechPermission: Bool { true }
+    public func requestMicrophonePermission() async -> Bool { await permissionRequester() }
+    public func requestSpeechPermission() async -> Bool { true }
+    public func captureStates() -> AsyncStream<AudioCaptureState> { captureStateSubject.stream() }
+    public func audioLevels() -> AsyncStream<Float> { audioLevelSubject.stream() }
 
     public var isTranscribing: Bool {
         _isTranscribing.withLock { $0 }
@@ -264,12 +254,10 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
                         timestamp: Date(),
                         locale: self.recordingLocale
                     )
-                    self.liveResultSubject.send(result)
                     self.sessionRelay.send(.partial(result))
                 },
                 onAudioLevel: { [weak self] level in
                     self?.audioLevelSubject.send(level)
-                    self?.levelRelay.send(level)
                 }
             )
         } catch {
@@ -278,25 +266,22 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
             throw error
         }
 
-        captureStateSubject.send(.recording)
-        captureRelay.send(.recording); sessionRelay.send(.state(.recording))
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
         _isTranscribing.withLock { $0 = true }
         _startedAt.withLock { $0 = Date() }
     }
 
     public func stop() async {
         logger.info("stop() called")
+        defer { sessionRelay.finish() }
 
         _isTranscribing.withLock { $0 = false }
-        defer { sessionRelay.finish() }
         let startedAt = _startedAt.withLock { state -> Date? in
             defer { state = nil }
             return state
         }
-        captureStateSubject.send(.idle)
-        captureRelay.send(.idle); sessionRelay.send(.state(.idle))
+        captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
         audioLevelSubject.send(0)
-        levelRelay.send(0)
 
         guard let engine = _engine.withLock({ $0 }) else {
             return
@@ -332,9 +317,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
             timestamp: Date(),
             locale: recordingLocale
         )
-        liveResultSubject.send(result)
         sessionRelay.send(.partial(result))
-        finalResultSubject.send(result)
         sessionRelay.send(.final(result))
 
         if let startedAt {
@@ -343,79 +326,14 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         }
     }
 
-    public func pause() {
-        captureStateSubject.send(.paused)
-        captureRelay.send(.paused); sessionRelay.send(.state(.paused))
-        Task { [weak self] in
-            guard let self, let engine = self._engine.withLock({ $0 }) else { return }
-            await engine.pauseStreaming()
-        }
+    public func pause() async {
+        captureStateSubject.send(.paused); sessionRelay.send(.state(.paused))
+        await _engine.withLock { $0 }?.pauseStreaming()
     }
 
-    public func resume() {
-        captureStateSubject.send(.recording)
-        captureRelay.send(.recording); sessionRelay.send(.state(.recording))
-        Task { [weak self] in
-            guard let self, let engine = self._engine.withLock({ $0 }) else { return }
-            await engine.resumeStreaming()
-        }
+    public func resume() async {
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
+        await _engine.withLock { $0 }?.resumeStreaming()
     }
 
-}
-
-// MARK: - Internal AudioCaptureService
-
-private final class WhisperKitAudioCapture: AudioCaptureService, @unchecked Sendable {
-    private weak var transcriber: WhisperKitTranscriber?
-    init(transcriber: WhisperKitTranscriber) { self.transcriber = transcriber }
-
-    var state: AudioCaptureState { transcriber?.captureStateSubject.value ?? .idle }
-
-    var statePublisher: AnyPublisher<AudioCaptureState, Never> {
-        transcriber?.captureStateSubject.eraseToAnyPublisher() ?? Just(.idle).eraseToAnyPublisher()
-    }
-
-    var audioLevelPublisher: AnyPublisher<Float, Never> {
-        transcriber?.audioLevelPublisher ?? Just(0).eraseToAnyPublisher()
-    }
-
-    func startCapture() async throws {}
-    func stopCapture() async {}
-    func pauseCapture() { transcriber?.pause() }
-    func resumeCapture() { transcriber?.resume() }
-    func requestPermission() async -> Bool { await transcriber?.permissionRequester() ?? false }
-    var hasPermission: Bool { transcriber?.hasPermissionProvider() ?? false }
-}
-
-// MARK: - Internal SpeechRecognitionService
-
-private final class WhisperKitSpeechRecognition: SpeechRecognitionService, @unchecked Sendable {
-    private weak var transcriber: WhisperKitTranscriber?
-    init(transcriber: WhisperKitTranscriber) { self.transcriber = transcriber }
-
-    var providerType: ASRProviderType { .whisper }
-
-    var resultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        transcriber?.liveResultPublisher
-            ?? Fail(error: NSError(domain: "", code: -1)).eraseToAnyPublisher()
-    }
-
-    func startRecognition(language: Locale) async throws {}
-    func stopRecognition() async {}
-    func checkAvailability() async -> Bool { true }
-    func requestPermission() async -> Bool { await transcriber?.permissionRequester() ?? false }
-    var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
-}
-
-
-extension WhisperKitTranscriber: SessionDriving {
-    public var providerKind: ASRProviderType { .whisper }
-    public var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
-    public var isActive: Bool { isTranscribing }
-    public var hasMicrophonePermission: Bool { hasPermissionProvider() }
-    public var hasSpeechPermission: Bool { true }
-    public func requestMicrophonePermission() async -> Bool { await permissionRequester() }
-    public func requestSpeechPermission() async -> Bool { true }
-    public func captureStates() -> AsyncStream<AudioCaptureState> { captureRelay.stream() }
-    public func audioLevels() -> AsyncStream<Float> { levelRelay.stream() }
 }

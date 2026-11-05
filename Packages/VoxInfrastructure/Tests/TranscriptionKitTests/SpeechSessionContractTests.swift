@@ -141,7 +141,6 @@ final class SpeechSessionContractTests: XCTestCase {
     }
 
 }
-
 private struct DeniedMicrophoneAuthorization: MicrophoneAuthorizationProviding {
     var hasMicrophoneAccess: Bool { false }
     func requestMicrophoneAccess() async -> Bool { false }
@@ -154,6 +153,7 @@ private final class SessionContractSource: SessionDriving {
     let operations = Mutex<[String]>([])
     private let capture = AsyncValueRelay<AudioCaptureState>(.idle)
     var providerKind: ASRProviderType { .custom }
+    var finishesRelayOnStopReturn: Bool { true }
     var supportedLanguages: [Locale] { [.current] }
     var isActive: Bool { capture.value == .recording }
     var hasMicrophonePermission: Bool { true }
@@ -176,5 +176,3 @@ private final class SessionContractSource: SessionDriving {
         sessionRelay.send(.state(.idle))
     }
 }
-
-let testStorageLocations = VoxStorageLocations(temporaryAudio: FileManager.default.temporaryDirectory, modelCache: FileManager.default.temporaryDirectory)

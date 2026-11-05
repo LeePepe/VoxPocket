@@ -19,7 +19,8 @@ class CheckFrontmatterTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="voxpocket frontmatter tests ")
         self.addCleanup(self.temporary.cleanup)
         self.repo = Path(self.temporary.name) / "fixture"
-        shutil.copytree(REPO / "Packages", self.repo / "Packages")
+        shutil.copytree(REPO / "Packages", self.repo / "Packages",
+                        ignore=shutil.ignore_patterns(".build", "Tests", "*.xcodeproj", "*.xcworkspace"))
         (self.repo / "docs" / "architecture").mkdir(parents=True)
         shutil.copy2(REPO / "docs" / "architecture" / "tech-context.md",
                      self.repo / "docs" / "architecture" / "tech-context.md")

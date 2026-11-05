@@ -13,7 +13,14 @@ let package = Package(
             name: "TranscriptionKit",
             targets: ["TranscriptionKit"]
         ),
-        .library(name: "VoxKitBridge", targets: ["VoxKitBridge"]),
+        .library(
+            name: "TranscriptionKitCombine",
+            targets: ["TranscriptionKitCombine"]
+        ),
+        .library(
+            name: "VoxKitBridge",
+            targets: ["VoxKitBridge"]
+        ),
         .library(
             name: "LLMKit",
             targets: ["LLMKit"]
@@ -43,11 +50,22 @@ let package = Package(
         .target(
             name: "TranscriptionKit",
             dependencies: [
-                "VoxKitBridge",
                 .product(name: "VoxCore", package: "VoxKit"),
-                .product(name: "CoreModels", package: "VoxDomain"),
-                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "WhisperKit", package: "WhisperKit"),
+            ]
+        ),
+        .target(
+            name: "TranscriptionKitCombine",
+            dependencies: [
+                "TranscriptionKit",
+                .product(name: "VoxCore", package: "VoxKit"),
+            ]
+        ),
+        .target(
+            name: "VoxKitBridge",
+            dependencies: [
+                .product(name: "VoxCore", package: "VoxKit"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
         .target(
@@ -58,7 +76,6 @@ let package = Package(
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
             ]
         ),
-        .target(name: "VoxKitBridge", dependencies: [.product(name: "VoxCore", package: "VoxKit"), .product(name: "LokiKit", package: "shared-telemetry")]),
         .target(
             name: "Persistence",
             dependencies: [
@@ -85,19 +102,21 @@ let package = Package(
         .testTarget(
             name: "TranscriptionKitTests",
             dependencies: [
-                .product(name: "VoxCore", package: "VoxKit"),
                 "TranscriptionKit",
+                "TranscriptionKitCombine",
+                "VoxKitBridge",
+                .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
-        .testTarget(name: "VoxKitBridgeTests", dependencies: ["VoxKitBridge", .product(name: "VoxCore", package: "VoxKit"), .product(name: "LokiKit", package: "shared-telemetry")]),
+        .testTarget(name: "VoxKitBridgeTests", dependencies: ["VoxKitBridge", "TranscriptionKitCombine", "TranscriptionKit", .product(name: "VoxCore", package: "VoxKit"), .product(name: "LokiKit", package: "shared-telemetry")]),
         .testTarget(
             name: "LLMKitTests",
             dependencies: [
-                .product(name: "CoreModels", package: "VoxDomain"),
-                .product(name: "VoxCore", package: "VoxKit"),
                 "LLMKit",
+                .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
+                .product(name: "CoreModels", package: "VoxDomain"),
             ]
         ),
         .testTarget(
@@ -111,10 +130,12 @@ let package = Package(
         .testTarget(
             name: "GoldenTraceTests",
             dependencies: [
-                .product(name: "VoxCore", package: "VoxKit"),
                 "TranscriptionKit",
+                "TranscriptionKitCombine",
+                "VoxKitBridge",
                 "LLMKit",
                 "Preferences",
+                .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
             ],
             resources: [.copy("Fixtures")]

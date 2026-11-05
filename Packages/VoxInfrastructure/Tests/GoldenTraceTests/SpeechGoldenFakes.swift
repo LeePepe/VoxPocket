@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import AVFoundation
 import Combine
 import Foundation
@@ -14,8 +16,8 @@ struct GoldenSpeechAuthorization: SpeechAuthorizationProviding {
 
 /// Combine 桥接；配置不可变，事件由线程安全的 subject 和 Mutex 收集。
 final class GoldenAudioSource: AudioBufferSource, @unchecked Sendable {
-    private let levels = CurrentValueSubject<Float, Never>(0)
-    private let states = CurrentValueSubject<AudioCaptureState, Never>(.idle)
+    private let levels = AsyncValueRelay<Float>(0)
+    private let states = AsyncValueRelay<AudioCaptureState>(.idle)
     let permission: Bool
     let calls: GoldenEvents
     let file: URL
@@ -27,8 +29,8 @@ final class GoldenAudioSource: AudioBufferSource, @unchecked Sendable {
         file = directory.appendingPathComponent("golden-\(UUID().uuidString).wav")
         try Data().write(to: file)
     }
-    var audioLevelPublisher: AnyPublisher<Float, Never> { levels.eraseToAnyPublisher() }
-    var statePublisher: AnyPublisher<AudioCaptureState, Never> { states.eraseToAnyPublisher() }
+    func audioLevels() -> AsyncStream<Float> { levels.stream() }
+    func captureStates() -> AsyncStream<AudioCaptureState> { states.stream() }
     var state: AudioCaptureState { states.value }
     var hasPermission: Bool { permission }
     func requestPermission() async -> Bool { calls.append("microphone.permission:\(permission)"); return permission }
@@ -141,6 +143,9 @@ final class GoldenSpeechProbe {
     private let events = GoldenEvents()
     private var subscriptions: [AnyCancellable] = []
     var values: [String] { events.values }
+    func waitFor(_ event: String, count: Int = 1) async {
+        await assertEventually { self.values.filter { $0 == event }.count >= count }
+    }
     init(_ coordinator: any TranscriptionCoordinator) {
         subscriptions.append(coordinator.liveResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { [events] result in
             let confidence = result.confidence.map { String($0) } ?? "nil"

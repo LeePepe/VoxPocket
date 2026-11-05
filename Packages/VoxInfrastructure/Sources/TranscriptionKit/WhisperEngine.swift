@@ -1,6 +1,5 @@
-import VoxCore
 import Foundation
-import LokiKit
+import VoxCore
 
 /// Azure 文件转写配置（兼容 Whisper 与 gpt-transcribe）
 public struct AzureWhisperConfig: Sendable {
@@ -36,16 +35,19 @@ public struct WhisperEngine: Sendable {
 
     private let config: AzureWhisperConfig
     private let session: URLSession
-    private let logger: Logger
+    private let logger: any VoxLogger
+    private let temporaryAudioStore: TemporaryAudioStore
 
     public init(
         config: AzureWhisperConfig,
         session: URLSession = .shared,
-        logger: Logger = PrintLogger(subsystem: "WhisperEngine")
+        logger: any VoxLogger = NoopVoxLogger(),
+        storageLocations: VoxStorageLocations
     ) {
         self.config = config
         self.session = session
         self.logger = logger
+        self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
     }
 
     /// 转录音频文件
@@ -56,7 +58,7 @@ public struct WhisperEngine: Sendable {
     /// - Returns: 转录文本
     public func transcribe(fileURL: URL, language: Locale) async throws -> String {
         try validateConfiguration()
-        return try await transcribe(audioData: Data(contentsOf: fileURL), language: language)
+        return try await transcribe(audioData: temporaryAudioStore.read(from: fileURL), language: language)
     }
 
     /// 调用方已校验的音频快照；避免校验后重新按路径打开造成输入替换。
@@ -75,7 +77,7 @@ public struct WhisperEngine: Sendable {
     }
 
     private func performTranscription(audioData: Data, language: Locale) async throws -> String {
-        logger.debug("Transcribing \(audioData.count) bytes, lang: \(language.identifier)")
+        logger.debug("Transcribing audio", fields: [.int("byte_count", audioData.count), .label("language", .source("locale"))])
 
         let boundary = "Boundary-\(UUID().uuidString)"
         var body = Data()
@@ -100,17 +102,14 @@ public struct WhisperEngine: Sendable {
                           userInfo: [NSLocalizedDescriptionKey: "无效的 HTTP 响应"])
         }
         guard (200..<300).contains(http.statusCode) else {
-            logger.error("Cloud transcription failed: HTTP \(http.statusCode)")
+            logger.error("Cloud transcription failed", fields: [.int("http_status", http.statusCode)])
             throw NSError(domain: "WhisperEngine", code: http.statusCode,
                           userInfo: [NSLocalizedDescriptionKey: "云端转写 API 错误 \(http.statusCode)"])
         }
 
         struct WhisperResponse: Decodable { let text: String }
         let result = try JSONDecoder().decode(WhisperResponse.self, from: data)
-        logger.log(.info, "Cloud transcription succeeded", context: [
-            "text_length": result.text.count,
-            "duration_ms": Int(Date().timeIntervalSince(started) * 1000)
-        ])
+        logger.log(.info, "Cloud transcription succeeded", fields: [.durationMs("duration_ms", Date().timeIntervalSince(started) * 1000), .int("text_length", result.text.count)])
         return result.text
     }
 }

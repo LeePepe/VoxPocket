@@ -1,7 +1,7 @@
-import VoxCore
-import Synchronization
+import TranscriptionKitCombine
 import Foundation
-import LokiKit
+import Synchronization
+import VoxCore
 import XCTest
 @testable import TranscriptionKit
 
@@ -10,7 +10,7 @@ final class WhisperKitFailureFallbackTests: XCTestCase {
         for _ in 0..<100 {
             let engine = ImmediateLocalWhisperEngine()
             let source = WhisperKitTranscriber(config: .init(preloadOnStart: false), logger: NoopVoxLogger(),
-                recorder: MicrophoneRecorder(),
+                recorder: MicrophoneRecorder(storageLocations: testStorageLocations),
                 permissionRequester: { true }, hasPermissionProvider: { true }, engineFactory: { _, _ in engine })
             for _ in 0..<2 {
                 try await source.start(language: Locale(identifier: "zh-Hans"))
@@ -23,16 +23,16 @@ final class WhisperKitFailureFallbackTests: XCTestCase {
     }
 
     func testModelLoadFailureStopsTranscriber() async {
-        let sut = WhisperKitTranscriber(
+        let sut = CombineTranscriptionCoordinator.wrap(WhisperKitTranscriber(
             config: .failingForTest,
             logger: NoopVoxLogger(),
-            recorder: MicrophoneRecorder(),
+            recorder: MicrophoneRecorder(logger: NoopVoxLogger(), storageLocations: testStorageLocations),
             telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in FailingLocalWhisperEngine() },
             autoPreload: true
-        )
+        ))
 
         await XCTAssertThrowsErrorAsync {
             try await sut.start(language: Locale(identifier: "zh-Hans"))
@@ -42,16 +42,16 @@ final class WhisperKitFailureFallbackTests: XCTestCase {
 
     func testSecondStartRetriesAfterInitialPreloadFailure() async throws {
         let factory = FailOnceEngineFactory()
-        let sut = WhisperKitTranscriber(
+        let sut = CombineTranscriptionCoordinator.wrap(WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
             logger: NoopVoxLogger(),
-            recorder: MicrophoneRecorder(),
+            recorder: MicrophoneRecorder(logger: NoopVoxLogger(), storageLocations: testStorageLocations),
             telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in factory.make() },
             autoPreload: false
-        )
+        ))
 
         await XCTAssertThrowsErrorAsync {
             try await sut.start(language: Locale(identifier: "zh-Hans"))

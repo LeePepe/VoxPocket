@@ -1,14 +1,14 @@
-import VoxCore
 import AVFoundation
-import Combine
 import Foundation
-import LokiKit
+import VoxCore
+import Synchronization
 
 /// 麦克风录音器
 ///
 /// 专注于音频采集：请求权限、启动 AVAudioEngine、写入临时 WAV 文件，
 /// 并通过 `bufferHandler` 同步回调将每个 PCM buffer 分发给外部消费者（如语音识别引擎）。
 /// 不包含任何转录逻辑。
+// Sendable: AVAudioEngine callbacks own audio writes; lifecycle configuration runs on MainActor.
 public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked Sendable {
 
     // MARK: - Private state
@@ -16,32 +16,44 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
     private let audioEngine = AVAudioEngine()
     private var audioFile: AVAudioFile?
     private var tempFileURL: URL?
+    private let interruptedFileURL = Mutex<URL?>(nil)
 
-    private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
-    private let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
-    private let logger: Logger
-    private let temporaryAudioStore: TemporaryAudioStore?
+    private let audioLevelSubject = AsyncValueRelay<Float>(0)
+    private let captureStateSubject = AsyncValueRelay<AudioCaptureState>(.idle)
+    private let logger: any VoxLogger
     private let authorizationProvider: any MicrophoneAuthorizationProviding
+    private let temporaryAudioStore: TemporaryAudioStore
+    private var notificationTokens: [NSObjectProtocol] = []
 
     // MARK: - Public publishers
 
-    public var audioLevelPublisher: AnyPublisher<Float, Never> { audioLevelSubject.eraseToAnyPublisher() }
-    public var statePublisher: AnyPublisher<AudioCaptureState, Never> { captureStateSubject.eraseToAnyPublisher() }
+    public func audioLevels() -> AsyncStream<Float> { audioLevelSubject.stream() }
+    public func captureStates() -> AsyncStream<AudioCaptureState> { captureStateSubject.stream() }
     public var state: AudioCaptureState { captureStateSubject.value }
 
     // MARK: - Init
 
-    public init(logger: Logger = PrintLogger(subsystem: "MicrophoneRecorder"), storageLocations: VoxStorageLocations? = nil) {
-        self.temporaryAudioStore = storageLocations.map { TemporaryAudioStore(storageLocations: $0) }
+    public init(
+        logger: any VoxLogger = NoopVoxLogger(),
+        storageLocations: VoxStorageLocations
+    ) {
         self.logger = logger
         self.authorizationProvider = SystemMicrophoneAuthorizationProvider()
+        self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
     }
 
-    init(logger: Logger = PrintLogger(subsystem: "MicrophoneRecorder"),
-         authorizationProvider: any MicrophoneAuthorizationProviding, storageLocations: VoxStorageLocations? = nil) {
-        self.temporaryAudioStore = storageLocations.map { TemporaryAudioStore(storageLocations: $0) }
+    init(
+        logger: any VoxLogger = NoopVoxLogger(),
+        authorizationProvider: any MicrophoneAuthorizationProviding,
+        storageLocations: VoxStorageLocations
+    ) {
         self.logger = logger
         self.authorizationProvider = authorizationProvider
+        self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
+    }
+
+    deinit {
+        notificationTokens.forEach(NotificationCenter.default.removeObserver)
     }
 
     // MARK: - Permissions
@@ -61,7 +73,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
     ///
     /// - Parameter bufferHandler: 每个 PCM buffer 的同步回调（在音频线程调用）。
     ///   可用于将 buffer 实时喂给语音识别引擎。
-    public func start(bufferHandler: ((AVAudioPCMBuffer) -> Void)? = nil) async throws {
+    func start(bufferHandler: ((AVAudioPCMBuffer) -> Void)? = nil) async throws {
         try await startIfAllowed(shouldStart: { true }, bufferHandler: bufferHandler)
     }
 
@@ -70,8 +82,8 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         bufferHandler: ((AVAudioPCMBuffer) -> Void)? = nil
     ) async throws {
         guard shouldStart() else { throw CancellationError() }
-        let authorized = await requestPermission()
-        guard authorized else { throw VoxKitError.microphoneAccessDenied }
+        guard await requestPermission() else { throw VoxKitError.microphoneAccessDenied }
+        installAudioSessionObservers()
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -81,16 +93,16 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         guard shouldStart() else { throw CancellationError() }
 
         // 用户音频只在应用数据目录暂存；目录创建不占用主线程。
-        let tempURL = try await Task.detached { [temporaryAudioStore] in
-            if let temporaryAudioStore { return try temporaryAudioStore.makeRecordingFileURL() }
-            return try Self.makeRecordingFileURL()
-        }.value
+        let store = temporaryAudioStore
+        let tempURL = try await Task.detached { try store.makeRecordingFileURL() }.value
         tempFileURL = tempURL
 
         // Tap callback must be defined OUTSIDE MainActor.run so it does not inherit
         // MainActor isolation. AVAudioEngine calls it on the realtime audio thread;
         // if the closure were @MainActor, Swift's runtime isolation check would crash.
+        // Sendable: the tap invokes this handler only on the AVAudioEngine callback thread.
         nonisolated(unsafe) let handler = bufferHandler
+        // Sendable: AVAudioEngine retains this callback; configuration stays on MainActor.
         nonisolated(unsafe) let tapBlock: (AVAudioPCMBuffer, AVAudioTime) -> Void = { [weak self] buffer, _ in
             guard let self else { return }
             try? self.audioFile?.write(from: buffer)
@@ -108,7 +120,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
 
             let format = inputNode.inputFormat(forBus: 0)
             audioFile = try AVAudioFile(forWriting: tempURL, settings: format.settings)
-            logger.debug("Recording to \(tempURL.lastPathComponent), \(format.sampleRate)Hz \(format.channelCount)ch")
+            logger.debug("Recording file prepared", fields: [.double("sample_rate", format.sampleRate), .int("channel_count", Int(format.channelCount))])
 
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
 
@@ -125,15 +137,23 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
     /// - Returns: 临时 WAV 文件 URL，调用方负责在使用完毕后删除。无录音时返回 nil。
     @discardableResult
     public func stop() -> URL? {
-        guard tempFileURL != nil else { return nil }
+        guard tempFileURL != nil else {
+            return interruptedFileURL.withLock { file in
+                defer { file = nil }
+                return file
+            }
+        }
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         audioFile = nil
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
         captureStateSubject.send(.idle)
         audioLevelSubject.send(0)
         let url = tempFileURL
         tempFileURL = nil
-        logger.info("Recording stopped → \(url?.lastPathComponent ?? "nil")")
+        logger.info("Recording stopped", fields: [.bool("has_file", url != nil)])
         return url
     }
 
@@ -151,20 +171,38 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
 
     // MARK: - Internal
 
-    static func makeRecordingFileURL(applicationSupport: URL? = nil) throws -> URL {
-        let support = try applicationSupport ?? FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: true
-        )
-        var directory = support.appendingPathComponent("VoxPocket/TemporaryAudio", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                                               attributes: [.posixPermissions: 0o700])
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        try directory.setResourceValues(values)
-        return directory.appendingPathComponent("mic_\(UUID().uuidString).wav")
+    private func installAudioSessionObservers() {
+        #if os(iOS)
+        guard notificationTokens.isEmpty else { return }
+        let center = NotificationCenter.default
+        notificationTokens = [
+            center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { [weak self] note in
+                guard let self else { return }
+                if let type = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                   AVAudioSession.InterruptionType(rawValue: type) == .began {
+                    self.stopForInterruption()
+                }
+            },
+            center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: nil) { [weak self] note in
+                guard Self.isDeviceRemoval(note) else { return }
+                self?.stopForInterruption()
+            }
+        ]
+        #endif
     }
+
+    #if os(iOS)
+    private func stopForInterruption() {
+        let file = stop()
+        interruptedFileURL.withLock { $0 = file }
+        captureStateSubject.send(.interrupted)
+    }
+
+    static func isDeviceRemoval(_ notification: Notification) -> Bool {
+        guard let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt else { return false }
+        return AVAudioSession.RouteChangeReason(rawValue: reason) == .oldDeviceUnavailable
+    }
+    #endif
 
     private func rmsLevel(buffer: AVAudioPCMBuffer) -> Float {
         guard let channelData = buffer.floatChannelData else { return 0 }

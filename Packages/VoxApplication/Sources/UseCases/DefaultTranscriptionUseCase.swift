@@ -1,3 +1,4 @@
+import TranscriptionKitCombine
 import VoxKitBridge
 import Foundation
 import Combine

@@ -16,14 +16,15 @@ roles:
   Repo:    [Persistence, PlatformAdapters, Providers]
   Service: [Services, Utilities, LLMKit, TranscriptionKit]
 test: swift test --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error
-targets: [TranscriptionKit, VoxKitBridge, LLMKit, Persistence, PlatformAdapters, Preferences]
+targets: [TranscriptionKit, TranscriptionKitCombine, VoxKitBridge, LLMKit, Persistence, PlatformAdapters, Preferences]
 ---
 
 # VoxInfrastructure Tech Context
 
 ## 职责
 基础设施/适配层。SDK async targets 与独立的 App 桥接 targets 对接不同外部系统:
-- **TranscriptionKit**:语音识别(AppleSpeech / WhisperKit / Azure Whisper), stages async `SpeechSessionSource` alongside existing Combine protocols; `TranscriptionKitCombine` splits out in TK1c-2。
+- **TranscriptionKit**:语音识别(AppleSpeech / WhisperKit / Azure Whisper),`SpeechSessionSource`（无 Combine）。
+- **TranscriptionKitCombine**:App-owned Combine 协议和 async session 包装器。
 - **VoxKitBridge**:typed SDK 日志/遥测到 LokiKit 的适配器与宿主凭据快照。
 - **LLMKit**:LLM 服务与 provider(`AppleIntelligenceProvider` 等),流式 `RefinementEvent`。
 - **Persistence**:SwiftData 会话存储(`SessionRepository` / `SwiftDataSessionRepository`)。
@@ -49,5 +50,3 @@ targets: [TranscriptionKit, VoxKitBridge, LLMKit, Persistence, PlatformAdapters,
 ## 测试注意
 `swift test` 会一起编译本包所有 test target;某个 target 的既有失败会阻塞其他 target 运行
 (见 `VoxPocket/tech-context.md` 的测试说明)。定位单类用 `--filter`。
-
-TK1c-1 stages async seams; legacy Combine APIs and complete module-map coverage follow in TK1c-2.

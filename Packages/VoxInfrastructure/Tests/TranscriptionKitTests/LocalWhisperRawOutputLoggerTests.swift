@@ -28,7 +28,7 @@ final class LocalWhisperRawOutputLoggerTests: XCTestCase {
         let telemetry = CanaryTelemetry()
         let engine = PrivacySuccessEngine(text: text)
         let source = WhisperKitTranscriber(config: .init(preloadOnStart: false), logger: logger,
-            recorder: MicrophoneRecorder(), telemetry: telemetry,
+            recorder: MicrophoneRecorder(storageLocations: testStorageLocations), telemetry: telemetry,
             permissionRequester: { true }, hasPermissionProvider: { true }, engineFactory: { _, _ in engine })
         let session = try await source.startSession(language: Locale(identifier: "zh-Hans"))
         engine.emit()

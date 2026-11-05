@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Combine
 import Foundation
 import Synchronization
@@ -8,7 +10,7 @@ final class QuickRecordingReleaseControlTests: XCTestCase {
     func testCloudPreviewDoesNotAllowQuickFinalizationButNormalStopStillFinalizes() async throws {
         for provider in [QuickRecordingTestProvider.batch, .realtime] {
             let probe = QuickRecordingEffectProbe(realtime: provider == .realtime)
-            let source = try XCTUnwrap(provider.make(probe) as? HybridWhisperTranscriber)
+            let source = try XCTUnwrap((provider.make(probe) as? CombineTranscriptionCoordinator)?.core as? HybridWhisperTranscriber)
             try source.prepareQuickRecording()
             try await source.start(language: .current)
             source.receiveCloudText("synthetic cloud", id: probe.sessionID, locale: .current)
@@ -26,7 +28,7 @@ final class QuickRecordingReleaseControlTests: XCTestCase {
 
     func testOrdinaryAppleStopRetainsDelayedFinal() async throws {
         let probe = QuickRecordingEffectProbe()
-        let source = AppleSpeechTranscriber(effects: probe.effects)
+        let source = CombineTranscriptionCoordinator.wrap(AppleSpeechTranscriber(effects: probe.effects))
         let seen = Mutex(0)
         let subscription = source.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { _ in
             seen.withLock { $0 += 1 }
@@ -35,6 +37,7 @@ final class QuickRecordingReleaseControlTests: XCTestCase {
         try await source.start(language: .current)
         await source.stop()
         probe.send("synthetic delayed final", type: .final)
+        await assertEventually { seen.withLock { $0 } == 1 }
         XCTAssertEqual(seen.withLock { $0 }, 1)
         XCTAssertEqual(probe.count("endApple"), 1)
         XCTAssertEqual(probe.count("cancelApple"), 0)
@@ -43,9 +46,8 @@ final class QuickRecordingReleaseControlTests: XCTestCase {
     func testDiscardInvokesRealCleanupAndNoFinalizationForEveryQuickProvider() async throws {
         for provider in QuickRecordingTestProvider.allCases {
             let probe = QuickRecordingEffectProbe(realtime: provider == .realtime)
-            let source = provider.make(probe)
             let merger = QuickRecordingCountingMerger()
-            (source as? HybridWhisperTranscriber)?.merger = merger
+            let source = provider.make(probe, merger: merger)
             let finals = Mutex(0)
             let subscription = source.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { _ in
                 finals.withLock { $0 += 1 }

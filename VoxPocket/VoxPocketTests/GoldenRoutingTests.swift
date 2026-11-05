@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Foundation
 import CoreFoundation
 import XCTest
@@ -67,7 +69,7 @@ final class GoldenRoutingTests: XCTestCase {
         if speech == .realtime { nodes.append("speech.azure.realtime") }
         if speech != .appleSpeech { nodes.append("speech.azure.batch") }
         let pipeline: [String: Any] = ["speech": nodes, "realtime": speech == .realtime,
-                                      "merger": (coordinator as? any MultiRecognizerTranscriber)?.merger != nil,
+                                      "merger": (coordinator as? any MultiRecognizerSpeechSource)?.merger != nil,
                                       "analysis": providers, "refine": text.currentProviderType?.rawValue ?? settings.refinement.rawValue,
                                       "configFailure": failure]
         return ["settings": ["speech": settings.speech.rawValue, "intent": settings.intent.rawValue,
@@ -180,7 +182,7 @@ final class GoldenRoutingTests: XCTestCase {
     }
 
     private func receivedRealtimeConfiguration(_ coordinator: any TranscriptionCoordinator) throws -> Bool {
-        guard let hybrid = coordinator as? HybridWhisperTranscriber else { return false }
+        guard let hybrid = (coordinator as? CombineTranscriptionCoordinator)?.core as? HybridWhisperTranscriber else { return false }
         let configuration = try XCTUnwrap(Mirror(reflecting: hybrid).children.first { $0.label == "realtimeConfig" })
         return configuration.value as? AzureRealtimeTranscriptionConfig != nil
     }
@@ -188,7 +190,7 @@ final class GoldenRoutingTests: XCTestCase {
     private func speechPipeline(_ coordinator: any TranscriptionCoordinator, realtime: Bool) -> [String: Any] {
         var nodes = ["capture.microphone", "speech.apple"]
         if realtime { nodes.append("speech.azure.realtime") }
-        if coordinator is HybridWhisperTranscriber { nodes.append("speech.azure.batch") }
+        if (coordinator as? CombineTranscriptionCoordinator)?.core is HybridWhisperTranscriber { nodes.append("speech.azure.batch") }
         return ["speech": nodes, "realtime": realtime,
                 "merger": (coordinator as? any MultiRecognizerTranscriber)?.merger != nil]
     }

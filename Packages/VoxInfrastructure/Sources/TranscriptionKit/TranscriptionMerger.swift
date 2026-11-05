@@ -16,17 +16,6 @@ public protocol TranscriptionMerger: Sendable {
     func merge(appleSpeech: String, whisper: String) async throws -> String
 }
 
-// MARK: - MultiRecognizerTranscriber
-
-/// 多识别器转录器协议
-///
-/// 所有同时运行多路识别器的 Transcriber（如 HybridWhisperTranscriber、
-/// HybridLocalWhisperTranscriber）均遵循此协议，支持注入 LLM 合并器。
-public protocol MultiRecognizerTranscriber: TranscriptionCoordinator {
-    /// 可选的 LLM 合并器；nil 时直接使用 Whisper 结果
-    var merger: (any TranscriptionMerger)? { get set }
-}
-
 // MARK: - Shared helper
 
 /// 尝试用 LLM 合并双路识别结果，失败或条件不满足时回退到 whisperText
