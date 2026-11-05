@@ -2,7 +2,7 @@
 layer: VoxPocketApp
 role: Xcode App 壳 —— 入口、ServiceContainer 组装、平台场景、Widget 扩展与交付配置
 owns: [VoxPocket/**, VoxPocketWidget/**]
-depends_on: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation]
+depends_on: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxKit]
 gate:
   app-python: python3 scripts/ci/run_repository_tests.py app-python --timeout 600
 red_lines:
@@ -23,7 +23,7 @@ red_lines:
 ## 依赖
 - **仓库内**:通过 `VoxPresentation` 的 `UIShared`/`PlatformUI`/`WidgetUI` 产品,并直接 import
   `VoxInfrastructure`(TranscriptionKit/LLMKit/Persistence/PlatformAdapters/Preferences)、
-  `VoxApplication`(UseCases)与 `VoxDomain`(CoreModels)的模块。
+  `VoxApplication`(UseCases)、`VoxDomain`(CoreModels)与 `VoxKit`(VoxCore)的模块。
 - **外部**:`LokiKit` 由 SwiftPM 按 shared-telemetry 远程依赖 `exact: "0.2.0"` 解析；
   `AppleUITesting`(`UITestingBridge`)放在仓库同级目录,CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA 取出。
 

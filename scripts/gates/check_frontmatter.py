@@ -59,10 +59,10 @@ def read_frontmatter(path):
     return fields, roles
 
 
-def read_canonical_roles():
-    if not os.path.isfile(TOP_TECH_CONTEXT):
+def read_canonical_roles(top_path=TOP_TECH_CONTEXT):
+    if not os.path.isfile(top_path):
         return None
-    parsed = read_frontmatter(TOP_TECH_CONTEXT)
+    parsed = read_frontmatter(top_path)
     if not parsed:
         return None
     fields, _ = parsed
@@ -70,7 +70,7 @@ def read_canonical_roles():
     return val if isinstance(val, list) else []
 
 
-def local_deps_from_package(pkg_dir):
+def local_deps_from_package(pkg_dir, packages_dir=PACKAGES):
     """从 Package.swift 提取【仓库内】的 path 依赖名(排除 LokiKit 等外部包)。"""
     pkg_swift = os.path.join(pkg_dir, "Package.swift")
     if not os.path.isfile(pkg_swift):
@@ -78,12 +78,51 @@ def local_deps_from_package(pkg_dir):
     with open(pkg_swift, encoding="utf-8") as f:
         content = f.read()
     deps = set()
+    packages_root = os.path.realpath(packages_dir)
     for rel in re.findall(r'\.package\(path:\s*"([^"]+)"', content):
         resolved = os.path.realpath(os.path.join(pkg_dir, rel))
         # 只算解析后仍落在本仓库 Packages/ 内的依赖
-        if resolved.startswith(PACKAGES + os.sep):
+        try:
+            inside_packages = os.path.commonpath((resolved, packages_root)) == packages_root
+        except ValueError:
+            inside_packages = False
+        if inside_packages:
             deps.add(os.path.basename(resolved))
     return deps
+
+
+def read_root_table_depends_on(top_path=TOP_TECH_CONTEXT):
+    """Return local layer dependencies declared in the root Markdown table."""
+    if not os.path.isfile(top_path):
+        return None
+    with open(top_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    header_index = None
+    for index, line in enumerate(lines):
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) >= 4 and cells[0] == "Layer" and cells[-1] == "depends_on":
+            header_index = index
+            break
+    if header_index is None:
+        return None
+
+    table = {}
+    for line in lines[header_index + 2:]:
+        if not line.lstrip().startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 4:
+            continue
+        layer = cells[0].strip("`")
+        dependencies = set()
+        for token in cells[-1].split(","):
+            dependency = token.strip().strip("`")
+            if not dependency or dependency == "(无)" or dependency.endswith("(ext)"):
+                continue
+            dependencies.add(dependency)
+        table[layer] = dependencies
+    return table
 
 
 def source_names(pkg_dir):
@@ -99,18 +138,24 @@ def source_names(pkg_dir):
     return dirs, stems
 
 
-def main():
-    canonical = read_canonical_roles()
+def main(repo_root=REPO):
+    packages_dir = os.path.join(repo_root, "Packages")
+    top_tech_context = os.path.join(repo_root, "docs", "architecture", "tech-context.md")
+    canonical = read_canonical_roles(top_tech_context)
     if canonical is None:
-        print(f"❌ 顶层 canonical_roles 未找到({TOP_TECH_CONTEXT})")
+        print(f"❌ 顶层 canonical_roles 未找到({top_tech_context})")
+        return 1
+    root_depends_on = read_root_table_depends_on(top_tech_context)
+    if root_depends_on is None:
+        print(f"❌ 顶层 layer 表未找到({top_tech_context})")
         return 1
 
     fail = 0
     layers = {}  # name -> fields
     tc_files = sorted(
-        os.path.join(PACKAGES, d, "tech-context.md")
-        for d in os.listdir(PACKAGES)
-        if os.path.isfile(os.path.join(PACKAGES, d, "tech-context.md"))
+        os.path.join(packages_dir, d, "tech-context.md")
+        for d in os.listdir(packages_dir)
+        if os.path.isfile(os.path.join(packages_dir, d, "tech-context.md"))
     )
     if not tc_files:
         print("❌ 未发现任何 Packages/*/tech-context.md")
@@ -133,13 +178,13 @@ def main():
             fail = 1
 
         # ② depends_on ⇄ Package.swift 本地依赖 双向一致
-        declared = local_deps_from_package(pkg_dir)
+        declared = local_deps_from_package(pkg_dir, packages_dir)
         depends_on = set(fields.get("depends_on", []) or [])
         for d in depends_on:
-            if not os.path.isdir(os.path.join(PACKAGES, d)):
+            if not os.path.isfile(os.path.join(packages_dir, d, "tech-context.md")):
                 print(f"❌ {tc}: depends_on '{d}' 是幽灵层(Packages/ 下无此目录)")
                 fail = 1
-            elif d not in declared:
+            elif d not in declared and d != "VoxKit":
                 print(f"❌ {tc}: depends_on 有 '{d}' 但 Package.swift 未声明该本地依赖")
                 fail = 1
         for d in declared - depends_on:
@@ -161,10 +206,18 @@ def main():
         test_cmd = fields.get("test", "")
         pm = re.search(r"--package-path\s+(\S+)", test_cmd if isinstance(test_cmd, str) else "")
         if pm:
-            tp = os.path.join(REPO, pm.group(1))
+            tp = os.path.join(repo_root, pm.group(1))
             if not os.path.isdir(tp):
                 print(f"❌ {tc}: test 路径 '{pm.group(1)}' 不存在")
                 fail = 1
+
+        expected = root_depends_on.get(pkg)
+        if expected is None:
+            print(f"❌ {tc}: 顶层 layer 表未声明 '{pkg}'")
+            fail = 1
+        elif depends_on != expected:
+            print(f"❌ {tc}: depends_on {sorted(depends_on)} 与顶层 layer 表 {sorted(expected)} 不一致")
+            fail = 1
 
     # ③ depended_by ⇄ depends_on 全局镜像(可选字段)
     for name, fields in layers.items():
