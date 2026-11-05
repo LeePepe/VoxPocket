@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic VoxKit red-line scanner and fixture harness."""
 from __future__ import annotations
-import argparse, json, re, subprocess, sys
+import argparse, json, platform, re, subprocess, sys
 from pathlib import Path
 
 R1_PATTERNS = [
@@ -72,7 +72,26 @@ def scan_rule(rule: str, paths: list[Path]) -> list[str]:
 
 
 def compile_fixture(path: Path, modules: Path) -> tuple[int, str]:
-    result = subprocess.run(["xcrun", "swiftc", "-typecheck", "-swift-version", "6", "-I", str(modules), str(path)], text=True, capture_output=True)
+    sdk_path = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True).strip()
+    arch = platform.machine()
+    result = subprocess.run(
+        [
+            "xcrun",
+            "swiftc",
+            "-typecheck",
+            "-swift-version",
+            "6",
+            "-sdk",
+            sdk_path,
+            "-target",
+            f"{arch}-apple-macosx26.0",
+            "-I",
+            str(modules),
+            str(path),
+        ],
+        text=True,
+        capture_output=True,
+    )
     return result.returncode, result.stdout + result.stderr
 
 
