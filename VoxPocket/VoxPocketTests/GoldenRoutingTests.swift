@@ -112,7 +112,7 @@ final class GoldenRoutingTests: XCTestCase {
                 if !batch { environment["AZURE_TRANSCRIPTION_ENDPOINT"] = "invalid" }
                 if realtime { environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "example-live" }
                 let coordinator = ServiceContainer.makeIOSHybridTranscriber(environment: environment)
-                XCTAssertEqual(coordinator is HybridWhisperTranscriber, batch)
+                XCTAssertEqual((coordinator as? CombineTranscriptionCoordinator)?.core is HybridWhisperTranscriber, batch)
                 let configuredRealtime = try receivedRealtimeConfiguration(coordinator)
                 XCTAssertEqual(configuredRealtime, batch && LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil)
                 rows.append(["platform": platform, "configuration": ["batch": batch, "realtime": realtime],
@@ -146,7 +146,7 @@ final class GoldenRoutingTests: XCTestCase {
         await binding.waitForPendingChanges()
         let coordinator = ServiceContainer.makeIOSHybridTranscriber(environment: environment)
         #endif
-        XCTAssertEqual(coordinator is HybridWhisperTranscriber, batch)
+        XCTAssertEqual((coordinator as? CombineTranscriptionCoordinator)?.core is HybridWhisperTranscriber, batch)
         let realtime = try receivedRealtimeConfiguration(coordinator)
         XCTAssertEqual(realtime, batch && LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil)
         XCTAssertEqual(service.currentProviderType, provider == "appleIntelligence" ? .appleIntelligence : .azureFoundry)
