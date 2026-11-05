@@ -1,6 +1,6 @@
 # AGENTS.md — VoxPocket
 
-Last-Reviewed: 2026-11-05
+Last-Reviewed: 2026-11-06
 
 VoxPocket is a SwiftUI voice recording and transcription app for macOS and iOS
 (default speech locale `zh-Hans`, text refinement with Apple Intelligence or a
@@ -25,6 +25,7 @@ VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, del
   → VoxApplication    use cases
   → VoxInfrastructure transcription, LLM, persistence, platform adapters, preferences (+ LokiKit)
   → VoxDomain         pure domain models, no external dependencies
+  → VoxKit            independent voice and refinement SDK (VoxCore), no local layer dependencies
 VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 

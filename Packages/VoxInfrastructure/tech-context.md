@@ -2,10 +2,10 @@
 layer: VoxInfrastructure
 role: 转写 · LLM · 持久化 · 平台适配 · 偏好 —— 对接外部系统与框架的适配层
 owns: [Packages/VoxInfrastructure/**]
-depends_on: [VoxDomain]
+depends_on: [VoxDomain, VoxKit]
 gate: {build: "swift build --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error"}
 red_lines:
-  - 只能依赖 VoxDomain(+ 外部 LokiKit);禁止 import VoxApplication/VoxPresentation(宪法 II)
+  - 只能依赖 VoxDomain/VoxKit(+ 外部 LokiKit);禁止 import VoxApplication/VoxPresentation(宪法 II)
   - API key/secret 来自环境变量;Azure 可读取受保护的沙箱私密配置,不进源码/日志/安装包,启动校验(宪法 V)
   - 转写文本/音频/精炼内容禁止写入日志或遥测负载,遥测只带指标(宪法 IV)
   - 端点/资源标识来自 config/env,禁止硬编码 Microsoft/Azure 标识(宪法 V)
@@ -31,7 +31,7 @@ targets: [TranscriptionKit, LLMKit, Persistence, PlatformAdapters, Preferences]
 - **Preferences**:用户偏好,无依赖。
 
 ## 依赖
-- **仓库内**:仅 `VoxDomain`(CoreModels/TextHistory)。
+- **仓库内**:`VoxDomain`(CoreModels/TextHistory) 与 `VoxKit`(VoxCore)。
 - **外部**:`LokiKit`(`LeePepe/shared-telemetry`,SwiftPM 远程依赖 `exact: "0.2.0"`,遥测/日志)+ `swift-async-algorithms` + `WhisperKit`。
   LokiKit 不进 `depends_on`(它不在本仓库,防腐脚本只校验本地 layer)。
 
