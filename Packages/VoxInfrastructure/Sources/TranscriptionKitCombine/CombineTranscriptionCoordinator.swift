@@ -223,7 +223,7 @@ private final class CombineSpeechRecognition: SpeechRecognitionService, @uncheck
     private weak var coordinator: CombineTranscriptionCoordinator?
     init(coordinator: CombineTranscriptionCoordinator) { self.coordinator = coordinator }
     var providerType: ASRProviderType { coordinator?.core.providerKind ?? .custom }
-    var resultPublisher: AnyPublisher<TranscriptionResult, Error> { coordinator!.liveResultPublisher }
+    var resultPublisher: AnyPublisher<TranscriptionResult, Error> { coordinator?.liveResultPublisher ?? Fail(error: NSError(domain: "", code: -1)).eraseToAnyPublisher() }
     var supportedLanguages: [Locale] { coordinator?.core.supportedLanguages ?? [] }
     func requestPermission() async -> Bool { await coordinator?.core.requestSpeechPermission() ?? false }
     func checkAvailability() async -> Bool { (coordinator?.core as? any SpeechAvailabilityProviding)?.isSpeechAvailable ?? coordinator?.core.hasSpeechPermission ?? false }

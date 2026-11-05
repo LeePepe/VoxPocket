@@ -72,6 +72,31 @@ final class CombineBridgeTests: XCTestCase {
         withExtendedLifetime(subscriptions) {}
     }
 
+    func testSpeechRecognitionServiceFailsAfterCoordinatorRelease() {
+        let service: any SpeechRecognitionService
+        do {
+            let source = ProbeSource(session: ProbeSession())
+            let coordinator = CombineTranscriptionCoordinator.wrap(source)
+            service = coordinator.speechRecognitionService
+        }
+
+        let failure = expectation(description: "result publisher failure")
+        let subscription = service.resultPublisher.sink(
+            receiveCompletion: { completion in
+                guard case .failure = completion else {
+                    XCTFail("Expected result publisher to fail after coordinator release")
+                    return
+                }
+                failure.fulfill()
+            },
+            receiveValue: { _ in
+                XCTFail("Expected no result after coordinator release")
+            }
+        )
+        wait(for: [failure], timeout: 1)
+        withExtendedLifetime(subscription) {}
+    }
+
     func testCredentialsUseInjectedSnapshot() {
         let credentials = EnvironmentCredentialProvider(snapshot: [.azureSpeechKey: Credential(rawValue: "fixture-key")])
         XCTAssertEqual(credentials.credential(for: .azureSpeechKey)?.rawValue, "fixture-key")
