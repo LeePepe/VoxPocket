@@ -121,14 +121,17 @@ protocol BatchTranscribing: Sendable {
 extension WhisperEngine: BatchTranscribing {}
 
 protocol RealtimePipelining: Sendable {
+    var hasMinimumAudio: Bool { get }
     func start(language: Locale) async
     func append(_ buffer: AVAudioPCMBuffer)
     func finish() async -> String?
     func cancel() async
 }
 
-private struct RealtimePipelineAdapter: RealtimePipelining, Sendable {
+struct RealtimePipelineAdapter: RealtimePipelining, Sendable {
     let pipeline: RealtimeAudioPipeline
+
+    var hasMinimumAudio: Bool { pipeline.hasMinimumAudio }
 
     func start(language: Locale) async {
         pipeline.start(language: language.language.languageCode?.identifier ?? "zh")

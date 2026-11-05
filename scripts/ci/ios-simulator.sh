@@ -35,6 +35,9 @@ command -v xcodegen >/dev/null || brew install xcodegen >/dev/null
 (cd VoxPocket && xcodegen generate --spec project.yml >/dev/null)
 run app-build xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket \
     -destination "$destination" CODE_SIGNING_ALLOWED=NO build
+run app-unit-tests-ios xcodebuild -project VoxPocket/VoxPocket.xcodeproj -scheme VoxPocket \
+    -destination "$destination" -only-testing:VoxPocketTests/GoldenRoutingTests \
+    CODE_SIGNING_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO test
 
 # SwiftPM names the aggregate scheme `<Package>-Package` only when a package has several
 # products; single-product packages (VoxApplication) use the package name. Pick what exists.

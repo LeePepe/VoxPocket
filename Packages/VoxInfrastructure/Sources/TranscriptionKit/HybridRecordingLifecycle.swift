@@ -8,7 +8,7 @@ final class HybridRecordingLifecycle: Sendable {
         var locale: Locale
         var appleText = ""
         var cloudText = ""
-        var realtime: RealtimeAudioPipeline?
+        var realtime: (any RealtimePipelining)?
         var cancelRealtime: (@Sendable () async -> Void)?
         var isQuick = false
         var hasRecognizedSpeech = false
@@ -65,6 +65,11 @@ final class HybridRecordingLifecycle: Sendable {
     }
 
     func attach(_ pipeline: RealtimeAudioPipeline?, id: UUID,
+                cancelRealtime: (@Sendable () async -> Void)? = nil) throws {
+        try attach(pipeline.map(RealtimePipelineAdapter.init), id: id, cancelRealtime: cancelRealtime)
+    }
+
+    func attach(_ pipeline: (any RealtimePipelining)?, id: UUID,
                 cancelRealtime: (@Sendable () async -> Void)? = nil) throws {
         try state.withLock { state in
             guard state.session?.id == id, state.phase == .starting,

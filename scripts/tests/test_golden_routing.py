@@ -2,6 +2,10 @@
 """Validate the golden-trace/v1 routing fixture contract."""
 import json
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).parent))
+from test_realtime_config import main as run_realtime_harness
 
 
 def main() -> None:
@@ -12,6 +16,7 @@ def main() -> None:
         payload = json.loads(fixture.read_text())
         assert payload.get("schema") == "golden-trace/v1", fixture
         assert isinstance(payload.get("traces"), list), fixture
+    run_realtime_harness()
 
 
 if __name__ == "__main__":

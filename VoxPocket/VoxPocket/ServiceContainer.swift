@@ -28,7 +28,7 @@ import PlatformUI
 /// 提供工厂方法创建 ViewModel。
 @MainActor
 public final class ServiceContainer: ObservableObject {
-    private let preferencesStore = UserDefaultsPreferencesStore.shared
+    private let preferencesStore: any PreferencesStore
     private let logger: Logger
     private let persistenceStartup = AppPersistenceStartup()
 
@@ -101,10 +101,13 @@ public final class ServiceContainer: ObservableObject {
     init(
         productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
         processEnvironment: [String: String] = ProcessInfo.processInfo.environment, processArguments: [String] = ProcessInfo.processInfo.arguments,
+        preferencesStore: any PreferencesStore = UserDefaultsPreferencesStore.shared,
+        llmServiceFactory: (() -> DefaultLLMService)? = nil,
         productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider = { BlobTelemetryConfiguration() },
         productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil, productTelemetryNotificationCenter: NotificationCenter = .default,
         productTelemetryHostOverride: BlobTelemetryHostKind? = nil
     ) {
+        self.preferencesStore = preferencesStore
         VoxPocketLogging.start(); logger = PrintLogger(subsystem: "ServiceContainer")
         let telemetryCoordinator = Self.makeTelemetryService()
         self.telemetryCoordinator = telemetryCoordinator; telemetryService = telemetryCoordinator
@@ -120,7 +123,7 @@ public final class ServiceContainer: ObservableObject {
         let configuredLLM = textModels.main; let configuredQuickLLM = textModels.quick
         quickLLMService = configuredQuickLLM; llmService = configuredLLM
         #else
-        let configuredLLM = DefaultLLMService(azureFoundryConfig: azureConfig)
+        let configuredLLM = llmServiceFactory?() ?? DefaultLLMService(azureFoundryConfig: azureConfig)
         llmService = configuredLLM
         #endif
         #if os(macOS)

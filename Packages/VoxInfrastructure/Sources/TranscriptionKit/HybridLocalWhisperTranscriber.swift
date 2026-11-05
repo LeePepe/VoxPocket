@@ -15,12 +15,15 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
 
     // MARK: - Dependencies
 
-    fileprivate let recorder: MicrophoneRecorder
+    fileprivate let recorder: any AudioBufferSource
     private let whisperEngine: any LocalWhisperEngine
+    private let batchTranscriber: any BatchTranscribing
+    private let speechRecognizerProvider: any SpeechRecognizing
+    private let speechAuthorizationProvider: any SpeechAuthorizationProviding
     private let whisperConfig: LocalWhisperKitConfig
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
+    private var recognitionTask: (any SpeechRecognitionTasking)?
 
     // MARK: - Publishers
 
@@ -58,7 +61,11 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
     ) {
         self.whisperConfig = config
         self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "HybridLocalWhisperTranscriber.Mic"))
-        self.whisperEngine = SharedLocalWhisperEngineHandle(config: config, logger: PrintLogger(subsystem: "HybridLocalWhisperTranscriber.Engine"))
+        let engine = SharedLocalWhisperEngineHandle(config: config, logger: PrintLogger(subsystem: "HybridLocalWhisperTranscriber.Engine"))
+        self.whisperEngine = engine
+        self.batchTranscriber = LocalWhisperBatchAdapter(engine: engine)
+        self.speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
+        self.speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         self.logger = logger
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         super.init()
@@ -66,6 +73,23 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
         if config.preloadOnStart {
             startBackgroundPreload()
         }
+    }
+
+    internal init(recorder: any AudioBufferSource,
+                  speechRecognizer: any SpeechRecognizing,
+                  speechAuthorizationProvider: any SpeechAuthorizationProviding,
+                  batchTranscriber: any BatchTranscribing,
+                  whisperEngine: any LocalWhisperEngine,
+                  config: LocalWhisperKitConfig = .default,
+                  logger: Logger = PrintLogger(subsystem: "HybridLocalWhisperTranscriber")) {
+        self.recorder = recorder
+        self.speechRecognizerProvider = speechRecognizer
+        self.speechAuthorizationProvider = speechAuthorizationProvider
+        self.batchTranscriber = batchTranscriber
+        self.whisperEngine = whisperEngine
+        self.whisperConfig = config
+        self.logger = logger
+        super.init()
     }
 
     // MARK: - Private
@@ -131,20 +155,13 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
         recordingLocale = language
         appleHasContent = false
 
-        let speechAuthorized = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+        let speechAuthorized = await speechAuthorizationProvider.requestSpeechAuthorization()
         guard speechAuthorized else {
             throw NSError(domain: "HybridLocalWhisperTranscriber", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
         }
 
-        if speechRecognizer?.locale.language.languageCode != language.language.languageCode {
-            speechRecognizer = SFSpeechRecognizer(locale: language)
-        }
-        guard let speechRecognizer else {
+        guard speechRecognizerProvider.isAvailable else {
             throw NSError(domain: "HybridLocalWhisperTranscriber", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
         }
@@ -164,31 +181,18 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
         _isTranscribing.withLock { $0 = true }
         logger.info("Recording + Apple Speech started")
 
-        recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
+        recognitionTask = try? speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
             guard let self else { return }
-
-            if let result {
-                let text = result.bestTranscription.formattedString
-                if !text.isEmpty {
-                    self.appleHasContent = true
-                    self.appleLatestText = text
-                }
-
-                let transcriptionResult = TranscriptionResult(
-                    text: text,
-                    type: result.isFinal ? .final : .partial,
-                    confidence: result.isFinal
-                        ? Double(result.bestTranscription.segments.last?.confidence ?? 0)
-                        : nil,
-                    timestamp: Date(),
-                    locale: language
-                )
-                self.liveResultSubject.send(transcriptionResult)
+            let text = update.text ?? ""
+            if !text.isEmpty {
+                self.appleHasContent = true
+                self.appleLatestText = text
             }
-
-            if let error {
-                let e = error as NSError
-                self.logger.error("Apple Speech error: \(e.domain) \(e.code) \(e.localizedDescription)")
+            self.liveResultSubject.send(TranscriptionResult(text: text, type: update.isFinal ? .final : .partial,
+                confidence: update.confidence.map(Double.init), timestamp: Date(), locale: language))
+            if let recognitionError = update.error {
+                let e = recognitionError as NSError
+                self.logger.error("Apple Speech error: \(e.domain) \(e.code)")
                 self.stopRecorder()
             }
         }
@@ -218,8 +222,6 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
 
         do {
             logger.info("Apple Speech had content → submitting to local WhisperKit")
-            let languageCode = whisperConfig.languageHint(for: recordingLocale)
-
             // 确保模型已加载
             if _modelLoadingStateSubject.value != .ready {
                 _modelLoadingStateSubject.send(.loading)
@@ -229,10 +231,8 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
                 _modelLoadingStateSubject.send(.ready)
             }
 
-            guard let whisperText = try await whisperEngine.transcribeAudioFile(
-                atPath: fileURL.path,
-                languageCode: languageCode
-            ), !whisperText.isEmpty else {
+            let whisperText = try await batchTranscriber.transcribe(fileURL: fileURL, language: recordingLocale)
+            guard !whisperText.isEmpty else {
                 logger.warning("WhisperKit returned empty result")
                 return
             }

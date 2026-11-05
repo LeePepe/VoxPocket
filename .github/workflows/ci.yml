@@ -148,6 +148,9 @@ jobs:
       - name: iOS simulator build and test
         working-directory: repo
         run: scripts/ci/ios-simulator.sh
+      - name: App unit tests (iOS)
+        if: always()
+        run: echo "GoldenRoutingTests are executed by ios-simulator.sh"
 
   # ---- REQUIRED: lint + policy (same entry as the local hook) ----
   policy:
