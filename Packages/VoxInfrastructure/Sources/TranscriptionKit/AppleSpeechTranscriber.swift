@@ -13,10 +13,11 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Dependencies
 
-    fileprivate let recorder: MicrophoneRecorder
-    private var speechRecognizer: SFSpeechRecognizer?
+    fileprivate let recorder: any AudioBufferSource
+    fileprivate let speechRecognizerProvider: any SpeechRecognizing
+    fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
+    private var recognitionTask: (any SpeechRecognitionTasking)?
 
     // MARK: - Publishers
 
@@ -39,26 +40,42 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
 
     public override init() {
         self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
+        self.speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
+        self.speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         self.logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
         self.sessionEffects = nil
         super.init()
-        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         logger.debug("init with default locale zh-Hans")
     }
 
     public init(locale: Locale, logger: Logger = PrintLogger(subsystem: "AppleSpeechTranscriber")) {
         self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AppleSpeechTranscriber.Mic"))
+        self.speechRecognizerProvider = SystemSpeechRecognizer(locale: locale)
+        self.speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         self.logger = logger
         self.sessionEffects = nil
         super.init()
-        self.speechRecognizer = SFSpeechRecognizer(locale: locale)
         logger.debug("init with locale: \(locale.identifier)")
     }
 
     init(effects: QuickRecordingSessionEffects) {
         recorder = MicrophoneRecorder()
+        speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
+        speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
         sessionEffects = effects
+        super.init()
+    }
+
+    internal init(recorder: any AudioBufferSource,
+                  speechRecognizer: any SpeechRecognizing,
+                  speechAuthorizationProvider: any SpeechAuthorizationProviding,
+                  logger: Logger = PrintLogger(subsystem: "AppleSpeechTranscriber")) {
+        self.recorder = recorder
+        self.speechRecognizerProvider = speechRecognizer
+        self.speechAuthorizationProvider = speechAuthorizationProvider
+        self.logger = logger
+        self.sessionEffects = nil
         super.init()
     }
 }
@@ -115,7 +132,10 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         try await authorizeSpeech()
         try Task.checkCancellation()
         guard recording.isStarting(id) else { throw CancellationError() }
-        let recognizer = try recognizer(language: language)
+        guard speechRecognizerProvider.isAvailable(for: language) else {
+            throw NSError(domain: "AppleSpeechTranscriber", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
+        }
         recognitionTask?.finish()
         recognitionTask = nil
         let request = DefaultAppleSpeechRequestFactory.makeRequest()
@@ -124,18 +144,22 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             request.append(buffer)
         }
         try Task.checkCancellation()
-        startAppleTask(recognizer, request: request, language: language, id: id)
+        do {
+            try startAppleTask(request: request, language: language, id: id)
+        } catch {
+            _ = recorder.stop()
+            recognitionRequest = nil
+            recognitionTask = nil
+            captureStateSubject.send(.idle)
+            throw error
+        }
         try recording.didStart(id)
         captureStateSubject.send(.recording)
         logger.info("Recording + recognition started")
     }
 
     private func authorizeSpeech() async throws {
-        let speechAuthorized = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+        let speechAuthorized = await speechAuthorizationProvider.requestSpeechAuthorization()
         guard speechAuthorized else {
             throw NSError(domain: "AppleSpeechTranscriber", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
@@ -143,45 +167,20 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
 
     }
 
-    private func recognizer(language: Locale) throws -> SFSpeechRecognizer {
-        if speechRecognizer?.locale.language.languageCode != language.language.languageCode {
-            speechRecognizer = SFSpeechRecognizer(locale: language)
-        }
-        guard let speechRecognizer else {
-            throw NSError(domain: "AppleSpeechTranscriber", code: -2,
-                          userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
-        }
-
-        return speechRecognizer
-    }
-
-    private func startAppleTask(_ recognizer: SFSpeechRecognizer, request: SFSpeechAudioBufferRecognitionRequest,
-                                language: Locale, id: UUID) {
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+    private func startAppleTask(request: SFSpeechAudioBufferRecognitionRequest,
+                                language: Locale, id: UUID) throws {
+        recognitionTask = try speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
             guard let self, self.recording.acceptsAppleResult(id) else { return }
-
-            if let result {
-                let transcriptionResult = TranscriptionResult(
-                    text: result.bestTranscription.formattedString,
-                    type: result.isFinal ? .final : .partial,
-                    confidence: result.isFinal
-                        ? Double(result.bestTranscription.segments.last?.confidence ?? 0)
-                        : nil,
-                    timestamp: Date(),
-                    locale: language
-                )
-                self.receiveAppleResult(transcriptionResult, id: id)
-                if result.isFinal { self.recognitionTask = nil }
+            if let text = update.text {
+                let result = TranscriptionResult(text: text, type: update.isFinal ? .final : .partial,
+                    confidence: update.confidence.map(Double.init), timestamp: Date(), locale: language)
+                self.receiveAppleResult(result, id: id)
+                if update.isFinal { self.recognitionTask = nil }
             }
-
-            if let error {
+            if let error = update.error {
                 let e = error as NSError
-                // code 301 (kLSRErrorDomain) 是 endAudio 后的正常取消信号
-                if e.code == 301 || e.code == NSURLErrorCancelled {
-                    self.logger.debug("Recognition task ended (expected on stop)")
-                } else {
-                    self.logger.error("Recognition error: \(e.domain) \(e.code) \(e.localizedDescription)")
-                }
+                if e.code == 301 || e.code == NSURLErrorCancelled { self.logger.debug("Recognition task ended") }
+                else { self.logger.error("Recognition error: \(e.domain) \(e.code)") }
                 self.recognitionTask = nil
             }
         }
@@ -318,15 +317,12 @@ private final class AppleSpeechRecognition: SpeechRecognitionService, @unchecked
     func stopRecognition() async {}
 
     func checkAvailability() async -> Bool {
-        SFSpeechRecognizer.authorizationStatus() == .authorized
+        transcriber?.speechAuthorizationProvider.speechAuthorizationStatus == .authorized
+            && transcriber?.speechRecognizerProvider.isAvailable == true
     }
 
     func requestPermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+        await transcriber?.speechAuthorizationProvider.requestSpeechAuthorization() ?? false
     }
 
     var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }

@@ -178,7 +178,12 @@ final class VoxAgentEvalIntegrationTests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        guard let cgImage = screenshot.image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        #if os(iOS)
+        let cgImage = screenshot.image.cgImage
+        #else
+        let cgImage = screenshot.image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #endif
+        guard let cgImage else {
             XCTFail("Failed to obtain CGImage from XCUIScreen screenshot")
             return
         }

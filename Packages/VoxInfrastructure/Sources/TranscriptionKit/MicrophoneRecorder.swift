@@ -8,7 +8,7 @@ import LokiKit
 /// 专注于音频采集：请求权限、启动 AVAudioEngine、写入临时 WAV 文件，
 /// 并通过 `bufferHandler` 同步回调将每个 PCM buffer 分发给外部消费者（如语音识别引擎）。
 /// 不包含任何转录逻辑。
-public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
+public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked Sendable {
 
     // MARK: - Private state
 
@@ -19,6 +19,7 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
     private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
     private let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
     private let logger: Logger
+    private let authorizationProvider: any MicrophoneAuthorizationProviding
 
     // MARK: - Public publishers
 
@@ -30,27 +31,24 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
 
     public init(logger: Logger = PrintLogger(subsystem: "MicrophoneRecorder")) {
         self.logger = logger
+        self.authorizationProvider = SystemMicrophoneAuthorizationProvider()
+    }
+
+    init(logger: Logger = PrintLogger(subsystem: "MicrophoneRecorder"),
+         authorizationProvider: any MicrophoneAuthorizationProviding) {
+        self.logger = logger
+        self.authorizationProvider = authorizationProvider
     }
 
     // MARK: - Permissions
 
     /// 请求麦克风权限，返回是否已授权
     public func requestPermission() async -> Bool {
-        #if os(iOS)
-        return await withCheckedContinuation { c in
-            AVAudioSession.sharedInstance().requestRecordPermission { c.resume(returning: $0) }
-        }
-        #else
-        return await AVCaptureDevice.requestAccess(for: .audio)
-        #endif
+        await authorizationProvider.requestMicrophoneAccess()
     }
 
     public var hasPermission: Bool {
-        #if os(iOS)
-        AVAudioSession.sharedInstance().recordPermission == .granted
-        #else
-        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        #endif
+        authorizationProvider.hasMicrophoneAccess
     }
 
     // MARK: - Recording
@@ -73,7 +71,7 @@ public final class MicrophoneRecorder: NSObject, @unchecked Sendable {
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #else
-        let authorized = await AVCaptureDevice.requestAccess(for: .audio)
+        let authorized = await requestPermission()
         guard authorized else {
             throw NSError(
                 domain: "MicrophoneRecorder", code: -1,

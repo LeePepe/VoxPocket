@@ -168,6 +168,10 @@ targets:
     supportedDestinations: [iOS, macOS, visionOS]
     sources:
       - path: VoxPocketTests
+      - path: ../scripts/tests/golden/golden_b_ios.json
+        buildPhase: resources
+      - path: ../scripts/tests/golden/golden_b_macos.json
+        buildPhase: resources
     dependencies:
       - target: VoxPocket
     settings:

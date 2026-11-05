@@ -89,6 +89,19 @@ public final class DefaultLLMService: LLMService, Sendable {
         state.withLock { $0.currentProvider?.providerType }
     }
 
+    internal var resolvedAnalysisRouting: [AnalysisStep: LLMProviderType] {
+        state.withLock { Self.analysisRouting(configuration: $0) }
+    }
+
+    internal var isContentAnalysisSkipped: Bool { state.withLock { $0.skipContentAnalysis } }
+
+    private static func analysisRouting(configuration: State) -> [AnalysisStep: LLMProviderType] {
+        guard let defaultProviderType = configuration.currentProvider?.providerType else { return [:] }
+        return Dictionary(uniqueKeysWithValues: AnalysisStep.allCases.map { step in
+            (step, configuration.analysisProviderOverrides[step] ?? defaultProviderType)
+        })
+    }
+
     public func setProvider(_ config: LLMProviderConfig) throws {
         try state.withLock { state in
             guard let provider = state.providers[config.providerType] else {
@@ -141,10 +154,7 @@ public final class DefaultLLMService: LLMService, Sendable {
             return (IntentAnalysis(), ToneAnalysis(), Set(AnalysisStep.allCases))
         }
 
-        var providersByStep: [AnalysisStep: LLMProviderType] = [:]
-        for step in AnalysisStep.allCases {
-            providersByStep[step] = configuration.analysisProviderOverrides[step] ?? defaultProviderType
-        }
+        let providersByStep = Self.analysisRouting(configuration: configuration)
 
         var stepsByProvider: [LLMProviderType: Set<AnalysisStep>] = [:]
         for (step, providerType) in providersByStep {
