@@ -14,7 +14,7 @@ permissions:
 jobs:
   report:
     # shared-ci v0.8.0; same full SHA as the AGENTS.md protocol pointer.
-    uses: LeePepe/shared-ci/.github/workflows/stuck-pr-bot.yml@fd8a187ef4872aa1aa69c4e9afec9782183cc02d
+    uses: LeePepe/shared-ci/.github/workflows/stuck-pr-bot.yml@838e10a059979e6732446cb26edc95d173cc7e3a
     with:
       failure-hours: 2
       open-hours: 24

@@ -1,6 +1,6 @@
 # Docs Records Index
 
-Last-Reviewed: 2026-09-24
+Last-Reviewed: 2026-11-05
 
 这是 VoxPocket 的文档总地图（system of record）。
 

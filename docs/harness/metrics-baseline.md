@@ -1,6 +1,6 @@
 # Harness Metrics Baseline
 
-Last-Reviewed: 2026-10-13
+Last-Reviewed: 2026-11-05
 Owner: VoxPocket Engineering
 Cadence: Weekly snapshot (every Tuesday)
 
