@@ -22,6 +22,8 @@ Last-Reviewed: 2026-11-05
 - `VoxInfrastructure`: `TranscriptionKit`, `LLMKit`, `Persistence`, `PlatformAdapters`, `Preferences`
 - `LokiKit`: 独立日志与遥测包
 - `VoxDomain`: `CoreModels`, `TextHistory`
+- `VoxKit`: standalone SDK (`VoxCore`, `VoxSpeech`, `VoxSpeechWhisperKit`, `VoxRefine`,
+  `VoxLLM`, `VoxWorkflow`, `VoxWorkflowWhisperKit`); Phase 1–3 staged under `Packages/VoxKit`
 
 ## Common Paths
 
