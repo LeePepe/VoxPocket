@@ -23,8 +23,7 @@ targets: [TranscriptionKit, VoxKitBridge, LLMKit, Persistence, PlatformAdapters,
 
 ## 职责
 基础设施/适配层。SDK async targets 与独立的 App 桥接 targets 对接不同外部系统:
-- **TranscriptionKit**:语音识别(AppleSpeech / WhisperKit / Azure Whisper),`SpeechSessionSource`（无 Combine）。
-- **TranscriptionKitCombine**:App-owned Combine 协议和 async session 包装器。
+- **TranscriptionKit**:语音识别(AppleSpeech / WhisperKit / Azure Whisper), stages async `SpeechSessionSource` alongside existing Combine protocols; `TranscriptionKitCombine` splits out in TK1c-2。
 - **VoxKitBridge**:typed SDK 日志/遥测到 LokiKit 的适配器与宿主凭据快照。
 - **LLMKit**:LLM 服务与 provider(`AppleIntelligenceProvider` 等),流式 `RefinementEvent`。
 - **Persistence**:SwiftData 会话存储(`SessionRepository` / `SwiftDataSessionRepository`)。

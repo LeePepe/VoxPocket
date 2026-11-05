@@ -288,6 +288,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         logger.info("stop() called")
 
         _isTranscribing.withLock { $0 = false }
+        defer { sessionRelay.finish() }
         let startedAt = _startedAt.withLock { state -> Date? in
             defer { state = nil }
             return state

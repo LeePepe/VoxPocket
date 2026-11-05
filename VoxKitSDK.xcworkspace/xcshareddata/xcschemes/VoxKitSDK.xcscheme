@@ -9,9 +9,6 @@
         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="TranscriptionKit" BuildableName="TranscriptionKit" BlueprintName="TranscriptionKit" ReferencedContainer="container:Packages/VoxInfrastructure"/>
       </BuildActionEntry>
       <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
-        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="TranscriptionKitCombine" BuildableName="TranscriptionKitCombine" BlueprintName="TranscriptionKitCombine" ReferencedContainer="container:Packages/VoxInfrastructure"/>
-      </BuildActionEntry>
-      <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="LLMKit" BuildableName="LLMKit" BlueprintName="LLMKit" ReferencedContainer="container:Packages/VoxInfrastructure"/>
       </BuildActionEntry>
       <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">

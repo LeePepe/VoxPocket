@@ -82,6 +82,32 @@ final class SpeechSessionContractTests: XCTestCase {
         await session.cancel()
     }
 
+    func testStopFinishesSessionEventStreamAndStopsObservers() async throws {
+        let source = SessionContractSource()
+        let session = try await source.startSession(language: .current)
+        let observer = Task { () -> Result<[TranscriptionEvent], Error> in
+            var events: [TranscriptionEvent] = []
+            do {
+                for try await event in session.events() { events.append(event) }
+                return .success(events)
+            } catch {
+                return .failure(error)
+            }
+        }
+
+        await session.stop()
+        source.levels.send(0.75)
+        source.deviceStates.send(.interrupted)
+
+        guard case .success(let events) = await observer.value else {
+            XCTFail("stop() must finish the event stream without an error")
+            return
+        }
+        XCTAssertFalse(events.contains { if case .level = $0 { return true }; return false })
+        XCTAssertFalse(events.contains { $0 == .state(.interrupted) })
+        XCTAssertFalse(source.isActive)
+    }
+
     func testSupersededSessionCannotControlTheNextRecording() async throws {
         let source = SessionContractSource()
         let first = try await source.startSession(language: .current)

@@ -33,10 +33,8 @@ final class LocalWhisperRawOutputLoggerTests: XCTestCase {
         let session = try await source.startSession(language: Locale(identifier: "zh-Hans"))
         engine.emit()
         await session.stop()
-        await session.cancel()
         var events: [TranscriptionEvent] = []
-        do { for try await event in session.events() { events.append(event) } }
-        catch is CancellationError {}
+        for try await event in session.events() { events.append(event) }
         return (events, logger, telemetry)
     }
 }

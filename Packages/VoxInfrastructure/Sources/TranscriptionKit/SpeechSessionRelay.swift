@@ -25,8 +25,9 @@ package final class SpeechSessionRelay: Sendable {
         let current = state.withLock { state in state.id == id ? state.continuation : nil }
         current?.yield(event)
     }
-    func finish(throwing error: (any Error)? = nil) {
-        let current = state.withLock { state in
+    func finish(id: UUID? = nil, throwing error: (any Error)? = nil) {
+        let current = state.withLock { state -> AsyncThrowingStream<TranscriptionEvent, Error>.Continuation? in
+            guard id == nil || state.id == id else { return nil }
             defer { state.continuation = nil }
             return state.continuation
         }
@@ -36,6 +37,7 @@ package final class SpeechSessionRelay: Sendable {
 
 protocol SessionDriving: SpeechSessionSource {
     var sessionRelay: SpeechSessionRelay { get }
+    var finishesRelayOnStopReturn: Bool { get }
     func start(language: Locale) async throws
     func stop() async
     func pause() async
@@ -45,6 +47,7 @@ protocol SessionDriving: SpeechSessionSource {
 }
 
 extension SessionDriving {
+    var finishesRelayOnStopReturn: Bool { true }
     func captureDeviceStates() -> AsyncStream<AudioCaptureState> { captureStates() }
     func interruptCapture() async {
         await stop()
@@ -77,13 +80,7 @@ private final class DrivenSpeechSession: SpeechSession {
         self.id = id
         self.stream = stream
         let deviceStates = source.captureDeviceStates()
-        self.interruptions = Task {
-            for await state in deviceStates {
-                guard !Task.isCancelled, source.sessionRelay.isCurrent(id) else { return }
-                if state == .interrupted { await source.interruptCapture() }
-            }
-        }
-        self.levels = Task { [relay = source.sessionRelay] in
+        let levelsTask = Task { [relay = source.sessionRelay] in
             var initial = true
             for await level in levels {
                 if initial { initial = false; continue }
@@ -91,12 +88,30 @@ private final class DrivenSpeechSession: SpeechSession {
                 relay.send(.level(level), id: id)
             }
         }
+        self.levels = levelsTask
+        self.interruptions = Task { [levelsTask] in
+            for await state in deviceStates {
+                guard !Task.isCancelled, source.sessionRelay.isCurrent(id) else { return }
+                if state == .interrupted {
+                    levelsTask.cancel()
+                    await source.interruptCapture()
+                    source.sessionRelay.finish(id: id)
+                    return
+                }
+            }
+        }
     }
     deinit { levels.cancel(); interruptions.cancel() }
     func events() -> AsyncThrowingStream<TranscriptionEvent, Error> { stream }
     func pause() async { if source.sessionRelay.isCurrent(id) { await source.pause() } }
     func resume() async { if source.sessionRelay.isCurrent(id) { await source.resume() } }
-    func stop() async { if source.sessionRelay.isCurrent(id) { await source.stop() } }
+    func stop() async {
+        guard source.sessionRelay.isCurrent(id) else { return }
+        levels.cancel()
+        interruptions.cancel()
+        await source.stop()
+        if source.finishesRelayOnStopReturn { source.sessionRelay.finish(id: id) }
+    }
     func cancel() async {
         guard source.sessionRelay.isCurrent(id) else { return }
         levels.cancel()
