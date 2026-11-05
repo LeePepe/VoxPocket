@@ -8,7 +8,7 @@ import Synchronization
 /// 专注于音频采集：请求权限、启动 AVAudioEngine、写入临时 WAV 文件，
 /// 并通过 `bufferHandler` 同步回调将每个 PCM buffer 分发给外部消费者（如语音识别引擎）。
 /// 不包含任何转录逻辑。
-// Sendable: AVAudioEngine callbacks own audio writes; lifecycle configuration runs on MainActor.
+// Sendable: AVAudioEngine callback and MainActor lifecycle are serialized by lock.
 public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked Sendable {
 
     // MARK: - Private state

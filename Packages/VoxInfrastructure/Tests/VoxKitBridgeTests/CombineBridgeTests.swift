@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import Synchronization
 import XCTest
 import TranscriptionKit
 import TranscriptionKitCombine
@@ -72,7 +71,7 @@ final class CombineBridgeTests: XCTestCase {
         withExtendedLifetime(subscriptions) {}
     }
 
-    func testSpeechRecognitionServiceFailsAfterCoordinatorRelease() {
+    func testReleasedSpeechServiceFails() {
         let service: any SpeechRecognitionService = CombineTranscriptionCoordinator.wrap(ProbeSource(session: ProbeSession())).speechRecognitionService
         let failure = expectation(description: "failure")
         _ = service.resultPublisher.sink(receiveCompletion: { if case .failure = $0 { failure.fulfill() } }, receiveValue: { _ in })
