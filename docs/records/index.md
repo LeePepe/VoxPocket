@@ -10,7 +10,7 @@ Last-Reviewed: 2026-11-05
 - Harness baseline: `docs/harness/metrics-baseline.md`
 
 ## Architecture
-- `docs/architecture/packages-architecture.md`
+- `docs/architecture/packages-architecture.md` (including the Phase 1.1 VoxKit SDK boundary)
 - `docs/architecture/dependency-graph.md`
 - `docs/architecture/tech-context.md`
 - `docs/architecture/private-model-config.md`

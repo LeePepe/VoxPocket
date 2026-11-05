@@ -1,5 +1,31 @@
 # VoxPocket 依赖关系图
 
+## VoxKit SDK 边界（Phase 1.1）
+
+```mermaid
+graph LR
+    VoxKit[VoxKit SDK\nVoxCore · VoxSpeech · VoxSpeechWhisperKit · VoxRefine · VoxLLM · VoxWorkflow]
+    Bridge[VoxInfrastructure\nVoxKitBridge]
+    App[VoxApplication]
+    Presentation[VoxPresentation]
+    Shell[VoxPocketApp]
+    Domain[VoxDomain]
+    Loki[LokiKit]
+    Bridge --> VoxKit
+    App --> VoxKit
+    Presentation --> VoxKit
+    Shell --> VoxKit
+    Bridge --> Domain
+    App --> Bridge
+    Presentation --> App
+    Shell --> Presentation
+    VoxKit -. forbidden .-> Domain
+    VoxKit -. forbidden .-> Loki
+```
+
+`VoxKit` is standalone and has zero dependency on `VoxDomain`, `LokiKit`, or App layers.
+The SDK redlines R1–R5 are checked by `Packages/VoxKit/scripts/redlines/check.sh --self-test`.
+
 ## 包级依赖（Package-level Dependencies）
 
 ```mermaid

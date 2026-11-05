@@ -17,9 +17,18 @@ eliminates hidden side effects and makes the hybrid Combine + async/await concur
 Dependencies flow one way only, and never reverse:
 
 ```
-VoxPresentation → VoxApplication → VoxInfrastructure → LokiKit → VoxDomain
+VoxPocketApp → VoxPresentation → VoxApplication → VoxInfrastructure (VoxKitBridge)
+                                      └──────────→ VoxKit SDK
+VoxKit (VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow,
+       VoxWorkflowWhisperKit) → no local or external runtime layer
+VoxInfrastructure → VoxDomain; VoxDomain → no dependencies
 ```
 
+- `VoxKit` is a standalone SDK layer. Its modules (`VoxCore`, `VoxSpeech`,
+  `VoxSpeechWhisperKit`, `VoxRefine`, `VoxLLM`, `VoxWorkflow`, and
+  `VoxWorkflowWhisperKit`) have zero dependency on `VoxDomain`, `LokiKit`, or any
+  App layer. `VoxInfrastructure` (`VoxKitBridge`), `VoxApplication`,
+  `VoxPresentation`, and `VoxPocketApp` may depend downward on `VoxKit`.
 - `VoxDomain` takes **no external dependencies** and imports no other local layer.
 - No layer may import a layer above it. A lower layer reaching upward is a red line, not a refactor.
 - This applies at two axes: **inter-layer** (package `depends_on`) and **intra-layer**
@@ -30,22 +39,35 @@ VoxPresentation → VoxApplication → VoxInfrastructure → LokiKit → VoxDoma
 - Shared mutable state is guarded by `Mutex<State>` (from `Synchronization`), never by ad-hoc locks
   or unguarded `var`.
 - View models and all UI code are `@MainActor`.
-- `@unchecked Sendable` is permitted **only** for Combine bridging and must be justified at the
-  declaration; never as a shortcut to silence the compiler.
+- `@unchecked Sendable` and `nonisolated(unsafe)` are permitted **only** for (a) App-side
+  Combine bridging or (b) Apple system framework boundary callbacks (`AVFoundation` realtime
+  audio tap and `Speech` recognition callbacks). Every such site carries an inline
+  `// Sendable:` safety invariant comment. Third-party libraries, including WhisperKit, are not
+  exempt; `VoxSpeechWhisperKit` uses an actor, `Mutex<State>`, or an `AsyncStream` continuation.
 - No blocking calls (`Thread.sleep`, synchronous I/O, blocking waits) on the main thread — ever.
 - Streaming uses `AsyncThrowingStream`; errors propagate, never silently dropped.
 
 ### IV. Privacy of Voice & Text (NON-NEGOTIABLE)
 Recorded audio, live/final transcripts, and refined user text are sensitive user data.
-- Never write transcript content, audio buffers, or refined text into logs or telemetry payloads.
+- Never write transcript content, audio buffers, or refined user text into logs or telemetry payloads.
   Telemetry carries metrics only (durations, counts, source labels, session IDs) — never content.
+- `VoxKit` is strictly bound by this principle: its entry points use compile-time typed
+  `StaticString` messages and `VoxLogField` values (R3(a)); static checks prohibit `print`,
+  `NSLog`, and `os_log` (R3(b)); dynamic Privacy Canary verification covers all entry points
+  and presets (R3(c)).
 - Never persist user content outside the app's own sandbox
   (`~/Library/Application Support/VoxPocket/`).
 
 ### V. Secrets & External-Vendor Hygiene (NON-NEGOTIABLE)
-- No hardcoded secrets, API keys, or tokens in source. Keys normally come from environment variables
-  (`whisperkey`, `kimikey`/`AZURE_API_KEY`, `LOKI_TOKEN`, `CLAUDE_API_KEY`/`ANTHROPIC_API_KEY`).
+- No hardcoded secrets, API keys, or tokens in source. Only the App shell (`VoxPocketApp`)
+  reads environment variables and the sandbox `config.private.json`; `VoxKit` never reads
+  environment variables, `UserDefaults`, `Bundle`, `Keychain`, or uninjected file paths.
+  Keys normally come from environment variables (`whisperkey`, `kimikey`/`AZURE_API_KEY`,
+  `LOKI_TOKEN`, `CLAUDE_API_KEY`/`ANTHROPIC_API_KEY`) and are injected into the SDK.
   Validate required keys are present at startup; fail fast with a clear message.
+- VoxKit receives credentials exclusively through `CredentialProvider` and its `Credential`
+  value type, whose `description`, `debugDescription`, and `customMirror` are redacted; it
+  receives storage paths only through `VoxStorageLocations`.
 - Azure model credentials may alternatively come from the user-approved runtime file
   `Application Support/VoxPocket/config.private.json` inside the app sandbox (approved 2026-09-09).
   Require an owner-only regular file (0600), exclude it from backups, Git and application bundles,
@@ -54,7 +76,9 @@ Recorded audio, live/final transcripts, and refined user text are sensitive user
   variables remain supported. Other credentials retain their existing environment-only contract.
 - No Microsoft-specific identifiers in committed code: no Azure resource IDs, tenant IDs,
   Microsoft account references, Windows registry paths, OneDrive/SharePoint/Teams fields,
-  or Microsoft copyright notices. Endpoints must come from config/env, not literals.
+  or Microsoft copyright notices. Endpoints must come from config/env, not literals. Non-public
+  integration configuration remains in gitignored `*.local.*` files with synthetic committed
+  `*.example.*` templates.
 
 ### VI. Input Validation at Boundaries
 Validate all external data (API responses, user input, file contents, env config) at the
@@ -69,6 +93,12 @@ system boundary before use. Fail fast with a clear message. Never trust external
   test doubles are `Fake*` / `Mock*`. Depend on protocols, not concrete types.
 - **File organization**: many small focused files over few large ones. Functions < 50 lines,
   files < 800 lines, nesting ≤ 4 levels.
+- **VoxKit SDK boundary**: during phases 1–3 it is the staged package at `Packages/VoxKit`;
+  from phase 4 it is a remote exact-version dependency. VoxKit's SDK redlines R1–R5 are
+  verified by `Packages/VoxKit/scripts/redlines/check.sh --self-test`.
+- **Non-public project configuration**: Azure hostnames, internal endpoints, and internal issue
+  numbers never enter Git; use gitignored local files and commit only synthetic `.example` templates
+  (`config.private.json`/`config.example.json` patterns).
 - **LokiKit is external**: it is published by `LeePepe/shared-telemetry` and resolved by SwiftPM
   as a remote dependency pinned to exact `0.2.0`. Provider implementation changes are out of scope
   for this repo's gates. VoxPocket does not override `maxDiskBytes`: it accepts the provider's
@@ -89,6 +119,9 @@ system boundary before use. Fail fast with a clear message. Never trust external
   cannot skip; heavy verification (`xcodebuild`, simulator) lives here, not in local hooks.
 - Repository-owned `.githooks/` run the deterministic checks directly, including docs-map and
   freshness on commit. Internal AI Reviewer and PR Actions review responsibilities are unchanged.
+- VoxKit SDK redlines R1–R5 (`Packages/VoxKit/scripts/redlines/check.sh --self-test`), VoxKit
+  iOS Simulator tests, and App iOS Simulator unit tests are governance gates and are required
+  once their corresponding targets are staged.
 
 ## Governance
 
@@ -115,4 +148,6 @@ separate change kinds. This authorization applies only to that indivisible migra
 general exception, changes no privacy/concurrency/layer red line, and does not authorize Blob
 adoption, credentials, CI-gate changes, delivery changes, or shared-telemetry edits.
 
-**Version**: 1.3.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-10-16
+**Amendment (2026-11-05)**: Establish the VoxKit standalone SDK boundary and its R1–R5 governance redlines; stage its leaf context support before code promotion. This is a non-breaking governance amendment; migration moves the SDK from the staged package to an exact remote dependency in phase 4.
+
+**Version**: 1.4.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-11-05

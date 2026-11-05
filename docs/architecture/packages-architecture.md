@@ -2,7 +2,7 @@
 
 ## 概览
 
-VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Package Manager 将代码组织成 4 个核心包，并接入独立的远程依赖 `LokiKit`（`LeePepe/shared-telemetry`，exact `0.2.0`），实现清晰的依赖方向和职责分离。
+VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Package Manager 将代码组织成 4 个核心包，并接入独立的远程依赖 `LokiKit`（`LeePepe/shared-telemetry`，exact `0.2.0`），实现清晰的依赖方向和职责分离。Phase 1.1 另行暂存独立的 `VoxKit` SDK 边界；它不属于 Clean Architecture 的运行时依赖链。
 
 ```
 ┌─────────────────────────────────────────┐
@@ -24,9 +24,21 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 └────────────────┘  └───────────────────────────┘
 ```
 
+## VoxKit SDK boundary (Phase 1.1)
+
+`VoxKit` comprises `VoxCore`, `VoxSpeech`, `VoxSpeechWhisperKit`, `VoxRefine`,
+`VoxLLM`, `VoxWorkflow`, and `VoxWorkflowWhisperKit`. It has zero dependency on
+`VoxDomain`, `LokiKit`, or App layers. `VoxInfrastructure` consumes it through
+`VoxKitBridge`; `VoxApplication`, `VoxPresentation`, and `VoxPocketApp` may depend
+on it downward. SDK redlines R1–R5 are checked by
+`Packages/VoxKit/scripts/redlines/check.sh --self-test`. The leaf tech context is
+pre-staged in the root support patterns for T103b and is promoted only after that file exists.
+
 ## 依赖规则
 
-**核心原则**: 依赖方向永远指向内层（Domain），外层依赖内层，内层不知道外层的存在。
+**核心原则**: 依赖方向永远指向内层（Domain），外层依赖内层，内层不知道外层的存在；
+VoxKit is the separate standalone SDK exception to that application chain, not a dependency
+of VoxDomain or LokiKit.
 
 - **VoxDomain**: 无外部依赖（纯业务实体）
 - **VoxInfrastructure**: 依赖 VoxDomain，并通过独立的 `LokiKit` 包接入遥测能力
