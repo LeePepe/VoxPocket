@@ -1,8 +1,5318 @@
 {
-  "schema": "golden-trace/v1",
-  "kind": "pipeline",
-  "platform": "macOS",
-  "traces": [
-    {"routing": {"intent": "azureFoundry", "tone": "azureFoundry", "entities": "azureFoundry", "tags": "azureFoundry", "params": "azureFoundry"}}
+  "kind" : "routing",
+  "schema" : "golden-trace\/v1",
+  "traces" : [
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : true,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.realtime",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "realtime",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple",
+          "speech.azure.batch"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "batch",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "appleIntelligence",
+          "intent" : "appleIntelligence",
+          "params" : "appleIntelligence",
+          "tags" : "appleIntelligence",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "appleIntelligence",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "appleIntelligence"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "appleIntelligence"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "appleIntelligence",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "appleIntelligence",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "azureFoundry",
+          "intent" : "azureFoundry",
+          "params" : "azureFoundry",
+          "tags" : "azureFoundry",
+          "tone" : "azureFoundry"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : false,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "fullConfig",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingBatch",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingRealtime",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "none",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    },
+    {
+      "configuration" : "missingAzureText",
+      "pipeline" : {
+        "analysis" : {
+          "entities" : "skipped",
+          "intent" : "skipped",
+          "params" : "skipped",
+          "tags" : "skipped",
+          "tone" : "skipped"
+        },
+        "configFailure" : "textModelUnavailable",
+        "merger" : false,
+        "realtime" : false,
+        "refine" : "azureFoundry",
+        "speech" : [
+          "capture.microphone",
+          "speech.apple"
+        ]
+      },
+      "settings" : {
+        "intent" : "azureFoundry",
+        "refinement" : "azureFoundry",
+        "skip" : true,
+        "speech" : "appleSpeech",
+        "tone" : "azureFoundry"
+      }
+    }
   ]
 }

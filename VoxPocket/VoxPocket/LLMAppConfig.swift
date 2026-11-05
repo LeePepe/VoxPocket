@@ -57,10 +57,16 @@ enum LLMAppConfig {
     /// 未配置时尝试 `AZURE_OPENAI_ENDPOINT`，两者都缺失则 Azure 不可用。
     /// `azureModelIdentifier`：可通过 `AZURE_FOUNDRY_MODEL` 覆盖。
     static var azureEndpoint: URL? {
-        secureURL(runtimeEnvironment["AZURE_FOUNDRY_ENDPOINT"] ?? runtimeEnvironment["AZURE_OPENAI_ENDPOINT"])
+        azureEndpoint(environment: runtimeEnvironment)
     }
     static var azureModelIdentifier: String {
-        nonempty(runtimeEnvironment["AZURE_FOUNDRY_MODEL"]) ?? "gpt-5.6-luna"
+        azureModelIdentifier(environment: runtimeEnvironment)
+    }
+    static func azureEndpoint(environment: [String: String]) -> URL? {
+        secureURL(environment["AZURE_FOUNDRY_ENDPOINT"] ?? environment["AZURE_OPENAI_ENDPOINT"])
+    }
+    static func azureModelIdentifier(environment: [String: String]) -> String {
+        nonempty(environment["AZURE_FOUNDRY_MODEL"]) ?? "gpt-5.6-luna"
     }
     static let azureAPIVersion = "2024-05-01-preview"
     static let azureAuthMode: AzureFoundryAuthMode = .apiKey

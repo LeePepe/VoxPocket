@@ -28,9 +28,10 @@ import PlatformUI
 /// 提供工厂方法创建 ViewModel。
 @MainActor
 public final class ServiceContainer: ObservableObject {
-    private let preferencesStore: any PreferencesStore
+    internal let preferencesStore: any PreferencesStore
     private let logger: Logger
     private let persistenceStartup = AppPersistenceStartup()
+    private var llmPreferencesBinding: LLMPreferenceBinding?
 
     // MARK: - 单例
 
@@ -100,24 +101,26 @@ public final class ServiceContainer: ObservableObject {
 
     init(
         productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
-        processEnvironment: [String: String] = ProcessInfo.processInfo.environment, processArguments: [String] = ProcessInfo.processInfo.arguments,
+        processEnvironment: [String: String]? = nil, processArguments: [String] = ProcessInfo.processInfo.arguments,
         preferencesStore: any PreferencesStore = UserDefaultsPreferencesStore.shared,
         llmServiceFactory: (() -> DefaultLLMService)? = nil,
+        llmNotificationCenter: NotificationCenter = .default,
         productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider = { BlobTelemetryConfiguration() },
         productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil, productTelemetryNotificationCenter: NotificationCenter = .default,
         productTelemetryHostOverride: BlobTelemetryHostKind? = nil
     ) {
         self.preferencesStore = preferencesStore
+        let environment = processEnvironment ?? LLMAppConfig.runtimeEnvironment
         VoxPocketLogging.start(); logger = PrintLogger(subsystem: "ServiceContainer")
         let telemetryCoordinator = Self.makeTelemetryService()
         self.telemetryCoordinator = telemetryCoordinator; telemetryService = telemetryCoordinator
         let productTelemetry = ProductTelemetryAssembly.make(
-            preferences: productTelemetryPreferences, environment: processEnvironment, arguments: processArguments,
+            preferences: productTelemetryPreferences, environment: processEnvironment ?? ProcessInfo.processInfo.environment, arguments: processArguments,
             configuration: productTelemetryConfiguration, bootstrapFactory: productTelemetryBootstrapFactory,
             notificationCenter: productTelemetryNotificationCenter, hostOverride: productTelemetryHostOverride, coordinator: telemetryCoordinator
         )
         self.productTelemetryPreferences = productTelemetry.preferences; productTelemetryInstrumentation = productTelemetry.instrumentation
-        let azureConfig = Self.makeAzureFoundryConfig()
+        let azureConfig = Self.makeAzureFoundryConfig(environment: environment)
         #if os(macOS)
         let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings)
         let configuredLLM = textModels.main; let configuredQuickLLM = textModels.quick
@@ -127,9 +130,9 @@ public final class ServiceContainer: ObservableObject {
         llmService = configuredLLM
         #endif
         #if os(macOS)
-        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber { configuredLLM.configure($0) }
+        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore) { configuredLLM.configure($0) }
         #else
-        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber()
+        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore)
         #endif
 #if os(macOS)
         clipboardService = MacOSClipboardService.shared; accessibilityService = MacOSAccessibilityService.shared
@@ -143,29 +146,27 @@ public final class ServiceContainer: ObservableObject {
             backing: InMemorySessionUseCase()) { await productTelemetryInstrumentation.sessionDidComplete() }
         deepLinkRouter = DefaultDeepLinkRouter()
 #if os(macOS)
-        quickTranscriber = Self.makeQuickTranscriber { configuredQuickLLM.configure($0) }; quickEditingUseCase = DefaultEditingUseCase()
+        quickTranscriber = Self.makeQuickTranscriber(environment: environment, preferences: preferencesStore) { configuredQuickLLM.configure($0) }; quickEditingUseCase = DefaultEditingUseCase()
         quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService); quickTranscriptionUseCase = DefaultTranscriptionUseCase(coordinator: quickTranscriber, editing: quickEditingUseCase, telemetry: telemetryService); quickRefinementUseCase = DefaultRefinementUseCase(llmService: configuredQuickLLM, editing: quickEditingUseCase, telemetry: telemetryService)
         quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(editing: quickEditingUseCase, transcription: quickTranscriptionUseCase, refinement: quickRefinementUseCase)
 #endif
-        finishInitialization()
+        finishInitialization(environment: environment, notificationCenter: llmNotificationCenter)
     }
 
-    private func finishInitialization() {
+    private func finishInitialization(environment: [String: String], notificationCenter: NotificationCenter) {
         injectMergerIfNeeded(into: transcriber)
         #if os(macOS)
         injectMergerIfNeeded(into: quickTranscriber)
         #else
-        configureLLMService()
-        observeProviderPreferenceChanges()
-        Task { [weak self] in
-            await self?.applyProviderPreferenceIfExists()
-            await self?.applyAnalysisSettingsPreference()
-        }
+        llmPreferencesBinding = LLMPreferenceBinding(service: llmService, environment: environment,
+                                                    preferences: preferencesStore, notificationCenter: notificationCenter,
+                                                    logger: logger)
         #endif
         logger.debug("Initialized")
     }
 
     private static func makePrimaryTranscriber(
+        environment: [String: String], preferences: any PreferencesStore,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
     ) -> (any TranscriptionCoordinator, (any ModelLoadingObservable)?) {
         switch LLMAppConfig.defaultTranscriberProvider {
@@ -183,55 +184,18 @@ public final class ServiceContainer: ObservableObject {
             return (hybrid, hybrid)
         default:
             return (
-                makeTranscriber(preloadOnStart: true, beforeSession: beforeSession),
+                makeTranscriber(preloadOnStart: true, environment: environment, preferences: preferences, beforeSession: beforeSession),
                 nil
             )
         }
     }
 
-    private func observeProviderPreferenceChanges() {
-        NotificationCenter.default.addObserver(
-            forName: PreferencesNotification.llmProviderDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            Task { [weak self] in
-                await self?.applyProviderPreferenceIfExists()
-            }
-        }
-
-        NotificationCenter.default.addObserver(
-            forName: PreferencesNotification.llmAnalysisSettingsDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            Task { [weak self] in
-                await self?.applyAnalysisSettingsPreference()
-            }
-        }
-    }
-
-    private func applyAnalysisSettingsPreference() async {
-        let skip: Bool = await preferencesStore.getValue(for: .llmSkipContentAnalysis, default: false)
-        llmService.setSkipContentAnalysis(skip)
-        logger.log(.debug, "Applied LLM analysis settings", context: [
-            "skip_content_analysis": skip
-        ])
-    }
-
-    private func applyProviderPreferenceIfExists() async {
-        let stored: String? = await preferencesStore.getValue(for: .llmProvider)
-        guard let stored, let preferred = LLMProviderType(rawValue: stored) else {
-            return
-        }
-        configureLLMService(preferredProvider: preferred)
-    }
+    func waitForPendingLLMPreferenceChanges() async { await llmPreferencesBinding?.waitForPendingChanges() }
 
     static func makeTranscriber(
         preloadOnStart: Bool = true,
         environment: [String: String]? = nil,
+        preferences: any PreferencesStore = UserDefaultsPreferencesStore.shared,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
     ) -> any TranscriptionCoordinator {
         let environment = environment ?? LLMAppConfig.runtimeEnvironment
@@ -243,17 +207,10 @@ public final class ServiceContainer: ObservableObject {
             )
         case .hybridWhisper:
             #if os(macOS)
-            return StageModelRouting.makeTranscriber(environment: environment, preferences: UserDefaultsPreferencesStore.shared,
+            return StageModelRouting.makeTranscriber(environment: environment, preferences: preferences,
                                                     beforeSession: beforeSession)
             #else
-            if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
-                return HybridWhisperTranscriber(
-                    whisperConfig: config,
-                    realtimeConfig: LLMAppConfig.realtimeTranscriptionConfig(environment: environment)
-                )
-            }
-            PrintLogger(subsystem: "ServiceContainer").warning("Azure transcription configuration missing; actual_provider=appleSpeech")
-            return AppleSpeechTranscriber()
+            return makeIOSHybridTranscriber(environment: environment)
             #endif
         case .azureWhisper:
             if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
@@ -273,8 +230,17 @@ public final class ServiceContainer: ObservableObject {
     }
 
     static func makeQuickTranscriber(environment: [String: String]? = nil,
+                                    preferences: any PreferencesStore = UserDefaultsPreferencesStore.shared,
                                     beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil) -> any TranscriptionCoordinator {
-        makeTranscriber(preloadOnStart: true, environment: environment, beforeSession: beforeSession)
+        makeTranscriber(preloadOnStart: true, environment: environment, preferences: preferences, beforeSession: beforeSession)
+    }
+
+    static func makeIOSHybridTranscriber(environment: [String: String]) -> any TranscriptionCoordinator {
+        if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
+            return HybridWhisperTranscriber(whisperConfig: config)
+        }
+        PrintLogger(subsystem: "ServiceContainer").warning("Azure transcription configuration missing; actual_provider=appleSpeech")
+        return AppleSpeechTranscriber()
     }
 
     private static func makeLocalWhisperTranscriber(preloadOnStart: Bool) -> WhisperKitTranscriber {
@@ -295,10 +261,10 @@ public final class ServiceContainer: ObservableObject {
         )
     }
 
-    private static func makeAzureFoundryConfig() -> LLMProviderConfig? {
-        guard let deployment = makeAzureFoundryDeployment() else {
+    static func makeAzureFoundryConfig(environment: [String: String]) -> LLMProviderConfig? {
+        guard let deployment = makeAzureFoundryDeployment(environment: environment) else {
             // Azure 缺配置时明确失败，不静默调用 Apple 精炼。
-            return LLMProviderConfig(providerType: .azureFoundry, modelIdentifier: LLMAppConfig.azureModelIdentifier)
+            return LLMProviderConfig(providerType: .azureFoundry, modelIdentifier: LLMAppConfig.azureModelIdentifier(environment: environment))
         }
         return deployment.providerConfig
     }
@@ -311,28 +277,8 @@ public final class ServiceContainer: ObservableObject {
         multiRecognizer.merger = LLMTranscriptionMerger(llmService: llmService)
     }
 
-    private func configureLLMService(
-        preferredProvider: LLMProviderType? = nil
-    ) {
-        let provider = preferredProvider
-            ?? LLMAppConfig.defaultProvider
-        let (config, optionsCount) = Self.makeProviderConfig(provider)
-        do {
-            try llmService.setProvider(config)
-            logger.log(.debug, "Configured LLM provider", context: [
-                "provider": provider.rawValue,
-                "options_count": optionsCount
-            ])
-        } catch {
-            logger.log(.debug, "LLM configuration failed; using fallback", context: [
-                "provider": provider.rawValue,
-                "error": error.localizedDescription
-            ])
-        }
-    }
-
-    private static func makeProviderConfig(
-        _ provider: LLMProviderType
+    static func makeProviderConfig(
+        _ provider: LLMProviderType, environment: [String: String]
     ) -> (LLMProviderConfig, Int) {
         var options: [String: String] = LLMAppConfig.analysisOptions()
         let modelIdentifier: String
@@ -340,7 +286,7 @@ public final class ServiceContainer: ObservableObject {
         let baseURL: URL?
         switch provider {
         case .azureFoundry:
-            if let deployment = Self.makeAzureFoundryDeployment() {
+            if let deployment = Self.makeAzureFoundryDeployment(environment: environment) {
                 modelIdentifier = deployment.model
                 apiKey = deployment.apiKey
                 baseURL = deployment.endpoint
@@ -352,9 +298,9 @@ public final class ServiceContainer: ObservableObject {
                 options["azure.api_style"] = deployment.apiStyle.rawValue
                 options["azure.reasoning_effort"] = deployment.reasoningEffort
             } else {
-                modelIdentifier = LLMAppConfig.azureModelIdentifier
+                modelIdentifier = LLMAppConfig.azureModelIdentifier(environment: environment)
                 apiKey = nil
-                baseURL = LLMAppConfig.azureEndpoint
+                baseURL = LLMAppConfig.azureEndpoint(environment: environment)
                 options["azure.api_version"] = LLMAppConfig.azureAPIVersion
             }
         default:
@@ -372,14 +318,9 @@ public final class ServiceContainer: ObservableObject {
         return (config, options.count)
     }
 
-    private static func readAzureFoundryAPIKey() -> String? {
-        // 新资源共享密钥优先；兼容旧变量，但空值不能遮蔽有效配置。
-        LLMAppConfig.refinementAPIKey(environment: LLMAppConfig.runtimeEnvironment)
-    }
-
-    private static func makeAzureFoundryDeployment() -> AzureFoundryDeployment? {
-        guard let apiKey = readAzureFoundryAPIKey(), !apiKey.isEmpty,
-              let endpoint = LLMAppConfig.azureEndpoint else {
+    private static func makeAzureFoundryDeployment(environment: [String: String]) -> AzureFoundryDeployment? {
+        guard let apiKey = LLMAppConfig.refinementAPIKey(environment: environment), !apiKey.isEmpty,
+              let endpoint = LLMAppConfig.azureEndpoint(environment: environment) else {
             return nil
         }
 
@@ -387,7 +328,7 @@ public final class ServiceContainer: ObservableObject {
         return AzureFoundryDeployment(
             name: "default",
             endpoint: endpoint,
-            model: LLMAppConfig.azureModelIdentifier,
+            model: LLMAppConfig.azureModelIdentifier(environment: environment),
             apiKey: apiKey,
             apiVersion: LLMAppConfig.azureAPIVersion,
             authMode: LLMAppConfig.azureAuthMode,
@@ -599,6 +540,67 @@ public final class ServiceContainer: ObservableObject {
 
     func waitForPendingProductTelemetrySessionCompletion() async {
         await productTelemetryInstrumentation.waitForPendingSessionCompletion()
+    }
+}
+
+@MainActor
+final class LLMPreferenceBinding {
+    let service: DefaultLLMService
+    private let environment: [String: String]
+    private let preferences: any PreferencesStore
+    private let notificationCenter: NotificationCenter
+    private let logger: Logger
+    private var observers: [any NSObjectProtocol] = []
+    private var pendingUpdate: Task<Void, Never>?
+
+    init(service: DefaultLLMService, environment: [String: String], preferences: any PreferencesStore,
+         notificationCenter: NotificationCenter, logger: Logger = PrintLogger(subsystem: "ServiceContainer")) {
+        self.service = service; self.environment = environment; self.preferences = preferences
+        self.notificationCenter = notificationCenter; self.logger = logger
+        configureLLMService()
+        for name in [PreferencesNotification.llmProviderDidChange, PreferencesNotification.llmAnalysisSettingsDidChange] {
+            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                MainActor.assumeIsolated { self?.enqueueUpdate(provider: notification.name == PreferencesNotification.llmProviderDidChange) }
+            })
+        }
+        pendingUpdate = Task { [weak self] in
+            await self?.applyProviderPreferenceIfExists()
+            await self?.applyAnalysisSettingsPreference()
+        }
+    }
+
+    isolated deinit { for observer in observers { notificationCenter.removeObserver(observer) } }
+
+    func waitForPendingChanges() async { await pendingUpdate?.value }
+
+    private func enqueueUpdate(provider: Bool) {
+        pendingUpdate = Task { [weak self] in
+            if provider { await self?.applyProviderPreferenceIfExists() }
+            else { await self?.applyAnalysisSettingsPreference() }
+        }
+    }
+
+    private func applyProviderPreferenceIfExists() async {
+        let stored: String? = await preferences.getValue(for: .llmProvider)
+        guard let stored, let preferred = LLMProviderType(rawValue: stored) else { return }
+        configureLLMService(preferredProvider: preferred)
+    }
+
+    private func applyAnalysisSettingsPreference() async {
+        let skip: Bool = await preferences.getValue(for: .llmSkipContentAnalysis, default: false)
+        service.setSkipContentAnalysis(skip)
+        logger.log(.debug, "Applied LLM analysis settings", context: ["skip_content_analysis": skip])
+    }
+
+    private func configureLLMService(preferredProvider: LLMProviderType? = nil) {
+        let provider = preferredProvider ?? LLMAppConfig.defaultProvider
+        let (config, optionsCount) = ServiceContainer.makeProviderConfig(provider, environment: environment)
+        do {
+            try service.setProvider(config)
+            logger.log(.debug, "Configured LLM provider", context: ["provider": provider.rawValue, "options_count": optionsCount])
+        } catch {
+            logger.log(.debug, "LLM configuration failed; using fallback", context: ["provider": provider.rawValue, "error": error.localizedDescription])
+        }
     }
 }
 
