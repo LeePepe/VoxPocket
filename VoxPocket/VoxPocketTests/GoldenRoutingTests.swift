@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import XCTest
 import Preferences
 import TranscriptionKit
@@ -175,7 +176,7 @@ final class GoldenRoutingTests: XCTestCase {
 
     private func assertFixture(_ rows: [[String: Any]], name: String) throws {
         let payload: [String: Any] = ["schema": "golden-trace/v1", "kind": "routing", "traces": rows]
-        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .prettyPrinted])
+        let data = try GoldenFixtureCodec.encode(payload)
         if let directory = ProcessInfo.processInfo.environment["VOX_GOLDEN_RECORD_DIR"] {
             try data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".json"))
         }
@@ -185,8 +186,68 @@ final class GoldenRoutingTests: XCTestCase {
         let bundle = Bundle(for: Self.self)
         #endif
         let url = try XCTUnwrap(bundle.url(forResource: name, withExtension: "json"))
-        let fixture = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? NSDictionary
+        let fixture = try GoldenFixtureCodec.decode(Data(contentsOf: url))
         XCTAssertEqual(payload as NSDictionary, fixture)
+    }
+}
+
+private enum GoldenFixtureCodec {
+    static func encode(_ payload: [String: Any]) throws -> Data {
+        var values: [Any] = []
+        var indices: [Data: Int] = [:]
+        func intern(_ value: Any) throws -> Int {
+            let node: Any
+            if let object = value as? [String: Any] {
+                var references: [String: Int] = [:]
+                for key in object.keys.sorted() { references[key] = try intern(object[key]!) }
+                node = references
+            } else if let array = value as? [Any] {
+                node = try array.map(intern)
+            } else {
+                node = value
+            }
+            let key = try JSONSerialization.data(withJSONObject: node, options: [.sortedKeys, .fragmentsAllowed])
+            if let index = indices[key] { return index }
+            let index = values.count
+            values.append(node)
+            indices[key] = index
+            return index
+        }
+        let root = try intern(payload)
+        return try JSONSerialization.data(withJSONObject: [
+            "schema": "golden-trace/v1", "encoding": "interned-values/v1", "root": root, "values": values
+        ], options: [.sortedKeys])
+    }
+
+    static func decode(_ data: Data) throws -> NSDictionary {
+        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              envelope["schema"] as? String == "golden-trace/v1" else { throw CocoaError(.coderReadCorrupt) }
+        guard envelope["encoding"] != nil else { return envelope as NSDictionary }
+        guard envelope["encoding"] as? String == "interned-values/v1",
+              let values = envelope["values"] as? [Any], let root = envelope["root"] else {
+            throw CocoaError(.coderReadCorrupt)
+        }
+        var expanded: [Any] = []
+        func resolve(_ reference: Any) throws -> Any {
+            guard let number = reference as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+                  let index = reference as? Int, expanded.indices.contains(index) else {
+                throw CocoaError(.coderReadCorrupt)
+            }
+            return expanded[index]
+        }
+        for node in values {
+            let value: Any
+            if let object = node as? [String: Any] {
+                value = try object.mapValues(resolve)
+            } else if let array = node as? [Any] {
+                value = try array.map(resolve)
+            } else {
+                value = node
+            }
+            expanded.append(value)
+        }
+        guard let payload = try resolve(root) as? NSDictionary else { throw CocoaError(.coderReadCorrupt) }
+        return payload
     }
 }
 
