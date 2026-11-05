@@ -1,6 +1,6 @@
 # AGENTS.md — VoxPocket
 
-Last-Reviewed: 2026-10-20
+Last-Reviewed: 2026-11-05
 
 VoxPocket is a SwiftUI voice recording and transcription app for macOS and iOS
 (default speech locale `zh-Hans`, text refinement with Apple Intelligence or a
@@ -34,8 +34,8 @@ a root cause elsewhere is a new task.
 
 ## Protocol
 
-Follow `LeePepe/shared-ci@fd8a187ef4872aa1aa69c4e9afec9782183cc02d/ai/agent-protocol.md`
-(https://github.com/LeePepe/shared-ci/blob/fd8a187ef4872aa1aa69c4e9afec9782183cc02d/ai/agent-protocol.md).
+Follow `LeePepe/shared-ci@838e10a059979e6732446cb26edc95d173cc7e3a/ai/agent-protocol.md`
+(https://github.com/LeePepe/shared-ci/blob/838e10a059979e6732446cb26edc95d173cc7e3a/ai/agent-protocol.md).
 It must be the same SHA as the `uses:` pins in `.github/workflows/`.
 
 Plan-Review Loop (mandatory for any implementation plan, spec or plan change; a test-only
@@ -120,7 +120,7 @@ repository-contract deviation; it creates no broader exception.
 
 ## Dependencies
 These are the current pins; changes require CI and AI review on the PR head.
-- `shared-ci` `fd8a187ef4872aa1aa69c4e9afec9782183cc02d` — https://github.com/LeePepe/shared-ci/blob/fd8a187ef4872aa1aa69c4e9afec9782183cc02d/ai/
+- `shared-ci` `838e10a059979e6732446cb26edc95d173cc7e3a` — https://github.com/LeePepe/shared-ci/blob/838e10a059979e6732446cb26edc95d173cc7e3a/ai/
 - LokiKit from LeePepe/shared-telemetry exact `0.2.0` (annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` → commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`), exact-version selectors in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag integrity guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.2.0/ai/
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
