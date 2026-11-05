@@ -3,7 +3,7 @@ layer: _root
 role: 全局架构总览与 layer 划分;声明层内轴的类角色词表 canonical_roles
 canonical_roles: [Types, Config, Repo, Service, Runtime, UI]
 support:
-  - patterns: ["*.md", "LICENSE", "docs/**", "specs/**", "design/**", "artifacts/**", ".claude/**", ".codex/**", ".specify/**", "Packages/VoxKit/tech-context.md"]
+  - patterns: ["*.md", "LICENSE", "docs/**", "specs/**", "design/**", "artifacts/**", ".claude/**", ".codex/**", ".specify/**"]
     reason: documentation, specs, design records and agent/tool configuration; checked by docs lints and the contract audit
   - patterns: [".github/**", ".githooks/**", "scripts/**", "tests/**", "fastlane/**", "docker/**", ".gitignore", ".gitleaks.toml", "config.example.json"]
     reason: CI, hooks, policy, release and local tooling; verified by scripts/verify --policy and CI
@@ -18,8 +18,8 @@ red_lines:
 这是**目录索引层**的技术总览。层间依赖图与详细职责已在同目录既有文档中维护,本文件不复制,
 只做指针 + 声明**层内轴**所需的 `canonical_roles`。
 
-> `Packages/VoxKit/tech-context.md` 已预置在 `support` 匹配范围内，供 T103b
-> 完成 VoxKit 叶子层晋级；在该叶子文件落地前，不将 VoxKit 加入下方 layer 表。
+> `VoxKit` 现已作为活动叶子层纳入架构；其叶子上下文位于
+> `Packages/VoxKit/tech-context.md`。
 
 ## 既有架构文档(权威来源)
 
@@ -41,6 +41,7 @@ VoxUITesting(standalone,不参与运行时依赖链)
 | VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, LokiKit(ext) |
 | VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, LokiKit(ext) |
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
+| VoxKit | 独立语音与精炼 SDK(VoxCore 等),无本地层依赖 | `Packages/VoxKit/tech-context.md` | (无) |
 | VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, AppleUITesting(ext), LokiKit(ext) |
 
 > **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `exact: "0.2.0"`
