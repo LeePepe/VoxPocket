@@ -161,7 +161,7 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
         }
 
-        guard speechRecognizerProvider.isAvailable else {
+        guard speechRecognizerProvider.isAvailable(for: language) else {
             throw NSError(domain: "HybridLocalWhisperTranscriber", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
         }
@@ -181,7 +181,8 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
         _isTranscribing.withLock { $0 = true }
         logger.info("Recording + Apple Speech started")
 
-        recognitionTask = try? speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
+        do {
+            recognitionTask = try speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
             guard let self else { return }
             let text = update.text ?? ""
             if !text.isEmpty {
@@ -195,6 +196,10 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
                 self.logger.error("Apple Speech error: \(e.domain) \(e.code)")
                 self.stopRecorder()
             }
+            }
+        } catch {
+            _ = stopRecorder()
+            throw error
         }
     }
 

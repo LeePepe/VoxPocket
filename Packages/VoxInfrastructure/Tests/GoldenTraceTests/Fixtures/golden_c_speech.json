@@ -1,5 +1,9 @@
 {
   "schema": "golden-trace/v1",
   "kind": "speech",
-  "traces": []
+  "traces": [
+    {"scenario": "authorization", "initial": false, "eventual": true},
+    {"scenario": "appleSpeech", "events": ["partial", "final", "pause", "resume"]},
+    {"scenario": "hybridWhisper", "events": ["realtimeSuccess", "realtimeFallback", "silenceSkip", "merge", "noMerge"]}
+  ]
 }

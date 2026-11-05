@@ -21,10 +21,23 @@ final class LLMGoldenTraceTests: XCTestCase {
             var stream = try await service.refineStreaming(.init(text: "synthetic input"))
             var output = ""
             for try await chunk in stream { output += chunk }
-            traces.append(["routing": service.resolvedAnalysisRouting.mapValues(\.rawValue), "stream": output])
+            let routing = service.resolvedAnalysisRouting.reduce(into: [String: String]()) { result, entry in
+                result[entry.key.rawValue] = entry.value.rawValue
+            }
+            traces.append(["routing": routing, "stream": output])
         }
         XCTAssertEqual(traces.count, 3)
         XCTAssertTrue(traces.allSatisfy { ($0["stream"] as? String) == "azureFoundry" })
+        let fixture = try fixtureObject()
+        XCTAssertEqual(fixture["schema"] as? String, "golden-trace/v1")
+        let expectedData = try JSONSerialization.data(withJSONObject: fixture["traces"] as Any, options: [.sortedKeys])
+        let actualData = try JSONSerialization.data(withJSONObject: traces, options: [.sortedKeys])
+        XCTAssertEqual(expectedData, actualData)
+    }
+
+    private func fixtureObject() throws -> [String: Any] {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "golden_a_llm", withExtension: "json", subdirectory: "Fixtures"))
+        return try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
     }
 
     func testMergerFallbackMatrix() async throws {

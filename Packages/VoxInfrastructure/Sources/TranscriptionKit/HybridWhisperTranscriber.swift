@@ -148,7 +148,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         try await authorizeSpeech()
         try Task.checkCancellation()
         guard recording.isStarting(id) else { throw CancellationError() }
-        guard speechRecognizerProvider.isAvailable else {
+        guard speechRecognizerProvider.isAvailable(for: language) else {
             throw NSError(domain: "HybridWhisperTranscriber", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
         }
@@ -163,7 +163,16 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             realtime.0?.append(buffer)
         }
         try Task.checkCancellation()
-        startAppleTask(request: request, language: language, id: id)
+        do {
+            try startAppleTask(request: request, language: language, id: id)
+        } catch {
+            await realtime.0?.cancel()
+            _ = recorder.stop()
+            recognitionRequest = nil
+            recognitionTask = nil
+            captureStateSubject.send(.idle)
+            throw error
+        }
         await realtime.0?.start(language: language)
         try recording.didStart(id)
         captureStateSubject.send(.recording)
@@ -200,8 +209,8 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
     }
 
     private func startAppleTask(request: SFSpeechAudioBufferRecognitionRequest,
-                                language: Locale, id: UUID) {
-        recognitionTask = try? speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
+                                language: Locale, id: UUID) throws {
+        recognitionTask = try speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
             guard let self else { return }
             if let text = update.text {
                 self.receiveAppleResult(TranscriptionResult(text: text, type: update.isFinal ? .final : .partial,
@@ -282,7 +291,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             return try await whisperEngine.transcribe(fileURL: fileURL, language: snapshot.locale)
         }
         return try await RealtimeASRFinalizer.resolve {
-            guard let text = await realtime.finish() else { throw RealtimeTranscriptionError.emptyTranscript }
+            let text = try await realtime.finish()
             self.logger.info("ASR completed, actual_path=realtime, chars=\(text.count)")
             return text
         } fallback: {

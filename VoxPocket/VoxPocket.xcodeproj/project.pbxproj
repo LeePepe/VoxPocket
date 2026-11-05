@@ -11,6 +11,7 @@
 		08DB2234C39F8AF9CDFFC333 /* StartRecordingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B712E72C2083CF6273C87C /* StartRecordingIntent.swift */; };
 		0BBD9AA8B029D150B42ADAAB /* BlobTelemetryConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A5EE8AAF401C6343BAC20B /* BlobTelemetryConfigurationTests.swift */; };
 		1285FDB931EC20192428DF88 /* AppStartup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C5B24029B5D02AE13B76160 /* AppStartup.swift */; };
+		13B8BB62911CE74CB2F13A65 /* golden_b_ios.json in Resources */ = {isa = PBXBuildFile; fileRef = 882EF170B7CA6756E262F1D9 /* golden_b_ios.json */; };
 		1A76D389C98E4BDD802CD409 /* ServiceContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ECDBBC78A8F624C19D4B1F /* ServiceContainer.swift */; };
 		1A78662E898F0874742BEAFD /* StageModelRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD039F530CCACAA63257C89 /* StageModelRouting.swift */; };
 		26A05838DDD35D092777A634 /* QuickRecordingImmediateDismissTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD20BC2930C8A34330766B72 /* QuickRecordingImmediateDismissTests.swift */; };
@@ -24,6 +25,7 @@
 		4F253E1CEADECB9BAB202CC0 /* GoldenRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 540FA86C12D0F35AB2225404 /* GoldenRoutingTests.swift */; };
 		5A12763FF94A40E50B6B4F3D /* RealtimeTranscriberConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB27BCA736DF9F266FD879B /* RealtimeTranscriberConfigurationTests.swift */; };
 		5D89F0261137B1ECA92C0AA6 /* BlobTelemetryConsentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39B8B4DD58755568CD305173 /* BlobTelemetryConsentTests.swift */; };
+		606E31A2F7FA463C03FEDCC4 /* golden_b_macos.json in Resources */ = {isa = PBXBuildFile; fileRef = A5E43A0E46E59B4EFB2E6ECB /* golden_b_macos.json */; };
 		6455072EC0EE55E9483B231A /* QuickRecordingRecognitionBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB860DAA7AEE6E482170887 /* QuickRecordingRecognitionBoundaryTests.swift */; };
 		66490340FC45E8705DF55413 /* VoxPocketWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D800EA7B885FF0BBEF3E83 /* VoxPocketWidgetBundle.swift */; };
 		6E644F205F37B430742C1599 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73E018E9065109FF12437540 /* SwiftUI.framework */; };
@@ -128,6 +130,7 @@
 		76A5EE8AAF401C6343BAC20B /* BlobTelemetryConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryConfigurationTests.swift; sourceTree = "<group>"; };
 		77AB160FC41A2F4691F66612 /* VoxPocket.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = VoxPocket.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F9B119D544EB00172D6981A /* BlobTelemetryConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryConfiguration.swift; sourceTree = "<group>"; };
+		882EF170B7CA6756E262F1D9 /* golden_b_ios.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = golden_b_ios.json; sourceTree = "<group>"; };
 		88D800EA7B885FF0BBEF3E83 /* VoxPocketWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketWidgetBundle.swift; sourceTree = "<group>"; };
 		89772BC7F823BAC86783E497 /* BlobTelemetryInstrumentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryInstrumentationTests.swift; sourceTree = "<group>"; };
 		898DDDAC245F6EDC97E3270D /* AppPersistenceStartup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPersistenceStartup.swift; sourceTree = "<group>"; };
@@ -140,6 +143,7 @@
 		A1ECDBBC78A8F624C19D4B1F /* ServiceContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceContainer.swift; sourceTree = "<group>"; };
 		A33B759B18AF93DC1CEAD42D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		A3FD9E601B7C25A0A7EAFA6C /* VoxPocketBlobTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketBlobTelemetry.swift; sourceTree = "<group>"; };
+		A5E43A0E46E59B4EFB2E6ECB /* golden_b_macos.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = golden_b_macos.json; sourceTree = "<group>"; };
 		A8D178BE85E727F731B8B667 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A8F54CBA5A2F23A9EF3C9E70 /* BlobTelemetryHostEligibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobTelemetryHostEligibility.swift; sourceTree = "<group>"; };
 		AF62A71944E1E1B0DE53C00F /* VoxPocketApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoxPocketApp.swift; sourceTree = "<group>"; };
@@ -153,7 +157,7 @@
 		D6025D46E5AB00762F5FB8CD /* QuickRecordingWindowLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickRecordingWindowLifecycleTests.swift; sourceTree = "<group>"; };
 		D9B4322401C88433C576C972 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		DD1E619B4998E9FCF2D79CDC /* TelemetryLifecycleCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryLifecycleCoordinatorTests.swift; sourceTree = "<group>"; };
-		"TEMP_FB56C0C4-9C5F-4311-88E1-EBC4A831E977" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_8E778EB5-0CEF-45B2-BDEE-2DDCCA5BFAA3" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,9 +184,27 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		06E2B195319F7EE4EE1DF6CF /* golden */ = {
+			isa = PBXGroup;
+			children = (
+				882EF170B7CA6756E262F1D9 /* golden_b_ios.json */,
+				A5E43A0E46E59B4EFB2E6ECB /* golden_b_macos.json */,
+			);
+			path = golden;
+			sourceTree = "<group>";
+		};
+		0AEEDEF3B96FB0F4098E95D0 /* tests */ = {
+			isa = PBXGroup;
+			children = (
+				06E2B195319F7EE4EE1DF6CF /* golden */,
+			);
+			path = tests;
+			sourceTree = "<group>";
+		};
 		158F6A7D58834DDE1CBBED71 /* voxkit-tk1a */ = {
 			isa = PBXGroup;
 			children = (
+				36CDC85A63CD543C44C2707F /* scripts */,
 				9A28B557EAC0FA119E5ECD52 /* VoxPocketWidget */,
 			);
 			name = "voxkit-tk1a";
@@ -200,6 +222,14 @@
 				986585298D0AEEE2E74DEC6B /* Frameworks */,
 				48A5D3C782F6F9761D3DBADF /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		36CDC85A63CD543C44C2707F /* scripts */ = {
+			isa = PBXGroup;
+			children = (
+				0AEEDEF3B96FB0F4098E95D0 /* tests */,
+			);
+			path = scripts;
 			sourceTree = "<group>";
 		};
 		48A5D3C782F6F9761D3DBADF /* Products */ = {
@@ -312,10 +342,10 @@
 			path = VoxPocketTests;
 			sourceTree = "<group>";
 		};
-		"TEMP_D54E1C18-6752-42AE-ABB3-B41D6D7F2921" /* VoxPocket */ = {
+		"TEMP_34D2F9E7-DD57-414A-B78E-1093C0E7BBF3" /* VoxPocket */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_FB56C0C4-9C5F-4311-88E1-EBC4A831E977" /* Config.xcconfig */,
+				"TEMP_8E778EB5-0CEF-45B2-BDEE-2DDCCA5BFAA3" /* Config.xcconfig */,
 			);
 			path = VoxPocket;
 			sourceTree = "<group>";
@@ -370,6 +400,7 @@
 			buildConfigurationList = EF9C43AEF53706DC6DBE6C8B /* Build configuration list for PBXNativeTarget "VoxPocketTests" */;
 			buildPhases = (
 				8091F576F3BFE18910DF2535 /* Sources */,
+				7E837FBE1EE64B6C1E999F74 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -461,6 +492,15 @@
 			files = (
 				9A27AC8EFBB068B41F872C02 /* AppIcon.icon in Resources */,
 				8BAF52832DE538C9ECFBF660 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7E837FBE1EE64B6C1E999F74 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				13B8BB62911CE74CB2F13A65 /* golden_b_ios.json in Resources */,
+				606E31A2F7FA463C03FEDCC4 /* golden_b_macos.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -618,7 +658,7 @@
 		};
 		489E40965BE35970213C29E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FB56C0C4-9C5F-4311-88E1-EBC4A831E977" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_8E778EB5-0CEF-45B2-BDEE-2DDCCA5BFAA3" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -860,7 +900,7 @@
 		};
 		C42F15964F9234EBB655F756 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FB56C0C4-9C5F-4311-88E1-EBC4A831E977" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_8E778EB5-0CEF-45B2-BDEE-2DDCCA5BFAA3" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

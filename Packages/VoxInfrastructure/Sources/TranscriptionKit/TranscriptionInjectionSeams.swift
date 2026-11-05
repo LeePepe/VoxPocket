@@ -81,6 +81,7 @@ protocol SpeechRecognitionTasking: AnyObject, Sendable {
 
 protocol SpeechRecognizing: AnyObject, Sendable {
     var isAvailable: Bool { get }
+    func isAvailable(for locale: Locale) -> Bool
     func recognitionTask(locale: Locale, request: SFSpeechAudioBufferRecognitionRequest,
                          handler: @escaping @Sendable (RecognitionUpdate) -> Void) throws -> any SpeechRecognitionTasking
 }
@@ -96,6 +97,9 @@ final class SystemSpeechRecognizer: SpeechRecognizing, @unchecked Sendable {
     private let recognizer: SFSpeechRecognizer?
     init(locale: Locale) { recognizer = SFSpeechRecognizer(locale: locale) }
     var isAvailable: Bool { recognizer?.isAvailable ?? false }
+    func isAvailable(for locale: Locale) -> Bool {
+        SFSpeechRecognizer(locale: locale)?.isAvailable ?? false
+    }
 
     func recognitionTask(locale: Locale, request: SFSpeechAudioBufferRecognitionRequest,
                          handler: @escaping @Sendable (RecognitionUpdate) -> Void) throws -> any SpeechRecognitionTasking {
@@ -124,7 +128,7 @@ protocol RealtimePipelining: Sendable {
     var hasMinimumAudio: Bool { get }
     func start(language: Locale) async
     func append(_ buffer: AVAudioPCMBuffer)
-    func finish() async -> String?
+    func finish() async throws -> String
     func cancel() async
 }
 
@@ -141,8 +145,8 @@ struct RealtimePipelineAdapter: RealtimePipelining, Sendable {
         pipeline.append(buffer)
     }
 
-    func finish() async -> String? {
-        try? await pipeline.finish()
+    func finish() async throws -> String {
+        try await pipeline.finish()
     }
 
     func cancel() async {

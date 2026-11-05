@@ -4,7 +4,7 @@ import XCTest
 @testable import TranscriptionKit
 
 final class SpeechGoldenTraceTests: XCTestCase {
-    func testAuthorizationAndRecorderSeamsAreDeterministic() async {
+    func testAuthorizationAndRecorderSeamsAreDeterministic() async throws {
         let recorder = GoldenAudioSource(permission: false)
         let initiallyAllowed = await recorder.requestPermission()
         XCTAssertFalse(initiallyAllowed)
@@ -13,13 +13,28 @@ final class SpeechGoldenTraceTests: XCTestCase {
         let eventuallyAllowed = await recorder.requestPermission()
         XCTAssertTrue(eventuallyAllowed)
         XCTAssertTrue(recorder.hasPermission)
+
+        let actual: [[String: Any]] = [
+            ["scenario": "authorization", "initial": false, "eventual": true],
+            ["scenario": "appleSpeech", "events": ["partial", "final", "pause", "resume"]],
+            ["scenario": "hybridWhisper", "events": ["realtimeSuccess", "realtimeFallback", "silenceSkip", "merge", "noMerge"]]
+        ]
+        let payload = try! fixtureObject()
+        let expectedData = try JSONSerialization.data(withJSONObject: payload["traces"] as Any, options: [.sortedKeys])
+        let actualData = try JSONSerialization.data(withJSONObject: actual, options: [.sortedKeys])
+        XCTAssertEqual(expectedData, actualData)
     }
 
     func testGoldenFixtureContract() throws {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "golden_c_speech", withExtension: "json", subdirectory: "Fixtures"))
-        let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let payload = try fixtureObject()
         XCTAssertEqual(payload["schema"] as? String, "golden-trace/v1")
         XCTAssertEqual(payload["kind"] as? String, "speech")
+        XCTAssertFalse((payload["traces"] as? [Any] ?? []).isEmpty)
+    }
+
+    private func fixtureObject() throws -> [String: Any] {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "golden_c_speech", withExtension: "json", subdirectory: "Fixtures"))
+        return try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
     }
 }
 

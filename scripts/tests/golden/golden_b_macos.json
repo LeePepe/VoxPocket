@@ -2,5 +2,7 @@
   "schema": "golden-trace/v1",
   "kind": "pipeline",
   "platform": "macOS",
-  "traces": []
+  "traces": [
+    {"routing": {"intent": "azureFoundry", "tone": "azureFoundry", "entities": "azureFoundry", "tags": "azureFoundry", "params": "azureFoundry"}}
+  ]
 }

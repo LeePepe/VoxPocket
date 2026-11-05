@@ -1,5 +1,9 @@
 {
   "schema": "golden-trace/v1",
   "kind": "llm",
-  "traces": []
+  "traces": [
+    {"routing": {"entities": "azureFoundry", "intent": "azureFoundry", "params": "azureFoundry", "tags": "azureFoundry", "tone": "azureFoundry"}, "stream": "azureFoundry"},
+    {"routing": {"entities": "azureFoundry", "intent": "appleIntelligence", "params": "azureFoundry", "tags": "azureFoundry", "tone": "azureFoundry"}, "stream": "azureFoundry"},
+    {"routing": {"entities": "azureFoundry", "intent": "azureFoundry", "params": "azureFoundry", "tags": "azureFoundry", "tone": "appleIntelligence"}, "stream": "azureFoundry"}
+  ]
 }

@@ -135,7 +135,7 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
         try await authorizeSpeech()
         try Task.checkCancellation()
         guard recording.isStarting(id) else { throw CancellationError() }
-        guard speechRecognizerProvider.isAvailable else {
+        guard speechRecognizerProvider.isAvailable(for: language) else {
             throw NSError(domain: "AppleSpeechTranscriber", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
         }
@@ -147,7 +147,15 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
             request.append(buffer)
         }
         try Task.checkCancellation()
-        startAppleTask(request: request, language: language, id: id)
+        do {
+            try startAppleTask(request: request, language: language, id: id)
+        } catch {
+            _ = recorder.stop()
+            recognitionRequest = nil
+            recognitionTask = nil
+            captureStateSubject.send(.idle)
+            throw error
+        }
         try recording.didStart(id)
         captureStateSubject.send(.recording)
         logger.info("Recording + recognition started")
@@ -175,8 +183,8 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
     }
 
     private func startAppleTask(request: SFSpeechAudioBufferRecognitionRequest,
-                                language: Locale, id: UUID) {
-        recognitionTask = try? speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
+                                language: Locale, id: UUID) throws {
+        recognitionTask = try speechRecognizerProvider.recognitionTask(locale: language, request: request) { [weak self] update in
             guard let self, self.recording.acceptsAppleResult(id) else { return }
             if let text = update.text {
                 let result = TranscriptionResult(text: text, type: update.isFinal ? .final : .partial,
