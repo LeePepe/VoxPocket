@@ -1,3 +1,4 @@
+import VoxCore
 import Speech
 
 /// 三条 Apple Speech 识别路径共用配置，避免实时识别行为不一致。

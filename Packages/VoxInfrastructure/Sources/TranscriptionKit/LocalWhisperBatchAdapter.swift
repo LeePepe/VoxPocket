@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 struct LocalWhisperBatchAdapter: BatchTranscribing, Sendable {

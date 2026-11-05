@@ -1,5 +1,5 @@
 import Foundation
-import LokiKit
+import VoxCore
 import TranscriptionKit
 
 /// 基于 LLM 的转录结果合并器
@@ -9,15 +9,15 @@ import TranscriptionKit
 public final class LLMTranscriptionMerger: TranscriptionMerger, Sendable {
 
     private let llmService: any LLMService
-    private let logger: Logger
+    private let logger: any VoxLogger
 
-    public init(llmService: any LLMService, logger: Logger = PrintLogger(subsystem: "LLMTranscriptionMerger")) {
+    public init(llmService: any LLMService, logger: any VoxLogger = NoopVoxLogger()) {
         self.llmService = llmService
         self.logger = logger
     }
 
     public func merge(appleSpeech: String, whisper: String) async throws -> String {
-        logger.info("merge() — AppleSpeech: '\(appleSpeech)' | Whisper: '\(whisper)'")
+        logger.info("merge() — inputs received", fields: [.int("apple_length", appleSpeech.count), .int("whisper_length", whisper.count)])
 
         // 策略：以 Whisper（高精度离线）为基底，用 Apple Speech（实时）交叉校正。
         // 明确限制输出只能来自两路结果中已有的内容，防止模型自由生成。
@@ -32,25 +32,25 @@ public final class LLMTranscriptionMerger: TranscriptionMerger, Sendable {
         输出长度不超过 \(maxLen + 5) 个字符。
         只输出转录文本本身，不输出任何标签或解释。
         """
-        logger.info("merge() — Prompt: '\(prompt)'")
+        logger.info("merge() — prompt prepared", fields: [.int("prompt_length", prompt.count)])
 
         let output: String
         do {
             output = try await llmService.complete(prompt: prompt)
         } catch {
-            logger.error("merge() — LLM call failed: \(error). Falling back to Whisper.")
+            logger.error("merge() — LLM call failed; falling back to Whisper")
             return whisper
         }
 
-        logger.info("merge() — LLM raw output: '\(output)'")
+        logger.info("merge() — LLM output received", fields: [.int("merged_length", output.count)])
 
         // 合理性校验：输出超过较长输入的 1.5 倍视为幻觉，回退到 whisper
         guard output.count <= Int(Double(maxLen) * 1.5) else {
-            logger.warning("merge() — LLM output too long (\(output.count) chars), falling back to Whisper. Output: '\(output)'")
+            logger.warning("merge() — LLM output too long; falling back to Whisper", fields: [.int("merged_length", output.count)])
             return whisper
         }
 
-        logger.info("merge() — Final: '\(output)'")
+        logger.info("merge() — final output selected", fields: [.int("merged_length", output.count)])
         return output
     }
 }

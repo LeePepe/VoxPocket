@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 import LokiKit
 import XCTest
@@ -7,9 +8,9 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
     func testProviderTypeIsWhisper() {
         let sut = WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
-            logger: PrintLogger(subsystem: "WhisperKitTranscriberTests"),
-            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriberTests.Mic")),
-            telemetry: NoopTelemetryService(),
+            logger: NoopVoxLogger(),
+            recorder: MicrophoneRecorder(),
+            telemetry: NoopVoxTelemetry(),
             engineFactory: { _, _ in FakeLocalWhisperEngine() }
         )
         XCTAssertEqual(sut.speechRecognitionService.providerType, .whisper)
@@ -18,9 +19,9 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
     func testStartThenStopChangesState() async throws {
         let sut = WhisperKitTranscriber(
             config: .default,
-            logger: PrintLogger(subsystem: "WhisperKitTranscriberTests"),
-            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriberTests.Mic")),
-            telemetry: NoopTelemetryService(),
+            logger: NoopVoxLogger(),
+            recorder: MicrophoneRecorder(),
+            telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in FakeLocalWhisperEngine() },
@@ -38,9 +39,9 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
         let engine = ScriptedLocalWhisperEngine()
         let sut = WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
-            logger: PrintLogger(subsystem: "WhisperKitTranscriberTests"),
-            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriberTests.Mic")),
-            telemetry: NoopTelemetryService(),
+            logger: NoopVoxLogger(),
+            recorder: MicrophoneRecorder(),
+            telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in engine },
@@ -66,9 +67,9 @@ final class WhisperKitTranscriberBehaviorTests: XCTestCase {
         let engine = ScriptedLocalWhisperEngine()
         let sut = WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
-            logger: PrintLogger(subsystem: "WhisperKitTranscriberTests"),
-            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriberTests.Mic")),
-            telemetry: NoopTelemetryService(),
+            logger: NoopVoxLogger(),
+            recorder: MicrophoneRecorder(),
+            telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in engine },

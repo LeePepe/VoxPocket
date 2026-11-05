@@ -13,6 +13,7 @@ let package = Package(
             name: "TranscriptionKit",
             targets: ["TranscriptionKit"]
         ),
+        .library(name: "VoxKitBridge", targets: ["VoxKitBridge"]),
         .library(
             name: "LLMKit",
             targets: ["LLMKit"]
@@ -32,6 +33,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../VoxDomain"),
+        .package(path: "../VoxKit"),
         // LokiKit from the immutable shared-telemetry v0.2.0 release; tag integrity is checked by scripts/ci/fetch-external-deps.sh.
         .package(url: "https://github.com/LeePepe/shared-telemetry.git", exact: "0.2.0"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
@@ -41,6 +43,8 @@ let package = Package(
         .target(
             name: "TranscriptionKit",
             dependencies: [
+                "VoxKitBridge",
+                .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "CoreModels", package: "VoxDomain"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "WhisperKit", package: "WhisperKit"),
@@ -49,12 +53,12 @@ let package = Package(
         .target(
             name: "LLMKit",
             dependencies: [
-                .product(name: "CoreModels", package: "VoxDomain"),
+                .product(name: "VoxCore", package: "VoxKit"),
                 "TranscriptionKit",
-                .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
             ]
         ),
+        .target(name: "VoxKitBridge", dependencies: [.product(name: "VoxCore", package: "VoxKit"), .product(name: "LokiKit", package: "shared-telemetry")]),
         .target(
             name: "Persistence",
             dependencies: [
@@ -75,19 +79,23 @@ let package = Package(
         ),
         .testTarget(
             name: "PrivateTranscriptionBenchmarkTests",
-            dependencies: ["TranscriptionKit", "LLMKit", "Preferences", .product(name: "LokiKit", package: "shared-telemetry")],
+            dependencies: ["TranscriptionKit", "LLMKit", "Preferences", .product(name: "VoxCore", package: "VoxKit"), .product(name: "LokiKit", package: "shared-telemetry")],
             exclude: ["README.md"]
         ),
         .testTarget(
             name: "TranscriptionKitTests",
             dependencies: [
+                .product(name: "VoxCore", package: "VoxKit"),
                 "TranscriptionKit",
                 .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),
+        .testTarget(name: "VoxKitBridgeTests", dependencies: ["VoxKitBridge", .product(name: "VoxCore", package: "VoxKit"), .product(name: "LokiKit", package: "shared-telemetry")]),
         .testTarget(
             name: "LLMKitTests",
             dependencies: [
+                .product(name: "CoreModels", package: "VoxDomain"),
+                .product(name: "VoxCore", package: "VoxKit"),
                 "LLMKit",
                 .product(name: "LokiKit", package: "shared-telemetry"),
             ]
@@ -103,6 +111,7 @@ let package = Package(
         .testTarget(
             name: "GoldenTraceTests",
             dependencies: [
+                .product(name: "VoxCore", package: "VoxKit"),
                 "TranscriptionKit",
                 "LLMKit",
                 "Preferences",

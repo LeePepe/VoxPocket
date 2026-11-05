@@ -1,3 +1,4 @@
+import VoxCore
 import CoreFoundation
 import Foundation
 import LokiKit
@@ -10,13 +11,17 @@ final class GoldenEvents: Sendable {
     var values: [String] { storage.withLock { $0 } }
 }
 
-final class GoldenLogger: Logger, Sendable {
+final class GoldenLogger: Logger, VoxLogger, Sendable {
     private let level = Mutex(LogLevel.debug)
     private let events = GoldenEvents()
     private let keys = Mutex<[[String]]>([])
     var minimumLevel: LogLevel {
         get { level.withLock { $0 } }
         set { level.withLock { $0 = newValue } }
+    }
+    func log(_ level: VoxLogLevel, _ message: StaticString, fields: [VoxLogField]) {
+        let context = Dictionary(fields.map { (String(describing: $0.key), $0.value.text as Any) }, uniquingKeysWith: { _, latest in latest })
+        log(LogLevel.info, String(describing: message), context: context, file: #file, function: #function, line: #line)
     }
     var messages: [String] { events.values }
     var contextKeys: [[String]] { keys.withLock { $0 } }

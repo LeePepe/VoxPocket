@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 本地 WhisperKit 转录配置

@@ -1,15 +1,33 @@
+import VoxCore
+import Synchronization
 import Foundation
 import LokiKit
 import XCTest
 @testable import TranscriptionKit
 
 final class WhisperKitFailureFallbackTests: XCTestCase {
+    func testImmediatePreparationNeverLosesItsTaskAndReusesTheReadyEngine() async throws {
+        for _ in 0..<100 {
+            let engine = ImmediateLocalWhisperEngine()
+            let source = WhisperKitTranscriber(config: .init(preloadOnStart: false), logger: NoopVoxLogger(),
+                recorder: MicrophoneRecorder(),
+                permissionRequester: { true }, hasPermissionProvider: { true }, engineFactory: { _, _ in engine })
+            for _ in 0..<2 {
+                try await source.start(language: Locale(identifier: "zh-Hans"))
+                XCTAssertTrue(source.isActive)
+                await source.stop()
+            }
+            XCTAssertEqual(engine.preparations.withLock { $0 }, 1)
+            XCTAssertEqual(source.modelLoadingState, .ready)
+        }
+    }
+
     func testModelLoadFailureStopsTranscriber() async {
         let sut = WhisperKitTranscriber(
             config: .failingForTest,
-            logger: PrintLogger(subsystem: "WhisperKitFailureFallbackTests"),
-            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitFailureFallbackTests.Mic")),
-            telemetry: NoopTelemetryService(),
+            logger: NoopVoxLogger(),
+            recorder: MicrophoneRecorder(),
+            telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in FailingLocalWhisperEngine() },
@@ -26,9 +44,9 @@ final class WhisperKitFailureFallbackTests: XCTestCase {
         let factory = FailOnceEngineFactory()
         let sut = WhisperKitTranscriber(
             config: LocalWhisperKitConfig(preloadOnStart: false),
-            logger: PrintLogger(subsystem: "WhisperKitFailureFallbackTests"),
-            recorder: MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitFailureFallbackTests.Mic")),
-            telemetry: NoopTelemetryService(),
+            logger: NoopVoxLogger(),
+            recorder: MicrophoneRecorder(),
+            telemetry: NoopVoxTelemetry(),
             permissionRequester: { true },
             hasPermissionProvider: { true },
             engineFactory: { _, _ in factory.make() },
@@ -131,4 +149,16 @@ private func XCTAssertThrowsErrorAsync(
     } catch {
         // expected
     }
+}
+
+private final class ImmediateLocalWhisperEngine: LocalWhisperEngine {
+    let preparations = Mutex(0)
+    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws { preparations.withLock { $0 += 1 } }
+    func startStreaming(languageCode: String?, onPartial: @escaping @Sendable (String) -> Void,
+                        onAudioLevel: @escaping @Sendable (Float) -> Void) async throws {}
+    func stopStreaming() async {}
+    func pauseStreaming() async {}
+    func resumeStreaming() async {}
+    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? { nil }
+    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? { nil }
 }

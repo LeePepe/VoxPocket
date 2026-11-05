@@ -1,3 +1,4 @@
+import VoxCore
 #if os(macOS)
 import AVFoundation
 import Foundation
@@ -173,7 +174,7 @@ struct BenchmarkExecution: Sendable {
         guard let model = group.localModel else { return nil }
         guard let folder else { throw BenchmarkFailure.missingModel }
         let engine = LocalWhisperKitEngine(config: LocalWhisperKitConfig(model: model, preloadOnStart: false),
-                                          logger: SilentBenchmarkLogger(), preparedModelFolder: folder)
+                                          logger: SilentBenchmarkLogger(), preparedModelFolder: folder, storageLocations: testStorageLocations)
         try await engine.prepare(onProgress: nil)
         return engine
     }
@@ -198,3 +199,5 @@ struct BenchmarkExecution: Sendable {
     }
 }
 #endif
+
+private let testStorageLocations = VoxStorageLocations(temporaryAudio: FileManager.default.temporaryDirectory, modelCache: FileManager.default.temporaryDirectory)

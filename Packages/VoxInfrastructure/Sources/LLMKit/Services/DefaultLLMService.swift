@@ -1,8 +1,6 @@
 import Foundation
-import Combine
-import CoreModels
 import Synchronization
-import LokiKit
+import VoxCore
 import AsyncAlgorithms
 
 /// LLM 服务默认实现
@@ -20,13 +18,13 @@ public final class DefaultLLMService: LLMService, Sendable {
     }
 
     private let state: Mutex<State>
-    private let logger: Logger
+    private let logger: any VoxLogger
 
     public init(
-        logger: Logger? = nil,
+        logger: (any VoxLogger)? = nil,
         azureFoundryConfig: LLMProviderConfig? = nil
     ) {
-        self.logger = logger ?? PrintLogger(subsystem: "LLMService", minimumLevel: .debug)
+        self.logger = logger ?? NoopVoxLogger()
         let aiProvider = AppleIntelligenceProvider(logger: self.logger)
         var providers: [LLMProviderType: any LLMProvider] = [.appleIntelligence: aiProvider]
 
@@ -42,7 +40,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         self.state = Mutex(initialState)
     }
 
-    init(providers: [LLMProviderType: any LLMProvider], logger: Logger = PrintLogger(subsystem: "LLMService")) {
+    init(providers: [LLMProviderType: any LLMProvider], logger: any VoxLogger = NoopVoxLogger()) {
         self.logger = logger
         state = Mutex(State(providers: providers, currentProvider: providers[.appleIntelligence]))
     }
@@ -105,7 +103,7 @@ public final class DefaultLLMService: LLMService, Sendable {
     public func setProvider(_ config: LLMProviderConfig) throws {
         try state.withLock { state in
             guard let provider = state.providers[config.providerType] else {
-                throw VoxError.llmProviderNotConfigured
+                throw VoxKitError.llmProviderNotConfigured
             }
             state.currentProvider = provider
             state.analysisProviderOverrides = Self.analysisProviderOverrides(from: config.options)
@@ -148,9 +146,7 @@ public final class DefaultLLMService: LLMService, Sendable {
 
     private func analyzeContent(_ request: RefinementRequest, configuration: State) async -> AnalysisResult {
         guard let defaultProviderType = configuration.currentProvider?.providerType else {
-            logger.log(.error, "分析失败：未配置默认 provider", context: [
-                "text_length": request.text.count
-            ], file: #file, function: #function, line: #line)
+            logger.log(.error, "分析失败：未配置默认 provider", fields: [.int("text_length", request.text.count)])
             return (IntentAnalysis(), ToneAnalysis(), Set(AnalysisStep.allCases))
         }
 
@@ -168,14 +164,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         var params = IntentParams()
         var missing = Set(AnalysisStep.allCases)
 
-        logger.log(.info, "开始内容分析", context: [
-            "text_length": request.text.count,
-            "default_provider": defaultProviderType.rawValue,
-            "providers_by_step": providersByStep
-                .map { "\($0.key.rawValue):\($0.value.rawValue)" }
-                .sorted()
-                .joined(separator: ", ")
-        ], file: #file, function: #function, line: #line)
+        logger.log(.info, "开始内容分析", fields: [.int("text_length", request.text.count)])
 
         let analysisRequest = AnalysisRequest(
             text: request.text,
@@ -186,10 +175,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         for (providerType, steps) in stepsByProvider {
             guard let provider = configuration.providers[providerType] else {
                 missing.formUnion(steps)
-                logger.log(.error, "分析 provider 缺失，使用默认值", context: [
-                    "provider": providerType.rawValue,
-                    "steps": steps.map { $0.rawValue }.joined(separator: ", ")
-                ], file: #file, function: #function, line: #line)
+                logger.log(.error, "分析 provider 缺失，使用默认值", fields: [])
                 continue
             }
 
@@ -199,73 +185,40 @@ public final class DefaultLLMService: LLMService, Sendable {
             func handleSteps(_ stepSet: Set<AnalysisStep>) async {
                 guard !stepSet.isEmpty else { return }
                 let stepLabel = stepSet.map { $0.rawValue }.sorted().joined(separator: ", ")
-                logger.log(.info, "开始分析步骤", context: [
-                    "provider": providerType.rawValue,
-                    "steps": stepLabel
-                ], file: #file, function: #function, line: #line)
+                logger.log(.info, "开始分析步骤", fields: [])
 
-                let perfStart = logger.performanceStart()
+                let perfStart = Date()
                 do {
                     let partial = try await provider.analyze(analysisRequest, steps: stepSet)
 
                     // 只记录类别与计数，模型提取的正文片段不进入日志。
-                    var resultContext: [String: Any] = [
-                        "provider": providerType.rawValue,
-                        "steps": stepLabel
-                    ]
 
                     if stepSet.contains(.intent), let value = partial.intent {
                         intent = value
                         missing.remove(.intent)
-                        resultContext["intent"] = value.intent.rawValue
-                        resultContext["intent_confidence"] = value.confidence
                     }
                     if stepSet.contains(.tone), let value = partial.tone {
                         tone = value
                         missing.remove(.tone)
-                        resultContext["tone"] = value.tone.rawValue
-                        resultContext["tone_confidence"] = value.confidence
                     }
                     if stepSet.contains(.entities), let value = partial.entities {
                         entities = value
                         missing.remove(.entities)
-                        resultContext["entities_count"] = value.count
                     }
                     if stepSet.contains(.tags), let value = partial.tags {
                         tags = value
                         missing.remove(.tags)
-                        resultContext["tags_count"] = value.count
                     }
                     if stepSet.contains(.params), let value = partial.params {
                         params = value
                         missing.remove(.params)
                     }
 
-                    logger.performanceEnd(
-                        "分析步骤",
-                        start: perfStart,
-                        context: resultContext,
-                        file: #file,
-                        function: #function,
-                        line: #line
-                    )
+                    logger.log(.info, "分析步骤", fields: [.durationMs("duration_ms", Date().timeIntervalSince(perfStart) * 1000)])
                 } catch {
-                    logger.performanceEnd(
-                        "分析步骤失败",
-                        start: perfStart,
-                        context: [
-                            "provider": providerType.rawValue,
-                            "steps": stepLabel
-                        ],
-                        file: #file,
-                        function: #function,
-                        line: #line
-                    )
+                    logger.log(.info, "分析步骤失败", fields: [.durationMs("duration_ms", Date().timeIntervalSince(perfStart) * 1000)])
                     missing.formUnion(stepSet)
-                    logger.log(.warning, "分析步骤失败，使用默认值", context: [
-                        "provider": providerType.rawValue,
-                        "steps": stepLabel
-                    ], file: #file, function: #function, line: #line)
+                    logger.log(.warning, "分析步骤失败，使用默认值", fields: [])
                 }
             }
 
@@ -285,13 +238,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         )
 
         let analysis = (intent: finalIntent, tone: tone, missingSteps: missing)
-        logger.log(.info, "内容分析完成", context: [
-            "missing_steps": missing.map { $0.rawValue }.sorted().joined(separator: ", "),
-            "intent": analysis.intent.intent.rawValue,
-            "tone": analysis.tone.tone.rawValue,
-            "entities_count": finalIntent.entities.count,
-            "tags_count": finalIntent.tags.count
-        ], file: #file, function: #function, line: #line)
+        logger.log(.info, "内容分析完成", fields: [.int("entities_count", finalIntent.entities.count), .int("tags_count", finalIntent.tags.count)])
         return analysis
     }
 
@@ -304,7 +251,7 @@ public final class DefaultLLMService: LLMService, Sendable {
 
     public func completeStreaming(prompt: String) async throws -> AsyncThrowingStream<String, Error> {
         guard let provider = currentProvider else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
         return try await provider.completeStreaming(prompt: prompt)
     }
@@ -314,15 +261,11 @@ public final class DefaultLLMService: LLMService, Sendable {
     public func refine(_ request: RefinementRequest) async throws -> RefinementResponse {
         let configuration = state.withLock { $0 }
         guard let provider = configuration.currentProvider else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
         let shouldSkip = configuration.skipContentAnalysis
-        logger.log(.info, "开始文本优化", context: [
-            "text_length": request.text.count,
-            "provider": provider.providerType.rawValue,
-            "skip_analysis": shouldSkip
-        ], file: #file, function: #function, line: #line)
+        logger.log(.info, "开始文本优化", fields: [.int("text_length", request.text.count)])
         let analysis: AnalysisResult = shouldSkip
             ? (intent: IntentAnalysis(), tone: ToneAnalysis(), missingSteps: Set(AnalysisStep.allCases))
             : await analyzeContent(request, configuration: configuration)
@@ -331,11 +274,7 @@ public final class DefaultLLMService: LLMService, Sendable {
             customPrompt: request.customPrompt
         )
         let refinedText = try await provider.complete(prompt: prompt)
-        logger.log(.info, "文本优化完成", context: [
-            "original_length": request.text.count,
-            "refined_length": refinedText.count,
-            "provider": provider.providerType.rawValue
-        ], file: #file, function: #function, line: #line)
+        logger.log(.info, "文本优化完成", fields: [.int("original_length", request.text.count), .int("refined_length", refinedText.count)])
         return RefinementResponse(
             originalText: request.text,
             refinedText: refinedText,
@@ -348,14 +287,10 @@ public final class DefaultLLMService: LLMService, Sendable {
     public func refineStreaming(_ request: RefinementRequest) async throws -> AsyncThrowingStream<String, Error> {
         let configuration = state.withLock { $0 }
         guard let provider = configuration.currentProvider else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
         let shouldSkip = configuration.skipContentAnalysis
-        logger.log(.info, "开始流式文本优化", context: [
-            "text_length": request.text.count,
-            "provider": provider.providerType.rawValue,
-            "skip_analysis": shouldSkip
-        ], file: #file, function: #function, line: #line)
+        logger.log(.info, "开始流式文本优化", fields: [.int("text_length", request.text.count)])
 
         if !shouldSkip {
             _ = await analyzeContent(request, configuration: configuration)
@@ -372,14 +307,10 @@ public final class DefaultLLMService: LLMService, Sendable {
                     for try await chunk in stream {
                         continuation.yield(chunk)
                     }
-                    logger.log(.info, "流式文本优化完成", context: [
-                        "provider": provider.providerType.rawValue
-                    ], file: #file, function: #function, line: #line)
+                    logger.log(.info, "流式文本优化完成", fields: [])
                     continuation.finish()
                 } catch {
-                    logger.log(.error, "流式文本优化失败", context: [
-                        "provider": provider.providerType.rawValue
-                    ], file: #file, function: #function, line: #line)
+                    logger.log(.error, "流式文本优化失败", fields: [])
                     continuation.finish(throwing: error)
                 }
             }

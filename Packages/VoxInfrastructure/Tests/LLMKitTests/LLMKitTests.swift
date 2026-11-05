@@ -1,6 +1,6 @@
 import XCTest
 import LLMKit
-import CoreModels
+import VoxCore
 
 final class LLMKitTests: XCTestCase {
     func testPlaceholder() {
@@ -26,7 +26,7 @@ final class LLMKitTests: XCTestCase {
         do {
             try await provider.validate()
             XCTFail("Expected validation to fail for missing endpoint/API key")
-        } catch VoxError.llmProviderNotConfigured {
+        } catch VoxKitError.llmProviderNotConfigured {
             XCTAssertTrue(true)
         } catch {
             XCTFail("Unexpected error: \(error)")

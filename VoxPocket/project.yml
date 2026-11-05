@@ -20,6 +20,10 @@ settings:
 
 packages:
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
+  VoxKit:
+    path: ../Packages/VoxKit
+  VoxInfrastructure:
+    path: ../Packages/VoxInfrastructure
   VoxPresentation:
     path: ../Packages/VoxPresentation
   # 外部 UI 测试桥接包
@@ -48,6 +52,10 @@ targets:
         buildPhase: resources
         destinationFilters: [iOS, macOS]
     dependencies:
+      - package: VoxKit
+        product: VoxCore
+      - package: VoxInfrastructure
+        product: VoxKitBridge
       - package: VoxPresentation
         product: PlatformUI
       - package: VoxPresentation

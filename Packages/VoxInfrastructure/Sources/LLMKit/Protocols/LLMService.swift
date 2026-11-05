@@ -1,5 +1,5 @@
+import VoxCore
 import Foundation
-import Combine
 
 /// LLM 服务协议
 ///
@@ -16,12 +16,6 @@ public protocol LLMService: AnyObject, Sendable {
     /// 当前提供者类型
     var currentProviderType: LLMProviderType? { get }
 
-    /// 设置当前提供者
-    ///
-    /// - Parameter config: 提供者配置
-    /// - Throws: 配置无效时抛出错误
-    func setProvider(_ config: LLMProviderConfig) throws
-
     // MARK: - 通用文本完成
 
     /// 通用文本完成
@@ -30,7 +24,7 @@ public protocol LLMService: AnyObject, Sendable {
     ///
     /// - Parameter prompt: 输入提示词
     /// - Returns: LLM 生成的响应文本
-    /// - Throws: `VoxError.llmProviderNotConfigured` 如果未配置提供者
+    /// - Throws: `VoxKitError.llmProviderNotConfigured` 如果未配置提供者
     func complete(prompt: String) async throws -> String
 
     /// 流式文本完成
@@ -49,7 +43,7 @@ public protocol LLMService: AnyObject, Sendable {
     ///
     /// - Parameter request: 优化请求
     /// - Returns: 优化响应
-    /// - Throws: `VoxError.llmProviderNotConfigured` 如果未配置提供者
+    /// - Throws: `VoxKitError.llmProviderNotConfigured` 如果未配置提供者
     func refine(_ request: RefinementRequest) async throws -> RefinementResponse
 
     /// 流式文本优化

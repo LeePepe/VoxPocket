@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 import Synchronization
 import XCTest
@@ -5,11 +6,25 @@ import LokiKit
 @testable import LLMKit
 
 final class StageProviderSnapshotTests: XCTestCase {
+    func testMergerNeverLogsInputPromptOrOutputContent() async throws {
+        let logger = CanaryLogger()
+        let provider = FakeStageProvider(type: .appleIntelligence)
+        let service = DefaultLLMService(providers: [.appleIntelligence: provider], logger: logger)
+        let merger = LLMTranscriptionMerger(llmService: service, logger: logger)
+        let apple = "PRIVATE_APPLE_SENTINEL"
+        let whisper = "PRIVATE_WHISPER_SENTINEL"
+        let output = try await merger.merge(appleSpeech: apple, whisper: whisper)
+        XCTAssertEqual(output, "appleIntelligence")
+        XCTAssertFalse(logger.recordedMessages.isEmpty)
+        XCTAssertTrue(logger.assertNoCanaryLeak(canaryStrings: [apple, whisper, output]))
+    }
+
     func testAnalysisEntityAndTagContentNeverEntersLogs() async throws {
         let logger = FakeStageLogger()
         let provider = FakeStageProvider(type: .appleIntelligence)
         let service = DefaultLLMService(providers: [.appleIntelligence: provider], logger: logger)
         _ = try await service.refine(.init(text: "PRIVATE_INPUT_SENTINEL"))
+        XCTAssertFalse(logger.messages.withLock { $0.isEmpty })
         XCTAssertFalse(logger.messages.withLock { $0.contains { $0.contains("PRIVATE_") } })
     }
 
@@ -79,7 +94,12 @@ private final class FakeStageProvider: LLMProvider, Sendable {
     func cancel() {}
 }
 
-private final class FakeStageLogger: LokiKit.Logger, Sendable {
+private final class FakeStageLogger: VoxLogger, LokiKit.Logger, Sendable {
+    func log(_ level: VoxLogLevel, _ message: StaticString, fields: [VoxLogField]) {
+        let output = String(describing: message) + fields.map { $0.value.text }.joined(separator: " ")
+        messages.withLock { $0.append(output) }
+    }
+
     let messages = Mutex<[String]>([])
     private let level = Mutex<LogLevel>(.debug)
     var minimumLevel: LogLevel {

@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 支持按需启动本地模型预加载。

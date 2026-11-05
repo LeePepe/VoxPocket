@@ -1,0 +1,102 @@
+{
+  "version": 2,
+  "modules": {
+    "VoxCore": {
+      "depends_on": [],
+      "files": [
+        "TranscriptionKit/ASRProviderType.swift",
+        "TranscriptionKit/AsyncValueRelay.swift",
+        "TranscriptionKit/AudioCaptureState.swift",
+        "TranscriptionKit/ModelLoadingStartControlling.swift",
+        "TranscriptionKit/ModelLoadingState.swift",
+        "TranscriptionKit/ModelLoadingStateProviding.swift",
+        "TranscriptionKit/MultiRecognizerSpeechSource.swift",
+        "TranscriptionKit/SpeechSession.swift",
+        "TranscriptionKit/SpeechSessionFactory.swift",
+        "TranscriptionKit/SpeechSessionSource.swift",
+        "TranscriptionKit/TranscriptionMerger.swift",
+        "TranscriptionKit/TranscriptionResult.swift"
+      ],
+      "native": [
+        "Packages/VoxKit/Sources/VoxCore"
+      ]
+    },
+    "VoxSpeech": {
+      "depends_on": [
+        "VoxCore"
+      ],
+      "files": [
+        "TranscriptionKit/AppleSpeechTranscriber.swift",
+        "TranscriptionKit/AzureRealtimeTranscriptionConfig.swift",
+        "TranscriptionKit/AzureWhisperTranscriber.swift",
+        "TranscriptionKit/DefaultAppleSpeechRequestFactory.swift",
+        "TranscriptionKit/DefaultRealtimeTranscriptionSession.swift",
+        "TranscriptionKit/DefaultSelectableTranscriptionCoordinator.swift",
+        "TranscriptionKit/EffectOnlyBatchTranscriber.swift",
+        "TranscriptionKit/HybridRecordingLifecycle.swift",
+        "TranscriptionKit/HybridWhisperTranscriber.swift",
+        "TranscriptionKit/MicrophoneRecorder.swift",
+        "TranscriptionKit/QuickRecordingReleaseControlling.swift",
+        "TranscriptionKit/RealtimeAudioPipeline.swift",
+        "TranscriptionKit/RealtimeTranscriptBuffer.swift",
+        "TranscriptionKit/RealtimeTranscriptionTransport.swift",
+        "TranscriptionKit/SpeechAvailabilityProviding.swift",
+        "TranscriptionKit/SpeechSessionRelay.swift",
+        "TranscriptionKit/SyntheticAudioBufferSource.swift",
+        "TranscriptionKit/TemporaryAudioStore.swift",
+        "TranscriptionKit/TranscriptionInjectionSeams.swift",
+        "TranscriptionKit/WhisperEngine.swift"
+      ]
+    },
+    "VoxSpeechWhisperKit": {
+      "depends_on": [
+        "VoxSpeech",
+        "VoxCore"
+      ],
+      "files": [
+        "TranscriptionKit/HybridLocalWhisperTranscriber.swift",
+        "TranscriptionKit/LoadingFallbackTranscriptionCoordinator.swift",
+        "TranscriptionKit/LocalWhisperBatchAdapter.swift",
+        "TranscriptionKit/LocalWhisperKitConfig.swift",
+        "TranscriptionKit/LocalWhisperKitEngine.swift",
+        "TranscriptionKit/ModelPreloadControlling.swift",
+        "TranscriptionKit/WhisperKitModelCacheAdapter.swift",
+        "TranscriptionKit/WhisperKitTranscriber.swift",
+        "TranscriptionKit/WhisperStreamingOwner.swift",
+        "TranscriptionKit/WhisperStreamingState.swift"
+      ]
+    },
+    "VoxRefine": {
+      "depends_on": [
+        "VoxCore"
+      ],
+      "files": [
+        "LLMKit/Models/AnalysisModels.swift",
+        "LLMKit/Models/FastIntentAnalysis.swift",
+        "LLMKit/Models/IntentAnalysis.swift",
+        "LLMKit/Models/IntentType.swift",
+        "LLMKit/Models/RefinementRequest.swift",
+        "LLMKit/Models/RefinementResponse.swift",
+        "LLMKit/Models/RefinementType.swift",
+        "LLMKit/Models/ToneAnalysis.swift",
+        "LLMKit/Models/TranscriptionMetadata.swift",
+        "LLMKit/Utilities/RefinementPromptBuilder.swift"
+      ]
+    },
+    "VoxLLM": {
+      "depends_on": [
+        "VoxCore",
+        "VoxRefine"
+      ],
+      "files": [
+        "LLMKit/LLMTranscriptionMerger.swift",
+        "LLMKit/Protocols/LLMProvider.swift",
+        "LLMKit/Protocols/LLMService.swift",
+        "LLMKit/Providers/AppleIntelligenceProvider.swift",
+        "LLMKit/Providers/AzureFoundryProvider.swift",
+        "LLMKit/Services/DefaultLLMService.swift"
+      ]
+    }
+  },
+  "combine_target": "TranscriptionKitCombine"
+}

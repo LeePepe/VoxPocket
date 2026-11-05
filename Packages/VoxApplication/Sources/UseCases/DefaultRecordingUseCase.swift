@@ -1,3 +1,4 @@
+import VoxKitBridge
 import Foundation
 import Combine
 import LokiKit
@@ -153,7 +154,7 @@ public final class DefaultRecordingUseCase: QuickRecordingUseCase, @unchecked Se
             .sink { [weak self] captureState in
                 guard let self, self.currentSelection() == selection else { return }
                 switch captureState {
-                case .idle:
+                case .idle, .interrupted:
                     self.stateSubject.send(.idle)
                     self.audioLevelSubject.send(0)
                     self.setActiveSelection(.primary)

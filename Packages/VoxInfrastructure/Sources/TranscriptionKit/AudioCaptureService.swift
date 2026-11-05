@@ -1,17 +1,6 @@
+import VoxCore
 import Foundation
 import Combine
-
-/// 音频捕获状态
-public enum AudioCaptureState: Sendable, Equatable {
-    /// 空闲状态
-    case idle
-    /// 正在录音
-    case recording
-    /// 已暂停
-    case paused
-    /// 发生错误
-    case error(String)
-}
 
 /// 音频捕获服务协议
 ///

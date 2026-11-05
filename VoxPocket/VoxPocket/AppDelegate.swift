@@ -16,6 +16,7 @@ import UseCases
 import Preferences
 import LokiKit
 import TranscriptionKit
+import VoxKitBridge
 
 /// macOS 应用代理
 ///

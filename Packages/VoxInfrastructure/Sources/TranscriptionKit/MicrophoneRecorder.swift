@@ -1,3 +1,4 @@
+import VoxCore
 import AVFoundation
 import Combine
 import Foundation
@@ -19,6 +20,7 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
     private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
     private let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
     private let logger: Logger
+    private let temporaryAudioStore: TemporaryAudioStore?
     private let authorizationProvider: any MicrophoneAuthorizationProviding
 
     // MARK: - Public publishers
@@ -29,13 +31,15 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
 
     // MARK: - Init
 
-    public init(logger: Logger = PrintLogger(subsystem: "MicrophoneRecorder")) {
+    public init(logger: Logger = PrintLogger(subsystem: "MicrophoneRecorder"), storageLocations: VoxStorageLocations? = nil) {
+        self.temporaryAudioStore = storageLocations.map { TemporaryAudioStore(storageLocations: $0) }
         self.logger = logger
         self.authorizationProvider = SystemMicrophoneAuthorizationProvider()
     }
 
     init(logger: Logger = PrintLogger(subsystem: "MicrophoneRecorder"),
-         authorizationProvider: any MicrophoneAuthorizationProviding) {
+         authorizationProvider: any MicrophoneAuthorizationProviding, storageLocations: VoxStorageLocations? = nil) {
+        self.temporaryAudioStore = storageLocations.map { TemporaryAudioStore(storageLocations: $0) }
         self.logger = logger
         self.authorizationProvider = authorizationProvider
     }
@@ -66,24 +70,21 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         bufferHandler: ((AVAudioPCMBuffer) -> Void)? = nil
     ) async throws {
         guard shouldStart() else { throw CancellationError() }
+        let authorized = await requestPermission()
+        guard authorized else { throw VoxKitError.microphoneAccessDenied }
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
-        #else
-        let authorized = await requestPermission()
-        guard authorized else {
-            throw NSError(
-                domain: "MicrophoneRecorder", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "麦克风权限未授权"]
-            )
-        }
         #endif
         try Task.checkCancellation()
         guard shouldStart() else { throw CancellationError() }
 
         // 用户音频只在应用数据目录暂存；目录创建不占用主线程。
-        let tempURL = try await Task.detached { try Self.makeRecordingFileURL() }.value
+        let tempURL = try await Task.detached { [temporaryAudioStore] in
+            if let temporaryAudioStore { return try temporaryAudioStore.makeRecordingFileURL() }
+            return try Self.makeRecordingFileURL()
+        }.value
         tempFileURL = tempURL
 
         // Tap callback must be defined OUTSIDE MainActor.run so it does not inherit

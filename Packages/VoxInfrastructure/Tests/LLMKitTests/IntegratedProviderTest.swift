@@ -1,3 +1,4 @@
+import VoxCore
 import XCTest
 @testable import LLMKit
 import LokiKit
@@ -8,7 +9,7 @@ final class IntegratedProviderTest: XCTestCase {
     /// 测试集成后的意图和语气分析
     func testIntegratedAnalysis() async throws {
         let provider = AppleIntelligenceProvider(
-            logger: PrintLogger(subsystem: "IntegratedTest", minimumLevel: .info)
+            logger: NoopVoxLogger()
         )
 
         guard provider.isAvailable else {
@@ -74,7 +75,7 @@ final class IntegratedProviderTest: XCTestCase {
     /// 测试完整的 refine 流程（包含并行分析）
     func testCompleteRefinementPipeline() async throws {
         let provider = AppleIntelligenceProvider(
-            logger: PrintLogger(subsystem: "IntegratedTest", minimumLevel: .info)
+            logger: NoopVoxLogger()
         )
 
         guard provider.isAvailable else {

@@ -1,3 +1,4 @@
+import VoxKitBridge
 import Foundation
 import Combine
 import LLMKit

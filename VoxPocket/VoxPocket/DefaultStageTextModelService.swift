@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 import Synchronization
 import Preferences
@@ -6,9 +7,9 @@ import LLMKit
 struct StageTextModelServices {
     let main: DefaultStageTextModelService
     let quick: DefaultStageTextModelService
-    init(azureConfig: LLMProviderConfig?, settings: StageModelSettings) {
-        main = DefaultStageTextModelService(azureFoundryConfig: azureConfig, settings: settings)
-        quick = DefaultStageTextModelService(azureFoundryConfig: azureConfig, settings: settings)
+    init(azureConfig: LLMProviderConfig?, settings: StageModelSettings, logger: any VoxLogger = NoopVoxLogger()) {
+        main = DefaultStageTextModelService(azureFoundryConfig: azureConfig, settings: settings, logger: logger)
+        quick = DefaultStageTextModelService(azureFoundryConfig: azureConfig, settings: settings, logger: logger)
     }
 }
 
@@ -19,22 +20,24 @@ public final class DefaultStageTextModelService: LLMService, Sendable {
         case unavailable
         public var errorDescription: String? { "所选文本模型尚未配置，请检查语音与文本设置。" }
     }
+    private let logger: any VoxLogger
     private let azureConfig: LLMProviderConfig?
     private let selection: Mutex<Result<DefaultLLMService, ConfigurationError>>
 
-    public init(azureFoundryConfig: LLMProviderConfig?, settings: StageModelSettings) {
+    public init(azureFoundryConfig: LLMProviderConfig?, settings: StageModelSettings, logger: any VoxLogger = NoopVoxLogger()) {
+        self.logger = logger
         azureConfig = azureFoundryConfig
-        selection = Mutex(Self.makeService(config: azureFoundryConfig, settings: settings))
+        selection = Mutex(Self.makeService(config: azureFoundryConfig, settings: settings, logger: logger))
     }
 
     public func configure(_ settings: StageModelSettings) {
-        let next = Self.makeService(config: azureConfig, settings: settings)
+        let next = Self.makeService(config: azureConfig, settings: settings, logger: logger)
         selection.withLock { $0 = next }
     }
 
-    private static func makeService(config: LLMProviderConfig?, settings: StageModelSettings)
+    private static func makeService(config: LLMProviderConfig?, settings: StageModelSettings, logger: any VoxLogger)
         -> Result<DefaultLLMService, ConfigurationError> {
-        let service = DefaultLLMService(azureFoundryConfig: config)
+        let service = DefaultLLMService(logger: logger, azureFoundryConfig: config)
         do {
             try StageModelRouting.applyTextModels(settings, to: service)
             if settings.refinement == .azureFoundry, service.currentProvider?.isAvailable != true {

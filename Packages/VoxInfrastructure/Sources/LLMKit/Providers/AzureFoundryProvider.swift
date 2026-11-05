@@ -1,6 +1,5 @@
 import Foundation
-import CoreModels
-import LokiKit
+import VoxCore
 
 /// Azure Foundry 鉴权模式
 public enum AzureFoundryAuthMode: String, Sendable {
@@ -81,22 +80,22 @@ public actor AzureFoundryProvider: LLMProvider {
     public nonisolated let providerType: LLMProviderType = .azureFoundry
     public nonisolated let config: LLMProviderConfig
 
-    private let logger: Logger
+    private let logger: any VoxLogger
     private let session: URLSession
 
     public init(
         config: LLMProviderConfig,
-        logger: Logger? = nil,
+        logger: (any VoxLogger)? = nil,
         session: URLSession = .shared
     ) {
         self.config = config
-        self.logger = logger ?? PrintLogger(subsystem: "AzureFoundry", minimumLevel: .debug)
+        self.logger = logger ?? NoopVoxLogger()
         self.session = session
     }
 
     public init(
         deployment: AzureFoundryDeployment,
-        logger: Logger? = nil,
+        logger: (any VoxLogger)? = nil,
         session: URLSession = .shared
     ) {
         self.init(config: deployment.providerConfig, logger: logger, session: session)
@@ -110,7 +109,7 @@ public actor AzureFoundryProvider: LLMProvider {
 
     public func validate() async throws {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
     }
 
@@ -231,10 +230,10 @@ public actor AzureFoundryProvider: LLMProvider {
         temperature: Double
     ) async throws -> String {
         guard let baseURL = config.baseURL else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
         let endpoint = buildCompletionsURL(from: baseURL)
@@ -266,41 +265,34 @@ public actor AzureFoundryProvider: LLMProvider {
 
         request.httpBody = try JSONEncoder().encode(payload)
 
-        logger.log(.debug, "调用 Azure Foundry", context: [
-            "model": config.modelIdentifier,
-            "prompt_length": userPrompt.count,
-            "auth_header": authMode == .apiKey ? "api-key" : "Authorization: Bearer"
-        ], file: #file, function: #function, line: #line)
+        logger.log(.debug, "调用 Azure Foundry", fields: [.int("prompt_length", userPrompt.count)])
 
         let started = Date()
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw VoxError.llmRequestFailed(reason: "invalid_http_response")
+            throw VoxKitError.llmRequestFailed(reason: .reason("invalid_http_response"))
         }
 
         guard (200..<300).contains(http.statusCode) else {
             if http.statusCode == 401 {
-                throw VoxError.llmInvalidAPIKey
+                throw VoxKitError.llmInvalidAPIKey
             }
             if http.statusCode == 429 {
-                throw VoxError.llmQuotaExceeded
+                throw VoxKitError.llmQuotaExceeded
             }
 
             // 错误正文可能回显用户输入，不传到日志或上层错误。
-            throw VoxError.llmRequestFailed(reason: "status_\(http.statusCode)")
+            throw VoxKitError.llmRequestFailed(reason: .reason("http_status"))
         }
 
         let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
         guard let choice = decoded.choices.first else {
-            throw VoxError.llmResponseInvalid
+            throw VoxKitError.llmResponseInvalid
         }
         guard choice.finish_reason == nil || choice.finish_reason == "stop" else {
-            throw VoxError.llmResponseInvalid
+            throw VoxKitError.llmResponseInvalid
         }
-        logger.log(.info, "Azure completion succeeded", context: [
-            "model": config.modelIdentifier,
-            "duration_ms": Int(Date().timeIntervalSince(started) * 1000)
-        ])
+        logger.log(.info, "Azure completion succeeded", fields: [])
 
         if let content = choice.message.content, !content.isEmpty {
             return content
@@ -313,7 +305,7 @@ public actor AzureFoundryProvider: LLMProvider {
             }
         }
 
-        throw VoxError.llmResponseInvalid
+        throw VoxKitError.llmResponseInvalid
     }
 
     private func buildCompletionsURL(from baseURL: URL) -> URL {

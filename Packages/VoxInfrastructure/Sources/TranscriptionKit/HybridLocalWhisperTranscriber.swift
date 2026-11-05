@@ -1,3 +1,4 @@
+import VoxCore
 import AVFoundation
 import Combine
 import Foundation
@@ -34,7 +35,7 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
     // MARK: - State
 
     private let _isTranscribing = Mutex(false)
-    private let logger: Logger
+    private let logger: any VoxLogger
     private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
     /// Apple Speech 是否识别到任何文字（用于决定是否调用 WhisperKit）
     private var appleHasContent = false
@@ -56,11 +57,12 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
 
     public init(
         config: LocalWhisperKitConfig = .default,
-        logger: Logger = PrintLogger(subsystem: "HybridLocalWhisperTranscriber")
+        logger: any VoxLogger = NoopVoxLogger(),
+        storageLocations: VoxStorageLocations
     ) {
         self.whisperConfig = config
         self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "HybridLocalWhisperTranscriber.Mic"))
-        let engine = SharedLocalWhisperEngineHandle(config: config, logger: PrintLogger(subsystem: "HybridLocalWhisperTranscriber.Engine"))
+        let engine = SharedLocalWhisperEngineHandle(config: config, logger: logger, storageLocations: storageLocations)
         self.whisperEngine = engine
         self.batchTranscriber = LocalWhisperBatchAdapter(engine: engine, config: config)
         self.speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
@@ -79,7 +81,7 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
                   batchTranscriber: any BatchTranscribing,
                   whisperEngine: any LocalWhisperEngine,
                   config: LocalWhisperKitConfig = .default,
-                  logger: Logger = PrintLogger(subsystem: "HybridLocalWhisperTranscriber")) {
+                  logger: any VoxLogger = NoopVoxLogger()) {
         self.recorder = recorder
         self.speechRecognizerProvider = speechRecognizer
         self.speechAuthorizationProvider = speechAuthorizationProvider
@@ -143,7 +145,7 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
     }
 
     public func start(language: Locale) async throws {
-        logger.info("start() language: \(language.identifier)")
+        logger.info("start()", fields: [.label("language", .source("locale"))])
 
         if _isTranscribing.withLock({ $0 }) {
             logger.warning("Already transcribing, stopping first")
@@ -191,7 +193,7 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
                 confidence: update.confidence.map(Double.init), timestamp: Date(), locale: language))
             if let recognitionError = update.error {
                 let e = recognitionError as NSError
-                self.logger.error("Apple Speech error: \(e.domain) \(e.code)")
+                self.logger.error("Apple Speech error", fields: [.int("code", e.code)])
                 self.stopRecorder()
             }
             }
@@ -202,7 +204,7 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
     }
 
     public func stop() async {
-        logger.info("stop() called, appleHasContent=\(appleHasContent)")
+        logger.info("stop() called", fields: [.bool("has_content", appleHasContent)])
 
         recognitionRequest?.endAudio()
         let fileURL = stopRecorder()
@@ -239,7 +241,7 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
                 logger.warning("WhisperKit returned empty result")
                 return
             }
-            logger.info("WhisperKit result: \(whisperText.count) chars")
+            logger.info("WhisperKit result", fields: [.int("text_length", whisperText.count)])
 
             let useMerger = merger != nil && !appleSpeechText.isEmpty && appleSpeechText != whisperText
             if useMerger { logger.info("Merging Apple Speech + WhisperKit via LLM") }
@@ -259,7 +261,7 @@ extension HybridLocalWhisperTranscriber: MultiRecognizerTranscriber {
             if !useMerger { liveResultSubject.send(result) }
             finalResultSubject.send(result)
         } catch {
-            logger.error("WhisperKit error: \(error.localizedDescription)")
+            logger.error("WhisperKit error")
         }
     }
 

@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 一次录音一个 session。调用方串行提供 PCM；服务器文本仅经回调/返回值传出，不进入日志。

@@ -1,0 +1,53 @@
+{
+  "configurations": [
+    {
+      "id": "A8A39E6D-1253-4AB1-ADBC-C1E530668294",
+      "name": "SDK",
+      "options": {}
+    }
+  ],
+  "defaultOptions": {},
+  "testTargets": [
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxKit",
+        "identifier": "VoxCoreTests",
+        "name": "VoxCoreTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxInfrastructure",
+        "identifier": "TranscriptionKitTests",
+        "name": "TranscriptionKitTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxInfrastructure",
+        "identifier": "LLMKitTests",
+        "name": "LLMKitTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxInfrastructure",
+        "identifier": "GoldenTraceTests",
+        "name": "GoldenTraceTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxInfrastructure",
+        "identifier": "VoxKitBridgeTests",
+        "name": "VoxKitBridgeTests"
+      }
+    }
+  ],
+  "version": 1
+}

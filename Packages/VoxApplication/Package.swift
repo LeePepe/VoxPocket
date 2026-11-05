@@ -17,6 +17,7 @@ let package = Package(
     dependencies: [
         .package(path: "../VoxDomain"),
         .package(path: "../VoxInfrastructure"),
+        .package(path: "../VoxKit"),
         // LokiKit from the immutable shared-telemetry v0.2.0 release; tag integrity is checked by scripts/ci/fetch-external-deps.sh.
         .package(url: "https://github.com/LeePepe/shared-telemetry.git", exact: "0.2.0"),
     ],
@@ -27,6 +28,8 @@ let package = Package(
                 .product(name: "CoreModels", package: "VoxDomain"),
                 .product(name: "TextHistory", package: "VoxDomain"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+                .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
+                .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "LLMKit", package: "VoxInfrastructure"),
                 .product(name: "Persistence", package: "VoxInfrastructure"),
                 .product(name: "LokiKit", package: "shared-telemetry"),

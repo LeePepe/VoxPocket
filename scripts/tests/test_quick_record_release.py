@@ -29,7 +29,7 @@ def main():
     fixture = fixture.replace("// PRODUCTION_HANDLERS", handlers)
     fixture = fixture.replace("// PRODUCTION_SESSION", method(
         delegate, "private struct QuickRecordingSession"))
-    catalog = (root / "Packages/VoxInfrastructure/Sources/TranscriptionKit/"
+    catalog = (root / "Packages/VoxInfrastructure/Sources/VoxKitBridge/"
                "VoxPocketTelemetryEventName.swift").read_text()
     fixture = fixture.replace("// PRODUCTION_EVENT_NAMES", method(
         catalog, "public enum VoxPocketTelemetryEventName"))

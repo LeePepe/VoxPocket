@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// LLM 提供者类型
@@ -58,7 +59,7 @@ public protocol LLMProvider: AnyObject, Sendable {
     ///
     /// - Parameter prompt: 输入提示词
     /// - Returns: LLM 生成的响应文本
-    /// - Throws: `VoxError.llmRequestFailed` 如果请求失败
+    /// - Throws: `VoxKitError.llmRequestFailed` 如果请求失败
     func complete(prompt: String) async throws -> String
 
     /// 流式文本完成
@@ -87,7 +88,7 @@ public protocol LLMProvider: AnyObject, Sendable {
     ///
     /// - Parameter request: 优化请求
     /// - Returns: 优化响应
-    /// - Throws: `VoxError.llmRequestFailed` 如果请求失败
+    /// - Throws: `VoxKitError.llmRequestFailed` 如果请求失败
     func refine(_ request: RefinementRequest) async throws -> RefinementResponse
 
     /// 流式文本优化

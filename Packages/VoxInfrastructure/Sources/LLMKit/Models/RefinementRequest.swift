@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// LLM 优化请求
