@@ -1,0 +1,6 @@
+{
+  "schema": "golden-trace/v1",
+  "kind": "pipeline",
+  "platform": "iOS",
+  "traces": []
+}

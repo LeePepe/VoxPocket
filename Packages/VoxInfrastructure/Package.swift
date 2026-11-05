@@ -100,5 +100,15 @@ let package = Package(
             name: "PreferencesTests",
             dependencies: ["Preferences"]
         ),
+        .testTarget(
+            name: "GoldenTraceTests",
+            dependencies: [
+                "TranscriptionKit",
+                "LLMKit",
+                "Preferences",
+                .product(name: "LokiKit", package: "shared-telemetry"),
+            ],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )
