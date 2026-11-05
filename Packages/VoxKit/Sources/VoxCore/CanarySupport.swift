@@ -19,10 +19,12 @@ public final class CanaryLogger: VoxLogger, Sendable {
     public var recordedFields: [[VoxLogField]] { state.withLock { $0.fields } }
 
     public func assertNoCanaryLeak(canaryStrings: [String], error: Error? = nil) -> Bool {
-        let values = recordedMessages + recordedFields.flatMap { fields in
-            fields.map { field in "\(field.key):\(field.value)" }
-        } + errorValues(error)
+        let values = recordedMessages + recordedFields.flatMap { fields in fields.flatMap(fieldValues) } + errorValues(error)
         return !canaryStrings.contains { canary in values.contains { $0.contains(canary) } }
+    }
+
+    private func fieldValues(_ field: VoxLogField) -> [String] {
+        [String(describing: field.key), field.value.text]
     }
 
     private func errorValues(_ error: Error?) -> [String] {
@@ -43,7 +45,7 @@ public final class CanaryTelemetry: VoxTelemetry, Sendable {
 
     public func assertNoCanaryLeak(canaryStrings: [String], error: Error? = nil) -> Bool {
         let values = recordedEvents.flatMap { event in
-            [String(describing: event.name)] + event.fields.map { "\($0.key):\($0.value)" }
+            [String(describing: event.name)] + event.fields.flatMap { field in [String(describing: field.key), field.value.text] }
         }
         var all = values
         if let error {

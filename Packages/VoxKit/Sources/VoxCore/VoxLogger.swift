@@ -13,18 +13,35 @@ public enum VoxLabel: Sendable, Equatable {
 
     public static func == (lhs: Self, rhs: Self) -> Bool { lhs.text == rhs.text }
 
+    public var rawLabel: String {
+        switch self {
+        case .provider(let value), .step(let value), .reason(let value), .source(let value): return "\(value)"
+        case .custom(let index): return "\(index)"
+        }
+    }
+
     public var text: String {
         switch self {
-        case .provider(let value): return "provider:\(value)"
-        case .step(let value): return "step:\(value)"
-        case .reason(let value): return "reason:\(value)"
-        case .source(let value): return "source:\(value)"
-        case .custom(let index): return "custom:\(index)"
+        case .provider: return "provider:\(rawLabel)"
+        case .step: return "step:\(rawLabel)"
+        case .reason: return "reason:\(rawLabel)"
+        case .source: return "source:\(rawLabel)"
+        case .custom: return "custom:\(rawLabel)"
         }
     }
 }
 
 public enum VoxLogValue: Sendable, Equatable {
+    public var text: String {
+        switch self {
+        case .int(let value): return "\(value)"
+        case .double(let value): return "\(value)"
+        case .durationMs(let value): return "\(value)"
+        case .bool(let value): return "\(value)"
+        case .label(let value): return value.text
+        }
+    }
+
     case int(Int)
     case double(Double)
     case durationMs(Double)

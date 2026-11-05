@@ -37,7 +37,6 @@ VoxUITesting(standalone,不参与运行时依赖链)
 | Layer | 一句话职责 | tech-context | depends_on |
 |---|---|---|---|
 | VoxDomain | 纯领域模型(CoreModels, TextHistory),无外部依赖 | `Packages/VoxDomain/tech-context.md` | (无) |
-| VoxKit | 独立 SDK 核心契约与红线检查,无仓库内依赖 | `Packages/VoxKit/tech-context.md` | (无) |
 | VoxInfrastructure | 转写 / LLM / 持久化 / 平台适配 / 偏好 | `Packages/VoxInfrastructure/tech-context.md` | VoxDomain, LokiKit(ext) |
 | VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, LokiKit(ext) |
 | VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, LokiKit(ext) |

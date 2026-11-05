@@ -61,11 +61,6 @@ jobs:
       - name: Layer gates (swift build + swift test)
         working-directory: repo
         run: scripts/verify --layer ${{ matrix.package }}
-      - name: SDK redlines (VoxKit)
-        if: matrix.package == 'VoxKit'
-        working-directory: repo
-        run: Packages/VoxKit/scripts/redlines/check.sh --self-test && Packages/VoxKit/scripts/redlines/check.sh
-
   # ---- REQUIRED: app target — xcodegen + xcodebuild (no signing) ----
   app:
     name: App target

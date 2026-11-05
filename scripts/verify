@@ -88,6 +88,7 @@ policy() {
     fi
     no_transcript_in_logs
     Packages/VoxKit/scripts/redlines/check.sh --self-test
+    Packages/VoxKit/scripts/redlines/check.sh
 }
 
 # Privacy (constitution IV): transcript/refined text must never reach logs.

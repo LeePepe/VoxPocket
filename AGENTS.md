@@ -25,7 +25,6 @@ VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, del
   → VoxApplication    use cases
   → VoxInfrastructure transcription, LLM, persistence, platform adapters, preferences (+ LokiKit)
   → VoxDomain         pure domain models, no external dependencies
-VoxKit                standalone SDK contracts and redline-checked core (no dependencies)
 VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 

@@ -20,7 +20,7 @@ import Testing
 }
 
 @Test func storageAndNoops() {
-    let locations = VoxStorageLocations(temporaryAudio: URL(fileURLWithPath: "/tmp/audio"), modelCache: URL(fileURLWithPath: "/tmp/cache"))
+    let locations = VoxStorageLocations(temporaryAudio: URL(string: "file:///tmp/audio")!, modelCache: URL(string: "file:///tmp/cache")!)
     #expect(locations.modelCache.lastPathComponent == "cache")
     #expect(NoopCredentialProvider().credential(for: .azureSpeechKey) == nil)
     NoopVoxLogger().info("safe")
@@ -28,7 +28,19 @@ import Testing
 }
 
 @Test func kitErrorDescriptionsRemainStable() {
-    #expect(VoxKitError.microphoneAccessDenied.errorDescription == "麦克风访问被拒绝，请在系统设置中允许访问")
-    #expect(VoxKitError.speechRecognitionUnavailable.errorDescription == "语音识别服务不可用")
-    #expect(VoxKitError.modelNotReady.errorDescription == "本地模型正在加载中，请稍候再试")
+    let cases: [(VoxKitError, String)] = [
+        (.microphoneAccessDenied, "麦克风访问被拒绝，请在系统设置中允许访问"),
+        (.speechRecognitionUnavailable, "语音识别服务不可用"),
+        (.speechRecognitionPermissionDenied, "语音识别权限被拒绝，请在系统设置中允许"),
+        (.transcriptionFailed(reason: .reason("timeout")), "转录失败：timeout"),
+        (.unsupportedLanguage(locale: .reason("en-US")), "不支持的语言：en-US"),
+        (.llmProviderNotConfigured, "LLM 提供者未配置"),
+        (.llmRequestFailed(reason: .reason("unavailable")), "LLM 请求失败：unavailable"),
+        (.llmResponseInvalid, "LLM 响应无效"),
+        (.llmInvalidAPIKey, "无效的 API Key"),
+        (.llmQuotaExceeded, "API 配额已用尽"),
+        (.llmOperationTimeout, "LLM 操作超时"),
+        (.modelNotReady, "本地模型正在加载中，请稍候再试")
+    ]
+    for (error, expected) in cases { #expect(error.errorDescription == expected) }
 }
