@@ -20,21 +20,25 @@ def main() -> None:
         (package / "Package.swift").write_text(f'''// swift-tools-version: 6.2
 import PackageDescription
 let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)],
-    dependencies: [.package(path: {infrastructure})],
+    dependencies: [.package(path: {infrastructure}), .package(path: {json.dumps(str(root / "Packages/VoxKit"))})],
     targets: [
         .target(name: "VoxPocket", dependencies: [
             .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+            .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
+            .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "LLMKit", package: "VoxInfrastructure"),
             .product(name: "Preferences", package: "VoxInfrastructure")]),
         .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket",
             .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+            .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
+            .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "LLMKit", package: "VoxInfrastructure"),
             .product(name: "Preferences", package: "VoxInfrastructure")],
             resources: [.copy("golden_b_macos.json")],
             swiftSettings: [.define("VOX_ROUTING_HARNESS")])
     ])
 ''')
-        for name in ("StageModelRouting", "DefaultStageTextModelService", "LLMAppConfig"):
+        for name in ("StageModelRouting", "DefaultStageTextModelService", "LLMAppConfig", "SDKHostConfiguration"):
             (sources / f"{name}.swift").symlink_to(root / f"VoxPocket/VoxPocket/{name}.swift")
         (tests / "GoldenRoutingTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/GoldenRoutingTests.swift")
         (tests / "golden_b_macos.json").symlink_to(root / "scripts/tests/golden/golden_b_macos.json")

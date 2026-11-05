@@ -22,8 +22,9 @@ red_lines:
 
 ## 依赖
 - **仓库内**:通过 `VoxPresentation` 的 `UIShared`/`PlatformUI`/`WidgetUI` 产品,并直接 import
-  `VoxInfrastructure`(TranscriptionKit/LLMKit/Persistence/PlatformAdapters/Preferences)、
-  `VoxApplication`(UseCases)、`VoxDomain`(CoreModels)与 `VoxKit`(VoxCore)的模块。
+  `VoxInfrastructure`(TranscriptionKit/VoxKitBridge/LLMKit/Persistence/PlatformAdapters/Preferences)、
+  `VoxKit`(VoxCore)、
+  `VoxApplication`(UseCases)与 `VoxDomain`(CoreModels)的模块。
 - **外部**:`LokiKit` 由 SwiftPM 按 shared-telemetry 远程依赖 `exact: "0.2.0"` 解析；
   `AppleUITesting`(`UITestingBridge`)放在仓库同级目录,CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA 取出。
 
@@ -44,3 +45,5 @@ executor 上惰性构造选定的 Loki/Noop provider，按 admission 顺序执�
   (`RUN_HEAVY=1 scripts/verify` 可显式开启 macOS 构建)。
 - 测试注意:`swift test` 会一起编译一个包的所有 test target,某个 target 的既有失败会阻塞其他 target;
   定位单类用 `--filter`。
+
+TK1c-1 injects host storage through SDKHostConfiguration; remaining assembly follows in TK1c-2.

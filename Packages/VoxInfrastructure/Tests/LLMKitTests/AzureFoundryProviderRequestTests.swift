@@ -1,3 +1,4 @@
+import VoxCore
 import XCTest
 @testable import LLMKit
 import CoreModels

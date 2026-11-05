@@ -1,3 +1,4 @@
+import VoxCore
 #if os(macOS)
 import Darwin
 import Foundation
@@ -10,7 +11,8 @@ enum BenchmarkFailure: String, Error {
 }
 
 /// 不求值日志消息，也不保存正文或上下文；评测不能接入任何日志后端。
-final class SilentBenchmarkLogger: Logger {
+final class SilentBenchmarkLogger: Logger, VoxLogger {
+    func log(_ level: VoxLogLevel, _ message: StaticString, fields: [VoxLogField]) {}
     private let level = Mutex(LogLevel.critical)
     var minimumLevel: LogLevel {
         get { level.withLock { $0 } }

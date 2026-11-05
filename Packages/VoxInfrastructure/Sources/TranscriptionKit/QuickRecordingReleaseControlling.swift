@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 松手时冻结的来源资格；不携带用户文本。

@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 public enum RefinementPromptBuilder {

@@ -1,15 +1,6 @@
+import VoxCore
 import Foundation
 import Combine
-
-/// ASR（自动语音识别）提供者类型
-public enum ASRProviderType: String, CaseIterable, Sendable {
-    /// Apple Speech Framework
-    case apple
-    /// OpenAI Whisper
-    case whisper
-    /// 自定义提供者
-    case custom
-}
 
 /// 语音识别服务协议
 ///

@@ -1,7 +1,6 @@
 import Foundation
 import FoundationModels
-import CoreModels
-import LokiKit
+import VoxCore
 
 enum AppleIntelligenceLocaleResolver {
     static func resolve(
@@ -85,17 +84,17 @@ public actor AppleIntelligenceProvider: LLMProvider {
 
     public nonisolated let providerType: LLMProviderType = .appleIntelligence
     public nonisolated let config: LLMProviderConfig
-    private let logger: Logger
+    private let logger: any VoxLogger
 
     public init(
         config: LLMProviderConfig = LLMProviderConfig(
             providerType: .appleIntelligence,
             modelIdentifier: "apple-intelligence"
         ),
-        logger: Logger? = nil
+        logger: (any VoxLogger)? = nil
     ) {
         self.config = config
-        self.logger = logger ?? PrintLogger(subsystem: "AppleIntelligence", minimumLevel: .debug)
+        self.logger = logger ?? NoopVoxLogger()
     }
 
     // MARK: - LLMProvider
@@ -113,7 +112,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
 
     public func complete(prompt: String) async throws -> String {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
         // 使用英文指令以确保兼容性
@@ -147,16 +146,16 @@ public actor AppleIntelligenceProvider: LLMProvider {
         )
 
         if resolvedLocale.identifier == locale.identifier {
-            logger.debug("Locale \(locale.identifier) is supported")
+            logger.debug("Locale is supported")
             return resolvedLocale
         }
 
         if resolvedLocale.identifier == defaultFallback.identifier {
-            logger.warning("Locale \(locale.identifier) is NOT supported by Apple Intelligence, falling back to en-US")
+            logger.warning("Locale unsupported; falling back to en-US")
             return resolvedLocale
         }
 
-        logger.warning("Locale \(locale.identifier) is NOT explicitly supported, falling back to same-language locale \(resolvedLocale.identifier)")
+        logger.warning("Locale not explicit; falling back to same-language locale")
         return resolvedLocale
     }
 
@@ -165,14 +164,14 @@ public actor AppleIntelligenceProvider: LLMProvider {
     /// 使用文本完成分析意图（替代 guided generation，性能提升 100+ 倍）
     private func analyzeIntent(_ text: String, locale: Locale?) async throws -> IntentAnalysis {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
         // 验证并使用支持的 locale
         let validatedLocale = validateLocale(locale)
 
-        logger.debug("开始意图分析（文本完成模式）- 文本长度: \(text.count)字符, locale: \(validatedLocale.identifier)")
-        let perfStart = logger.performanceStart()
+        logger.debug("开始意图分析（文本完成模式）", fields: [.int("text_length", text.count)])
+        let perfStart = Date()
         do {
             // 根据 locale 选择合适的指令语言。
             // 重要：用户文本嵌入 instructions 而非 prompt，避免 FoundationModels
@@ -217,12 +216,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 prompt = "Analyze the intent and return JSON"
             }
 
-            logger.log(.debug, "意图分析配置", context: [
-                "text_length": text.count,
-                "method": "text_completion",
-                "model": "default",
-                "locale": validatedLocale.identifier
-            ], file: #file, function: #function, line: #line)
+            logger.log(.debug, "意图分析配置", fields: [.int("text_length", text.count)])
 
             let session = LanguageModelSession(
                 model: .default,
@@ -240,19 +234,14 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 jsonText = jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
             }
 
-            logger.log(.debug, "收到 LLM 响应（已清理）", context: [
-                "response_length": jsonText.count,
-                "response_preview": String(jsonText.prefix(200))
-            ], file: #file, function: #function, line: #line)
+            logger.log(.debug, "收到 LLM 响应（已清理）", fields: [.int("response_length", jsonText.count)])
 
             // 解析 JSON
             guard let data = jsonText.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let intentStr = json["intent"] as? String,
                   let confidence = json["confidence"] as? Double else {
-                logger.log(.warning, "JSON 解析失败，使用默认值", context: [
-                    "response": jsonText
-                ], file: #file, function: #function, line: #line)
+                logger.log(.warning, "JSON 解析失败，使用默认值", fields: [])
                 return IntentAnalysis(intent: .selfCorrection, confidence: 0.5, params: IntentParams(), entities: [], tags: [])
             }
 
@@ -281,36 +270,15 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 tags: []
             )
 
-            logger.log(.info, "意图分析完成", context: [
-                "intent": result.intent.rawValue,
-                "confidence": result.confidence,
-                "method": "text_completion"
-            ], file: #file, function: #function, line: #line)
+            logger.log(.info, "意图分析完成", fields: [])
 
-            logger.performanceEnd(
-                "意图分析 (文本完成)",
-                start: perfStart,
-                context: ["text_length": text.count, "method": "text_completion"],
-                file: #file,
-                function: #function,
-                line: #line
-            )
+            logger.log(.info, "意图分析 (文本完成)", fields: [.int("text_length", text.count), .durationMs("duration_ms", Date().timeIntervalSince(perfStart) * 1000)])
 
             return result
         } catch {
-            logger.log(.error, "意图分析失败", context: [
-                "error": error.localizedDescription
-            ], file: #file, function: #function, line: #line)
+            logger.log(.error, "意图分析失败", fields: [])
 
-            logger.performanceEnd(
-                "意图分析 (文本完成)",
-                start: perfStart,
-                context: ["text_length": text.count],
-                error: error,
-                file: #file,
-                function: #function,
-                line: #line
-            )
+            logger.log(.info, "意图分析 (文本完成)", fields: [.int("text_length", text.count), .durationMs("duration_ms", Date().timeIntervalSince(perfStart) * 1000)])
 
             throw error
         }
@@ -319,14 +287,14 @@ public actor AppleIntelligenceProvider: LLMProvider {
     /// 使用文本完成分析语气（替代 guided generation，性能提升 100+ 倍）
     private func analyzeTone(_ text: String, locale: Locale?) async throws -> ToneAnalysis {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
         // 验证并使用支持的 locale
         let validatedLocale = validateLocale(locale)
 
-        logger.debug("开始语气分析（文本完成模式）- 文本长度: \(text.count)字符, locale: \(validatedLocale.identifier)")
-        let perfStart = logger.performanceStart()
+        logger.debug("开始语气分析（文本完成模式）", fields: [.int("text_length", text.count)])
+        let perfStart = Date()
         do {
             // 根据 locale 选择合适的指令语言。
             // 重要：用户文本嵌入 instructions 而非 prompt，避免 FoundationModels
@@ -371,11 +339,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 prompt = "Analyze the tone and return JSON"
             }
 
-            logger.log(.debug, "语气分析配置", context: [
-                "text_length": text.count,
-                "method": "text_completion",
-                "locale": validatedLocale.identifier
-            ], file: #file, function: #function, line: #line)
+            logger.log(.debug, "语气分析配置", fields: [.int("text_length", text.count)])
 
             let session = LanguageModelSession(
                 model: .default,
@@ -393,19 +357,14 @@ public actor AppleIntelligenceProvider: LLMProvider {
                 jsonText = jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
             }
 
-            logger.log(.debug, "收到 LLM 响应（已清理）", context: [
-                "response_length": jsonText.count,
-                "response_preview": String(jsonText.prefix(200))
-            ], file: #file, function: #function, line: #line)
+            logger.log(.debug, "收到 LLM 响应（已清理）", fields: [.int("response_length", jsonText.count)])
 
             // 解析 JSON
             guard let data = jsonText.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let toneStr = json["tone"] as? String,
                   let confidence = json["confidence"] as? Double else {
-                logger.log(.warning, "JSON 解析失败，使用默认值", context: [
-                    "response": jsonText
-                ], file: #file, function: #function, line: #line)
+                logger.log(.warning, "JSON 解析失败，使用默认值", fields: [])
                 return ToneAnalysis(tone: .neutral, confidence: 0.5)
             }
 
@@ -430,36 +389,15 @@ public actor AppleIntelligenceProvider: LLMProvider {
 
             let result = ToneAnalysis(tone: tone, confidence: confidence)
 
-            logger.log(.info, "语气分析完成", context: [
-                "tone": result.tone.rawValue,
-                "confidence": result.confidence,
-                "method": "text_completion"
-            ], file: #file, function: #function, line: #line)
+            logger.log(.info, "语气分析完成", fields: [])
 
-            logger.performanceEnd(
-                "语气分析 (文本完成)",
-                start: perfStart,
-                context: ["text_length": text.count, "method": "text_completion"],
-                file: #file,
-                function: #function,
-                line: #line
-            )
+            logger.log(.info, "语气分析 (文本完成)", fields: [.int("text_length", text.count), .durationMs("duration_ms", Date().timeIntervalSince(perfStart) * 1000)])
 
             return result
         } catch {
-            logger.log(.error, "语气分析失败", context: [
-                "error": error.localizedDescription
-            ], file: #file, function: #function, line: #line)
+            logger.log(.error, "语气分析失败", fields: [])
 
-            logger.performanceEnd(
-                "语气分析 (文本完成)",
-                start: perfStart,
-                context: ["text_length": text.count],
-                error: error,
-                file: #file,
-                function: #function,
-                line: #line
-            )
+            logger.log(.info, "语气分析 (文本完成)", fields: [.int("text_length", text.count), .durationMs("duration_ms", Date().timeIntervalSince(perfStart) * 1000)])
 
             throw error
         }
@@ -469,17 +407,14 @@ public actor AppleIntelligenceProvider: LLMProvider {
 
     public func refine(_ request: RefinementRequest) async throws -> RefinementResponse {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
-        logger.log(.info, "开始文本优化", context: [
-            "text_length": request.text.count,
-            "has_custom_prompt": request.customPrompt != nil
-        ], file: #file, function: #function, line: #line)
+        logger.log(.info, "开始文本优化", fields: [.int("text_length", request.text.count)])
 
         // 阶段 1: 分析意图/语气（并行执行，失败时使用默认值）
         logger.debug("启用两阶段处理：意图 || 语气（并行） → 优化")
-        let perfAnalysisStart = logger.performanceStart()
+        let perfAnalysisStart = Date()
 
         // 使用 async let 并行执行意图和语气分析
         async let intentResult: IntentAnalysis = {
@@ -489,9 +424,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
                     locale: request.transcriptionMetadata?.locale
                 )
             } catch {
-                logger.log(.warning, "意图分析失败，使用默认值", context: [
-                    "error": error.localizedDescription
-                ], file: #file, function: #function, line: #line)
+                logger.log(.warning, "意图分析失败，使用默认值", fields: [])
                 return IntentAnalysis(intent: .selfCorrection, confidence: 0.0)
             }
         }()
@@ -503,9 +436,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
                     locale: request.transcriptionMetadata?.locale
                 )
             } catch {
-                logger.log(.warning, "语气分析失败，使用默认值", context: [
-                    "error": error.localizedDescription
-                ], file: #file, function: #function, line: #line)
+                logger.log(.warning, "语气分析失败，使用默认值", fields: [])
                 return ToneAnalysis(tone: .neutral, confidence: 0.0)
             }
         }()
@@ -513,36 +444,19 @@ public actor AppleIntelligenceProvider: LLMProvider {
         // 等待两个分析都完成
         let (intent, tone) = await (intentResult, toneResult)
 
-        logger.performanceEnd(
-            "并行分析 (意图 + 语气)",
-            start: perfAnalysisStart,
-            context: [
-                "intent": intent.intent.rawValue,
-                "tone": tone.tone.rawValue,
-                "text_length": request.text.count
-            ],
-            file: #file,
-            function: #function,
-            line: #line
-        )
+        logger.log(.info, "并行分析 (意图 + 语气)", fields: [.int("text_length", request.text.count), .durationMs("duration_ms", Date().timeIntervalSince(perfAnalysisStart) * 1000)])
 
         // 阶段 2: 构建简化 prompt
         let prompt = RefinementPromptBuilder.build(
             text: request.text,
             customPrompt: request.customPrompt
         )
-        logger.log(.debug, "使用简化 prompt 进行优化", context: [
-            "intent": intent.intent.rawValue,
-            "tone": tone.tone.rawValue
-        ], file: #file, function: #function, line: #line)
+        logger.log(.debug, "使用简化 prompt 进行优化", fields: [])
 
         // 执行优化
         let refinedText = try await complete(prompt: prompt)
 
-        logger.log(.info, "文本优化完成", context: [
-            "original_length": request.text.count,
-            "refined_length": refinedText.count
-        ], file: #file, function: #function, line: #line)
+        logger.log(.info, "文本优化完成", fields: [.int("original_length", request.text.count), .int("refined_length", refinedText.count)])
 
         return RefinementResponse(
             originalText: request.text,
@@ -555,7 +469,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
 
     public func validate() async throws {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
     }
 
@@ -568,7 +482,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
     /// 流式文本完成
     public func completeStreaming(prompt: String) async throws -> AsyncThrowingStream<String, Error> {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
         // 使用英文指令以确保兼容性
@@ -597,7 +511,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
     /// 流式优化（先执行 intent/tone 分析，再构建增强 prompt）
     public func refineStreaming(_ request: RefinementRequest) async throws -> AsyncThrowingStream<String, Error> {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
 
         logger.debug("流式优化：先执行意图/语气分析，再构建 prompt")
@@ -620,7 +534,7 @@ public actor AppleIntelligenceProvider: LLMProvider {
 
     public func analyze(_ request: AnalysisRequest, steps: Set<AnalysisStep>) async throws -> PartialAnalysis {
         guard isAvailable else {
-            throw VoxError.llmProviderNotConfigured
+            throw VoxKitError.llmProviderNotConfigured
         }
         guard !steps.isEmpty else {
             return PartialAnalysis()

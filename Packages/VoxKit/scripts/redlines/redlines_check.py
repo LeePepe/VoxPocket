@@ -190,7 +190,11 @@ def main() -> int:
     root = args.root.resolve()
     if args.write_baseline: return generate_baseline(root)
     if args.self_test: return self_test(root)
-    paths = [p if p.is_absolute() else root / p for p in (args.paths or [root / "Sources", root / "Tests"])]
+    requested = [root / "Sources", root / "Tests", *args.paths]
+    paths = list(dict.fromkeys(p.resolve() if p.exists() else (root / p).resolve() for p in requested))
+    missing = [str(path) for path in paths if not path.exists()]
+    if missing:
+        parser.error("missing scan paths: " + ", ".join(missing))
     return run_checks(root, paths)
 
 if __name__ == "__main__": sys.exit(main())

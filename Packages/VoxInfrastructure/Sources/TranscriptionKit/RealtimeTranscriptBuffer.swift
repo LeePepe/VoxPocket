@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 完成事件可能乱序：终稿使用 committed 顺序，不使用 completion 到达顺序。

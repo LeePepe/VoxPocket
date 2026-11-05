@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 转录结果类型

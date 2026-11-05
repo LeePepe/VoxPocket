@@ -1,3 +1,4 @@
+import VoxCore
 #if os(macOS)
 import Foundation
 import Darwin
@@ -93,7 +94,7 @@ final class BenchmarkContractTests: XCTestCase {
 
     func testUnpreparedLocalBenchmarkDoesNotAutoloadOrUseSharedProductionEngine() async {
         let engine = LocalWhisperKitEngine(config: LocalWhisperKitConfig(model: "synthetic-not-a-model", preloadOnStart: false),
-            logger: SilentBenchmarkLogger(), preparedModelFolder: URL(fileURLWithPath: "/not-a-model"))
+            logger: SilentBenchmarkLogger(), preparedModelFolder: URL(fileURLWithPath: "/not-a-model"), storageLocations: testStorageLocations)
         let emptyResults = await withTaskGroup(of: Bool.self) { group in
             for _ in 0..<4 {
                 group.addTask { (try? await engine.transcribeCanonicalSamples([0], languageCode: "zh")) == nil }
@@ -130,3 +131,5 @@ final class BenchmarkContractTests: XCTestCase {
     }
 }
 #endif
+
+private let testStorageLocations = VoxStorageLocations(temporaryAudio: FileManager.default.temporaryDirectory, modelCache: FileManager.default.temporaryDirectory)

@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 用户意图类型

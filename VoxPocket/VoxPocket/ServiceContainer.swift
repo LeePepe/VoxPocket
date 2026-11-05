@@ -222,7 +222,8 @@ public final class ServiceContainer: ObservableObject {
                 config: LocalWhisperKitConfig(
                     model: LocalWhisperKitConfig.platformDefaultModel,
                     preloadOnStart: preloadOnStart
-                )
+                ),
+                storageLocations: SDKHostConfiguration.storageLocations()
             )
         case .appleSpeech:
             return AppleSpeechTranscriber()
@@ -251,7 +252,8 @@ public final class ServiceContainer: ObservableObject {
             config: LocalWhisperKitConfig(
                 model: LocalWhisperKitConfig.platformDefaultModel,
                 preloadOnStart: preloadOnStart
-            )
+            ),
+                storageLocations: SDKHostConfiguration.storageLocations()
         )
     }
 
@@ -260,7 +262,8 @@ public final class ServiceContainer: ObservableObject {
             config: LocalWhisperKitConfig(
                 model: LocalWhisperKitConfig.platformDefaultModel,
                 preloadOnStart: preloadOnStart
-            )
+            ),
+                storageLocations: SDKHostConfiguration.storageLocations()
         )
     }
 

@@ -1,3 +1,5 @@
+import VoxCore
+@_exported import VoxKitBridge
 import Combine
 import Foundation
 import LokiKit
@@ -16,16 +18,19 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
     fileprivate let recorder: MicrophoneRecorder
     private let config: LocalWhisperKitConfig
-    private let logger: Logger
-    fileprivate let telemetry: TelemetryService
+    private let logger: any VoxLogger
+    fileprivate let telemetry: any VoxTelemetry
     fileprivate let permissionRequester: @Sendable () async -> Bool
     fileprivate let hasPermissionProvider: @Sendable () -> Bool
-    private let engineFactory: @Sendable (LocalWhisperKitConfig, Logger) -> any LocalWhisperEngine
+    private let engineFactory: @Sendable (LocalWhisperKitConfig, any VoxLogger) -> any LocalWhisperEngine
 
     // MARK: - Publishers
 
     private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
     private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
+    let sessionRelay = SpeechSessionRelay()
+    private let captureRelay = AsyncValueRelay<AudioCaptureState>(.idle)
+    private let levelRelay = AsyncValueRelay<Float>(0)
     private let audioLevelSubject = CurrentValueSubject<Float, Never>(0)
     fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
     private let _modelLoadingStateSubject = CurrentValueSubject<ModelLoadingState, Never>(.idle)
@@ -48,17 +53,14 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Init
 
-    public convenience override init() {
-        self.init(config: .default)
-    }
-
     public init(
         config: LocalWhisperKitConfig,
-        logger: Logger = PrintLogger(subsystem: "WhisperKitTranscriber"),
+        logger: any VoxLogger = NoopVoxLogger(),
         recorder: MicrophoneRecorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "WhisperKitTranscriber.Mic")),
-        telemetry: TelemetryService = NoopTelemetryService()
+        telemetry: any VoxTelemetry = NoopVoxTelemetry(),
+        storageLocations: VoxStorageLocations
     ) {
-        self.engineFactory = { SharedLocalWhisperEngineHandle(config: $0, logger: $1) }
+        self.engineFactory = { SharedLocalWhisperEngineHandle(config: $0, logger: $1, storageLocations: storageLocations) }
         self.config = config
         self.logger = logger
         self.recorder = recorder
@@ -73,12 +75,12 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
 
     init(
         config: LocalWhisperKitConfig,
-        logger: Logger,
+        logger: any VoxLogger,
         recorder: MicrophoneRecorder,
-        telemetry: TelemetryService = NoopTelemetryService(),
+        telemetry: any VoxTelemetry = NoopVoxTelemetry(),
         permissionRequester: (@Sendable () async -> Bool)? = nil,
         hasPermissionProvider: (@Sendable () -> Bool)? = nil,
-        engineFactory: @escaping @Sendable (LocalWhisperKitConfig, Logger) -> any LocalWhisperEngine,
+        engineFactory: @escaping @Sendable (LocalWhisperKitConfig, any VoxLogger) -> any LocalWhisperEngine,
         autoPreload: Bool = false
     ) {
         self.config = config
@@ -95,95 +97,52 @@ public final class WhisperKitTranscriber: NSObject, @unchecked Sendable {
     }
 
     /// 后台下载并加载模型，与录音流程完全解耦
-    private func startBackgroundPreload() {
-        if _engine.withLock({ $0 }) != nil {
-            _modelLoadingStateSubject.send(.ready)
-            return
-        }
-        if _preloadTask.withLock({ $0 }) != nil {
-            return
-        }
-
-        let task = Task<Void, Error> { [weak self] in
-            guard let self else { return }
-            defer {
-                self._preloadTask.withLock { $0 = nil }
+    @discardableResult
+    private func startBackgroundPreload() -> Task<Void, Error>? {
+        _preloadTask.withLock { pending -> Task<Void, Error>? in
+            if _engine.withLock({ $0 }) != nil { return nil }
+            if let pending { return pending }
+            _modelLoadingStateSubject.send(.loading)
+            let task = Task<Void, Error> { [weak self] in
+                guard let self else { return }
+                defer { self._preloadTask.withLock { $0 = nil } }
+                let startedAt = Date()
+                let engine = self.engineFactory(self.config, self.logger)
+                do {
+                    try await engine.prepare(onProgress: { [weak self] progress in
+                        self?._modelLoadingStateSubject.send(.downloading(progress: progress))
+                    })
+                    self._engine.withLock { $0 = engine }
+                    self._modelLoadingStateSubject.send(.ready)
+                    self.logger.info("WhisperKit model preloaded and ready")
+                    let loadMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    self.telemetry.record(VoxTelemetryEvent(name: "whisper.model.loaded", fields: [.label("model", .source("whisperKit")), .durationMs("load_ms", Double(loadMs))]))
+                } catch {
+                    self._modelLoadingStateSubject.send(.failed("Model preparation failed"))
+                    self.logger.error("WhisperKit model preload failed")
+                    self.telemetry.record(VoxTelemetryEvent(name: "whisper.model.load_failed", fields: [.label("model", .source("whisperKit")), .label("error_kind", .reason("model_preparation"))]))
+                    throw error
+                }
             }
-            let startedAt = Date()
-            let engine = self.engineFactory(self.config, self.logger)
-            do {
-                try await engine.prepare(onProgress: { [weak self] progress in
-                    self?._modelLoadingStateSubject.send(.downloading(progress: progress))
-                })
-                self._modelLoadingStateSubject.send(.ready)
-                self._engine.withLock { $0 = engine }
-                self.logger.info("WhisperKit model preloaded and ready")
-                let loadMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                self.telemetry.track(
-                    name: VoxPocketTelemetryEventName.whisperModelLoaded.rawValue,
-                    properties: [
-                        "model": self.config.model,
-                        "load_ms": String(loadMs)
-                    ]
-                )
-            } catch {
-                self._modelLoadingStateSubject.send(.failed(error.localizedDescription))
-                self.logger.error("WhisperKit model preload failed")
-                self.telemetry.track(
-                    name: VoxPocketTelemetryEventName.whisperModelLoadFailed.rawValue,
-                    properties: [
-                        "model": self.config.model,
-                        "category": VoxPocketTranscriptionFailureCategory.modelPreparation.rawValue
-                    ]
-                )
-                throw error
-            }
+            pending = task
+            return task
         }
-        _preloadTask.withLock { $0 = task }
-        _modelLoadingStateSubject.send(.loading)
     }
 
     private func ensureEngineReady() async throws -> any LocalWhisperEngine {
-        if let existing = _engine.withLock({ $0 }) {
-            return existing
-        }
-
-        if _preloadTask.withLock({ $0 }) == nil {
-            startBackgroundPreload()
-        }
-
-        guard let preloadTask = _preloadTask.withLock({ $0 }) else {
-            throw NSError(
-                domain: "WhisperKitTranscriber",
-                code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "WhisperKit 模型预加载任务不存在"]
-            )
-        }
-        try await preloadTask.value
-
+        if let existing = _engine.withLock({ $0 }) { return existing }
+        if let preparation = startBackgroundPreload() { try await preparation.value }
         guard let engine = _engine.withLock({ $0 }) else {
-            throw NSError(
-                domain: "WhisperKitTranscriber",
-                code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "WhisperKit 模型加载失败"]
-            )
+            throw VoxKitError.modelNotReady
         }
         return engine
     }
 
-    private func trackTranscriptionFailure(
-        category: VoxPocketTranscriptionFailureCategory,
-        phase: String
-    ) {
-        telemetry.track(
-            name: VoxPocketTelemetryEventName.transcriptionFailed.rawValue,
-            properties: [
-                "provider": "whisperkit",
-                "model": config.model,
-                "phase": phase,
-                "category": category.rawValue
-            ]
-        )
+    private func trackTranscriptionFailure(phase: VoxLabel) {
+        telemetry.record(VoxTelemetryEvent(name: "transcription.failed", fields: [
+            .label("provider", .provider("whisperkit")), .label("model", .source("whisperKit")),
+            .label("phase", phase), .label("error_kind", phase == .step("model_load") ? .reason("model_preparation") : .reason("streaming_start"))
+        ]))
     }
 
     private func acceptLivePartial(_ text: String) -> String? {
@@ -261,7 +220,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
     }
 
     public func start(language: Locale) async throws {
-        logger.info("start() language: \(language.identifier)")
+        logger.info("start()", fields: [.label("language", .source("locale"))])
 
         if _isTranscribing.withLock({ $0 }) {
             logger.warning("Already transcribing, stopping first")
@@ -280,7 +239,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
         do {
             engine = try await ensureEngineReady()
         } catch {
-            trackTranscriptionFailure(category: .modelPreparation, phase: "model_load")
+            trackTranscriptionFailure(phase: .step("model_load"))
             await stop()
             throw error
         }
@@ -306,18 +265,21 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
                         locale: self.recordingLocale
                     )
                     self.liveResultSubject.send(result)
+                    self.sessionRelay.send(.partial(result))
                 },
                 onAudioLevel: { [weak self] level in
                     self?.audioLevelSubject.send(level)
+                    self?.levelRelay.send(level)
                 }
             )
         } catch {
-            trackTranscriptionFailure(category: .streamingStart, phase: "stream_start")
+            trackTranscriptionFailure(phase: .step("stream_start"))
             await stop()
             throw error
         }
 
         captureStateSubject.send(.recording)
+        captureRelay.send(.recording); sessionRelay.send(.state(.recording))
         _isTranscribing.withLock { $0 = true }
         _startedAt.withLock { $0 = Date() }
     }
@@ -331,7 +293,9 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
             return state
         }
         captureStateSubject.send(.idle)
+        captureRelay.send(.idle); sessionRelay.send(.state(.idle))
         audioLevelSubject.send(0)
+        levelRelay.send(0)
 
         guard let engine = _engine.withLock({ $0 }) else {
             return
@@ -368,25 +332,19 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
             locale: recordingLocale
         )
         liveResultSubject.send(result)
+        sessionRelay.send(.partial(result))
         finalResultSubject.send(result)
+        sessionRelay.send(.final(result))
 
         if let startedAt {
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-            telemetry.track(
-                name: VoxPocketTelemetryEventName.transcriptionCompleted.rawValue,
-                properties: [
-                    "provider": "whisperkit",
-                    "model": config.model,
-                    "elapsed_ms": String(max(elapsedMs, 0)),
-                    "rtf_rough": "1.0",
-                    "text_length": String(finalText.count)
-                ]
-            )
+            telemetry.record(VoxTelemetryEvent(name: "transcription.completed", fields: [.label("provider", .provider("whisperkit")), .label("model", .source("whisperKit")), .durationMs("elapsed_ms", Double(max(elapsedMs, 0))), .double("rtf_rough", 1), .int("text_length", finalText.count)]))
         }
     }
 
     public func pause() {
         captureStateSubject.send(.paused)
+        captureRelay.send(.paused); sessionRelay.send(.state(.paused))
         Task { [weak self] in
             guard let self, let engine = self._engine.withLock({ $0 }) else { return }
             await engine.pauseStreaming()
@@ -395,6 +353,7 @@ extension WhisperKitTranscriber: TranscriptionCoordinator {
 
     public func resume() {
         captureStateSubject.send(.recording)
+        captureRelay.send(.recording); sessionRelay.send(.state(.recording))
         Task { [weak self] in
             guard let self, let engine = self._engine.withLock({ $0 }) else { return }
             await engine.resumeStreaming()
@@ -447,484 +406,15 @@ private final class WhisperKitSpeechRecognition: SpeechRecognitionService, @unch
     var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
 }
 
-// MARK: - Engine abstraction
 
-protocol LocalWhisperEngine: Sendable {
-    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws
-    func startStreaming(
-
-        languageCode: String?,
-        onPartial: @escaping @Sendable (String) -> Void,
-        onAudioLevel: @escaping @Sendable (Float) -> Void
-    ) async throws
-    func stopStreaming() async
-    func pauseStreaming() async
-    func resumeStreaming() async
-    /// 停止后对全量音频做一次完整转录，捕捉最后 <1s 的未解码内容
-    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String?
-    /// 对指定音频文件做完整转录（供 Hybrid 模式使用）
-    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String?
+extension WhisperKitTranscriber: SessionDriving {
+    public var providerKind: ASRProviderType { .whisper }
+    public var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
+    public var isActive: Bool { isTranscribing }
+    public var hasMicrophonePermission: Bool { hasPermissionProvider() }
+    public var hasSpeechPermission: Bool { true }
+    public func requestMicrophonePermission() async -> Bool { await permissionRequester() }
+    public func requestSpeechPermission() async -> Bool { true }
+    public func captureStates() -> AsyncStream<AudioCaptureState> { captureRelay.stream() }
+    public func audioLevels() -> AsyncStream<Float> { levelRelay.stream() }
 }
-
-enum LocalWhisperRawOutputLogger {
-    static func log(_ rawText: String, logger: Logger) {
-        let normalized = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return }
-        logger.debug("Local Whisper raw output: \(normalized)")
-    }
-}
-
-private actor SharedLocalWhisperEnginePool {
-    static let shared = SharedLocalWhisperEnginePool()
-
-    private var engines: [String: any LocalWhisperEngine] = [:]
-
-    func engine(for config: LocalWhisperKitConfig, logger: Logger) -> any LocalWhisperEngine {
-        let key = config.resolvedModelVariant
-        if let existing = engines[key] {
-            return existing
-        }
-
-        let engine = LocalWhisperKitEngine(config: config, logger: logger)
-        engines[key] = engine
-        return engine
-    }
-}
-
-final class SharedLocalWhisperEngineHandle: LocalWhisperEngine {
-    private let config: LocalWhisperKitConfig
-    private let logger: Logger
-
-    init(config: LocalWhisperKitConfig, logger: Logger) {
-        self.config = config
-        self.logger = logger
-    }
-
-    private func engine() async -> any LocalWhisperEngine {
-        await SharedLocalWhisperEnginePool.shared.engine(for: config, logger: logger)
-    }
-
-    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
-        let engine = await engine()
-        try await engine.prepare(onProgress: onProgress)
-    }
-
-    func startStreaming(
-        languageCode: String?,
-        onPartial: @escaping @Sendable (String) -> Void,
-        onAudioLevel: @escaping @Sendable (Float) -> Void
-    ) async throws {
-        let engine = await engine()
-        try await engine.startStreaming(
-            languageCode: languageCode,
-            onPartial: onPartial,
-            onAudioLevel: onAudioLevel
-        )
-    }
-
-    func stopStreaming() async {
-        let engine = await engine()
-        await engine.stopStreaming()
-    }
-
-    func pauseStreaming() async {
-        let engine = await engine()
-        await engine.pauseStreaming()
-    }
-
-    func resumeStreaming() async {
-        let engine = await engine()
-        await engine.resumeStreaming()
-    }
-
-    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? {
-        let engine = await engine()
-        return try await engine.transcribeAccumulatedAudio(languageCode: languageCode)
-    }
-
-    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? {
-        let engine = await engine()
-        return try await engine.transcribeAudioFile(atPath: path, languageCode: languageCode)
-    }
-}
-
-actor LocalWhisperKitEngine: LocalWhisperEngine {
-    private let config: LocalWhisperKitConfig
-    private let logger: Logger
-    /// 仅供独立文件评测：绕过共享池、下载与缓存修复；生产入口保持原行为。
-    private let preparedModelFolder: URL?
-
-#if canImport(WhisperKit)
-    private var pipeline: WhisperKit?
-    // 评测引擎独占借出；异步调用期间池中为空，杜绝可重入访问非 Sendable 的供应商对象。
-    private let benchmarkPipeline = Mutex<WhisperKit?>(nil)
-    private var benchmarkPrepared = false
-    private var streamTranscriber: AudioStreamTranscriber?
-    private var streamTask: Task<Void, Error>?
-    private var prepareTask: Task<Void, Error>?
-#endif
-
-    init(config: LocalWhisperKitConfig, logger: Logger, preparedModelFolder: URL? = nil) {
-        self.config = config
-        self.logger = logger
-        self.preparedModelFolder = preparedModelFolder
-    }
-
-    private static func dedicatedDownloadBase() -> URL? {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("VoxPocketWhisperKitHub", isDirectory: true)
-    }
-
-    private static func isRecoverableSnapshotError(_ error: Error) -> Bool {
-        let text = String(describing: error).lowercased()
-        return text.contains(".incomplete")
-            || text.contains("couldn’t be moved")
-            || text.contains("couldn't be moved")
-    }
-
-    private static func resetCorruptedCache(downloadBase: URL?, modelFolder: URL?) {
-        let fileManager = FileManager.default
-        if let modelFolder {
-            try? fileManager.removeItem(at: modelFolder)
-        }
-        if let downloadBase {
-            try? fileManager.removeItem(at: downloadBase)
-            try? fileManager.createDirectory(at: downloadBase, withIntermediateDirectories: true)
-        }
-        for cachePath in huggingFaceWhisperKitRepoCacheCandidates() {
-            try? fileManager.removeItem(at: cachePath)
-        }
-    }
-
-    private static func huggingFaceWhisperKitRepoCacheCandidates() -> [URL] {
-        let fileManager = FileManager.default
-        var roots: [URL] = []
-
-        if let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            roots.append(caches.appendingPathComponent("huggingface/hub", isDirectory: true))
-        }
-
-        // ~/.cache/huggingface 是 macOS/CLI 的 HuggingFace 缓存约定；iOS 沙盒无 home
-        // 目录（homeDirectoryForCurrentUser 在 iOS 不可用），且沙盒里本就不存在该路径，
-        // 故仅 macOS 追加这个候选。
-        #if os(macOS)
-        let home = fileManager.homeDirectoryForCurrentUser
-        roots.append(home.appendingPathComponent(".cache/huggingface/hub", isDirectory: true))
-        #endif
-
-        return roots.map {
-            $0.appendingPathComponent("models--argmaxinc--whisperkit-coreml", isDirectory: true)
-        }
-    }
-
-    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
-#if canImport(WhisperKit)
-        if pipeline != nil || benchmarkPrepared {
-            return
-        }
-
-        if let prepareTask {
-            try await prepareTask.value
-            return
-        }
-
-        let task = Task { [weak self] in
-            guard let self else { return }
-            try await self.performPrepare(onProgress: onProgress)
-        }
-        prepareTask = task
-        defer { prepareTask = nil }
-
-        try await task.value
-#else
-        _ = onProgress
-        throw NSError(
-            domain: "WhisperKitTranscriber", code: -100,
-            userInfo: [NSLocalizedDescriptionKey: "WhisperKit module unavailable in current build"]
-        )
-#endif
-    }
-
-#if canImport(WhisperKit)
-    private func performPrepare(onProgress: (@Sendable (Double) -> Void)?) async throws {
-        if let preparedModelFolder {
-            try await loadBenchmarkPipeline(from: preparedModelFolder)
-            benchmarkPrepared = true
-            return
-        }
-        let modelVariant = config.resolvedModelVariant
-        logger.info("Downloading/locating WhisperKit model: \(config.model)")
-        if modelVariant != config.model {
-            logger.info("Resolved WhisperKit variant: \(modelVariant)")
-        }
-        let downloadBase = Self.dedicatedDownloadBase()
-        if let downloadBase {
-            try? FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
-        }
-
-        let downloadModel: () async throws -> URL = { [logger = self.logger] in
-            try await WhisperKit.download(
-                variant: modelVariant,
-                downloadBase: downloadBase,
-                progressCallback: { progress in
-                    let pct = Int(progress.fractionCompleted * 100)
-                    let completed = progress.completedUnitCount
-                    let total = progress.totalUnitCount
-                    if total > 0 {
-                        logger.info("WhisperKit model download: \(pct)% (\(completed)/\(total) bytes)")
-                    } else {
-                        logger.info("WhisperKit model download: \(pct)%")
-                    }
-                    onProgress?(progress.fractionCompleted)
-                }
-            )
-        }
-
-        var lastModelFolder: URL?
-        let initializePipeline: () async throws -> WhisperKit = { [self] in
-            let modelFolder = try await downloadModel()
-            lastModelFolder = modelFolder
-            self.logger.info("Model ready at: \(modelFolder.path)")
-            onProgress?(1.0)
-
-            self.logger.info("Loading WhisperKit pipeline from model folder...")
-            let whisperConfig = WhisperKitConfig(modelFolder: modelFolder.path)
-            return try await WhisperKit(whisperConfig)
-        }
-
-        do {
-            pipeline = try await initializePipeline()
-        } catch {
-            guard Self.isRecoverableSnapshotError(error) else { throw error }
-            logger.warning("WhisperKit cache appears corrupted. Clearing cache and retrying once.")
-            Self.resetCorruptedCache(downloadBase: downloadBase, modelFolder: lastModelFolder)
-            pipeline = try await initializePipeline()
-        }
-        logger.info("WhisperKit pipeline loaded successfully")
-    }
-#endif
-
-    func startStreaming(
-        languageCode: String?,
-        onPartial: @escaping @Sendable (String) -> Void,
-        onAudioLevel: @escaping @Sendable (Float) -> Void
-    ) async throws {
-#if canImport(WhisperKit)
-        if streamTask != nil {
-            return
-        }
-
-        try await prepare(onProgress: nil)
-        guard let pipeline else {
-            throw NSError(
-                domain: "WhisperKitTranscriber", code: -101,
-                userInfo: [NSLocalizedDescriptionKey: "WhisperKit pipeline not initialized"]
-            )
-        }
-
-        var options = DecodingOptions()
-        options.language = languageCode
-
-        nonisolated(unsafe) let audioEncoder = pipeline.audioEncoder
-        nonisolated(unsafe) let featureExtractor = pipeline.featureExtractor
-        nonisolated(unsafe) let segmentSeeker = pipeline.segmentSeeker
-        nonisolated(unsafe) let textDecoder = pipeline.textDecoder
-        nonisolated(unsafe) let audioProcessor = pipeline.audioProcessor
-        let tokenizer = try pipeline.tokenizerRequired()
-        nonisolated(unsafe) let tokenizerRef = tokenizer
-
-        // 跟踪峰值已确认文本：按字符数比较，只增不减，防止 WhisperKit 窗口切换时丢失历史片段
-        nonisolated(unsafe) var peakConfirmedText = ""
-
-        let transcriber = AudioStreamTranscriber(
-            audioEncoder: audioEncoder,
-            featureExtractor: featureExtractor,
-            segmentSeeker: segmentSeeker,
-            textDecoder: textDecoder,
-            tokenizer: tokenizerRef,
-            audioProcessor: audioProcessor,
-            decodingOptions: options,
-            stateChangeCallback: { _, newState in
-                // 用字符数做比较：新的确认文本更长才更新，防止窗口滑动后丢失旧内容
-                let newConfirmedText = newState.confirmedSegments.map(\.text).joined(separator: " ")
-                if newConfirmedText.count > peakConfirmedText.count {
-                    peakConfirmedText = newConfirmedText
-                }
-                // 确认文本 + hypothesis 组合显示；hypothesis 提供实时反馈
-                let currentHypothesis = newState.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                let rawText = [peakConfirmedText, currentHypothesis]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: " ")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                onPartial(LocalWhisperKitEngine.cleanStreamText(fromRaw: rawText))
-                let level = newState.bufferEnergy.last ?? 0
-                onAudioLevel(level)
-            }
-        )
-
-        streamTranscriber = transcriber
-        streamTask = Task {
-            try await transcriber.startStreamTranscription()
-        }
-#else
-        _ = languageCode
-        _ = onPartial
-        _ = onAudioLevel
-        throw NSError(
-            domain: "WhisperKitTranscriber", code: -100,
-            userInfo: [NSLocalizedDescriptionKey: "WhisperKit module unavailable in current build"]
-        )
-#endif
-    }
-
-    func stopStreaming() async {
-#if canImport(WhisperKit)
-        if let streamTranscriber {
-            await streamTranscriber.stopStreamTranscription()
-        }
-        // Cancel the task but do NOT await its value:
-        // WhisperKit may continue decoding buffered audio for ~2s after
-        // stopStreamTranscription(), and awaiting here blocks the UI for that
-        // duration. Late onPartial callbacks after stop are harmless because
-        // WhisperKitTranscriber.start()'s onPartial closure guards on
-        // _isTranscribing before forwarding results.
-        streamTask?.cancel()
-        streamTask = nil
-        streamTranscriber = nil
-#endif
-    }
-
-    func transcribeAccumulatedAudio(languageCode: String?) async throws -> String? {
-#if canImport(WhisperKit)
-        guard let pipeline else { return nil }
-        let allSamples = Array(pipeline.audioProcessor.audioSamples)
-        guard !allSamples.isEmpty else { return nil }
-
-        var options = DecodingOptions()
-        options.language = languageCode
-        // 限制 temperature fallback 次数（默认 5 次 → 2 次），减少短录音批量解码卡顿
-        options.temperatureFallbackCount = 2
-        // 放宽 firstTokenLogProbThreshold 避免在低质量音频上触发过多重试
-        options.firstTokenLogProbThreshold = -2.5
-        // 批量解码不需要 prefill，跳过可加快速度
-        options.usePrefillPrompt = false
-        options.usePrefillCache = false
-
-        nonisolated(unsafe) let pipelineRef = pipeline
-        let results = try await pipelineRef.transcribe(audioArray: allSamples, decodeOptions: options)
-        let text = results
-            .compactMap { $0.text }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-#else
-        _ = languageCode
-        return nil
-#endif
-    }
-
-    func transcribeAudioFile(atPath path: String, languageCode: String?) async throws -> String? {
-#if canImport(WhisperKit)
-        guard let pipeline else { return nil }
-
-        var options = DecodingOptions()
-        options.language = languageCode
-
-        nonisolated(unsafe) let pipelineRef = pipeline
-        let results = try await pipelineRef.transcribe(audioPath: path, decodeOptions: options)
-        let text = results
-            .compactMap { $0.text }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-#else
-        _ = path
-        _ = languageCode
-        return nil
-#endif
-    }
-
-    /// 与文件模式相同的解码选项，直接消费已规范化、已校验的 16kHz 单声道样本。
-    nonisolated func transcribeCanonicalSamples(_ samples: [Float], languageCode: String?) async throws -> String? {
-#if canImport(WhisperKit)
-        let checkedOut = benchmarkPipeline.withLock { state in
-            let value = state
-            state = nil
-            return value
-        }
-        guard let checkedOut else { return nil }
-        var options = DecodingOptions()
-        options.language = languageCode
-        do {
-            let results = try await checkedOut.transcribe(audioArray: samples, decodeOptions: options)
-            let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-            returnBenchmarkPipeline(checkedOut)
-            return text.isEmpty ? nil : text
-        } catch {
-            returnBenchmarkPipeline(checkedOut)
-            throw error
-        }
-#else
-        return nil
-#endif
-    }
-
-#if canImport(WhisperKit)
-    private nonisolated func loadBenchmarkPipeline(from folder: URL) async throws {
-        let loaded = try await WhisperKit(WhisperKitConfig(modelFolder: folder.path, verbose: false, download: false))
-        returnBenchmarkPipeline(loaded)
-    }
-
-    private nonisolated func returnBenchmarkPipeline(_ pipeline: sending WhisperKit) {
-        // sending 转移所有权；中转 Mutex 使闭包不捕获仍属于调用方隔离域的引用。
-        let transfer = Mutex<WhisperKit?>(pipeline)
-        benchmarkPipeline.withLock { destination in
-            destination = transfer.withLock { source in
-                let value = source
-                source = nil
-                return value
-            }
-        }
-    }
-#endif
-
-    func pauseStreaming() async {
-#if canImport(WhisperKit)
-        pipeline?.audioProcessor.pauseRecording()
-#endif
-    }
-
-    func resumeStreaming() async {
-#if canImport(WhisperKit)
-        _ = try? pipeline?.audioProcessor.resumeRecordingLive(inputDeviceID: nil, callback: nil)
-#endif
-    }
-
-#if canImport(WhisperKit)
-    private nonisolated static func cleanStreamText(fromRaw rawText: String) -> String {
-        stripWhisperTokens(from: rawText)
-    }
-
-    /// 剥离 Whisper 特殊 token，如 <|startoftranscript|>、<|zh|>、<|0.00|> 等
-    private nonisolated static func stripWhisperTokens(from text: String) -> String {
-        let pattern = try? NSRegularExpression(pattern: "<\\|[^|]+\\|>")
-        let range = NSRange(text.startIndex..., in: text)
-        let stripped = pattern?.stringByReplacingMatches(in: text, range: range, withTemplate: "") ?? text
-        return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-#endif
-}
-
-#if canImport(WhisperKit)
-private extension WhisperKit {
-    func tokenizerRequired() throws -> any WhisperTokenizer {
-        if let tokenizer {
-            return tokenizer
-        }
-        throw NSError(
-            domain: "WhisperKitTranscriber", code: -103,
-            userInfo: [NSLocalizedDescriptionKey: "WhisperKit tokenizer unavailable"]
-        )
-    }
-}
-#endif

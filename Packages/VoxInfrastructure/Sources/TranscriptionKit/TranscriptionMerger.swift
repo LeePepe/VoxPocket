@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 多识别器结果合并器协议

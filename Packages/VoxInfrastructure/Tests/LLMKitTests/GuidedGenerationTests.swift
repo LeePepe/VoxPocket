@@ -1,3 +1,4 @@
+import VoxCore
 import XCTest
 import FoundationModels
 @testable import LLMKit

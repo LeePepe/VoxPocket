@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 本地模型的加载状态

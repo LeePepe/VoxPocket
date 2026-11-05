@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 
 /// 仅隔离外部 WebSocket I/O，允许测试使用可控的事件流。
