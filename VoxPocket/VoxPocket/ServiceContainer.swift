@@ -237,7 +237,10 @@ public final class ServiceContainer: ObservableObject {
 
     static func makeIOSHybridTranscriber(environment: [String: String]) -> any TranscriptionCoordinator {
         if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
-            return HybridWhisperTranscriber(whisperConfig: config)
+            return HybridWhisperTranscriber(
+                whisperConfig: config,
+                realtimeConfig: LLMAppConfig.realtimeTranscriptionConfig(environment: environment)
+            )
         }
         PrintLogger(subsystem: "ServiceContainer").warning("Azure transcription configuration missing; actual_provider=appleSpeech")
         return AppleSpeechTranscriber()

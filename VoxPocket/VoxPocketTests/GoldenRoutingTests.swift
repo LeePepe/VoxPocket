@@ -99,7 +99,26 @@ final class GoldenRoutingTests: XCTestCase {
             }
         }
         XCTAssertEqual(rows.count, 224)
-        try assertFixture(rows, name: "golden_b_ios")
+        #if os(macOS)
+        let platform = "macOS"
+        #else
+        let platform = "iOS"
+        #endif
+        for batch in [false, true] {
+            for realtime in [false, true] {
+                var environment = ["AZURE_OPENAI_ENDPOINT": "https://example.invalid", "whisperkey": "fixture-speech"]
+                if !batch { environment["AZURE_TRANSCRIPTION_ENDPOINT"] = "invalid" }
+                if realtime { environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "example-live" }
+                let coordinator = ServiceContainer.makeIOSHybridTranscriber(environment: environment)
+                XCTAssertEqual(coordinator is HybridWhisperTranscriber, batch)
+                let configuredRealtime = try receivedRealtimeConfiguration(coordinator)
+                XCTAssertEqual(configuredRealtime, batch && LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil)
+                rows.append(["platform": platform, "configuration": ["batch": batch, "realtime": realtime],
+                             "pipeline": speechPipeline(coordinator, realtime: configuredRealtime)])
+            }
+        }
+        XCTAssertEqual(rows.count, 228)
+        try assertFixture(rows, name: "golden_b_ios", platform: platform)
     }
 
     @MainActor private func preferenceRows(batch: Bool, provider: String, skip: Bool, azure: Bool) async throws -> [[String: Any]] {
@@ -126,9 +145,11 @@ final class GoldenRoutingTests: XCTestCase {
         let coordinator = ServiceContainer.makeIOSHybridTranscriber(environment: environment)
         #endif
         XCTAssertEqual(coordinator is HybridWhisperTranscriber, batch)
+        let realtime = try receivedRealtimeConfiguration(coordinator)
+        XCTAssertEqual(realtime, batch && LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil)
         XCTAssertEqual(service.currentProviderType, provider == "appleIntelligence" ? .appleIntelligence : .azureFoundry)
         let initial: [String: Any] = ["batch": batch, "provider": provider, "skip": skip, "azureText": azure]
-        var rows = [preferenceRow(service, coordinator: coordinator, initial: initial, event: "initial")]
+        var rows = [preferenceRow(service, coordinator: coordinator, realtime: realtime, initial: initial, event: "initial")]
         for name in [PreferencesNotification.llmProviderDidChange, PreferencesNotification.llmAnalysisSettingsDidChange] {
             for mutation in ["valid", "invalid", "deleted"] {
                 let providerChange = name == PreferencesNotification.llmProviderDidChange
@@ -143,7 +164,7 @@ final class GoldenRoutingTests: XCTestCase {
                 if providerChange {
                     XCTAssertEqual(service.currentProviderType, mutation == "valid" ? .appleIntelligence : previousProvider)
                 } else { XCTAssertEqual(service.isContentAnalysisSkipped, mutation == "valid" ? !skip : false) }
-                rows.append(preferenceRow(service, coordinator: coordinator, initial: initial,
+                rows.append(preferenceRow(service, coordinator: coordinator, realtime: realtime, initial: initial,
                                           event: "\(providerChange ? "provider" : "analysis").\(mutation)"))
             }
         }
@@ -158,27 +179,40 @@ final class GoldenRoutingTests: XCTestCase {
         else { await preferences.setValue("not-a-bool", for: key) }
     }
 
-    @MainActor private func preferenceRow(_ service: DefaultLLMService, coordinator: any TranscriptionCoordinator,
+    private func receivedRealtimeConfiguration(_ coordinator: any TranscriptionCoordinator) throws -> Bool {
+        guard let hybrid = coordinator as? HybridWhisperTranscriber else { return false }
+        let configuration = try XCTUnwrap(Mirror(reflecting: hybrid).children.first { $0.label == "realtimeConfig" })
+        return configuration.value as? AzureRealtimeTranscriptionConfig != nil
+    }
+
+    private func speechPipeline(_ coordinator: any TranscriptionCoordinator, realtime: Bool) -> [String: Any] {
+        var nodes = ["capture.microphone", "speech.apple"]
+        if realtime { nodes.append("speech.azure.realtime") }
+        if coordinator is HybridWhisperTranscriber { nodes.append("speech.azure.batch") }
+        return ["speech": nodes, "realtime": realtime,
+                "merger": (coordinator as? any MultiRecognizerTranscriber)?.merger != nil]
+    }
+
+    @MainActor private func preferenceRow(_ service: DefaultLLMService, coordinator: any TranscriptionCoordinator, realtime: Bool,
                                          initial: [String: Any], event: String) -> [String: Any] {
         let routing = service.resolvedAnalysisRouting.reduce(into: [String: String]()) { $0[$1.key.rawValue] = $1.value.rawValue }
         XCTAssertEqual(routing["intent"], "appleIntelligence"); XCTAssertEqual(routing["tone"], "appleIntelligence")
         for step in ["entities", "tags", "params"] { XCTAssertEqual(routing[step], service.currentProviderType?.rawValue) }
-        let hybrid = coordinator is HybridWhisperTranscriber
-        let nodes = ["capture.microphone", "speech.apple"] + (hybrid ? ["speech.azure.batch"] : [])
-        let pipeline: [String: Any] = ["speech": nodes, "realtime": false, "merger": false,
-                                      "analysis": routing.mapValues { service.isContentAnalysisSkipped ? "skipped" : $0 },
-                                      "refine": service.currentProviderType!.rawValue,
-                                      "configFailure": service.currentProviderType == .azureFoundry && service.currentProvider?.isAvailable != true
-                                        ? "textModelUnavailable" : "none"]
+        var pipeline = speechPipeline(coordinator, realtime: realtime)
+        pipeline["analysis"] = routing.mapValues { service.isContentAnalysisSkipped ? "skipped" : $0 }
+        pipeline["refine"] = service.currentProviderType!.rawValue
+        pipeline["configFailure"] = service.currentProviderType == .azureFoundry && service.currentProvider?.isAvailable != true
+            ? "textModelUnavailable" : "none"
         return ["initial": initial, "event": event, "routing": routing, "skip": service.isContentAnalysisSkipped, "pipeline": pipeline]
     }
     #endif
 
-    private func assertFixture(_ rows: [[String: Any]], name: String) throws {
+    private func assertFixture(_ rows: [[String: Any]], name: String, platform: String? = nil) throws {
         let payload: [String: Any] = ["schema": "golden-trace/v1", "kind": "routing", "traces": rows]
         let data = try GoldenFixtureCodec.encode(payload)
         if let directory = ProcessInfo.processInfo.environment["VOX_GOLDEN_RECORD_DIR"] {
-            try data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".json"))
+            let filename = name + (platform.map { "-" + $0 } ?? "") + ".json"
+            try data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(filename))
         }
         #if SWIFT_PACKAGE
         let bundle = Bundle.module
@@ -186,8 +220,13 @@ final class GoldenRoutingTests: XCTestCase {
         let bundle = Bundle(for: Self.self)
         #endif
         let url = try XCTUnwrap(bundle.url(forResource: name, withExtension: "json"))
-        let fixture = try GoldenFixtureCodec.decode(Data(contentsOf: url))
-        XCTAssertEqual(payload as NSDictionary, fixture)
+        var fixture = try GoldenFixtureCodec.decode(Data(contentsOf: url)) as! [String: Any]
+        if let platform {
+            let traces = try XCTUnwrap(fixture["traces"] as? [[String: Any]])
+            XCTAssertEqual(traces.count, 232)
+            fixture["traces"] = traces.filter { $0["platform"] == nil || $0["platform"] as? String == platform }
+        }
+        XCTAssertEqual(payload as NSDictionary, fixture as NSDictionary)
     }
 }
 
