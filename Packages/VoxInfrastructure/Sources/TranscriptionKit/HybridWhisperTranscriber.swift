@@ -18,10 +18,9 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
     fileprivate let recorder: any AudioBufferSource
     private let whisperEngine: any BatchTranscribing
     private let realtimeConfig: AzureRealtimeTranscriptionConfig?
-    private let speechRecognizerProvider: any SpeechRecognizing
-    private let speechAuthorizationProvider: any SpeechAuthorizationProviding
+    fileprivate let speechRecognizerProvider: any SpeechRecognizing
+    fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
     private let realtimeSessionMaker: any RealtimeSessionMaking
-    private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: (any SpeechRecognitionTasking)?
 
@@ -64,7 +63,6 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
         self.logger = logger
         self.realtimeConfig = realtimeConfig
         self.sessionEffects = nil
-        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         super.init()
     }
 
@@ -187,25 +185,17 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         }
     }
 
-    private func recognizer(language: Locale) throws -> SFSpeechRecognizer {
-        if speechRecognizer?.locale.language.languageCode != language.language.languageCode {
-            speechRecognizer = SFSpeechRecognizer(locale: language)
-        }
-        guard let speechRecognizer else {
-            throw NSError(domain: "HybridWhisperTranscriber", code: -2,
-                          userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
-        }
-
-        return speechRecognizer
-    }
-
     private func makeRealtime(language: Locale, id: UUID)
         -> ((any RealtimePipelining)?, (@Sendable () async -> Void)?) {
         guard let config = realtimeConfig else { return (nil, nil) }
-        let pipeline = realtimeSessionMaker.makePipeline(config: config) { [weak self] text in
+        let pipeline = realtimeSessionMaker.makePipeline(config: config, onPartial: { [weak self] text in
             self?.receiveCloudText(text, id: id, locale: language)
-        }
-        return (pipeline, { await pipeline.cancel() })
+        }, onFallback: { [weak self] in
+            guard let self, let text = self.recording.restoreApplePreview(id), !text.isEmpty else { return }
+            self.liveResultSubject.send(TranscriptionResult(text: text, type: .partial, confidence: nil,
+                                                           timestamp: Date(), locale: language))
+        })
+        return (pipeline, { await pipeline.cancelQuickRecording() })
     }
 
     private func startAppleTask(request: SFSpeechAudioBufferRecognitionRequest,
@@ -419,14 +409,13 @@ private final class HybridSpeechRecognition: SpeechRecognitionService, @unchecke
 
     func startRecognition(language: Locale) async throws {}
     func stopRecognition() async {}
-    func checkAvailability() async -> Bool { true }
+    func checkAvailability() async -> Bool {
+        transcriber?.speechAuthorizationProvider.speechAuthorizationStatus == .authorized
+            && transcriber?.speechRecognizerProvider.isAvailable == true
+    }
 
     func requestPermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+        await transcriber?.speechAuthorizationProvider.requestSpeechAuthorization() ?? false
     }
 
     var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }

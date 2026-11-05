@@ -14,9 +14,8 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
     // MARK: - Dependencies
 
     fileprivate let recorder: any AudioBufferSource
-    private let speechRecognizerProvider: any SpeechRecognizing
-    private let speechAuthorizationProvider: any SpeechAuthorizationProviding
-    private var speechRecognizer: SFSpeechRecognizer?
+    fileprivate let speechRecognizerProvider: any SpeechRecognizing
+    fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: (any SpeechRecognitionTasking)?
 
@@ -46,7 +45,6 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
         self.logger = PrintLogger(subsystem: "AppleSpeechTranscriber")
         self.sessionEffects = nil
         super.init()
-        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         logger.debug("init with default locale zh-Hans")
     }
 
@@ -57,7 +55,6 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
         self.logger = logger
         self.sessionEffects = nil
         super.init()
-        self.speechRecognizer = SFSpeechRecognizer(locale: locale)
         logger.debug("init with locale: \(locale.identifier)")
     }
 
@@ -168,18 +165,6 @@ extension AppleSpeechTranscriber: TranscriptionCoordinator {
                           userInfo: [NSLocalizedDescriptionKey: "语音识别权限未授权"])
         }
 
-    }
-
-    private func recognizer(language: Locale) throws -> SFSpeechRecognizer {
-        if speechRecognizer?.locale.language.languageCode != language.language.languageCode {
-            speechRecognizer = SFSpeechRecognizer(locale: language)
-        }
-        guard let speechRecognizer else {
-            throw NSError(domain: "AppleSpeechTranscriber", code: -2,
-                          userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer 不可用"])
-        }
-
-        return speechRecognizer
     }
 
     private func startAppleTask(request: SFSpeechAudioBufferRecognitionRequest,
@@ -332,15 +317,12 @@ private final class AppleSpeechRecognition: SpeechRecognitionService, @unchecked
     func stopRecognition() async {}
 
     func checkAvailability() async -> Bool {
-        SFSpeechRecognizer.authorizationStatus() == .authorized
+        transcriber?.speechAuthorizationProvider.speechAuthorizationStatus == .authorized
+            && transcriber?.speechRecognizerProvider.isAvailable == true
     }
 
     func requestPermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+        await transcriber?.speechAuthorizationProvider.requestSpeechAuthorization() ?? false
     }
 
     var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }

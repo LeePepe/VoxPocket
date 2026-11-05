@@ -109,7 +109,7 @@ final class SystemSpeechRecognizer: SpeechRecognizing, @unchecked Sendable {
             let update = RecognitionUpdate(
                 text: result?.bestTranscription.formattedString,
                 isFinal: result?.isFinal ?? false,
-                confidence: result?.isFinal == true ? result?.bestTranscription.segments.last?.confidence : nil,
+                confidence: result?.isFinal == true ? (result?.bestTranscription.segments.last?.confidence ?? 0) : nil,
                 error: error
             )
             handler(update)
@@ -130,10 +130,17 @@ protocol RealtimePipelining: Sendable {
     func append(_ buffer: AVAudioPCMBuffer)
     func finish() async throws -> String
     func cancel() async
+    func cancelQuickRecording() async
 }
 
 struct RealtimePipelineAdapter: RealtimePipelining, Sendable {
     let pipeline: RealtimeAudioPipeline
+    let session: DefaultRealtimeTranscriptionSession?
+
+    init(pipeline: RealtimeAudioPipeline, session: DefaultRealtimeTranscriptionSession? = nil) {
+        self.pipeline = pipeline
+        self.session = session
+    }
 
     var hasMinimumAudio: Bool { pipeline.hasMinimumAudio }
 
@@ -152,17 +159,24 @@ struct RealtimePipelineAdapter: RealtimePipelining, Sendable {
     func cancel() async {
         pipeline.cancel()
     }
+
+    func cancelQuickRecording() async {
+        if let session { await cancelQuickRecordingRealtime(pipeline, session: session) }
+        else { pipeline.cancel() }
+    }
 }
 
 protocol RealtimeSessionMaking: Sendable {
     func makePipeline(config: AzureRealtimeTranscriptionConfig,
-                      onPartial: @escaping @Sendable (String) -> Void) -> any RealtimePipelining
+                      onPartial: @escaping @Sendable (String) -> Void,
+                      onFallback: @escaping @Sendable () -> Void) -> any RealtimePipelining
 }
 
 struct DefaultRealtimeSessionMaker: RealtimeSessionMaking, Sendable {
     func makePipeline(config: AzureRealtimeTranscriptionConfig,
-                      onPartial: @escaping @Sendable (String) -> Void) -> any RealtimePipelining {
+                      onPartial: @escaping @Sendable (String) -> Void,
+                      onFallback: @escaping @Sendable () -> Void) -> any RealtimePipelining {
         let session = DefaultRealtimeTranscriptionSession(config: config, onPartial: onPartial)
-        return RealtimePipelineAdapter(pipeline: RealtimeAudioPipeline(session: session))
+        return RealtimePipelineAdapter(pipeline: RealtimeAudioPipeline(session: session, onFailure: onFallback), session: session)
     }
 }

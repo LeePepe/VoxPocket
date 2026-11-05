@@ -18,10 +18,9 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
     fileprivate let recorder: any AudioBufferSource
     private let whisperEngine: any LocalWhisperEngine
     private let batchTranscriber: any BatchTranscribing
-    private let speechRecognizerProvider: any SpeechRecognizing
-    private let speechAuthorizationProvider: any SpeechAuthorizationProviding
+    fileprivate let speechRecognizerProvider: any SpeechRecognizing
+    fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
     private let whisperConfig: LocalWhisperKitConfig
-    private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: (any SpeechRecognitionTasking)?
 
@@ -63,11 +62,10 @@ public final class HybridLocalWhisperTranscriber: NSObject, @unchecked Sendable 
         self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "HybridLocalWhisperTranscriber.Mic"))
         let engine = SharedLocalWhisperEngineHandle(config: config, logger: PrintLogger(subsystem: "HybridLocalWhisperTranscriber.Engine"))
         self.whisperEngine = engine
-        self.batchTranscriber = LocalWhisperBatchAdapter(engine: engine)
+        self.batchTranscriber = LocalWhisperBatchAdapter(engine: engine, config: config)
         self.speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         self.speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         self.logger = logger
-        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         super.init()
 
         if config.preloadOnStart {
@@ -342,14 +340,13 @@ private final class HybridLocalSpeechRecognition: SpeechRecognitionService, @unc
 
     func startRecognition(language: Locale) async throws {}
     func stopRecognition() async {}
-    func checkAvailability() async -> Bool { true }
+    func checkAvailability() async -> Bool {
+        transcriber?.speechAuthorizationProvider.speechAuthorizationStatus == .authorized
+            && transcriber?.speechRecognizerProvider.isAvailable == true
+    }
 
     func requestPermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+        await transcriber?.speechAuthorizationProvider.requestSpeechAuthorization() ?? false
     }
 
     var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }

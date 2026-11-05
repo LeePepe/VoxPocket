@@ -1,9 +1,408 @@
 {
-  "schema": "golden-trace/v1",
-  "kind": "speech",
-  "traces": [
-    {"scenario": "authorization", "initial": false, "eventual": true},
-    {"scenario": "appleSpeech", "events": ["partial", "final", "pause", "resume"]},
-    {"scenario": "hybridWhisper", "events": ["realtimeSuccess", "realtimeFallback", "silenceSkip", "merge", "noMerge"]}
+  "kind" : "speech",
+  "schema" : "golden-trace\/v1",
+  "traces" : [
+    {
+      "calls" : [
+        "speech.permission:false",
+        "speech.permission:false",
+        "recorder.stop"
+      ],
+      "errorCode" : -1,
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:idle"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "scenario" : "speechAuthDenied",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        "speech.permission:true",
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "recorder.start",
+        "microphone.permission:false",
+        "recorder.stop"
+      ],
+      "errorCode" : -1,
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:idle"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "scenario" : "micAuthDenied",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        "speech.permission:true",
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "recorder.pause",
+        "recorder.resume",
+        "recorder.stop"
+      ],
+      "errorCode" : null,
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "level:0.25",
+        "live:partial:synthetic partial:nil",
+        "state:paused",
+        "state:recording",
+        "live:final:synthetic final:0.0",
+        "final:synthetic final",
+        "state:idle"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "scenario" : "normalRecognition",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        "speech.permission:true",
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "recorder.stop"
+      ],
+      "errorCode" : -2,
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:idle"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "scenario" : "recognizerUnavailable",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        "speech.permission:true",
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "recorder.stop",
+        "recorder.stop"
+      ],
+      "errorCode" : -7,
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:idle",
+        "state:idle"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "scenario" : "recognizerThrows",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "batchCalls" : 0,
+      "calls" : [
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "realtime.make",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "realtime.start:zh-Hans",
+        "recorder.stop",
+        "speech.cancel",
+        "realtime.finish"
+      ],
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "live:partial:synthetic apple:nil",
+        "live:partial:synthetic cloud partial:nil",
+        "state:idle",
+        "live:final:synthetic cloud final:nil",
+        "final:synthetic cloud final"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+        [
+
+        ]
+      ],
+      "logs" : [
+        "Recording + Apple Speech started"
+      ],
+      "scenario" : "realtimeSuccess",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "batchCalls" : 1,
+      "calls" : [
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "realtime.make",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "realtime.start:zh-Hans",
+        "realtime.fallback",
+        "recorder.stop",
+        "speech.cancel",
+        "realtime.finish",
+        "batch.transcribe:zh-Hans"
+      ],
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "live:partial:synthetic apple:nil",
+        "live:partial:synthetic cloud partial:nil",
+        "live:partial:synthetic newer apple:nil",
+        "state:idle",
+        "live:final:synthetic batch:nil",
+        "final:synthetic batch"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+        [
+
+        ]
+      ],
+      "logs" : [
+        "Recording + Apple Speech started"
+      ],
+      "scenario" : "realtimeFallback",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "batchCalls" : 0,
+      "calls" : [
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "realtime.make",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "realtime.start:zh-Hans",
+        "recorder.stop",
+        "speech.cancel",
+        "realtime.cancel"
+      ],
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "state:idle"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+        [
+
+        ]
+      ],
+      "logs" : [
+        "Recording + Apple Speech started"
+      ],
+      "scenario" : "silenceSkip",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "batchCalls" : 1,
+      "calls" : [
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "recorder.stop",
+        "speech.cancel",
+        "batch.transcribe:zh-Hans",
+        "merge:synthetic apple|synthetic batch"
+      ],
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "live:partial:synthetic apple:nil",
+        "state:idle",
+        "final:synthetic merged"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "Recording + Apple Speech started",
+        "Merging Apple Speech + Whisper via LLM"
+      ],
+      "scenario" : "withMerger",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "batchCalls" : 1,
+      "calls" : [
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "recorder.stop",
+        "speech.cancel",
+        "batch.transcribe:zh-Hans"
+      ],
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "live:partial:synthetic apple:nil",
+        "state:idle",
+        "live:final:synthetic batch:nil",
+        "final:synthetic batch"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+        [
+
+        ]
+      ],
+      "logs" : [
+        "Recording + Apple Speech started"
+      ],
+      "scenario" : "withoutMerger",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "batchCalls" : 0,
+      "calls" : [
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "realtime.make",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "realtime.start:zh-Hans",
+        "recorder.stop",
+        "speech.cancel",
+        "realtime.cancelQuickRecording"
+      ],
+      "events" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "state:idle"
+      ],
+      "fileRemoved" : true,
+      "logContextKeys" : [
+        [
+
+        ]
+      ],
+      "logs" : [
+        "Recording + Apple Speech started"
+      ],
+      "scenario" : "quickDiscard",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "mainCalls" : [
+        "speech.permission:true",
+        "speech.available:en",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:en",
+        "recorder.stop"
+      ],
+      "mainEvents" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "live:partial:synthetic main:nil",
+        "live:final:synthetic main final:0.0",
+        "final:synthetic main final",
+        "state:idle"
+      ],
+      "quickCalls" : [
+        "speech.permission:true",
+        "speech.available:zh-Hans",
+        "recorder.start",
+        "microphone.permission:true",
+        "speech.start:zh-Hans",
+        "recorder.stop"
+      ],
+      "quickEvents" : [
+        "level:0.0",
+        "state:idle",
+        "state:recording",
+        "live:final:synthetic quick:0.0",
+        "final:synthetic quick",
+        "state:idle",
+        "live:partial:synthetic late quick:nil"
+      ],
+      "recognizedAtRelease" : true,
+      "scenario" : "mainAndQuickIsolation"
+    }
   ]
 }

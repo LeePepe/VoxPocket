@@ -1,9 +1,2209 @@
 {
-  "schema": "golden-trace/v1",
-  "kind": "llm",
-  "traces": [
-    {"routing": {"entities": "azureFoundry", "intent": "azureFoundry", "params": "azureFoundry", "tags": "azureFoundry", "tone": "azureFoundry"}, "stream": "azureFoundry"},
-    {"routing": {"entities": "azureFoundry", "intent": "appleIntelligence", "params": "azureFoundry", "tags": "azureFoundry", "tone": "azureFoundry"}, "stream": "azureFoundry"},
-    {"routing": {"entities": "azureFoundry", "intent": "azureFoundry", "params": "azureFoundry", "tags": "azureFoundry", "tone": "appleIntelligence"}, "stream": "azureFoundry"}
+  "kind" : "llm",
+  "schema" : "golden-trace\/v1",
+  "traces" : [
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "success",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0,
+          "entities" : [
+
+          ],
+          "intent" : "self_correction",
+          "tags" : [
+
+          ],
+          "targetLanguage" : null
+        },
+        "missingAnalysisSteps" : [
+          "entities",
+          "intent",
+          "params",
+          "tags",
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "skip",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "success",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "skip",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "singleStepFailure",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0,
+          "entities" : [
+
+          ],
+          "intent" : "self_correction",
+          "tags" : [
+
+          ],
+          "targetLanguage" : null
+        },
+        "missingAnalysisSteps" : [
+          "entities",
+          "intent",
+          "params",
+          "tags",
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "skip",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "singleStepFailure",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "skip",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "providerMissing",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0,
+          "entities" : [
+
+          ],
+          "intent" : "self_correction",
+          "tags" : [
+
+          ],
+          "targetLanguage" : null
+        },
+        "missingAnalysisSteps" : [
+          "entities",
+          "intent",
+          "params",
+          "tags",
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "skip",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "providerMissing",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "skip",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "success",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0.5,
+          "tone" : "formal"
+        }
+      },
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "allApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "success",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "allApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "singleStepFailure",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "allApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "singleStepFailure",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "allApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "providerMissing",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0,
+          "entities" : [
+
+          ],
+          "intent" : "self_correction",
+          "tags" : [
+
+          ],
+          "targetLanguage" : null
+        },
+        "missingAnalysisSteps" : [
+          "entities",
+          "intent",
+          "params",
+          "tags",
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "allApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "providerMissing",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "allApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "success",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0.5,
+          "tone" : "formal"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "allAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "success",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "allAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "singleStepFailure",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "allAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "singleStepFailure",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "allAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "appleIntelligence",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "providerMissing",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0,
+          "entities" : [
+
+          ],
+          "intent" : "self_correction",
+          "tags" : [
+
+          ],
+          "targetLanguage" : null
+        },
+        "missingAnalysisSteps" : [
+          "entities",
+          "intent",
+          "params",
+          "tags",
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "allAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "appleIntelligence",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "providerMissing",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "allAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "success",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0.5,
+          "tone" : "formal"
+        }
+      },
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "intentApple_toneAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "success",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "intentApple_toneAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "singleStepFailure",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "intentApple_toneAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "singleStepFailure",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "intentApple_toneAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "providerMissing",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0,
+          "entities" : [
+
+          ],
+          "intent" : "self_correction",
+          "tags" : [
+
+          ],
+          "targetLanguage" : null
+        },
+        "missingAnalysisSteps" : [
+          "entities",
+          "intent",
+          "params",
+          "tags"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0.5,
+          "tone" : "formal"
+        }
+      },
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "intentApple_toneAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "providerMissing",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "appleIntelligence",
+        "intent" : "appleIntelligence",
+        "params" : "appleIntelligence",
+        "tags" : "appleIntelligence",
+        "tone" : "azureFoundry"
+      },
+      "scenario" : "intentApple_toneAzure",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "success",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0.5,
+          "tone" : "formal"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "intentAzure_toneApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "success",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "intentAzure_toneApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "singleStepFailure",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "intentAzure_toneApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "appleIntelligence",
+          "steps" : [
+            "tone"
+          ]
+        },
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "singleStepFailure",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "intentAzure_toneApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "complete",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+          "refined_length"
+        ]
+      ],
+      "logs" : [
+        "开始文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "文本优化完成"
+      ],
+      "mode" : "refine",
+      "outcome" : "providerMissing",
+      "response" : {
+        "intentAnalysis" : {
+          "confidence" : 0.75,
+          "entities" : [
+            "example-entity"
+          ],
+          "intent" : "polish",
+          "tags" : [
+            "example-tag"
+          ],
+          "targetLanguage" : "en"
+        },
+        "missingAnalysisSteps" : [
+          "tone"
+        ],
+        "originalText" : "synthetic input",
+        "refinedText" : "synthetic refined",
+        "tokenUsage" : null,
+        "toneAnalysis" : {
+          "confidence" : 0,
+          "tone" : "neutral"
+        }
+      },
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "intentAzure_toneApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "calls" : [
+        {
+          "input" : "synthetic input",
+          "method" : "analyze",
+          "provider" : "azureFoundry",
+          "steps" : [
+            "entities",
+            "intent",
+            "params",
+            "tags"
+          ]
+        },
+        {
+          "input" : "Keep the synthetic meaning.\n\n原文：synthetic input",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "chunks" : [
+        "synt",
+        "hetic refined"
+      ],
+      "logContextKeys" : [
+        [
+          "text_length"
+        ],
+        [
+          "text_length"
+        ],
+        [
+
+        ],
+        [
+
+        ]
+      ],
+      "logs" : [
+        "开始流式文本优化",
+        "开始内容分析",
+        "内容分析完成",
+        "流式文本优化完成"
+      ],
+      "mode" : "refineStreaming",
+      "outcome" : "providerMissing",
+      "refinedText" : "synthetic refined",
+      "routing" : {
+        "entities" : "azureFoundry",
+        "intent" : "azureFoundry",
+        "params" : "azureFoundry",
+        "tags" : "azureFoundry",
+        "tone" : "appleIntelligence"
+      },
+      "scenario" : "intentAzure_toneApple",
+      "telemetry" : [
+
+      ]
+    },
+    {
+      "apple" : "apple",
+      "calls" : [
+        {
+          "input" : "A: apple\nB: whisper\n\n以 B 为基础，参考 A 校正明显错字或漏字，输出最准确的语音转录文本。\n只能使用 A 和 B 中已有的词，不得添加新内容。\n输出长度不超过 12 个字符。\n只输出转录文本本身，不输出任何标签或解释。",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "mode" : "merge",
+      "output" : "merged",
+      "scenario" : "success",
+      "telemetry" : [
+
+      ],
+      "whisper" : "whisper"
+    },
+    {
+      "apple" : "apple",
+      "calls" : [
+        {
+          "input" : "A: apple\nB: whisper\n\n以 B 为基础，参考 A 校正明显错字或漏字，输出最准确的语音转录文本。\n只能使用 A 和 B 中已有的词，不得添加新内容。\n输出长度不超过 12 个字符。\n只输出转录文本本身，不输出任何标签或解释。",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "mode" : "merge",
+      "output" : "whisper",
+      "scenario" : "providerThrows",
+      "telemetry" : [
+
+      ],
+      "whisper" : "whisper"
+    },
+    {
+      "apple" : "apple",
+      "calls" : [
+        {
+          "input" : "A: apple\nB: whisper\n\n以 B 为基础，参考 A 校正明显错字或漏字，输出最准确的语音转录文本。\n只能使用 A 和 B 中已有的词，不得添加新内容。\n输出长度不超过 12 个字符。\n只输出转录文本本身，不输出任何标签或解释。",
+          "method" : "completeStreaming",
+          "provider" : "azureFoundry",
+          "steps" : [
+
+          ]
+        }
+      ],
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "mode" : "merge",
+      "output" : "whisper",
+      "scenario" : "outputTooLong",
+      "telemetry" : [
+
+      ],
+      "whisper" : "whisper"
+    },
+    {
+      "apple" : "whisper",
+      "calls" : [
+
+      ],
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "mode" : "merge",
+      "output" : "whisper",
+      "scenario" : "identicalInputs",
+      "telemetry" : [
+
+      ],
+      "whisper" : "whisper"
+    },
+    {
+      "apple" : "",
+      "calls" : [
+
+      ],
+      "logContextKeys" : [
+
+      ],
+      "logs" : [
+
+      ],
+      "mode" : "merge",
+      "output" : "whisper",
+      "scenario" : "emptyAppleText",
+      "telemetry" : [
+
+      ],
+      "whisper" : "whisper"
+    }
   ]
 }
