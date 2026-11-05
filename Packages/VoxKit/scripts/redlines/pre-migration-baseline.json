@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "scope": ["Packages/VoxInfrastructure/Sources/TranscriptionKit", "Packages/VoxInfrastructure/Sources/LLMKit"],
+  "generated_from": "origin/main",
+  "rules": ["R1", "R2", "R3", "R4", "R5"],
+  "violations": [
+    {"id": "R1-001", "rule": "R1", "path": "TranscriptionKit/MicrophoneRecorder.swift", "line": 158, "detail": "product-name temporary audio path", "task": "T109"},
+    {"id": "R1-002", "rule": "R1", "path": "TranscriptionKit/WhisperKitTranscriber.swift", "line": 575, "detail": "product-name model cache path", "task": "T109"},
+    {"id": "R2-001", "rule": "R2", "path": "TranscriptionKit", "line": 1, "detail": "LokiKit logger and telemetry imports", "task": "T107"},
+    {"id": "R3-001", "rule": "R3", "path": "TranscriptionKit/WhisperKitTranscriber.swift", "line": 120, "detail": "free-form logging in SDK candidate", "task": "T108"},
+    {"id": "R3-002", "rule": "R3", "path": "LLMKit/LLMTranscriptionMerger.swift", "line": 1, "detail": "transcription content logging path", "task": "T108"},
+    {"id": "R4-001", "rule": "R4", "path": "TranscriptionKit", "line": 1, "detail": "Combine public contracts", "task": "T110"},
+    {"id": "R4-002", "rule": "R4", "path": "TranscriptionKit/WhisperKitTranscriber.swift", "line": 23, "detail": "escaping closure engine factory", "task": "T110"},
+    {"id": "R5-001", "rule": "R5", "path": "LLMKit/Providers/AzureFoundryProvider.swift", "line": 330, "detail": "Azure hostname in test/provider material", "task": "T108"},
+    {"id": "R5-002", "rule": "R5", "path": "TranscriptionKit/VoxPocketTelemetryEventName.swift", "line": 1, "detail": "product-specific SDK symbol", "task": "T108"},
+    {"id": "SENDABLE-001", "rule": "R4", "path": "TranscriptionKit/WhisperKitTranscriber.swift", "line": 13, "detail": "@unchecked Sendable requiring actor/Mutex migration", "task": "T110"},
+    {"id": "SENDABLE-002", "rule": "R4", "path": "TranscriptionKit/MicrophoneRecorder.swift", "line": 92, "detail": "nonisolated(unsafe) callback state", "task": "T110"}
+  ],
+  "task_mapping": {"T107": ["R2-001"], "T108": ["R3-001", "R3-002", "R5-001", "R5-002"], "T108a": [], "T109": ["R1-001", "R1-002"], "T110": ["R4-001", "R4-002", "SENDABLE-001", "SENDABLE-002"], "T111": []}
+}
