@@ -92,7 +92,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         state.withLock { Self.analysisRouting(configuration: $0) }
     }
 
-    internal var isContentAnalysisSkipped: Bool { state.withLock { $0.skipContentAnalysis } }
+    public var isContentAnalysisSkipped: Bool { state.withLock { $0.skipContentAnalysis } }
 
     private static func analysisRouting(configuration: State) -> [AnalysisStep: LLMProviderType] {
         guard let defaultProviderType = configuration.currentProvider?.providerType else { return [:] }
