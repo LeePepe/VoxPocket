@@ -39,6 +39,20 @@ import VoxSpeech
     #expect(try JSONDecoder().decode(WorkflowDefinition.self, from: JSONEncoder().encode(decoded)) == decoded)
 }
 
+@Test func testExportedPipelineUsesLatestProviderForRepeatedAnalysisKinds() throws {
+    let original = Preset.appleSpeech
+    let repeatedIntent = NodeSpec(id: "secondIntent", kind: .analyzeIntent,
+        inputs: [PortRef(nodeID: "input", port: "text")],
+        params: ["analysis.intent.provider": .string("azureFoundry")])
+    let preset = Preset(id: "repeated.intent", speech: original.speech,
+        refine: WorkflowDefinition(entry: .refine, nodes: original.refine.nodes + [repeatedIntent]))
+    try preset.refine.validate()
+    #expect(preset.refine.nodes.filter { $0.kind == .analyzeIntent }.count == 2)
+    var expectedAnalysis = original.exportedPipeline().analysis
+    expectedAnalysis["intent"] = "azureFoundry"
+    #expect(preset.exportedPipeline().analysis == expectedAnalysis)
+}
+
 @Test func testPreExecutionValidationRejectsInvalidGraphsWithoutLeakingContent() {
     let registry = NodeRegistry()
     let cases: [(WorkflowDefinition, WorkflowValidationError.Code)] = [

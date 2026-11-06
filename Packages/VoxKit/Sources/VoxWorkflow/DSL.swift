@@ -82,13 +82,13 @@ public struct Preset: Sendable, Equatable, Codable {
             .map { $0.kind.rawValue }
         let hasRealtime = speech.nodes.contains { $0.kind == .speechAzureRealtime }
         let hasMerger = speech.nodes.contains { $0.kind == .mergeLLM }
-        let analysis = Dictionary(uniqueKeysWithValues: refine.nodes.compactMap { node -> (String, String)? in
+        let analysis = Dictionary(refine.nodes.compactMap { node -> (String, String)? in
             guard node.kind.rawValue.hasPrefix("analyze.") else { return nil }
             let key = String(node.kind.rawValue.dropFirst("analyze.".count))
             if node.params["analysis.skip"] == .string("true") { return (key, "skipped") }
             guard let provider = node.params["analysis.\(key).provider"].flatMap(Self.stringValue) else { return nil }
             return (key, provider)
-        })
+        }, uniquingKeysWith: { _, latest in latest })
         let refineProvider = refine.nodes.first { $0.kind == .llmAzure || $0.kind == .llmApple }?.params["refine.provider"].flatMap(Self.stringValue)
             ?? (refine.nodes.contains { $0.kind == .llmAzure } ? "azureFoundry" : "appleIntelligence")
         var failure = "none"

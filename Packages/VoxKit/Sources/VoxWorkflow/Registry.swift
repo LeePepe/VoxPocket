@@ -190,8 +190,8 @@ public extension WorkflowDefinition {
             }
         }
 
-        var indegree = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, 0) })
-        var edges = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, [String]()) })
+        var indegree = Dictionary(nodes.map { ($0.id, 0) }, uniquingKeysWith: { _, latest in latest })
+        var edges = Dictionary(nodes.map { ($0.id, [String]()) }, uniquingKeysWith: { _, latest in latest })
         for node in nodes {
             var dependencies = node.inputs.map(\.nodeID)
             if case .fallback(let fallbackID) = node.onFailure { dependencies.append(fallbackID) }
