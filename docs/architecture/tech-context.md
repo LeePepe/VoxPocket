@@ -7,7 +7,6 @@ support:
     reason: documentation, specs, design records and agent/tool configuration; checked by docs lints and the contract audit
   - patterns: [".github/**", ".githooks/**", "scripts/**", "tests/**", "fastlane/**", "docker/**", ".gitignore", ".gitleaks.toml", "config.example.json"]
     reason: CI, hooks, policy, release and local tooling; verified by scripts/verify --policy and CI
-  - patterns: ["Packages/VoxKit/**"]
     reason: staged local SDK removal; retained only so the native package gate can run during the transition
 red_lines:
   - 依赖方向永远向下,任何反向依赖(层间或层内)都是红线(宪法 II)
