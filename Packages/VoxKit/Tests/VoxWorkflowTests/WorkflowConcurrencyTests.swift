@@ -119,6 +119,25 @@ private extension WorkflowNodeValue {
     }
 }
 
+@Test(.timeLimit(.minutes(1))) func testMixedLimitsUseStrictestSharedAdmission() async throws {
+    let barrier = WorkflowBarrier()
+    let registry = NodeRegistry(registerBuiltIns: false)
+    registry.register(NodeSignature(kind: "test.wait", allowedEntries: [.speech], outputType: .text),
+        handler: BarrierHandler(barrier: barrier, analysis: false))
+    let definition = WorkflowDefinition(entry: .speech, nodes: [
+        NodeSpec(id: "one", kind: "test.wait", concurrency: 1),
+        NodeSpec(id: "two", kind: "test.wait", concurrency: 2),
+        NodeSpec(id: "unrestricted", kind: "test.wait")])
+    let task = Task { try await WorkflowRuntime(registry: registry).execute(definition) }
+    for count in 1...3 {
+        await barrier.waitForEntries(count)
+        await barrier.release(try #require(await barrier.entered.last))
+    }
+    _ = try await task.value
+    #expect(await barrier.maximum == 1)
+    #expect(await barrier.active == 0)
+}
+
 @Test(.timeLimit(.minutes(1))) func testCancellationPropagatesToAllRunningNodesWithZeroLeakedTasks() async throws {
     for mode in ["runtime", "task", "stream"] {
         let barrier = WorkflowBarrier()

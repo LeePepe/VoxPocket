@@ -199,8 +199,9 @@ private actor WorkflowExecution {
         for reference in node.inputs { inputs.append(try await resolve(reference.nodeID)) }
         if node.inputs.isEmpty { inputs = [input] }
         let label = registry.label(for: node.kind) ?? .custom(index: -1)
-        let limit = node.concurrency ?? registry.signature(for: node.kind)?.defaultConcurrency
         let key = node.params["concurrency.key"]?.stringValue ?? node.kind.rawValue
+        let limit = definition.nodes.filter { ($0.params["concurrency.key"]?.stringValue ?? $0.kind.rawValue) == key }
+            .compactMap { $0.concurrency ?? registry.signature(for: $0.kind)?.defaultConcurrency }.min()
         await limiter.acquire(key: key, limit: limit)
         do {
             try Task.checkCancellation()
