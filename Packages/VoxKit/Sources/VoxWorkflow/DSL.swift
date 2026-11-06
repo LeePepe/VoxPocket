@@ -151,7 +151,18 @@ public struct Preset: Sendable, Equatable, Codable {
                 NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "select", port: "text")])
             ]
             return WorkflowDefinition(entry: .speech, nodes: nodes)
-        case "batch": return WorkflowDefinition(entry: .speech) {
+        case "batch":
+            let combineKind: NodeKindID = merger ? .mergeLLM : .selectText
+            let combineID = merger ? "merge" : "select"
+            return WorkflowDefinition(entry: .speech) {
+                NodeSpec(id: "capture", kind: .captureMicrophone)
+                NodeSpec(id: "apple", kind: .speechApple, inputs: [PortRef(nodeID: "capture", port: "audio")])
+                NodeSpec(id: "azureBatch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")])
+                NodeSpec(id: combineID, kind: combineKind,
+                    inputs: [PortRef(nodeID: "apple", port: "text"), PortRef(nodeID: "azureBatch", port: "text")])
+                NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: combineID, port: "text")])
+            }
+        case "azureWhisper": return WorkflowDefinition(entry: .speech) {
             NodeSpec(id: "capture", kind: .captureMicrophone)
             NodeSpec(id: "batch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")])
             NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "batch", port: "text")])

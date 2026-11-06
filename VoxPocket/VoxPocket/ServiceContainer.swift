@@ -292,7 +292,7 @@ public final class ServiceContainer: ObservableObject {
         case "apple.speech": return .appleSpeech
         case "local.whisperkit": return .localWhisperKit
         case "hybrid.local": return .hybridLocal
-        case "azure.whisper": return .hybridAzure.overriding(["speech": "batch"])
+        case "azure.whisper": return .hybridAzure.overriding(["speech": "azureWhisper"])
         default:
             #if os(macOS)
             return StagePresetMapping.preset(settings: LLMAppConfig.initialStageModelSettings,
