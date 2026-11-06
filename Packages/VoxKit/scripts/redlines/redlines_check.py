@@ -38,25 +38,25 @@ def check_sendable_invariants(root: Path) -> list[str]:
                 if re.search(r"@unchecked\s+Sendable|nonisolated\(unsafe\)", declaration):
                     rationale = line.partition("// Sendable:")[2].strip()
                     if not rationale or "Combine" in rationale:
-                        findings.append(f"{path}:{number}: missing/invalid inline Sendable invariant")
+                        findings.append(f"{path}:{number}: invalid Sendable rationale")
         limit = baseline.get(target.name, {}).get("target_count_after_T110", 0)
         if count > limit:
-            findings.append(f"{target.name}: Sendable escape hatches {count} exceed baseline {limit}")
+            findings.append(f"{target.name}: Sendable {count}>{limit}")
     return findings
 
 
 def validate_manifest_and_resolved(root: Path) -> None:
     manifest = (root / "Package.swift").read_text()
     if re.search(r"\.package\s*\(\s*path:", manifest):
-        raise ValueError("external local path dependency")
+        raise ValueError("local dependency")
     approved_urls = {normalized_url(pin[0]) for pin in APPROVED_DEPENDENCIES.values()}
     for url in re.findall(r'\.package\s*\(\s*url:\s*"([^"]+)"', manifest):
         if normalized_url(url) not in approved_urls:
-            raise ValueError("unapproved manifest dependency")
+            raise ValueError("manifest denied")
     pins = json.loads((root / "Package.resolved").read_text())["pins"]
     resolved = {pin["identity"]: [pin["location"], pin["state"]["version"], pin["state"]["revision"]] for pin in pins}
     if resolved != APPROVED_DEPENDENCIES or any(pin["kind"] != "remoteSourceControl" for pin in pins):
-        raise ValueError("resolved dependencies differ from approved URL/revision snapshot")
+        raise ValueError("pin drift")
 
 
 def swift_files(paths: list[Path]):
@@ -172,14 +172,14 @@ def run_checks(root: Path, paths: list[Path]) -> int:
             failed = True
     deps = subprocess.run(["swift", "package", "--package-path", str(root), "show-dependencies", "--format", "json"], text=True, capture_output=True)
     if deps.returncode != 0:
-        print("R2 cannot resolve dependency closure"); failed = True
+        print("R2 resolution failed"); failed = True
     else:
         try:
             graph = json.loads(deps.stdout)
             validate_dependencies(graph)
             validate_manifest_and_resolved(root)
         except (ValueError, KeyError, TypeError, OSError) as error:
-            print(f"R2 dependency closure: {error}"); failed = True
+            print(f"R2: {error}"); failed = True
     if not check_minimal_consumer(root): failed = True
     return 1 if failed else 0
 
@@ -188,15 +188,15 @@ def validate_dependencies(graph: dict) -> None:
     for dependency in graph["dependencies"]:
         serialized = json.dumps(dependency)
         if re.search(r"LokiKit|SharedTelemetry|shared-telemetry", serialized, re.I):
-            raise ValueError("forbidden telemetry package")
+            raise ValueError("telemetry dependency")
         if not re.match(r"(?:https?://|ssh://|git@)", dependency["url"]):
-            raise ValueError("external local path dependency")
+            raise ValueError("local dependency")
         identity = dependency.get("identity", "").lower()
         approved = APPROVED_DEPENDENCIES.get(identity)
         if approved is None or normalized_url(dependency["url"]) != normalized_url(approved[0]):
-            raise ValueError("unapproved dependency identity/URL")
+            raise ValueError("unapproved dependency")
         if dependency.get("version") != approved[1]:
-            raise ValueError("dependency version differs from approved snapshot")
+            raise ValueError("version drift")
         validate_dependencies(dependency)
 
 
@@ -204,15 +204,15 @@ def check_minimal_consumer(root: Path) -> bool:
     consumer = root / "Examples/MinimalConsumer"
     build = subprocess.run(["swift", "build", "--package-path", str(consumer)], capture_output=True, text=True)
     if build.returncode != 0:
-        print("MinimalConsumer build failed:\n" + build.stderr); return False
+        print("consumer build:\n" + build.stderr); return False
     bin_path = Path(subprocess.check_output(["swift", "build", "--package-path", str(consumer), "--show-bin-path"], text=True).strip())
     binary = bin_path / "MinimalConsumer"
     symbols = subprocess.run(["xcrun", "nm", str(binary)], capture_output=True, text=True)
     if symbols.returncode != 0 or re.search(r"WhisperKit", symbols.stdout):
-        print("MinimalConsumer contains WhisperKit symbols or cannot be inspected"); return False
+        print("consumer symbols: WhisperKit or unreadable"); return False
     modules = list(bin_path.rglob("*WhisperKit*.swiftmodule"))
     if modules:
-        print("MinimalConsumer built WhisperKit modules"); return False
+        print("consumer: WhisperKit modules"); return False
     with tempfile.TemporaryDirectory(prefix="voxkit-consumer-ios-") as temporary:
         sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], text=True).strip()
         target = f"{platform.machine()}-apple-ios26.0-simulator"
@@ -220,14 +220,14 @@ def check_minimal_consumer(root: Path) -> bool:
                    "--scratch-path", temporary, "--triple", target, "--sdk", sdk, "--target", "MinimalConsumer"]
         build = subprocess.run(command, capture_output=True, text=True)
         if build.returncode != 0:
-            print("MinimalConsumer iOS Simulator build failed:\n" + build.stdout + build.stderr); return False
+            print("iOS consumer build:\n" + build.stdout + build.stderr); return False
         ios_modules = Path(temporary) / target.replace("26.0", "") / "debug/Modules"
         for module in ("VoxCore", "VoxSpeech", "VoxRefine", "VoxLLM", "MinimalConsumer"):
             if not (ios_modules / f"{module}.swiftmodule").exists():
-                print(f"MinimalConsumer iOS Simulator missing module: {module}"); return False
+                print(f"iOS consumer missing: {module}"); return False
         if list(Path(temporary).rglob("*WhisperKit*.swiftmodule")):
-            print("MinimalConsumer iOS Simulator built WhisperKit modules"); return False
-    print("MinimalConsumer: PASS macOS + iOS Simulator (no WhisperKit symbols/modules)")
+            print("iOS consumer: WhisperKit modules"); return False
+    print("consumer: PASS macOS/iOS, no WhisperKit")
     return True
 
 
@@ -258,12 +258,12 @@ def self_test(root: Path) -> int:
             *map(str, sorted((root / "Sources/VoxCore").glob("*.swift"))),
         ], capture_output=True, text=True)
         if result.returncode != 0:
-            print("iOS fixture module build failed:\n" + result.stderr); return 1
+            print("iOS fixture build:\n" + result.stderr); return 1
         bad_code, bad_output = compile_fixture(bad, ios_modules, "iphonesimulator")
         good_code, good_output = compile_fixture(good, ios_modules, "iphonesimulator")
         if bad_code == 0 or not re.search(expected, bad_output) or good_code != 0:
-            print(f"iOS compile fixture self-test failed: R3a\n{bad_output}\n{good_output}"); return 1
-    print("self-test R3a iOS Simulator compile: pass")
+            print(f"R3a iOS fixture failed\n{bad_output}\n{good_output}"); return 1
+    print("R3a iOS: pass")
     return run_checks(root, [root / "Sources", root / "Tests", root / "Examples"])
 
 
