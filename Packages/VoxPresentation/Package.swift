@@ -40,7 +40,6 @@ let package = Package(
                 .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
-                .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
                 .product(name: "VoxRefine", package: "VoxKit"),
                 .product(name: "VoxLLM", package: "VoxKit"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
@@ -61,7 +60,6 @@ let package = Package(
                 .product(name: "VoxLLM", package: "VoxKit"),
                 .product(name: "VoxRefine", package: "VoxKit"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
-                .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
@@ -94,7 +92,6 @@ let package = Package(
                 .product(name: "UseCases", package: "VoxApplication"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
-                .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "VoxLLM", package: "VoxKit"),
                 .product(name: "VoxRefine", package: "VoxKit"),

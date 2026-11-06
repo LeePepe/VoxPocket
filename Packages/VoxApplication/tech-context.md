@@ -29,7 +29,7 @@ targets: [UseCases]
 - **StreamingInputCoordinator**:流式输入协调。
 
 ## 依赖
-- **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/Persistence/PlatformAdapters) + `VoxKit`(VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM)。
+- **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/Persistence/PlatformAdapters) + `VoxKit`(VoxCore/VoxSpeech/VoxRefine/VoxLLM)。
 - **外部**:`LokiKit`(遥测)。所有 UseCase 的 telemetry 参数默认 `NoopTelemetryService`。
 
 ## 约束 / 红线投影
