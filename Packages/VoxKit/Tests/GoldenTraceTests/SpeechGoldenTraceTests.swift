@@ -3,6 +3,7 @@ import VoxWorkflow
 @testable import VoxSpeech
 @testable import VoxSpeechWhisperKit
 import Foundation
+import Synchronization
 import XCTest
 
 final class SpeechGoldenTraceTests: XCTestCase {
@@ -17,28 +18,41 @@ final class SpeechGoldenTraceTests: XCTestCase {
             let recognizer = GoldenRecognizer(calls: calls)
             let pipeline = GoldenRealtime(calls: calls, minimumAudio: true, fails: scenario == "realtimeFallback")
             let logger = GoldenLogger()
+            let batchBoundary = GoldenWorkflowBatchBoundary(calls: calls)
+            let appleBranch = GoldenWorkflowAppleBranch()
             let source: any SpeechSessionSource
+            let preset: Preset
+            let registry = NodeRegistry.builtIn
+            let sourceKind: NodeKindID
             if scenario == "normalRecognition" {
+                preset = .appleSpeech
+                sourceKind = .speechApple
                 source = AppleSpeechTranscriber(recorder: recorder, speechRecognizer: recognizer,
                     speechAuthorizationProvider: GoldenSpeechAuthorization(allowed: true, calls: calls), logger: logger, storageLocations: testStorageLocations)
                 _ = await source.requestSpeechPermission()
             } else {
+                preset = .hybridAzure
+                sourceKind = .speechAzureRealtime
                 let config = try AzureRealtimeTranscriptionConfig(endpoint: XCTUnwrap(URL(string: "https://example.invalid")),
                     apiKey: Credential(rawValue: "fixture-key"), deployment: "example-live")
                 source = HybridWhisperTranscriber(recorder: recorder, speechRecognizer: recognizer,
                     speechAuthorizationProvider: GoldenSpeechAuthorization(allowed: true, calls: calls),
-                    whisperEngine: GoldenBatch(calls: calls), realtimeSessionMaker: pipeline, realtimeConfig: config, logger: logger,
+                    whisperEngine: batchBoundary, realtimeSessionMaker: pipeline, realtimeConfig: config, logger: logger,
                     storageLocations: testStorageLocations)
+                registry.register(try XCTUnwrap(registry.signature(for: .speechApple)), handler: appleBranch)
+                registry.register(try XCTUnwrap(registry.signature(for: .speechAzureBatch)), handler: batchBoundary)
             }
-            let runtime = WorkflowRuntime(configuration: WorkflowExecutionConfiguration(providers: [:],
-                speechFactories: [.speechApple: GoldenWorkflowFactory(source: source)]))
+            let runtime = WorkflowRuntime(registry: registry, configuration: WorkflowExecutionConfiguration(providers: [:],
+                speechFactories: [sourceKind: GoldenWorkflowFactory(source: source)]))
             var levels = source.audioLevels().makeAsyncIterator()
             var states = source.captureStates().makeAsyncIterator()
             let initialLevel = await levels.next()
             let initialState = await states.next()
             var actual = ["level:\(try XCTUnwrap(initialLevel))", "state:\(try XCTUnwrap(initialState))"]
             var recordingCount = 0
-            for try await event in runtime.events(for: Preset.appleSpeech.speech) {
+            var workflowEvents: [WorkflowEvent] = []
+            for try await event in runtime.events(for: preset.speech) {
+                workflowEvents.append(event)
                 switch event {
                 case .state(.recording):
                     actual.append("state:recording")
@@ -56,6 +70,7 @@ final class SpeechGoldenTraceTests: XCTestCase {
                     if value == 0.25 { recognizer.emit("synthetic partial") }
                 case .partial(let result):
                     actual.append("live:\(result.type.rawValue):\(result.text):\(result.confidence.map { String($0) } ?? "nil")")
+                    if result.text == "synthetic apple" || result.text == "synthetic newer apple" { await appleBranch.receive(result) }
                     if result.text == "synthetic partial" { (source as? AppleSpeechTranscriber)?.pause() }
                     if result.text == "synthetic apple" { pipeline.partial() }
                     if result.text == "synthetic cloud partial" {
@@ -73,6 +88,40 @@ final class SpeechGoldenTraceTests: XCTestCase {
             XCTAssertEqual(calls.values, expected["calls"] as? [String])
             XCTAssertEqual(logger.messages, expected["logs"] as? [String])
             XCTAssertEqual(logger.contextKeys, expected["logContextKeys"] as? [[String]])
+            let startedNodes = workflowEvents.compactMap { event -> VoxLabel? in
+                if case .nodeStarted(let label) = event { return label }; return nil
+            }
+            let expectedNodes: [VoxLabel] = scenario == "normalRecognition"
+                ? [.node("capture.microphone"), .node("speech.apple"), .node("output.text")]
+                : [.node("capture.microphone"), .node("speech.apple"), .node("speech.azure.realtime"), .node("merge.llm"), .node("output.text")]
+                    + (scenario == "realtimeFallback" ? [.node("speech.azure.batch")] : [])
+            XCTAssertEqual(startedNodes.count, expectedNodes.count)
+            for label in expectedNodes {
+                XCTAssertEqual(startedNodes.filter { $0 == label }.count, 1)
+                XCTAssertEqual(workflowEvents.filter { $0 == .nodeFinished(label: label) }.count, 1)
+            }
+            let batchEvents = workflowEvents.filter { event in
+                switch event {
+                case .nodeStarted(let label), .nodeFinished(let label), .nodeFailed(let label, _): label == .node("speech.azure.batch")
+                default: false
+                }
+            }
+            XCTAssertEqual(batchEvents, scenario == "realtimeFallback"
+                ? [.nodeStarted(label: .node("speech.azure.batch")), .nodeFinished(label: .node("speech.azure.batch"))] : [])
+            let realtimeFailure = WorkflowEvent.nodeFailed(label: .node("speech.azure.realtime"), reason: .reason("node_failure"))
+            XCTAssertEqual(workflowEvents.contains(realtimeFailure), scenario == "realtimeFallback")
+            if scenario == "realtimeFallback" {
+                let failed = try XCTUnwrap(workflowEvents.firstIndex(of: realtimeFailure))
+                let batchStarted = try XCTUnwrap(workflowEvents.firstIndex(of: .nodeStarted(label: .node("speech.azure.batch"))))
+                let batchFinished = try XCTUnwrap(workflowEvents.firstIndex(of: .nodeFinished(label: .node("speech.azure.batch"))))
+                let mergeStarted = try XCTUnwrap(workflowEvents.firstIndex(of: .nodeStarted(label: .node("merge.llm"))))
+                XCTAssertLessThan(failed, batchStarted)
+                XCTAssertLessThan(batchStarted, batchFinished)
+                XCTAssertLessThan(batchFinished, mergeStarted)
+            }
+            if scenario != "normalRecognition" {
+                XCTAssertEqual(calls.values.filter { $0.hasPrefix("batch.transcribe:") }.count, expected["batchCalls"] as? Int)
+            }
             XCTAssertFalse(source.isActive)
             XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.file.path))
         }
@@ -278,4 +327,45 @@ final class SpeechGoldenTraceTests: XCTestCase {
 private struct GoldenWorkflowFactory: SpeechSessionFactory {
     let source: any SpeechSessionSource
     func makeSource() async throws -> any SpeechSessionSource { source }
+}
+
+private actor GoldenWorkflowAppleBranch: WorkflowNodeHandler {
+    private var result: TranscriptionResult?
+    private var waiter: CheckedContinuation<TranscriptionResult, Never>?
+
+    func receive(_ value: TranscriptionResult) {
+        result = value
+        waiter?.resume(returning: value)
+        waiter = nil
+    }
+
+    func execute(context: WorkflowNodeContext) async throws -> WorkflowNodeValue {
+        if let result { return .transcriptionResult(result) }
+        let value = await withCheckedContinuation { waiter = $0 }
+        return .transcriptionResult(value)
+    }
+}
+
+private final class GoldenWorkflowBatchBoundary: BatchTranscribing, WorkflowNodeHandler, Sendable {
+    private struct Request: Sendable {
+        let fileURL: URL
+        let language: Locale
+    }
+    private let request = Mutex<Request?>(nil)
+    private let calls: GoldenEvents
+
+    init(calls: GoldenEvents) { self.calls = calls }
+
+    func transcribe(fileURL: URL, language: Locale) async throws -> String {
+        request.withLock { $0 = Request(fileURL: fileURL, language: language) }
+        throw WorkflowRuntimeError.nodeFailed
+    }
+
+    func execute(context: WorkflowNodeContext) async throws -> WorkflowNodeValue {
+        guard let pending = request.withLock({ $0 }) else { throw WorkflowRuntimeError.nodeFailed }
+        let text = try await GoldenBatch(calls: calls).transcribe(fileURL: pending.fileURL, language: pending.language)
+        let result = TranscriptionResult(text: text, type: .final, locale: pending.language)
+        context.emit(.partial(result))
+        return .transcriptionResult(result)
+    }
 }

@@ -155,8 +155,20 @@ import VoxSpeech
 @Test func testFailurePoliciesFailFallbackAndDefaultReproduceEB2EB3EB8() async throws {
     for failing in [false, true] {
         let calls = WorkflowCalls()
-        let events = try await WorkflowRuntime(configuration: workflowConfiguration(calls: calls, realtimeFails: failing)).execute(Preset.hybridAzure.speech)
+        let configured = workflowConfiguration(calls: calls, realtimeFails: failing)
+        var factories = configured.speechFactories
+        if !failing { factories.removeValue(forKey: .speechAzureBatch) }
+        let configuration = WorkflowExecutionConfiguration(providers: configured.providers, merger: configured.merger,
+            speechFactories: factories)
+        let events = try await WorkflowRuntime(configuration: configuration).execute(Preset.hybridAzure.speech)
         #expect(calls.values.filter { $0 == "speech.azure.batch" }.count == (failing ? 1 : 0))
+        let batchEvents = events.filter {
+            switch $0 {
+            case .nodeStarted(let label), .nodeFinished(let label), .nodeFailed(let label, _): label == .node("speech.azure.batch")
+            default: false
+            }
+        }
+        #expect(batchEvents == (failing ? [.nodeStarted(label: .node("speech.azure.batch")), .nodeFinished(label: .node("speech.azure.batch"))] : []))
         #expect(calls.values.filter { $0 == "speech.azure.realtime" }.count == 1)
         #expect(calls.values.contains("merge:speech.apple:\(failing ? "speech.azure.batch" : "speech.azure.realtime")"))
         #expect(events.contains { if case .final(let value) = $0 { value.text == "merged" } else { false } })

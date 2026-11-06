@@ -145,11 +145,19 @@ private actor WorkflowExecution {
     }
 
     private func runGraph() async throws {
-        let normalInputs = Set(definition.nodes.flatMap { $0.inputs.map(\.nodeID) })
-        let fallbackIDs = Set(definition.nodes.compactMap { node -> String? in
+        let terminal = definition.nodes.last { $0.kind == .outputText } ?? definition.nodes.last
+        let nodesByID = Dictionary(uniqueKeysWithValues: definition.nodes.map { ($0.id, $0) })
+        var primaryReachableIDs = Set<String>()
+        var ancestors = terminal.map { [$0.id] } ?? []
+        while let id = ancestors.popLast() {
+            guard primaryReachableIDs.insert(id).inserted, let node = nodesByID[id] else { continue }
+            ancestors.append(contentsOf: node.inputs.map(\.nodeID))
+        }
+        let fallbackTargetIDs = Set(definition.nodes.compactMap { node -> String? in
             if case .fallback(let id) = node.onFailure { return id }; return nil
-        }).subtracting(normalInputs)
-        var pending = definition.nodes.filter { !fallbackIDs.contains($0.id) }
+        })
+        let fallbackOnlyIDs = fallbackTargetIDs.subtracting(primaryReachableIDs)
+        var pending = definition.nodes.filter { primaryReachableIDs.contains($0.id) && !fallbackOnlyIDs.contains($0.id) }
         var completed = Set<String>()
         while !pending.isEmpty {
             try Task.checkCancellation()
@@ -164,7 +172,6 @@ private actor WorkflowExecution {
             pending.removeAll { completed.contains($0.id) }
         }
         try Task.checkCancellation()
-        let terminal = definition.nodes.last { $0.kind == .outputText } ?? definition.nodes.last
         if let terminal, let value = outputs[terminal.id] {
             switch value {
             case .response(let response): continuation.yield(.completed(response))

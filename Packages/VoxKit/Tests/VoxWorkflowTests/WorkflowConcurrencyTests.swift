@@ -62,6 +62,20 @@ private extension WorkflowNodeValue {
     var jsonText: String? { if case .string(let value) = self { value } else { nil } }
 }
 
+private struct BarrierOutputHandler: WorkflowNodeHandler {
+    func execute(context: WorkflowNodeContext) async throws -> WorkflowNodeValue {
+        guard let value = context.inputs.first else { throw WorkflowRuntimeError.nodeFailed }
+        return value
+    }
+}
+
+private func barrierDefinition(_ nodes: [NodeSpec], registry: NodeRegistry) -> WorkflowDefinition {
+    registry.register(NodeSignature(kind: .outputText, allowedEntries: [.speech],
+        inputTypes: Array(repeating: .text, count: nodes.count), outputType: .text), handler: BarrierOutputHandler())
+    return WorkflowDefinition(entry: .speech, nodes: nodes + [NodeSpec(id: "output", kind: .outputText,
+        inputs: nodes.map { PortRef(nodeID: $0.id, port: "text") })])
+}
+
 @Test(.timeLimit(.minutes(1))) func testSameLayerNodesExecuteConcurrentlyWithControllableClock() async throws {
     var responses: [RefinementResponse] = []
     for serial in [false, true] {
@@ -105,9 +119,9 @@ private extension WorkflowNodeValue {
         let registry = NodeRegistry(registerBuiltIns: false)
         registry.register(NodeSignature(kind: "test.wait", allowedEntries: [.speech], outputType: .text,
             defaultConcurrency: useDefault ? 1 : nil), handler: BarrierHandler(barrier: barrier, analysis: false))
-        let definition = WorkflowDefinition(entry: .speech, nodes: ["left", "right"].map {
+        let definition = barrierDefinition(["left", "right"].map {
             NodeSpec(id: $0, kind: "test.wait", concurrency: useDefault ? nil : 1)
-        })
+        }, registry: registry)
         let task = Task { try await WorkflowRuntime(registry: registry).execute(definition) }
         await barrier.waitForEntries(1)
         await barrier.release(try #require(await barrier.entered.first))
@@ -124,10 +138,10 @@ private extension WorkflowNodeValue {
     let registry = NodeRegistry(registerBuiltIns: false)
     registry.register(NodeSignature(kind: "test.wait", allowedEntries: [.speech], outputType: .text),
         handler: BarrierHandler(barrier: barrier, analysis: false))
-    let definition = WorkflowDefinition(entry: .speech, nodes: [
+    let definition = barrierDefinition([
         NodeSpec(id: "one", kind: "test.wait", concurrency: 1),
         NodeSpec(id: "two", kind: "test.wait", concurrency: 2),
-        NodeSpec(id: "unrestricted", kind: "test.wait")])
+        NodeSpec(id: "unrestricted", kind: "test.wait")], registry: registry)
     let task = Task { try await WorkflowRuntime(registry: registry).execute(definition) }
     for count in 1...3 {
         await barrier.waitForEntries(count)
@@ -144,7 +158,7 @@ private extension WorkflowNodeValue {
         let registry = NodeRegistry(registerBuiltIns: false)
         registry.register(NodeSignature(kind: "test.wait", allowedEntries: [.speech], outputType: .text),
             handler: BarrierHandler(barrier: barrier, analysis: false))
-        let definition = WorkflowDefinition(entry: .speech, nodes: [NodeSpec(id: "left", kind: "test.wait"), NodeSpec(id: "right", kind: "test.wait")])
+        let definition = barrierDefinition([NodeSpec(id: "left", kind: "test.wait"), NodeSpec(id: "right", kind: "test.wait")], registry: registry)
         let runtime = WorkflowRuntime(registry: registry)
         let first = Task { try await runtime.execute(definition, input: .string("A")) }
         await barrier.waitForEntries(2)
