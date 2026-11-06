@@ -1,14 +1,15 @@
+import VoxRefine
 #if os(macOS)
 import AppKit
 import Combine
 import CoreModels
 import Foundation
-import LLMKit
+import VoxLLM
 import PlatformAdapters
 import PlatformUI
 import Synchronization
 import Testing
-import TranscriptionKit
+import VoxSpeech
 import UIShared
 import UseCases
 @testable import VoxPocket

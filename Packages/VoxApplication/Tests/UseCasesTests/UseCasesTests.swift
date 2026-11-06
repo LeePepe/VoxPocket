@@ -1,8 +1,9 @@
-import TranscriptionKitCombine
+import VoxCore
+import VoxKitBridge
 import XCTest
 import Combine
 @testable import UseCases
-import TranscriptionKit
+import VoxSpeech
 import CoreModels
 import LokiKit
 import Synchronization

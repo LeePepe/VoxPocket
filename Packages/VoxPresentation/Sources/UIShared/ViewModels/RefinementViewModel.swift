@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import LLMKit
+import VoxLLM
 import UseCases
 
 /// 优化面板 ViewModel

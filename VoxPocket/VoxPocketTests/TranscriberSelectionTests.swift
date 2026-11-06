@@ -1,10 +1,11 @@
-import TranscriptionKitCombine
+import VoxSpeechWhisperKit
+import VoxKitBridge
 import VoxCore
 import Foundation
 import Testing
 @testable import VoxPocket
-import TranscriptionKit
-import LLMKit
+import VoxSpeech
+import VoxLLM
 import Preferences
 
 struct TranscriberSelectionTests {

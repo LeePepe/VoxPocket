@@ -1,3 +1,4 @@
+import VoxSpeechWhisperKit
 //
 //  ServiceContainer.swift
 //  VoxPocket
@@ -9,11 +10,10 @@ import Foundation
 import SwiftUI
 import SwiftData
 import Combine
-import TranscriptionKit
-import TranscriptionKitCombine
+import VoxSpeech
 import VoxKitBridge
 import VoxCore
-import LLMKit
+import VoxLLM
 import UseCases
 import CoreModels
 import Persistence

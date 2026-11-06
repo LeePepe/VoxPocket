@@ -1,6 +1,7 @@
+import VoxCore
 import Foundation
 import Combine
-import TranscriptionKit
+import VoxSpeech
 
 /// 转录用例协议
 ///

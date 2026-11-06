@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 import CoreModels
-import LLMKit
+import VoxLLM
 
 /// Preview 用 Mock 编辑器 ViewModel
 @MainActor

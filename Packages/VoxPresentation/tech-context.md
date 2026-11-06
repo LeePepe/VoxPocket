@@ -27,7 +27,7 @@ targets: [UIShared, PlatformUI, WidgetUI]
 - **WidgetUI**(dynamic library):独立无依赖。
 
 ## 依赖
-- **仓库内**:`VoxDomain` + `VoxInfrastructure` + `VoxApplication`(UseCases) + `VoxKit`(VoxCore)。
+- **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/平台适配/偏好) + `VoxApplication`(UseCases) + `VoxKit`(VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM)。
 - **外部**:`LokiKit`(遥测)。
 
 ## 约束 / 红线投影

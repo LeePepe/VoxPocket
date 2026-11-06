@@ -19,23 +19,39 @@
     {
       "parallelizable": false,
       "target": {
-        "containerPath": "container:Packages/VoxInfrastructure",
-        "identifier": "TranscriptionKitTests",
-        "name": "TranscriptionKitTests"
+        "containerPath": "container:Packages/VoxKit",
+        "identifier": "VoxSpeechTests",
+        "name": "VoxSpeechTests"
       }
     },
     {
       "parallelizable": false,
       "target": {
-        "containerPath": "container:Packages/VoxInfrastructure",
-        "identifier": "LLMKitTests",
-        "name": "LLMKitTests"
+        "containerPath": "container:Packages/VoxKit",
+        "identifier": "VoxSpeechWhisperKitTests",
+        "name": "VoxSpeechWhisperKitTests"
       }
     },
     {
       "parallelizable": false,
       "target": {
-        "containerPath": "container:Packages/VoxInfrastructure",
+        "containerPath": "container:Packages/VoxKit",
+        "identifier": "VoxRefineTests",
+        "name": "VoxRefineTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxKit",
+        "identifier": "VoxLLMTests",
+        "name": "VoxLLMTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxKit",
         "identifier": "GoldenTraceTests",
         "name": "GoldenTraceTests"
       }

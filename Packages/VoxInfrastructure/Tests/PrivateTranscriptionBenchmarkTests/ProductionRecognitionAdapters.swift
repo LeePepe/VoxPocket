@@ -2,12 +2,14 @@ import VoxCore
 #if os(macOS)
 import AVFoundation
 import Foundation
-import LLMKit
+import VoxLLM
+import VoxRefine
+import VoxSpeechWhisperKit
 import LokiKit
 import Preferences
 import Speech
 import Synchronization
-@testable import TranscriptionKit
+import VoxSpeech
 
 struct AppleBenchmarkResult: Sendable {
     let text: String

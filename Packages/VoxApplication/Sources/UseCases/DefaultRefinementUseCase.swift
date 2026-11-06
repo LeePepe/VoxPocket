@@ -1,9 +1,11 @@
+import VoxCore
+import VoxRefine
 import VoxKitBridge
 import Foundation
 import Combine
-import LLMKit
+import VoxLLM
 import CoreModels
-import TranscriptionKit
+import VoxSpeech
 import LokiKit
 
 /// LLM 优化用例默认实现

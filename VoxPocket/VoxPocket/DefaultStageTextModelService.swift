@@ -1,8 +1,9 @@
+import VoxRefine
 import VoxCore
 import Foundation
 import Synchronization
 import Preferences
-import LLMKit
+import VoxLLM
 
 struct StageTextModelServices {
     let main: DefaultStageTextModelService

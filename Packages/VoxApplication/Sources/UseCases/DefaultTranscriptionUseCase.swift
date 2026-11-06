@@ -1,10 +1,10 @@
-import TranscriptionKitCombine
+import VoxCore
 import VoxKitBridge
 import Foundation
 import Combine
 import CoreModels
 import os
-import TranscriptionKit
+import VoxSpeech
 import LokiKit
 
 /// 转录用例默认实现

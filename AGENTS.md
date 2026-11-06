@@ -22,9 +22,9 @@ Layer map (dependencies point down only; `LokiKit` and `AppleUITesting` are exte
 VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, delivery
   → VoxPresentation   SwiftUI views and view models
   → VoxApplication    use cases
-  → VoxInfrastructure transcription, LLM, persistence, platform adapters, preferences (+ LokiKit)
+  → VoxInfrastructure SDK Combine/Loki bridge, persistence, platform adapters, preferences
   → VoxDomain         pure domain models, no external dependencies
-  → VoxKit            independent voice and refinement SDK (VoxCore), no local layer dependencies
+  → VoxKit            VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM; no local layer dependencies
 VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 

@@ -112,7 +112,7 @@ policy() {
     Packages/VoxKit/scripts/redlines/check.sh --self-test
     Packages/VoxKit/scripts/redlines/check.sh
     python3 Packages/VoxKit/scripts/redlines/module-map.py
-    python3 Packages/VoxKit/scripts/redlines/redlines_check.py Packages/VoxKit Packages/VoxInfrastructure/Sources/TranscriptionKit Packages/VoxInfrastructure/Sources/LLMKit
+    python3 Packages/VoxKit/scripts/redlines/redlines_check.py Packages/VoxKit
 }
 
 # Privacy (constitution IV): transcript/refined text must never reach logs.

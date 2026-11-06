@@ -1,7 +1,7 @@
 import XCTest
 import Combine
 import CoreModels
-import LLMKit
+import VoxLLM
 @testable import UIShared
 
 @MainActor

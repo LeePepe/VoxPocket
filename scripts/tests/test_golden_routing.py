@@ -23,18 +23,16 @@ let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)]
     dependencies: [.package(path: {infrastructure}), .package(path: {json.dumps(str(root / "Packages/VoxKit"))})],
     targets: [
         .target(name: "VoxPocket", dependencies: [
-            .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-            .product(name: "TranscriptionKitCombine", package: "VoxInfrastructure"),
+            .product(name: "VoxSpeech", package: "VoxKit"),
             .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
             .product(name: "VoxCore", package: "VoxKit"),
-            .product(name: "LLMKit", package: "VoxInfrastructure"),
+            .product(name: "VoxLLM", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")]),
         .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket",
-            .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-            .product(name: "TranscriptionKitCombine", package: "VoxInfrastructure"),
+            .product(name: "VoxSpeech", package: "VoxKit"),
             .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
             .product(name: "VoxCore", package: "VoxKit"),
-            .product(name: "LLMKit", package: "VoxInfrastructure"),
+            .product(name: "VoxLLM", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")],
             resources: [.copy("golden_b_macos.json")],
             swiftSettings: [.define("VOX_ROUTING_HARNESS")])

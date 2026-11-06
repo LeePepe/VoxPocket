@@ -16,27 +16,27 @@ class ModuleMapTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.source = self.root / "Sources"
-        (self.source / "TranscriptionKit").mkdir(parents=True)
-        (self.source / "LLMKit").mkdir()
-        (self.source / "TranscriptionKit/Core.swift").write_text("import VoxCore\npublic struct CoreValue {}\n")
+        (self.source / "VoxCore").mkdir(parents=True)
+        (self.source / "VoxSpeech").mkdir()
+        (self.source / "VoxCore/Core.swift").write_text("public struct CoreValue {}\n")
         self.data = {"modules": {
-            "VoxCore": {"files": ["TranscriptionKit/Core.swift"], "native": [], "depends_on": []},
+            "VoxCore": {"files": ["VoxCore/Core.swift"], "depends_on": []},
             "VoxSpeech": {"files": [], "depends_on": ["VoxCore"]}}}
 
     def testCompleteValidMapPasses(self):
         self.assertEqual(MODULE.validate(self.data, self.source, self.root), 0)
 
     def testUnmappedFileFails(self):
-        (self.source / "LLMKit/Missing.swift").write_text("struct Missing {}")
+        (self.source / "VoxSpeech/Missing.swift").write_text("struct Missing {}")
         with self.assertRaisesRegex(ValueError, "incomplete coverage"):
             MODULE.validate(self.data, self.source, self.root)
 
     def testDuplicateAndMissingMappingsFail(self):
         duplicate = copy.deepcopy(self.data)
-        duplicate["modules"]["VoxSpeech"]["files"] = ["TranscriptionKit/Core.swift"]
+        duplicate["modules"]["VoxSpeech"]["files"] = ["VoxCore/Core.swift"]
         with self.assertRaisesRegex(ValueError, "duplicate mapping"):
             MODULE.validate(duplicate, self.source, self.root)
-        self.data["modules"]["VoxCore"]["files"].append("TranscriptionKit/Absent.swift")
+        self.data["modules"]["VoxCore"]["files"].append("VoxCore/Absent.swift")
         with self.assertRaisesRegex(ValueError, "missing mapped file"):
             MODULE.validate(self.data, self.source, self.root)
 
@@ -45,21 +45,35 @@ class ModuleMapTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cyclic dependency"):
             MODULE.validate(self.data, self.source, self.root)
 
+    def testHostBridgeReferencesNeedExplicitImport(self):
+        bridge = self.root / "Packages/VoxInfrastructure/Sources/VoxKitBridge"
+        bridge.mkdir(parents=True)
+        (bridge / "Coordinator.swift").write_text("public protocol TranscriptionCoordinator {}")
+        application = self.root / "Packages/VoxApplication/Sources"
+        application.mkdir(parents=True)
+        consumer = application / "Consumer.swift"
+        consumer.write_text("let source: (any TranscriptionCoordinator)? = nil")
+        with self.assertRaisesRegex(ValueError, "missing explicit import VoxKitBridge"):
+            MODULE.validate(self.data, self.source, self.root)
+        consumer.write_text("import VoxKitBridge\nlet source: (any TranscriptionCoordinator)? = nil")
+        self.assertEqual(MODULE.validate(self.data, self.source, self.root), 0)
+
     def testCoreCannotReferenceSpeechType(self):
-        self.data["modules"]["VoxSpeech"]["files"] = ["TranscriptionKit/Speech.swift"]
-        (self.source / "TranscriptionKit/Speech.swift").write_text("import VoxCore\npublic struct SpeechValue {}")
-        (self.source / "TranscriptionKit/Core.swift").write_text("import VoxCore\npublic struct CoreValue { let speech: SpeechValue }")
+        self.data["modules"]["VoxSpeech"]["files"] = ["VoxSpeech/Speech.swift"]
+        (self.source / "VoxSpeech/Speech.swift").write_text("import VoxCore\npublic struct SpeechValue {}")
+        (self.source / "VoxCore/Core.swift").write_text("public struct CoreValue { let speech: SpeechValue }")
         with self.assertRaisesRegex(ValueError, "forbidden module references"):
             MODULE.validate(self.data, self.source, self.root)
 
     def testSourceAndTestsRequirePreStagedCoreImport(self):
-        (self.source / "TranscriptionKit/Core.swift").write_text("public struct CoreValue {}")
+        self.data["modules"]["VoxSpeech"]["files"] = ["VoxSpeech/Speech.swift"]
+        (self.source / "VoxSpeech/Speech.swift").write_text("public struct SpeechValue { let core: CoreValue }")
         with self.assertRaisesRegex(ValueError, "missing pre-staged import"):
             MODULE.validate(self.data, self.source, self.root)
-        (self.source / "TranscriptionKit/Core.swift").write_text("import VoxCore\npublic struct CoreValue {}")
+        (self.source / "VoxSpeech/Speech.swift").write_text("import VoxCore\npublic struct SpeechValue { let core: CoreValue }")
         tests = self.root / "Tests"
         tests.mkdir()
-        (tests / "Consumer.swift").write_text("import TranscriptionKit\nlet value: CoreValue? = nil")
+        (tests / "Consumer.swift").write_text("import VoxSpeech\nlet value: CoreValue? = nil")
         with self.assertRaisesRegex(ValueError, "missing pre-staged import"):
             MODULE.validate(self.data, self.source, self.root)
 

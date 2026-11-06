@@ -1,14 +1,15 @@
+import VoxRefine
 import VoxKitBridge
 #if os(macOS)
 import Foundation
 import Combine
 import CoreModels
-import LLMKit
+import VoxLLM
 import UseCases
 import PlatformAdapters
 import UIShared
 import LokiKit
-import TranscriptionKit
+import VoxSpeech
 
 /// 快速录音 ViewModel
 ///

@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import LLMKit
+import VoxLLM
 
 /// Preview 用 Mock 优化面板 ViewModel
 @MainActor

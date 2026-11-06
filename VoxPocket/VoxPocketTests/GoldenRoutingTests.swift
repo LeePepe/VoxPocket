@@ -1,11 +1,12 @@
-import TranscriptionKitCombine
+import VoxRefine
+import VoxKitBridge
 import VoxCore
 import Foundation
 import CoreFoundation
 import XCTest
 import Preferences
-import TranscriptionKit
-@testable import LLMKit
+import VoxSpeech
+import VoxLLM
 @testable import VoxPocket
 
 final class GoldenRoutingTests: XCTestCase {

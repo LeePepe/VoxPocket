@@ -1,10 +1,10 @@
 import Combine
 import Foundation
 import XCTest
-import TranscriptionKit
-import TranscriptionKitCombine
-import VoxCore
 import VoxKitBridge
+import VoxCore
+import VoxSpeech
+import VoxSpeechWhisperKit
 
 final class CombineBridgeTests: XCTestCase {
     private var storage: VoxStorageLocations {

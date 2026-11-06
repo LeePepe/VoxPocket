@@ -1,11 +1,13 @@
+import VoxCore
+import VoxRefine
 import VoxKitBridge
 import Combine
 import CoreModels
 import Foundation
-import LLMKit
+import VoxLLM
 import LokiKit
 import Synchronization
-import TranscriptionKit
+import VoxSpeech
 import XCTest
 @testable import UseCases
 

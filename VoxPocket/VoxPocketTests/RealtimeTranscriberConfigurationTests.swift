@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 import Preferences
-import LLMKit
-import TranscriptionKit
+import VoxLLM
+import VoxSpeech
 @testable import VoxPocket
 
 struct RealtimeTranscriberConfigurationTests {
@@ -65,7 +65,11 @@ struct RealtimeTranscriberConfigurationTests {
         #endif
         let availability = StageModelRouting.availability(environment: environment)
         #expect(availability.batchConfigured)
+        #if os(macOS)
         #expect(availability.realtimeCredentialsConfigured)
+        #else
+        #expect(!availability.realtimeCredentialsConfigured)
+        #endif
         #expect(availability.realtimeDeployment.isEmpty)
         #expect(availability.textModelName == "默认文本模型")
     }

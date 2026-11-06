@@ -37,11 +37,12 @@ let package = Package(
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
                 .product(name: "TextHistory", package: "VoxDomain"),
-                .product(name: "LLMKit", package: "VoxInfrastructure"),
-                .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-                .product(name: "TranscriptionKitCombine", package: "VoxInfrastructure"),
                 .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
                 .product(name: "VoxCore", package: "VoxKit"),
+                .product(name: "VoxSpeech", package: "VoxKit"),
+                .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
+                .product(name: "VoxLLM", package: "VoxKit"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "Preferences", package: "VoxInfrastructure"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
@@ -52,11 +53,15 @@ let package = Package(
             name: "PlatformUI",
             dependencies: [
                 "UIShared",
+                .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
+                .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "CoreModels", package: "VoxDomain"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "Preferences", package: "VoxInfrastructure"),
-                .product(name: "LLMKit", package: "VoxInfrastructure"),
-                .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+                .product(name: "VoxLLM", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
+                .product(name: "VoxSpeech", package: "VoxKit"),
+                .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "UseCases", package: "VoxApplication"),
             ]
@@ -67,15 +72,32 @@ let package = Package(
         ),
         .testTarget(
             name: "UISharedTests",
-            dependencies: ["UIShared"]
+            dependencies: [
+                "UIShared",
+                .product(name: "CoreModels", package: "VoxDomain"),
+                .product(name: "TextHistory", package: "VoxDomain"),
+                .product(name: "UseCases", package: "VoxApplication"),
+                .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
+                .product(name: "Preferences", package: "VoxInfrastructure"),
+                .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
+                .product(name: "VoxCore", package: "VoxKit"),
+                .product(name: "VoxSpeech", package: "VoxKit"),
+                .product(name: "VoxLLM", package: "VoxKit"),
+            ]
         ),
         .testTarget(
             name: "PlatformUITests",
             dependencies: [
                 "PlatformUI",
+                "UIShared",
+                .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
                 .product(name: "UseCases", package: "VoxApplication"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
-                .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+                .product(name: "VoxSpeech", package: "VoxKit"),
+                .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
+                .product(name: "VoxCore", package: "VoxKit"),
+                .product(name: "VoxLLM", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),

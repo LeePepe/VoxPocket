@@ -1,5 +1,5 @@
 import XCTest
-import LLMKit
+import VoxRefine
 
 final class RefinementPromptBuilderTests: XCTestCase {
     func testDefaultPromptRequiresSentenceTerminatorWhenMissing() {

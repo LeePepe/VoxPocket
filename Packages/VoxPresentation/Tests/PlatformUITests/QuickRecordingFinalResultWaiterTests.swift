@@ -1,8 +1,9 @@
+import VoxCore
 #if os(macOS)
 import Combine
 import Foundation
 import Synchronization
-import TranscriptionKit
+import VoxSpeech
 import XCTest
 @testable import PlatformUI
 

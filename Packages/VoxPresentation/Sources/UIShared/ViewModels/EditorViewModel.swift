@@ -1,11 +1,11 @@
 import Foundation
 import Combine
 import CoreModels
-import LLMKit
+import VoxLLM
 import UseCases
 import LokiKit
 import PlatformAdapters
-import TranscriptionKit
+import VoxSpeech
 
 /// 编辑器 ViewModel
 ///

@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import TranscriptionKit
+import VoxSpeech
 
 /// 录音状态
 public enum RecordingState: Equatable, Sendable {
