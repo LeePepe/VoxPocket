@@ -14,7 +14,7 @@ final class CombineBridgeTests: XCTestCase {
     func testEveryCoreTypePreservesIndependentCapabilities() throws {
         let apple = AppleSpeechTranscriber(storageLocations: storage)
         let whisper = WhisperKitTranscriber(config: .init(preloadOnStart: false), storageLocations: storage)
-        let config = AzureWhisperConfig(endpoint: URL(string: "https://example.invalid")!, apiKey: "fixture")
+        let config = AzureWhisperConfig(endpoint: URL(string: "https://example.invalid")!, apiKey: Credential(rawValue: "fixture"))
         let rows: [(any SpeechSessionSource, Bool, Bool, Bool)] = [
             (apple, false, false, false),
             (AzureWhisperTranscriber(config: config, storageLocations: storage), false, false, false),

@@ -27,7 +27,12 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
             .product(name: "VoxLLM", package: "VoxKit"),
             .product(name: "VoxRefine", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")]),
-        .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket"])
+        .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket",
+            .product(name: "VoxCore", package: "VoxKit"),
+            .product(name: "VoxSpeech", package: "VoxKit"),
+            .product(name: "VoxRefine", package: "VoxKit"),
+            .product(name: "VoxLLM", package: "VoxKit"),
+            .product(name: "VoxKitBridge", package: "VoxInfrastructure")])
     ])
 ''')
         (sources / "LLMAppConfig.swift").symlink_to(root / "VoxPocket/VoxPocket/LLMAppConfig.swift")

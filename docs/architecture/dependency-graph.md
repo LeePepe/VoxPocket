@@ -1,4 +1,6 @@
-# VoxPocket 依赖关系图
+# VoxPocket 依赖关系图（历史记录：Phase 2 之前）
+
+> Historical only. Superseded by [current Phase 2 architecture](voxkit-phase2.md).
 
 ## VoxKit SDK 边界（Phase 1.1）
 

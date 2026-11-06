@@ -5,7 +5,7 @@
     "team": "voice-tests"
   },
   "entry": {
-    "command": "swift test --package-path Packages/VoxInfrastructure --filter TranscriptionKitTests",
+    "command": "swift test --package-path Packages/VoxKit --filter VoxSpeechTests && swift test --package-path Packages/VoxKit --filter VoxSpeechWhisperKitTests && swift test --package-path Packages/VoxInfrastructure --filter VoxKitBridgeTests",
     "timeoutSeconds": 1800
   },
   "labels": [

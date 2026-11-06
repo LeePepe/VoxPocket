@@ -1,3 +1,4 @@
+import VoxCore
 import VoxRefine
 import Foundation
 import VoxLLM
@@ -77,7 +78,7 @@ enum LLMAppConfig {
         guard let key = nonempty(environment["AZURE_API_KEY"]) ?? nonempty(environment["whisperkey"]) else { return nil }
         if let explicit = environment["AZURE_TRANSCRIPTION_ENDPOINT"] {
             guard let endpoint = secureURL(explicit) else { return nil }
-            return AzureWhisperConfig(endpoint: endpoint, apiKey: key)
+            return AzureWhisperConfig(endpoint: endpoint, apiKey: Credential(rawValue: key))
         }
         guard var endpoint = secureURL(environment["AZURE_OPENAI_ENDPOINT"]),
               endpoint.path.isEmpty || endpoint.path == "/" else { return nil }
@@ -87,7 +88,7 @@ enum LLMAppConfig {
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
         components?.queryItems = [URLQueryItem(name: "api-version", value: "2024-02-01")]
         guard let url = components?.url else { return nil }
-        return AzureWhisperConfig(endpoint: url, apiKey: key)
+        return AzureWhisperConfig(endpoint: url, apiKey: Credential(rawValue: key))
     }
 
     /// 独立实时部署显式启用；旧配置及 iOS 保持原 ASR 路径。
@@ -96,7 +97,7 @@ enum LLMAppConfig {
         guard let deployment = nonempty(deploymentOverride) ?? nonempty(environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"]),
               let endpoint = secureURL(environment["AZURE_OPENAI_ENDPOINT"]),
               let key = nonempty(environment["AZURE_API_KEY"]) ?? nonempty(environment["whisperkey"]) else { return nil }
-        return try? AzureRealtimeTranscriptionConfig(endpoint: endpoint, apiKey: key, deployment: deployment)
+        return try? AzureRealtimeTranscriptionConfig(endpoint: endpoint, apiKey: Credential(rawValue: key), deployment: deployment)
         #else
         return nil
         #endif

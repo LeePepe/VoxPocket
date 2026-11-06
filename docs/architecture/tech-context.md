@@ -23,8 +23,8 @@ red_lines:
 
 ## 既有架构文档(权威来源)
 
-- 包架构梳理:[`packages-architecture.md`](./packages-architecture.md)
-- 依赖关系图(mermaid):[`dependency-graph.md`](./dependency-graph.md)
+- 当前包架构与依赖图:[`voxkit-phase2.md`](./voxkit-phase2.md)
+- 迁移前历史记录:[`packages-architecture.md`](./packages-architecture.md)、[`dependency-graph.md`](./dependency-graph.md)
 - 快速索引:[`../index.md`](../index.md) · 记录索引:[`../records/index.md`](../records/index.md)
 
 ## Layer 划分(inter-layer 轴,权威事实源 = 各层 frontmatter 的 `depends_on`)

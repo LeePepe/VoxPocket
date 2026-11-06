@@ -79,7 +79,7 @@ enum QuickRecordingTestProvider: CaseIterable {
 
     func make(_ probe: QuickRecordingEffectProbe, merger: (any TranscriptionMerger)? = nil) -> AsyncTestCoordinator {
         if self == .apple { return AsyncTestCoordinator.wrap(AppleSpeechTranscriber(effects: probe.effects)) }
-        let config = AzureWhisperConfig(endpoint: URL(string: "https://example.invalid/transcriptions")!, apiKey: "fixture")
+        let config = AzureWhisperConfig(endpoint: URL(string: "https://example.invalid/transcriptions")!, apiKey: Credential(rawValue: "fixture"))
         return AsyncTestCoordinator.wrap(HybridWhisperTranscriber(whisperConfig: config, effects: probe.effects, merger: merger))
     }
 }

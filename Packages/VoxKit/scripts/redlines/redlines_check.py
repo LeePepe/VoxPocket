@@ -18,6 +18,48 @@ R5_PRODUCT = re.compile(r"VoxPocket|MY-[0-9]+|com\.leepepe", re.I)
 R5_GUID = re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b")
 R5_HOST = re.compile(r"\b([A-Za-z0-9_-]+)\.(services\.ai|openai|cognitiveservices)\.azure\.com\b", re.I)
 ALLOW_R1 = {"TemporaryAudioStore.swift", "WhisperKitModelCacheAdapter.swift"}
+APPROVED_DEPENDENCIES = {
+    pin["identity"]: pin
+    for pin in json.loads((Path(__file__).parent / "approved-dependencies.json").read_text())["dependencies"]
+}
+
+
+def normalized_url(url: str) -> str:
+    return url.removesuffix(".git").rstrip("/").lower()
+
+
+def check_sendable_invariants(root: Path) -> list[str]:
+    baseline = json.loads((root / "scripts/redlines/pre-migration-baseline.json").read_text())["sendable_baseline"]
+    findings = []
+    for target in sorted((root / "Sources").iterdir()):
+        if not target.is_dir(): continue
+        count = 0
+        for path in swift_files([target]):
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                declaration = line.split("//", 1)[0]
+                count += len(re.findall(r"@unchecked\s+Sendable|nonisolated\(unsafe\)", declaration))
+                if re.search(r"@unchecked\s+Sendable|nonisolated\(unsafe\)", declaration):
+                    rationale = line.partition("// Sendable:")[2].strip()
+                    if not rationale or "Combine" in rationale:
+                        findings.append(f"{path}:{number}: missing/invalid inline Sendable invariant")
+        limit = baseline.get(target.name, {}).get("target_count_after_T110", 0)
+        if count > limit:
+            findings.append(f"{target.name}: Sendable escape hatches {count} exceed baseline {limit}")
+    return findings
+
+
+def validate_manifest_and_resolved(root: Path) -> None:
+    manifest = (root / "Package.swift").read_text()
+    if re.search(r"\.package\s*\(\s*path:", manifest):
+        raise ValueError("external local path dependency")
+    approved_urls = {normalized_url(pin["location"]) for pin in APPROVED_DEPENDENCIES.values()}
+    for url in re.findall(r'\.package\s*\(\s*url:\s*"([^"]+)"', manifest):
+        if normalized_url(url) not in approved_urls:
+            raise ValueError("unapproved manifest dependency")
+    pins = json.loads((root / "Package.resolved").read_text())["pins"]
+    resolved = {pin["identity"]: pin for pin in pins}
+    if resolved != APPROVED_DEPENDENCIES:
+        raise ValueError("resolved dependencies differ from approved URL/revision snapshot")
 
 
 def swift_files(paths: list[Path]):
@@ -121,6 +163,9 @@ def build_modules(root: Path) -> Path:
 
 def run_checks(root: Path, paths: list[Path]) -> int:
     failed = False
+    invariants = check_sendable_invariants(root)
+    if invariants:
+        print("\n".join(invariants)); failed = True
     for rule in ("R1", "R2", "R3b", "R4a", "R4b", "R5"):
         scoped = paths if rule == "R5" else [root / "Sources"]
         findings = scan_rule(rule, scoped)
@@ -135,7 +180,8 @@ def run_checks(root: Path, paths: list[Path]) -> int:
         try:
             graph = json.loads(deps.stdout)
             validate_dependencies(graph)
-        except (ValueError, KeyError, TypeError) as error:
+            validate_manifest_and_resolved(root)
+        except (ValueError, KeyError, TypeError, OSError) as error:
             print(f"R2 dependency closure: {error}"); failed = True
     if not check_minimal_consumer(root): failed = True
     return 1 if failed else 0
@@ -148,6 +194,12 @@ def validate_dependencies(graph: dict) -> None:
             raise ValueError("forbidden telemetry package")
         if not re.match(r"(?:https?://|ssh://|git@)", dependency["url"]):
             raise ValueError("external local path dependency")
+        identity = dependency.get("identity", "").lower()
+        approved = APPROVED_DEPENDENCIES.get(identity)
+        if approved is None or normalized_url(dependency["url"]) != normalized_url(approved["location"]):
+            raise ValueError("unapproved dependency identity/URL")
+        if dependency.get("version") != approved["state"]["version"]:
+            raise ValueError("dependency version differs from approved snapshot")
         validate_dependencies(dependency)
 
 
@@ -164,7 +216,25 @@ def check_minimal_consumer(root: Path) -> bool:
     modules = list(bin_path.rglob("*WhisperKit*.swiftmodule"))
     if modules:
         print("MinimalConsumer built WhisperKit modules"); return False
-    print("MinimalConsumer: PASS (no WhisperKit symbols/modules)")
+    with tempfile.TemporaryDirectory(prefix="voxkit-consumer-ios-") as temporary:
+        sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], text=True).strip()
+        target = f"{platform.machine()}-apple-ios26.0-simulator"
+        command = ["swift", "build", "--package-path", str(consumer), "--build-system", "native",
+                   "--scratch-path", temporary, "--triple", target, "--sdk", sdk, "--target", "MinimalConsumer"]
+        build = subprocess.run(command, capture_output=True, text=True)
+        if build.returncode != 0:
+            print("MinimalConsumer iOS Simulator build failed:\n" + build.stdout + build.stderr); return False
+        ios_modules = Path(temporary) / target.replace("26.0", "") / "debug/Modules"
+        for module in ("VoxCore", "VoxSpeech", "VoxRefine", "VoxLLM", "MinimalConsumer"):
+            if not (ios_modules / f"{module}.swiftmodule").exists():
+                print(f"MinimalConsumer iOS Simulator missing module: {module}"); return False
+        source = consumer / "Sources/MinimalConsumer/MinimalConsumer.swift"
+        result = subprocess.run(["xcrun", "--sdk", "iphonesimulator", "swiftc", "-typecheck", "-parse-as-library",
+                                 "-swift-version", "6", "-sdk", sdk, "-target", target, "-I", str(ios_modules), str(source)],
+                                capture_output=True, text=True)
+        if result.returncode != 0 or list(Path(temporary).rglob("*WhisperKit*.swiftmodule")):
+            print("MinimalConsumer iOS Simulator typecheck/WhisperKit isolation failed:\n" + result.stderr); return False
+    print("MinimalConsumer: PASS macOS + iOS Simulator (no WhisperKit symbols/modules)")
     return True
 
 

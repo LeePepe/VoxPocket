@@ -8,7 +8,7 @@ public struct AzureWhisperConfig: Sendable {
     /// 使用 `audio/transcriptions` 保留原始语言；`audio/translations` 会强制输出英文。
     public let endpoint: URL
     /// API Key（用于 `api-key` 请求头）
-    public let apiKey: String
+    public let apiKey: Credential
     /// 静音超过此时长后自动停止录音（秒）；仅 AzureWhisperTranscriber 使用，0 表示禁用
     public let autoStopSilenceDuration: TimeInterval
     /// RMS 低于此值视为静音（0.0 – 1.0 归一化）；仅 AzureWhisperTranscriber 使用
@@ -16,7 +16,7 @@ public struct AzureWhisperConfig: Sendable {
 
     public init(
         endpoint: URL,
-        apiKey: String,
+        apiKey: Credential,
         autoStopSilenceDuration: TimeInterval = 2.5,
         silenceThreshold: Float = 0.02
     ) {
@@ -70,7 +70,7 @@ public struct WhisperEngine: Sendable {
     private func validateConfiguration() throws {
         guard config.endpoint.scheme == "https", config.endpoint.host != nil,
               config.endpoint.user == nil, config.endpoint.password == nil,
-              !config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              !config.apiKey.isEmpty else {
             throw NSError(domain: "WhisperEngine", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "云端转写配置缺失或无效"])
         }
@@ -91,7 +91,7 @@ public struct WhisperEngine: Sendable {
         var request = URLRequest(url: config.endpoint)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.setValue(config.apiKey, forHTTPHeaderField: "api-key")
+        request.setValue(config.apiKey.rawValue, forHTTPHeaderField: "api-key")
         request.httpBody = body
 
         let started = Date()

@@ -19,7 +19,7 @@ public struct AzureFoundryDeployment: Sendable, Equatable {
     public let name: String
     public let endpoint: URL
     public let model: String
-    public let apiKey: String
+    public let apiKey: Credential
     public let apiVersion: String
     public let authMode: AzureFoundryAuthMode
     public let maxTokens: Int
@@ -32,7 +32,7 @@ public struct AzureFoundryDeployment: Sendable, Equatable {
         name: String,
         endpoint: URL,
         model: String,
-        apiKey: String,
+        apiKey: Credential,
         apiVersion: String = "2024-05-01-preview",
         authMode: AzureFoundryAuthMode = .bearer,
         maxTokens: Int = 2048,
@@ -105,7 +105,7 @@ public actor AzureFoundryProvider: LLMProvider {
     public nonisolated var isAvailable: Bool {
         guard let url = config.baseURL else { return false }
         return url.scheme == "https" && url.host != nil && url.user == nil && url.password == nil
-            && !(config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            && !(config.apiKey?.isEmpty ?? true)
     }
 
     public func validate() async throws {
@@ -244,9 +244,9 @@ public actor AzureFoundryProvider: LLMProvider {
         let authMode = Self.resolveAuthMode(endpoint: endpoint, options: config.options)
         switch authMode {
         case .apiKey:
-            request.setValue(apiKey, forHTTPHeaderField: "api-key")
+            request.setValue(apiKey.rawValue, forHTTPHeaderField: "api-key")
         case .bearer:
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(apiKey.rawValue)", forHTTPHeaderField: "Authorization")
         }
 
         let usesV1 = config.options["azure.api_style"] == AzureFoundryAPIStyle.openAIV1.rawValue

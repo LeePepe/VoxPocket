@@ -11,6 +11,15 @@ import Testing
     #expect(!String(describing: credential).contains("canary-secret"))
 }
 
+@Test func credentialValueSemantics() {
+    let credential = Credential(rawValue: "canary-secret")
+    #expect(credential == Credential(rawValue: "canary-secret"))
+    #expect(credential != Credential(rawValue: "different-secret"))
+    #expect(Set([credential, Credential(rawValue: "canary-secret")]).count == 1)
+    #expect(!credential.isEmpty)
+    #expect(Credential(rawValue: " \n\t").isEmpty)
+}
+
 @Test func coreContractsRecordSafeValues() {
     let field = VoxLogField.int("count", 2)
     #expect(field.value == .int(2))

@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import VoxCore
 import Speech
+import Synchronization
 
 /// Apple Speech + Azure Whisper 混合转录器
 ///
@@ -9,8 +10,7 @@ import Speech
 /// - Apple Speech 提供实时 partial 结果，驱动 UI 更新和自动停止
 /// - 可选云端实时 ASR 在录音期间发送音频；失败时才由 `WhisperEngine` 获取终稿
 /// - 若 Apple Speech 全程无内容（静默/噪音），跳过 Whisper API 调用
-// Combine publisher 桥接沿用 unchecked Sendable；跨回调的会话数据由 Mutex 保护。
-public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
+public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable { // Sendable: Apple Speech (SFSpeechRecognizer/SFSpeechAudioBufferRecognitionRequest/SFSpeechRecognitionTask) callback boundary; all mutable state is guarded by stateMutex.
 
     // MARK: - Dependencies
 
@@ -20,8 +20,19 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
     fileprivate let speechRecognizerProvider: any SpeechRecognizing
     fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
     private let realtimeSessionMaker: any RealtimeSessionMaking
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: (any SpeechRecognitionTasking)?
+    private struct State: @unchecked Sendable { // Sendable: Apple Speech request/task references are guarded by stateMutex; only framework-safe append/end/finish/cancel operations cross the callback boundary.
+        var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+        var recognitionTask: (any SpeechRecognitionTasking)?
+    }
+    private let stateMutex = Mutex(State())
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest? {
+        get { stateMutex.withLock { $0.recognitionRequest } }
+        set { stateMutex.withLock { $0.recognitionRequest = newValue } }
+    }
+    private var recognitionTask: (any SpeechRecognitionTasking)? {
+        get { stateMutex.withLock { $0.recognitionTask } }
+        set { stateMutex.withLock { $0.recognitionTask = newValue } }
+    }
 
     // MARK: - Publishers
 

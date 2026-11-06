@@ -44,7 +44,7 @@ final class WhisperEngineRequestTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: file) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
-        let engine = WhisperEngine(config: .init(endpoint: URL(string: "https://example.invalid/audio/transcriptions")!, apiKey: "test-key"), session: URLSession(configuration: configuration), storageLocations: testStorageLocations)
+        let engine = WhisperEngine(config: .init(endpoint: URL(string: "https://example.invalid/audio/transcriptions")!, apiKey: Credential(rawValue: "test-key")), session: URLSession(configuration: configuration), storageLocations: testStorageLocations)
         MockURLProtocol.status.withLock { $0 = 200 }
         let result = try await engine.transcribe(fileURL: file, language: Locale(identifier: "zh-Hans"))
         XCTAssertEqual(result, "几点开始？")
@@ -61,7 +61,7 @@ final class WhisperEngineRequestTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
         let engine = WhisperEngine(config: .init(endpoint: URL(string: "https://example.invalid/audio/transcriptions")!,
-                                                 apiKey: "test-key"), session: URLSession(configuration: configuration), storageLocations: testStorageLocations)
+                                                 apiKey: Credential(rawValue: "test-key")), session: URLSession(configuration: configuration), storageLocations: testStorageLocations)
         MockURLProtocol.status.withLock { $0 = 200 }
         let result = try await engine.transcribe(audioData: Data("synthetic-memory-fixture".utf8),
                                                 language: Locale(identifier: "zh-Hans"))

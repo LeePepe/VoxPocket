@@ -56,7 +56,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         let provider = AzureFoundryProvider(
             config: LLMProviderConfig(
                 providerType: .azureFoundry,
-                apiKey: "test-key",
+                apiKey: Credential(rawValue: "test-key"),
                 baseURL: URL(string: "https://example-resource.services.ai.azure.com")!,
                 modelIdentifier: "Kimi-K2.5",
                 options: ["azure.api_version": "2024-05-01-preview"]
@@ -93,7 +93,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         let provider = AzureFoundryProvider(
             config: LLMProviderConfig(
                 providerType: .azureFoundry,
-                apiKey: "test-key",
+                apiKey: Credential(rawValue: "test-key"),
                 baseURL: URL(string: "https://example-project.services.ai.azure.com/api/projects/example-project")!,
                 modelIdentifier: "gpt-4.1-mini",
                 options: ["azure.api_version": "2024-05-01-preview"]
@@ -129,7 +129,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         let provider = AzureFoundryProvider(
             config: LLMProviderConfig(
                 providerType: .azureFoundry,
-                apiKey: "test-key",
+                apiKey: Credential(rawValue: "test-key"),
                 baseURL: URL(string: "https://example-resource.services.ai.azure.com")!,
                 modelIdentifier: "Kimi-K2.5"
             ),
@@ -158,7 +158,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
             name: "kimi-prod",
             endpoint: URL(string: "https://example-resource.services.ai.azure.com")!,
             model: "Kimi-K2.5",
-            apiKey: "secret-123",
+            apiKey: Credential(rawValue: "secret-123"),
             apiVersion: "2024-05-01-preview",
             authMode: .bearer
         )
@@ -167,7 +167,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
         XCTAssertEqual(providerConfig.providerType, .azureFoundry)
         XCTAssertEqual(providerConfig.modelIdentifier, "Kimi-K2.5")
         XCTAssertEqual(providerConfig.baseURL?.absoluteString, "https://example-resource.services.ai.azure.com")
-        XCTAssertEqual(providerConfig.apiKey, "secret-123")
+        XCTAssertEqual(providerConfig.apiKey, Credential(rawValue: "secret-123"))
         XCTAssertEqual(providerConfig.options["azure.api_version"], "2024-05-01-preview")
         XCTAssertEqual(providerConfig.options["azure.auth_mode"], "bearer")
     }
@@ -191,7 +191,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
             }
             let deployment = AzureFoundryDeployment(
                 name: "test", endpoint: URL(string: "https://example.invalid" + suffix)!,
-                model: "custom-deployment", apiKey: "test-key", authMode: .apiKey,
+                model: "custom-deployment", apiKey: Credential(rawValue: "test-key"), authMode: .apiKey,
                 maxTokens: 512, apiStyle: .openAIV1, reasoningEffort: "none"
             )
             let output = try await AzureFoundryProvider(deployment: deployment, session: makeSession()).complete(prompt: "几点开始")
@@ -207,7 +207,7 @@ final class AzureFoundryProviderRequestTests: XCTestCase {
                 return (HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
             }
             let provider = AzureFoundryProvider(config: .init(
-                providerType: .azureFoundry, apiKey: "test-key", baseURL: URL(string: "https://example.invalid")!, modelIdentifier: "test"
+                providerType: .azureFoundry, apiKey: Credential(rawValue: "test-key"), baseURL: URL(string: "https://example.invalid")!, modelIdentifier: "test"
             ), session: makeSession())
             do {
                 _ = try await provider.complete(prompt: "fixture")

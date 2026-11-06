@@ -1,3 +1,4 @@
+import VoxCore
 import Foundation
 import Testing
 import Preferences
@@ -96,7 +97,7 @@ struct RealtimeTranscriberConfigurationTests {
     }
 
     @MainActor @Test func recordingChannelsOwnDifferentTextSnapshots() throws {
-        let config = LLMProviderConfig(providerType: .azureFoundry, apiKey: "fixture-key",
+        let config = LLMProviderConfig(providerType: .azureFoundry, apiKey: Credential(rawValue: "fixture-key"),
                                        baseURL: URL(string: "https://example.invalid"), modelIdentifier: "fixture-text")
         let channels = StageTextModelServices(azureConfig: config, settings: .init())
         #expect(channels.main !== channels.quick)
@@ -122,3 +123,4 @@ struct RealtimeTranscriberConfigurationTests {
         #expect(StageModelRouting.availability(environment: values).textModelName.isEmpty)
     }
 }
+import VoxRefine

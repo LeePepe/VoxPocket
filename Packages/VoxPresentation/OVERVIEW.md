@@ -6,10 +6,12 @@ Purpose
 Public products
 - `UIShared`
 - `PlatformUI`
+- `WidgetUI`
 
 Depends on
 - VoxDomain (`CoreModels`, `TextHistory`)
-- VoxInfrastructure (`LLMKit`, `TranscriptionKit`, `PlatformAdapters`)
+- VoxInfrastructure (`VoxKitBridge`, `PlatformAdapters`)
+- VoxKit (`VoxCore`, `VoxSpeech`, `VoxRefine`, `VoxLLM`)
 - VoxApplication (`UseCases`)
 
 Primary entry points

@@ -7,16 +7,26 @@ import Synchronization
 /// Apple Speech Framework 转录协调器
 ///
 /// 使用 `MicrophoneRecorder` 采集音频，`SFSpeechRecognizer` 实时识别文字。
-/// Combine 桥接沿用 unchecked Sendable；会话资格及身份由 Mutex 生命周期保护。
-public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable {
+public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable { // Sendable: Apple Speech (SFSpeechRecognizer/SFSpeechAudioBufferRecognitionRequest/SFSpeechRecognitionTask) callback boundary; all mutable state is guarded by stateMutex.
 
     // MARK: - Dependencies
 
     fileprivate let recorder: any AudioBufferSource
     fileprivate let speechRecognizerProvider: any SpeechRecognizing
     fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: (any SpeechRecognitionTasking)?
+    private struct State: @unchecked Sendable { // Sendable: Apple Speech request/task references are guarded by stateMutex; only framework-safe append/end/finish/cancel operations cross the callback boundary.
+        var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+        var recognitionTask: (any SpeechRecognitionTasking)?
+    }
+    private let stateMutex = Mutex(State())
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest? {
+        get { stateMutex.withLock { $0.recognitionRequest } }
+        set { stateMutex.withLock { $0.recognitionRequest = newValue } }
+    }
+    private var recognitionTask: (any SpeechRecognitionTasking)? {
+        get { stateMutex.withLock { $0.recognitionTask } }
+        set { stateMutex.withLock { $0.recognitionTask = newValue } }
+    }
 
     // MARK: - Publishers
 

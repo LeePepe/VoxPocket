@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,6 +42,8 @@ class RedlineCoverageTests(unittest.TestCase):
                 return []
 
             with patch.object(MODULE, "scan_rule", side_effect=record), \
+                    patch.object(MODULE, "check_sendable_invariants", return_value=[]), \
+                    patch.object(MODULE, "validate_manifest_and_resolved"), \
                     patch.object(MODULE.subprocess, "run") as run, \
                     patch.object(MODULE, "check_minimal_consumer", return_value=True):
                 run.return_value.returncode = 0
@@ -52,12 +55,58 @@ class RedlineCoverageTests(unittest.TestCase):
 
     def testDependencyClosureRejectsNestedTelemetryAndLocalPaths(self):
         def graph(url, dependencies=None):
-            return {"dependencies": [{"url": url, "dependencies": dependencies or []}]}
+            return {"dependencies": [{"identity": "swift-async-algorithms", "version": "1.1.7",
+                                      "url": url, "dependencies": dependencies or []}]}
 
-        MODULE.validate_dependencies(graph("https://example.invalid/sdk.git"))
+        approved = "https://github.com/apple/swift-async-algorithms"
+        MODULE.validate_dependencies(graph(approved))
         for url in ("https://example.invalid/shared-telemetry.git", "../example-sdk", "/example-sdk"):
             with self.subTest(url=url), self.assertRaises(ValueError):
-                MODULE.validate_dependencies(graph("https://example.invalid/sdk.git", graph(url)["dependencies"]))
+                MODULE.validate_dependencies(graph(approved, graph(url)["dependencies"]))
+
+    def testUnapprovedRemoteIsRejected(self):
+        with self.assertRaises(ValueError):
+            MODULE.validate_dependencies({"dependencies": [{"identity": "pkg", "url": "https://example.com/evil/pkg.git"}]})
+
+    def testResolvedRevisionAndManifestAreAllowlisted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, resolved = root / "Package.swift", root / "Package.resolved"
+            manifest.write_text("")
+            snapshot = {"pins": list(MODULE.APPROVED_DEPENDENCIES.values())}
+            resolved.write_text(json.dumps(snapshot))
+            MODULE.validate_manifest_and_resolved(root)
+            snapshot = json.loads(resolved.read_text())
+            snapshot["pins"][0]["state"]["revision"] = "0" * 40
+            resolved.write_text(json.dumps(snapshot))
+            with self.assertRaises(ValueError): MODULE.validate_manifest_and_resolved(root)
+            manifest.write_text('.package(url: "https://example.com/evil/pkg.git", from: "1.0.0")')
+            with self.assertRaisesRegex(ValueError, "manifest"): MODULE.validate_manifest_and_resolved(root)
+
+    def testSendableInlineRationaleAndBudget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "Sources/VoxSpeech").mkdir(parents=True)
+            (root / "scripts/redlines").mkdir(parents=True)
+            (root / "scripts/redlines/pre-migration-baseline.json").write_text(
+                '{"sendable_baseline":{"VoxSpeech":{"target_count_after_T110":1}}}')
+            source = root / "Sources/VoxSpeech/Boundary.swift"
+            for declaration in ("struct Boundary: @unchecked Sendable {}", "nonisolated(unsafe) let boundary = 0"):
+                for comment in ("", " // Sendable: Combine bridge", " // Sendable: Apple callback guarded by Mutex"):
+                    source.write_text("// Sendable: preceding comment\n" + declaration + comment)
+                    self.assertEqual(bool(MODULE.check_sendable_invariants(root)), "Mutex" not in comment)
+                source.write_text(source.read_text() * 2)
+                self.assertTrue(MODULE.check_sendable_invariants(root))
+
+    def testMinimalConsumerFailsClosedWhenIOSBuildFails(self):
+        success = MODULE.subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        failure = MODULE.subprocess.CompletedProcess([], 1, stdout="", stderr="synthetic iOS failure")
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.object(MODULE.subprocess, "run", side_effect=[success, success, failure]) as run, \
+                patch.object(MODULE.subprocess, "check_output", side_effect=[temporary, "/example-sdk"]):
+            self.assertFalse(MODULE.check_minimal_consumer(Path(temporary)))
+            command = run.call_args.args[0]
+            self.assertTrue(any("-apple-ios26.0-simulator" in argument for argument in command))
 
     def testDependencyResolutionFailureIsFailClosed(self):
         with patch.object(MODULE, "scan_rule", return_value=[]), \

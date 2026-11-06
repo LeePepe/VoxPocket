@@ -44,7 +44,7 @@ let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)]
             (sources / f"{name}.swift").symlink_to(root / f"VoxPocket/VoxPocket/{name}.swift")
         (tests / "GoldenRoutingTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/GoldenRoutingTests.swift")
         (tests / "golden_b_macos.json").symlink_to(root / "scripts/tests/golden/golden_b_macos.json")
-        subprocess.run(["swift", "test", "--package-path", str(package)], check=True, timeout=300)
+        subprocess.run(["swift", "test", "--package-path", str(package), "--explicit-target-dependency-import-check", "error"], check=True, timeout=300)
     run_realtime_harness()
 
 

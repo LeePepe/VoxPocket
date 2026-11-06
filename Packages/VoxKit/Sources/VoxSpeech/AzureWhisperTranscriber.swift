@@ -7,7 +7,7 @@ import Synchronization
 ///
 /// 使用 `MicrophoneRecorder` 采集音频，录音结束后由 `WhisperEngine` 批量转录。
 /// 录音期间无实时文字结果；通过 RMS 静音检测实现自动停止。
-public final class AzureWhisperTranscriber: NSObject, @unchecked Sendable {
+public final class AzureWhisperTranscriber: NSObject, Sendable {
 
     // MARK: - Dependencies
 
@@ -22,12 +22,15 @@ public final class AzureWhisperTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - State
 
-    private let _isTranscribing = Mutex(false)
+    private struct State {
+        var isTranscribing = false
+        var recordingLocale = Locale(identifier: "zh-Hans")
+        var recordingStartTime: Date?
+        var silenceTask: Task<Void, Never>?
+    }
+    private let stateMutex = Mutex(State())
     private let temporaryAudioStore: TemporaryAudioStore
     private let logger: any VoxLogger
-    private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
-    private var recordingStartTime: Date?
-    private var silenceTask: Task<Void, Never>?
 
     // MARK: - Sub-services
 
@@ -73,18 +76,16 @@ extension AzureWhisperTranscriber: SessionDriving {
 
 
     public var isTranscribing: Bool {
-        _isTranscribing.withLock { $0 }
+        stateMutex.withLock { $0.isTranscribing }
     }
 
     public func start(language: Locale) async throws {
         logger.info("start()", fields: [.label("language", .source("locale"))])
 
-        if _isTranscribing.withLock({ $0 }) {
+        if isTranscribing {
             logger.warning("Already recording, stopping first")
             await stop()
         }
-
-        recordingLocale = language
 
         let silenceDuration = config.autoStopSilenceDuration
         let silenceThreshold = config.silenceThreshold
@@ -94,9 +95,17 @@ extension AzureWhisperTranscriber: SessionDriving {
 
         // 通过 audioLevelPublisher 监听音量做静音检测
         // 注意：此 Task 在 start() 返回后在后台运行
-        silenceTask?.cancel()
+        let previousTask = stateMutex.withLock { state in
+            let previousTask = state.silenceTask
+            state.silenceTask = nil
+            state.isTranscribing = true
+            state.recordingLocale = language
+            state.recordingStartTime = Date()
+            return previousTask
+        }
+        previousTask?.cancel()
         if silenceDuration > 0 {
-            silenceTask = Task { [weak self] in
+            let silenceTask = Task { [weak self] in
                 guard let self else { return }
                 var silentSince: Date? = nil
 
@@ -115,11 +124,15 @@ extension AzureWhisperTranscriber: SessionDriving {
                     }
                 }
             }
+            let retained = stateMutex.withLock { state in
+                guard state.isTranscribing else { return false }
+                state.silenceTask = silenceTask
+                return true
+            }
+            if !retained { silenceTask.cancel() }
         }
 
         captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
-        _isTranscribing.withLock { $0 = true }
-        recordingStartTime = Date()
         logger.info("Recording started")
     }
 
@@ -127,15 +140,19 @@ extension AzureWhisperTranscriber: SessionDriving {
         logger.info("stop() called")
         defer { sessionRelay.finish() }
 
-        silenceTask?.cancel()
-        silenceTask = nil
+        let snapshot = stateMutex.withLock { state in
+            let snapshot = (state.silenceTask, state.recordingStartTime, state.recordingLocale)
+            state.silenceTask = nil
+            state.recordingStartTime = nil
+            state.isTranscribing = false
+            return snapshot
+        }
+        snapshot.0?.cancel()
 
         let fileURL = recorder.stop()
         captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
-        _isTranscribing.withLock { $0 = false }
-
-        let duration = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
-        recordingStartTime = nil
+        let duration = snapshot.1.map { Date().timeIntervalSince($0) } ?? 0
+        let recordingLocale = snapshot.2
 
         guard let fileURL else {
             logger.warning("No audio file to transcribe")

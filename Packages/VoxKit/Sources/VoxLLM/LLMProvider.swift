@@ -15,7 +15,7 @@ public struct LLMProviderConfig: Sendable, Equatable {
     /// 提供者类型
     public let providerType: LLMProviderType
     /// API Key
-    public let apiKey: String?
+    public let apiKey: Credential?
     /// 基础 URL（用于自定义端点）
     public let baseURL: URL?
     /// 模型标识符
@@ -25,7 +25,7 @@ public struct LLMProviderConfig: Sendable, Equatable {
 
     public init(
         providerType: LLMProviderType,
-        apiKey: String? = nil,
+        apiKey: Credential? = nil,
         baseURL: URL? = nil,
         modelIdentifier: String,
         options: [String: String] = [:]

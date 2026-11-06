@@ -44,7 +44,7 @@ final class GoldenRoutingTests: XCTestCase {
         XCTAssertEqual(coordinator is HybridWhisperTranscriber, speech != .appleSpeech)
         let azure = LLMAppConfig.refinementAPIKey(environment: environment).flatMap { key in
             LLMAppConfig.azureEndpoint(environment: environment).map { endpoint in
-                LLMProviderConfig(providerType: .azureFoundry, apiKey: key, baseURL: endpoint,
+                LLMProviderConfig(providerType: .azureFoundry, apiKey: Credential(rawValue: key), baseURL: endpoint,
                                   modelIdentifier: LLMAppConfig.azureModelIdentifier(environment: environment))
             }
         }

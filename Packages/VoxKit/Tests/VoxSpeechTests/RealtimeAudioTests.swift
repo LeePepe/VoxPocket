@@ -100,6 +100,6 @@ final class RealtimeAudioTests: XCTestCase {
     }
 
     private func config() throws -> AzureRealtimeTranscriptionConfig {
-        try .init(endpoint: URL(string: "https://example.invalid")!, apiKey: "synthetic", deployment: "live")
+        try .init(endpoint: URL(string: "https://example.invalid")!, apiKey: Credential(rawValue: "synthetic"), deployment: "live")
     }
 }

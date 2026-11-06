@@ -1,6 +1,6 @@
 # VoxPocket Context Index
 
-Last-Reviewed: 2026-11-05
+Last-Reviewed: 2026-11-06
 
 这是仓库的快速入口。先看这里，再按需下钻。
 
@@ -12,6 +12,7 @@ Last-Reviewed: 2026-11-05
 - Xcode project source: `VoxPocket/project.yml` (XcodeGen)
 - Build and delivery policy: `AGENTS.md` → Red lines (TestFlight-only delivery); release mechanics: `docs/testflight-release.md`
 - Runtime architecture notes (flows, providers, env vars, telemetry): `docs/architecture/runtime-notes.md`
+- Current package ownership and dependency graph: `docs/architecture/voxkit-phase2.md`
 - Verification entry: `scripts/verify` (see `docs/local-gates.md`)
 - Private runtime model configuration: `docs/architecture/private-model-config.md`
 
@@ -19,11 +20,11 @@ Last-Reviewed: 2026-11-05
 
 - `VoxPresentation`: `UIShared`, `PlatformUI`
 - `VoxApplication`: `UseCases`
-- `VoxInfrastructure`: `TranscriptionKit`, `LLMKit`, `Persistence`, `PlatformAdapters`, `Preferences`
+- `VoxInfrastructure`: `VoxKitBridge`, `Persistence`, `PlatformAdapters`, `Preferences`
 - `LokiKit`: 独立日志与遥测包
 - `VoxDomain`: `CoreModels`, `TextHistory`
 - `VoxKit`: standalone SDK (`VoxCore`, `VoxSpeech`, `VoxSpeechWhisperKit`, `VoxRefine`,
-  `VoxLLM`, `VoxWorkflow`, `VoxWorkflowWhisperKit`); Phase 1–3 staged under `Packages/VoxKit`
+  `VoxLLM`); Phase 2 modules under `Packages/VoxKit`; workflow products follow in Phase 3
 
 ## Common Paths
 

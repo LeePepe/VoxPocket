@@ -181,7 +181,7 @@ final class QuickRecordingReleaseControlTests: XCTestCase {
     func testProductionRealtimeCancellationAwaitsTransportCloseBeforeReturning() async throws {
         let transport = QuickRecordingClosingTransport()
         let config = try AzureRealtimeTranscriptionConfig(endpoint: URL(string: "https://example.invalid")!,
-                                                          apiKey: "fixture", deployment: "live")
+                                                          apiKey: Credential(rawValue: "fixture"), deployment: "live")
         let session = DefaultRealtimeTranscriptionSession(config: config, transport: transport, onPartial: { _ in })
         let pipeline = RealtimeAudioPipeline(session: session)
         let done = Mutex(false)

@@ -112,7 +112,7 @@ final class SpeechGoldenTraceTests: XCTestCase {
         let pipeline = GoldenRealtime(calls: calls, minimumAudio: !["silenceSkip", "quickDiscard"].contains(scenario),
                                       fails: scenario == "realtimeFallback")
         let config = try AzureRealtimeTranscriptionConfig(endpoint: XCTUnwrap(URL(string: "https://example.invalid")),
-                                                          apiKey: "fixture-key", deployment: "example-live")
+                                                          apiKey: Credential(rawValue: "fixture-key"), deployment: "example-live")
         let logger = GoldenLogger()
         let realtimeEnabled = ["realtimeSuccess", "realtimeFallback", "silenceSkip", "quickDiscard"].contains(scenario)
         let transcriber = AsyncTestCoordinator.wrap(HybridWhisperTranscriber(recorder: recorder, speechRecognizer: recognizer,
