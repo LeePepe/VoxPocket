@@ -1,8 +1,8 @@
 # VoxKit 拆分任务（依赖顺序）
 
-> **TK4 status (2026-11-07, PR-4a):** T407a, T408, T409, and T410 are complete on
-> `feat/voxkit-p4a-remote-adopt`; T407b, T407c, and GATE-4 remain pending until PR-4c.
-> VoxKit consumers use remote exact `0.1.0` from `LeePepe/VoxKit`.
+> **TK4 status (2026-11-07, PR-4c):** T407a, T407b, T407c, T408, T409, T410,
+> and GATE-4 are complete across the staged PR-4 slices. VoxKit consumers use remote
+> exact `0.1.0` from `LeePepe/VoxKit`.
 >
 > **TK3-2 status (2026-11-06):** T101–T312 are complete on the Phase 3 implementation
 > branch. This includes the App Group workflow bridge, application runner migration,
@@ -90,12 +90,12 @@
 | T405 ✅ | VoxKit | ruleset（分支 + tag 保护，Q6：`tags-immutable` = update/deletion/non_fast_forward、无任何 bypass；`tags-create` = creation、仅 Owner bypass）old→new 给 Owner，批准后设置并回读（断言两者 bypass 列表） | T404 ✅ | US6-AC3, US6-AC7 |
 | T406 ✅ | VoxKit | tag `0.1.0`（Q6）+ release notes；外部消费者 exact 版本验证（macOS + iOS Simulator） | T405 ✅ | US6-AC4, US2-AC1 |
 | T407a ✅ | VoxPocket（E2） | PR-4a：所有 manifest + `project.yml` + harness 切到远程 exact；移除重复顶层 VoxKit 包/产品声明；删除 `Packages/VoxKit/{tech-context.md,scripts,Examples}` 与 `Tests/GoldenTraceTests/**`，并移除其 manifest test target | T406 ✅ | US6-AC5 |
-| T407b | VoxPocket（E2） | PR-4b：删除 `Packages/VoxKit/Tests/{VoxSpeechTests,VoxWorkflowTests,VoxLLMTests,VoxSpeechWhisperKitTests,CanaryTests}` 与 `Sources/{VoxWorkflow,VoxWorkflowWhisperKit}` | T407a ✅ | US6-AC5 |
-| T407c | VoxPocket（E2） | PR-4c：删除剩余 `Packages/VoxKit/{Package.swift,Sources,Tests}` 与临时 tech-context support entry | T407b |
+| T407b ✅ | VoxPocket（E2） | PR-4b：删除 `Packages/VoxKit/Tests/{VoxSpeechTests,VoxWorkflowTests,VoxLLMTests,VoxSpeechWhisperKitTests,CanaryTests}` 与 `Sources/{VoxWorkflow,VoxWorkflowWhisperKit}` | T407a ✅ | US6-AC5 |
+| T407c ✅ | VoxPocket（E2） | PR-4c：删除剩余 `Packages/VoxKit/{Package.swift,Sources,Tests}` 与临时 tech-context support entry | T407b ✅ | US6-AC5 |
 | T408 ✅ | VoxPocket | `.gitignore` 放行并提交 4 个 `Package.resolved` | T407a ✅ | US6-AC5 |
 | T409 ✅ | VoxPocket | CI 删 VoxKit lane 与 SDK red lines；golden drift 检查改为对比 pin 版本 tag 中的副本；ruleset 映射文件 | T408 ✅ | US6-AC5 |
 | T410 ✅ | VoxPocket | `check_frontmatter.py` 外部化；宪法/tech-context/AGENTS Dependencies 段与本地覆盖说明 | T409 ✅ | US7-AC1, US7-AC2 |
-| GATE-4 | — | 全部既有测试 + App 侧 golden (b) 通过，且 T407c 已完成 | T410 ✅, T407c |
+| GATE-4 ✅ | — | 全部既有测试 + App 侧 golden (b) 通过，且 T407c 已完成 | T410 ✅, T407c ✅ | US6-AC5 |
 | T411 | VoxPocket | 合并后 ruleset apply（Owner 批准）；revert 演练分支 CI 绿后关闭 | GATE-4 ✅ | US6-AC6 |
 
 ## 关键路径
