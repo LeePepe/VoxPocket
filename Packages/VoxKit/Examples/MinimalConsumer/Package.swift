@@ -12,6 +12,7 @@ let package = Package(
             .product(name: "VoxSpeech", package: "VoxKit"),
             .product(name: "VoxRefine", package: "VoxKit"),
             .product(name: "VoxLLM", package: "VoxKit"),
+            .product(name: "VoxWorkflow", package: "VoxKit"),
         ])
     ],
     swiftLanguageModes: [.v6]

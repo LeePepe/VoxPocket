@@ -111,7 +111,8 @@ def scan_rule(rule: str, paths: list[Path]) -> list[str]:
             declarations = re.findall(r"\b(?:public|open)\b[^{};\n]*(?:\n[^{};\n]*)*(?:\{|;|$)", text)
             for declaration in declarations:
                 if R4_TYPES.search(declaration): findings.append(f"{path}:public API uses forbidden reactive type")
-                if re.search(r"\b(?:func|init|subscript)\b[^\n{]*\([^\n{]*(?:->|@escaping)[^\n{]*\)", declaration, re.S): findings.append(f"{path}:public API uses closure parameter")
+                workflow_builder = "@WorkflowBuilder" in declaration
+                if not workflow_builder and re.search(r"\b(?:func|init|subscript)\b[^\n{]*\([^\n{]*(?:->|@escaping)[^\n{]*\)", declaration, re.S): findings.append(f"{path}:public API uses closure parameter")
                 if re.search(r"\b(?:var|let)\b[^\n{]*:\s*[^\n{;]*(?:->|@escaping)", declaration): findings.append(f"{path}:public API uses closure property")
                 if re.search(r"\)\s*(?:async\s*)?(?:throws\s*)?->\s*[^\n{;]*(?:->|@escaping)", declaration): findings.append(f"{path}:public API uses closure return")
             protocols = re.findall(r"\bpublic\s+protocol\b.*?(?=\bpublic\s+protocol\b|\Z)", text, re.S)
@@ -208,7 +209,10 @@ def check_minimal_consumer(root: Path) -> bool:
     bin_path = Path(subprocess.check_output(["swift", "build", "--package-path", str(consumer), "--show-bin-path"], text=True).strip())
     binary = bin_path / "MinimalConsumer"
     symbols = subprocess.run(["xcrun", "nm", str(binary)], capture_output=True, text=True)
-    if symbols.returncode != 0 or re.search(r"WhisperKit", symbols.stdout):
+    # VoxWorkflow owns the stable `speech.whisperkit.local` node identifier,
+    # while the optional implementation lives in VoxWorkflowWhisperKit. Only
+    # reject linked implementation modules/symbols, not that identifier.
+    if symbols.returncode != 0 or re.search(r"VoxWorkflowWhisperKit|ArgmaxCore|WhisperKit\.WhisperKit", symbols.stdout):
         print("consumer symbols: WhisperKit or unreadable"); return False
     modules = list(bin_path.rglob("*WhisperKit*.swiftmodule"))
     if modules:

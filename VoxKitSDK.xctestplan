@@ -63,6 +63,22 @@
         "identifier": "VoxKitBridgeTests",
         "name": "VoxKitBridgeTests"
       }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxKit",
+        "identifier": "VoxWorkflowTests",
+        "name": "VoxWorkflowTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Packages/VoxKit",
+        "identifier": "CanaryTests",
+        "name": "CanaryTests"
+      }
     }
   ],
   "version": 1

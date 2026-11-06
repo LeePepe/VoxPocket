@@ -1,10 +1,17 @@
 import VoxCore
+import VoxWorkflow
 @testable import VoxSpeech
 @testable import VoxSpeechWhisperKit
 import Foundation
 import XCTest
 
 final class SpeechGoldenTraceTests: XCTestCase {
+    func testWorkflowPresetSpeechParity() throws {
+        let registry = NodeRegistry()
+        try Preset.default.speech.validate(using: registry)
+        XCTAssertTrue(Preset.default.exportedPipeline().realtime)
+    }
+
     @MainActor func testAllSpeechAdaptersUseInjectedAuthorizationAndAvailability() async throws {
         for allowed in [false, true] {
             for available in [false, true] {

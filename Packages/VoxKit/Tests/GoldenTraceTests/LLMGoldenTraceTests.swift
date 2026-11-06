@@ -1,11 +1,19 @@
 import VoxCore
 import VoxLLM
 import VoxRefine
+import VoxWorkflow
 import Foundation
 import Synchronization
 import XCTest
 
 final class LLMGoldenTraceTests: XCTestCase {
+    func testWorkflowPresetRefineParity() throws {
+        try Preset.default.refine.validate(using: NodeRegistry())
+        let snapshot = Preset.default.exportedPipeline()
+        XCTAssertEqual(snapshot.analysis.count, 5)
+        XCTAssertEqual(snapshot.refine, "azureFoundry")
+    }
+
     func testAnalysisAndMergerGolden() async throws {
         var traces: [[String: Any]] = []
         for routing in ["skip", "allApple", "allAzure", "intentApple_toneAzure", "intentAzure_toneApple"] {

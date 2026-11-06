@@ -8,9 +8,9 @@ red_lines: ["R1 SDK has no environment, file, configuration, defaults, bundle, o
 roles:
   Types: [VoxCore, VoxRefine]
   Config: [VoxStorageLocations, LocalWhisperKitConfig]
-  Service: [VoxSpeech, VoxSpeechWhisperKit, VoxLLM]
+  Service: [VoxSpeech, VoxSpeechWhisperKit, VoxLLM, VoxWorkflow, VoxWorkflowWhisperKit]
 test: swift test --package-path Packages/VoxKit --explicit-target-dependency-import-check error
-targets: [VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxCoreTests, VoxSpeechTests, VoxSpeechWhisperKitTests, VoxRefineTests, VoxLLMTests, GoldenTraceTests]
+targets: [VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow, VoxWorkflowWhisperKit, VoxCoreTests, VoxSpeechTests, VoxSpeechWhisperKitTests, VoxRefineTests, VoxLLMTests, VoxWorkflowTests, CanaryTests, GoldenTraceTests]
 Last-Reviewed: 2026-11-06
 ---
 
@@ -27,9 +27,11 @@ The package must remain independent from VoxDomain, LokiKit, shared-telemetry, a
 - `VoxSpeechWhisperKit`: isolated local-model adapters; depends on VoxCore, VoxSpeech and WhisperKit.
 - `VoxRefine`: refinement requests, responses, analysis values and prompt building; depends only on VoxCore.
 - `VoxLLM`: Apple Intelligence/Azure providers and refinement services; depends on VoxCore, VoxRefine and AsyncAlgorithms.
+- `VoxWorkflow`: validated workflow definitions, layered async execution, DSL and provider presets; depends on the phase-2 SDK modules.
+- `VoxWorkflowWhisperKit`: local WhisperKit workflow presets and model-loading-preserving source adapters; depends on VoxWorkflow and VoxSpeechWhisperKit.
 
 SDK tests follow the tested module. Golden traces (a) and (c), their injected async probes
 and both fixtures live in `Tests/GoldenTraceTests`; App routing (b) and Combine/Loki mapping remain host-owned.
-`Examples/MinimalConsumer` links the four non-WhisperKit products on macOS/iOS; redline checks
+`Examples/MinimalConsumer` links the workflow API and the four non-WhisperKit products on macOS/iOS; redline checks
 build it and inspect its linked symbols/modules. R1–R4 cover all SDK sources, R5 also covers
 tests and examples, and the typed logging fixtures compile for macOS and iOS Simulator.
