@@ -1,23 +1,18 @@
-import VoxCore
-import Combine
 import Foundation
 import Synchronization
+import VoxCore
 
-/// Combine 桥接需要 unchecked Sendable；所有跨任务状态和订阅由 Mutex 保护。
-/// 每次 start 读取一次选择，录音/收尾期间固定同一引擎，订阅方无需重新绑定。
-public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoordinator,
-    AudioCaptureService, SpeechRecognitionService, QuickRecordingReleaseControlling, @unchecked Sendable {
-    /// Combine 的取消令牌桥接；数组不可变，只允许取消，不暴露非 Sendable 令牌。
-    private final class Subscriptions: @unchecked Sendable {
-        private let values: [AnyCancellable]
-        init(_ values: [AnyCancellable]) { self.values = values }
+public final class DefaultSelectableTranscriptionCoordinator: SessionDriving, QuickRecordingReleaseControlling {
+    private struct Subscriptions: Sendable {
+        let values: [Task<Void, Never>]
         func cancel() { values.forEach { $0.cancel() } }
     }
     private struct State {
         enum Phase { case idle, prepared, starting, recording, stopping }
         var phase: Phase = .idle
         var id = UUID()
-        var active: (any TranscriptionCoordinator)?
+        var active: (any SpeechSessionSource)?
+        var session: (any SpeechSession)?
         var startup: Task<Void, Error>?
         var subscriptions: Subscriptions?
         var isQuick = false
@@ -27,31 +22,27 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
         var muted = false
     }
     private let stateLock = Mutex(State())
-    private let factory: @Sendable () async throws -> any TranscriptionCoordinator
-    private let permissions: any TranscriptionCoordinator
-    private let live = PassthroughSubject<TranscriptionResult, Error>()
-    private let final = PassthroughSubject<TranscriptionResult, Error>()
-    private let levels = CurrentValueSubject<Float, Never>(0)
-    private let capture = CurrentValueSubject<AudioCaptureState, Never>(.idle)
+    private let factory: any SpeechSessionFactory
+    private let permissions: any SpeechSessionSource
+    let sessionRelay = SpeechSessionRelay()
+    private let levels = AsyncValueRelay<Float>(0)
+    private let capture = AsyncValueRelay<AudioCaptureState>(.idle)
 
-    public init(permissionCoordinator: any TranscriptionCoordinator,
-                factory: @escaping @Sendable () async throws -> any TranscriptionCoordinator) {
+    public init(permissionCoordinator: any SpeechSessionSource,
+                factory: any SpeechSessionFactory) {
         permissions = permissionCoordinator
         self.factory = factory
     }
 
-    public var audioCaptureService: any AudioCaptureService { self }
-    public var speechRecognitionService: any SpeechRecognitionService { self }
-    public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> { live.eraseToAnyPublisher() }
-    public var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> { final.eraseToAnyPublisher() }
-    public var audioLevelPublisher: AnyPublisher<Float, Never> { levels.eraseToAnyPublisher() }
-    public var statePublisher: AnyPublisher<AudioCaptureState, Never> { capture.eraseToAnyPublisher() }
-    public var state: AudioCaptureState { capture.value }
-    public var resultPublisher: AnyPublisher<TranscriptionResult, Error> { liveResultPublisher }
-    public var providerType: ASRProviderType { .custom }
-    public var supportedLanguages: [Locale] { permissions.speechRecognitionService.supportedLanguages }
-    public var hasPermission: Bool { permissions.audioCaptureService.hasPermission }
-    public var isTranscribing: Bool { stateLock.withLock { $0.phase == .recording } }
+    public var providerKind: ASRProviderType { .custom }
+    public var supportedLanguages: [Locale] { permissions.supportedLanguages }
+    public var hasMicrophonePermission: Bool { permissions.hasMicrophonePermission }
+    public var hasSpeechPermission: Bool { permissions.hasSpeechPermission }
+    public var isActive: Bool { stateLock.withLock { $0.phase == .recording } }
+    public func captureStates() -> AsyncStream<AudioCaptureState> { capture.stream() }
+    public func audioLevels() -> AsyncStream<Float> { levels.stream() }
+    public func requestMicrophonePermission() async -> Bool { await permissions.requestMicrophonePermission() }
+    public func requestSpeechPermission() async -> Bool { await permissions.requestSpeechPermission() }
 
     public func start(language: Locale) async throws {
         let prepared = try stateLock.withLock { state in
@@ -75,15 +66,13 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
     }
 
     private func startSession(id: UUID, language: Locale) async throws {
-        var coordinator: (any TranscriptionCoordinator)?
         do {
-            let chosen = try await factory()
-            coordinator = chosen
+            let chosen = try await factory.makeSource()
             try Task.checkCancellation()
             try attach(chosen, id: id)
-            let subscriptions = bind(chosen, id: id)
-            stateLock.withLock { $0.subscriptions = subscriptions }
-            try await chosen.start(language: language)
+            let session = try await chosen.startSession(language: language)
+            let subscriptions = bind(chosen, session: session, id: id)
+            stateLock.withLock { $0.subscriptions = subscriptions; $0.session = session }
             try Task.checkCancellation()
             stateLock.withLock {
                 guard $0.id == id else { return }
@@ -93,14 +82,14 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
             if stateLock.withLock({ $0.id == id && $0.isQuick }) {
                 await failQuickStartup(id: id)
             } else {
-                await coordinator?.stop()
+                await stateLock.withLock { $0.session }?.cancel()
                 clear(id)
             }
             throw error
         }
     }
 
-    private func attach(_ chosen: any TranscriptionCoordinator, id: UUID) throws {
+    private func attach(_ chosen: any SpeechSessionSource, id: UUID) throws {
         try stateLock.withLock { state in
             guard state.id == id, state.phase == .starting,
                   state.release?.hasRecognizedSpeech != false else { throw CancellationError() }
@@ -116,7 +105,7 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
 
     private func failQuickStartup(id: UUID) async {
         defer { clear(id) }
-        let active = stateLock.withLock { state -> (any TranscriptionCoordinator)? in
+        let active = stateLock.withLock { state -> (any SpeechSessionSource)? in
             guard state.id == id else { return nil }
             state.startup = nil; state.phase = .stopping; state.muted = true
             return state.active
@@ -177,7 +166,7 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
     }
 
     public func stop() async {
-        let snapshot = stateLock.withLock { state -> (Task<Void, Error>?, (any TranscriptionCoordinator)?, UUID) in
+        let snapshot = stateLock.withLock { state -> (Task<Void, Error>?, (any SpeechSessionSource)?, UUID) in
             switch state.phase {
             case .starting: return (state.startup, nil, state.id)
             case .recording:
@@ -190,61 +179,61 @@ public final class DefaultSelectableTranscriptionCoordinator: TranscriptionCoord
             startup.cancel()
             _ = await startup.result
             // start 可能恰好先完成；停止这一代，不能影响清理后新开的录音。
-            let active = stateLock.withLock { state -> (any TranscriptionCoordinator)? in
+            let active = stateLock.withLock { state -> (any SpeechSessionSource)? in
                 guard state.id == snapshot.2, state.phase == .recording else { return nil }
                 state.phase = .stopping
                 return state.active
             }
-            if let active { await active.stop(); clear(snapshot.2, keepResults: true) }
-        } else if let active = snapshot.1 {
-            await active.stop()
+            if active != nil { await stateLock.withLock { $0.session }?.stop(); clear(snapshot.2, keepResults: true) }
+        } else if snapshot.1 != nil {
+            await stateLock.withLock { $0.session }?.stop()
             clear(snapshot.2, keepResults: true)
         }
     }
 
-    public func pause() { stateLock.withLock { $0.active }?.pause() }
-    public func resume() { stateLock.withLock { $0.active }?.resume() }
-    public func pauseCapture() { pause() }
-    public func resumeCapture() { resume() }
-    public func startCapture() async throws {}
-    public func stopCapture() async { await stop() }
-    public func startRecognition(language: Locale) async throws {}
-    public func stopRecognition() async { await stop() }
-    public func checkAvailability() async -> Bool { true }
-    public func requestPermission() async -> Bool {
-        guard await permissions.audioCaptureService.requestPermission() else { return false }
-        return await permissions.speechRecognitionService.requestPermission()
-    }
+    public func pause() async { await stateLock.withLock { $0.session }?.pause() }
+    public func resume() async { await stateLock.withLock { $0.session }?.resume() }
 
     private func isCurrent(_ id: UUID) -> Bool {
         // Apple Speech.stop 返回后才可能发出终稿；保留这一代直到下一次 start。
         stateLock.withLock { $0.id == id && $0.active != nil && !$0.muted }
     }
 
-    private func bind(_ chosen: any TranscriptionCoordinator, id: UUID) -> Subscriptions {
-        let failed: @Sendable (Subscribers.Completion<Error>) -> Void = { [weak self] completion in
-            guard let self, self.isCurrent(id), case .failure = completion else { return }
-            // 错误经捕获状态传播；不能终结跨录音复用的 publisher，也不回显供应商正文。
-            self.capture.send(.error("语音识别失败，请重试。"))
-        }
-        return Subscriptions([
-            chosen.liveResultPublisher.sink(receiveCompletion: failed) { [weak self] value in
-                guard let self, self.isCurrent(id) else { return }; self.live.send(value)
+    private func bind(_ chosen: any SpeechSessionSource, session: any SpeechSession, id: UUID) -> Subscriptions {
+        let states = chosen.captureStates()
+        let audio = chosen.audioLevels()
+        let events = session.events()
+        return Subscriptions(values: [
+            Task { [weak self] in
+                do {
+                    for try await event in events {
+                        guard let self, self.isCurrent(id), !Task.isCancelled else { continue }
+                        if case .level = event { continue }
+                        self.sessionRelay.send(event)
+                    }
+                } catch {
+                    guard let self, self.isCurrent(id) else { return }
+                    self.capture.send(.error("语音识别失败，请重试。"))
+                    self.sessionRelay.finish(throwing: error)
+                }
             },
-            chosen.finalResultPublisher.sink(receiveCompletion: failed) { [weak self] value in
-                guard let self, self.isCurrent(id) else { return }; self.final.send(value)
+            Task { [weak self] in
+                for await state in states {
+                    guard let self, self.isCurrent(id), !Task.isCancelled else { continue }
+                    self.capture.send(state)
+                }
             },
-            chosen.audioLevelPublisher.sink { [weak self] value in
-                guard let self, self.isCurrent(id) else { return }; self.levels.send(value)
-            },
-            chosen.audioCaptureService.statePublisher.sink { [weak self] value in
-                guard let self, self.isCurrent(id) else { return }; self.capture.send(value)
+            Task { [weak self] in
+                for await level in audio {
+                    guard let self, self.isCurrent(id), !Task.isCancelled else { continue }
+                    self.levels.send(level)
+                }
             }
         ])
     }
 
     private func clear(_ id: UUID, keepResults: Bool = false) {
-        let result = stateLock.withLock { state -> (Bool, Subscriptions?, (any TranscriptionCoordinator)?) in
+        let result = stateLock.withLock { state -> (Bool, Subscriptions?, (any SpeechSessionSource)?) in
             guard state.id == id else { return (false, nil, nil) }
             state.phase = .idle; state.startup = nil; state.isQuick = false
             state.release = nil; state.sourceRelease = nil; state.releaseClaimed = false

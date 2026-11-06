@@ -47,7 +47,7 @@ protocol SessionDriving: SpeechSessionSource {
 }
 
 extension SessionDriving {
-    var finishesRelayOnStopReturn: Bool { true }
+    var finishesRelayOnStopReturn: Bool { false }
     func captureDeviceStates() -> AsyncStream<AudioCaptureState> { captureStates() }
     func interruptCapture() async {
         await stop()

@@ -28,6 +28,7 @@ let package = Package(
                 .product(name: "CoreModels", package: "VoxDomain"),
                 .product(name: "TextHistory", package: "VoxDomain"),
                 .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+                .product(name: "TranscriptionKitCombine", package: "VoxInfrastructure"),
                 .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "LLMKit", package: "VoxInfrastructure"),

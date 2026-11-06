@@ -95,7 +95,7 @@ struct BenchmarkExecution: Sendable {
         do {
             let apple = try await group.usesApple ? AppleBenchmarkAdapter(onDevice: group == .appleOnDevice) : nil
             let config = try await group.usesCloud ? BenchmarkCloudConfiguration.load() : nil
-            let cloud = config.map { WhisperEngine(config: $0.speech, session: Self.session(), logger: SilentBenchmarkLogger()) }
+            let cloud = config.map { WhisperEngine(config: $0.speech, session: Self.session(), logger: SilentBenchmarkLogger(), storageLocations: testStorageLocations) }
             let llm = try group.isHybrid ? config.map { try BenchmarkLLMService(config: $0.refinement.providerConfig) } : nil
             let localStart = benchmarkNow()
             let local = try await localEngine(folder)
@@ -198,6 +198,6 @@ struct BenchmarkExecution: Sendable {
         return URLSession(configuration: config)
     }
 }
-#endif
 
 private let testStorageLocations = VoxStorageLocations(temporaryAudio: FileManager.default.temporaryDirectory, modelCache: FileManager.default.temporaryDirectory)
+#endif

@@ -1,6 +1,5 @@
 import VoxCore
 import AVFoundation
-import Combine
 import Foundation
 import Speech
 
@@ -31,9 +30,7 @@ protocol MicrophoneAuthorizationProviding: Sendable {
 struct SystemMicrophoneAuthorizationProvider: MicrophoneAuthorizationProviding, Sendable {
     func requestMicrophoneAccess() async -> Bool {
         #if os(iOS)
-        await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { continuation.resume(returning: $0) }
-        }
+        await AVAudioApplication.requestRecordPermission()
         #else
         await AVCaptureDevice.requestAccess(for: .audio)
         #endif
@@ -41,7 +38,7 @@ struct SystemMicrophoneAuthorizationProvider: MicrophoneAuthorizationProviding, 
 
     var hasMicrophoneAccess: Bool {
         #if os(iOS)
-        AVAudioSession.sharedInstance().recordPermission == .granted
+        AVAudioApplication.shared.recordPermission == .granted
         #else
         AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         #endif
@@ -49,8 +46,8 @@ struct SystemMicrophoneAuthorizationProvider: MicrophoneAuthorizationProviding, 
 }
 
 protocol AudioBufferSource: AnyObject, Sendable {
-    var audioLevelPublisher: AnyPublisher<Float, Never> { get }
-    var statePublisher: AnyPublisher<AudioCaptureState, Never> { get }
+    func audioLevels() -> AsyncStream<Float>
+    func captureStates() -> AsyncStream<AudioCaptureState>
     var state: AudioCaptureState { get }
     func requestPermission() async -> Bool
     var hasPermission: Bool { get }
@@ -87,6 +84,7 @@ protocol SpeechRecognizing: AnyObject, Sendable {
                          handler: @escaping @Sendable (RecognitionUpdate) -> Void) throws -> any SpeechRecognitionTasking
 }
 
+// Sendable: Apple Speech task cancellation/finish are thread-safe boundary operations.
 final class SystemSpeechRecognitionTask: SpeechRecognitionTasking, @unchecked Sendable {
     private let task: SFSpeechRecognitionTask
     init(_ task: SFSpeechRecognitionTask) { self.task = task }
@@ -94,6 +92,7 @@ final class SystemSpeechRecognitionTask: SpeechRecognitionTasking, @unchecked Se
     func cancel() { task.cancel() }
 }
 
+// Sendable: the immutable Apple recognizer is used only through framework callback APIs.
 final class SystemSpeechRecognizer: SpeechRecognizing, @unchecked Sendable {
     private let recognizer: SFSpeechRecognizer?
     init(locale: Locale) { recognizer = SFSpeechRecognizer(locale: locale) }

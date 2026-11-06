@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Foundation
 import Testing
 @testable import VoxPocket
@@ -67,23 +69,57 @@ struct TranscriberSelectionTests {
         let main = ServiceContainer.makeTranscriber(environment: cloudEnvironment)
         let quick = ServiceContainer.makeQuickTranscriber(environment: cloudEnvironment)
         #if os(macOS)
-        #expect(main is DefaultSelectableTranscriptionCoordinator)
-        #expect(quick is DefaultSelectableTranscriptionCoordinator)
+        #expect(main.core is DefaultSelectableTranscriptionCoordinator)
+        #expect(quick.core is DefaultSelectableTranscriptionCoordinator)
         #else
-        #expect(main is HybridWhisperTranscriber)
-        #expect(quick is HybridWhisperTranscriber)
+        #expect(main.core is HybridWhisperTranscriber)
+        #expect(quick.core is HybridWhisperTranscriber)
         #endif
         #expect((main as AnyObject) !== (quick as AnyObject))
-        #expect((quick as? HybridWhisperTranscriber)?.merger == nil)
+        #expect((quick.core as? HybridWhisperTranscriber)?.merger == nil)
     }
 
     @MainActor @Test func missingCloudConfigurationKeepsRecordingAvailableLocally() {
         #if os(macOS)
-        #expect(ServiceContainer.makeTranscriber(environment: [:]) is DefaultSelectableTranscriptionCoordinator)
+        #expect(ServiceContainer.makeTranscriber(environment: [:]).core is DefaultSelectableTranscriptionCoordinator)
         #expect(StageModelRouting.resolvedSpeechModel(settings: .init(), environment: [:]) == .appleSpeech)
         #else
-        #expect(ServiceContainer.makeTranscriber(environment: [:]) is AppleSpeechTranscriber)
+        #expect(ServiceContainer.makeTranscriber(environment: [:]).core is AppleSpeechTranscriber)
         #endif
+    }
+
+    @MainActor @Test func hybridLocalReceivesMergerInBothStacksAndCloudDoesNot() throws {
+        let merger = LLMTranscriptionMerger(llmService: DefaultLLMService())
+        let main = ServiceContainer.makeTranscriber(preloadOnStart: false, environment: [:],
+            provider: .hybridLocalWhisper, merger: merger)
+        let quick = ServiceContainer.makeQuickTranscriber(environment: [:], provider: .hybridLocalWhisper, merger: merger)
+        let mainCore = try #require(main.core as? HybridLocalWhisperTranscriber)
+        let quickCore = try #require(quick.core as? HybridLocalWhisperTranscriber)
+        #expect(mainCore.merger != nil)
+        #expect(quickCore.merger != nil)
+        let cloud = ServiceContainer.makeTranscriber(environment: cloudEnvironment, provider: .hybridWhisper, merger: merger)
+        #if os(iOS)
+        let cloudCore = try #require(cloud.core as? HybridWhisperTranscriber)
+        #expect(cloudCore.merger == nil)
+        #else
+        #expect(cloud.core is DefaultSelectableTranscriptionCoordinator)
+        let cloudCore = try #require(ServiceContainer.makeIOSHybridTranscriber(environment: cloudEnvironment).core as? HybridWhisperTranscriber)
+        #expect(cloudCore.merger == nil)
+        #endif
+    }
+
+    @MainActor @Test func sandboxStorageLocationsMatchAllThreeHostProperties() {
+        let manager = FileManager.default
+        let support = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let caches = manager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let locations = SDKHostConfiguration.storageLocations()
+        #expect(locations.temporaryAudio == support.appendingPathComponent("VoxPocket/TemporaryAudio", isDirectory: true))
+        #expect(locations.modelCache == caches.appendingPathComponent("VoxPocketWhisperKitHub", isDirectory: true))
+        var expected = [caches.appendingPathComponent("huggingface/hub/models--argmaxinc--whisperkit-coreml", isDirectory: true)]
+        #if os(macOS)
+        expected.append(manager.homeDirectoryForCurrentUser.appendingPathComponent(".cache/huggingface/hub/models--argmaxinc--whisperkit-coreml", isDirectory: true))
+        #endif
+        #expect(locations.modelCacheCleanupCandidates == expected)
     }
 
     private var cloudEnvironment: [String: String] {

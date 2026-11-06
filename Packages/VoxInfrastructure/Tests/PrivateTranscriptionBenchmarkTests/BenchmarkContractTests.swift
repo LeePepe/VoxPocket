@@ -130,6 +130,6 @@ final class BenchmarkContractTests: XCTestCase {
         return URL(fileURLWithPath: String(cString: resolved)).appendingPathComponent(UUID().uuidString)
     }
 }
-#endif
 
 private let testStorageLocations = VoxStorageLocations(temporaryAudio: FileManager.default.temporaryDirectory, modelCache: FileManager.default.temporaryDirectory)
+#endif

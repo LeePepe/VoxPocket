@@ -1,8 +1,6 @@
-import VoxCore
 import AVFoundation
-import Combine
 import Foundation
-import LokiKit
+import VoxCore
 import Synchronization
 
 /// Azure OpenAI Whisper 转录协调器（纯批量模式）
@@ -19,34 +17,34 @@ public final class AzureWhisperTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Publishers
 
-    private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
+    let sessionRelay = SpeechSessionRelay()
+    fileprivate let captureStateSubject = AsyncValueRelay<AudioCaptureState>(.idle)
 
     // MARK: - State
 
     private let _isTranscribing = Mutex(false)
-    private let logger: Logger
+    private let temporaryAudioStore: TemporaryAudioStore
+    private let logger: any VoxLogger
     private var recordingLocale: Locale = Locale(identifier: "zh-Hans")
     private var recordingStartTime: Date?
     private var silenceTask: Task<Void, Never>?
 
     // MARK: - Sub-services
 
-    private lazy var _audioCaptureService: WhisperAudioCapture = WhisperAudioCapture(transcriber: self)
-    private lazy var _speechRecognitionService: WhisperSpeechRecognition = WhisperSpeechRecognition(transcriber: self)
 
     // MARK: - Init
 
     public init(
         config: AzureWhisperConfig,
-        logger: Logger = PrintLogger(subsystem: "AzureWhisperTranscriber"),
-        session: URLSession = .shared
+        logger: any VoxLogger = NoopVoxLogger(),
+        session: URLSession = .shared,
+        storageLocations: VoxStorageLocations
     ) {
+        self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
         self.config = config
-        self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "AzureWhisperTranscriber.Mic"))
+        self.recorder = MicrophoneRecorder(logger: logger, storageLocations: storageLocations)
         self.whisperEngine = WhisperEngine(config: config, session: session,
-                                           logger: PrintLogger(subsystem: "WhisperEngine"))
+                                           logger: logger, storageLocations: storageLocations)
         self.logger = logger
         super.init()
     }
@@ -54,29 +52,32 @@ public final class AzureWhisperTranscriber: NSObject, @unchecked Sendable {
 
 // MARK: - TranscriptionCoordinator
 
-extension AzureWhisperTranscriber: TranscriptionCoordinator {
+extension AzureWhisperTranscriber: SessionDriving {
 
-    public var audioCaptureService: AudioCaptureService { _audioCaptureService }
-    public var speechRecognitionService: SpeechRecognitionService { _speechRecognitionService }
 
-    public var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        finalResultSubject.eraseToAnyPublisher()
+    public var providerKind: ASRProviderType { .whisper }
+    public var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
+    public var isActive: Bool { isTranscribing }
+    public var hasMicrophonePermission: Bool { recorder.hasPermission }
+    public var hasSpeechPermission: Bool { true }
+    public func requestMicrophonePermission() async -> Bool { await recorder.requestPermission() }
+    public func requestSpeechPermission() async -> Bool { true }
+    public func captureStates() -> AsyncStream<AudioCaptureState> { captureStateSubject.stream() }
+    public func audioLevels() -> AsyncStream<Float> { recorder.audioLevels() }
+    func captureDeviceStates() -> AsyncStream<AudioCaptureState> { recorder.captureStates() }
+    func interruptCapture() async {
+        await stop()
+        captureStateSubject.send(.interrupted)
+        sessionRelay.send(.state(.interrupted))
     }
 
-    public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        liveResultSubject.eraseToAnyPublisher()
-    }
-
-    public var audioLevelPublisher: AnyPublisher<Float, Never> {
-        recorder.audioLevelPublisher
-    }
 
     public var isTranscribing: Bool {
         _isTranscribing.withLock { $0 }
     }
 
     public func start(language: Locale) async throws {
-        logger.info("start() language: \(language.identifier)")
+        logger.info("start()", fields: [.label("language", .source("locale"))])
 
         if _isTranscribing.withLock({ $0 }) {
             logger.warning("Already recording, stopping first")
@@ -89,11 +90,7 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
         let silenceThreshold = config.silenceThreshold
 
         // 录音中监听音量，实现静音自动停止
-        try await recorder.start { [weak self] _ in
-            guard let self, silenceDuration > 0 else { return }
-            let level = self.recorder.audioLevelPublisher  // 仅触发，实际值已通过 audioLevelPublisher 发布
-            _ = level  // 静音检测移到 audioLevelPublisher 订阅中
-        }
+        try await recorder.start(bufferHandler: nil)
 
         // 通过 audioLevelPublisher 监听音量做静音检测
         // 注意：此 Task 在 start() 返回后在后台运行
@@ -103,7 +100,7 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
                 guard let self else { return }
                 var silentSince: Date? = nil
 
-                for await level in self.recorder.audioLevelPublisher.values {
+                for await level in self.recorder.audioLevels() {
                     guard !Task.isCancelled else { return }
                     if level > silenceThreshold {
                         silentSince = nil
@@ -111,7 +108,7 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
                         let now = Date()
                         let start = silentSince ?? { silentSince = now; return now }()
                         if now.timeIntervalSince(start) >= silenceDuration {
-                            self.logger.info("Auto-stop: silence \(silenceDuration)s")
+                            self.logger.info("Auto-stop: silence", fields: [.double("silence_seconds", silenceDuration)])
                             await self.stop()
                             return
                         }
@@ -120,7 +117,7 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
             }
         }
 
-        captureStateSubject.send(.recording)
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
         _isTranscribing.withLock { $0 = true }
         recordingStartTime = Date()
         logger.info("Recording started")
@@ -128,12 +125,13 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
 
     public func stop() async {
         logger.info("stop() called")
+        defer { sessionRelay.finish() }
 
         silenceTask?.cancel()
         silenceTask = nil
 
         let fileURL = recorder.stop()
-        captureStateSubject.send(.idle)
+        captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
         _isTranscribing.withLock { $0 = false }
 
         let duration = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
@@ -145,8 +143,8 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
         }
 
         guard duration >= 0.5 else {
-            logger.warning("Recording too short (\(String(format: "%.2f", duration))s), skipping Whisper")
-            try? FileManager.default.removeItem(at: fileURL)
+            logger.warning("Recording too short, skipping Whisper", fields: [.double("duration_seconds", duration)])
+            try? await Task.detached { [temporaryAudioStore] in try temporaryAudioStore.remove(fileURL) }.value
             return
         }
 
@@ -156,66 +154,23 @@ extension AzureWhisperTranscriber: TranscriptionCoordinator {
                 text: text, type: .final,
                 confidence: nil, timestamp: Date(), locale: recordingLocale
             )
-            liveResultSubject.send(result)
-            finalResultSubject.send(result)
+            sessionRelay.send(.partial(result))
+            sessionRelay.send(.final(result))
         } catch {
-            logger.error("Whisper error: \(error.localizedDescription)")
+            sessionRelay.finish(throwing: error)
+            logger.error("Whisper error")
         }
 
-        try? FileManager.default.removeItem(at: fileURL)
+        try? await Task.detached { [temporaryAudioStore] in try temporaryAudioStore.remove(fileURL) }.value
     }
 
     public func pause() {
         recorder.pause()
-        captureStateSubject.send(.paused)
+        captureStateSubject.send(.paused); sessionRelay.send(.state(.paused))
     }
 
     public func resume() {
         recorder.resume()
-        captureStateSubject.send(.recording)
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
     }
-}
-
-// MARK: - Internal AudioCaptureService
-
-private final class WhisperAudioCapture: AudioCaptureService, @unchecked Sendable {
-    private weak var transcriber: AzureWhisperTranscriber?
-    init(transcriber: AzureWhisperTranscriber) { self.transcriber = transcriber }
-
-    var state: AudioCaptureState { transcriber?.captureStateSubject.value ?? .idle }
-
-    var statePublisher: AnyPublisher<AudioCaptureState, Never> {
-        transcriber?.captureStateSubject.eraseToAnyPublisher() ?? Just(.idle).eraseToAnyPublisher()
-    }
-
-    var audioLevelPublisher: AnyPublisher<Float, Never> {
-        transcriber?.audioLevelPublisher ?? Just(0).eraseToAnyPublisher()
-    }
-
-    func startCapture() async throws {}
-    func stopCapture() async {}
-    func pauseCapture() { transcriber?.pause() }
-    func resumeCapture() { transcriber?.resume() }
-    func requestPermission() async -> Bool { await transcriber?.recorder.requestPermission() ?? false }
-    var hasPermission: Bool { transcriber?.recorder.hasPermission ?? false }
-}
-
-// MARK: - Internal SpeechRecognitionService
-
-private final class WhisperSpeechRecognition: SpeechRecognitionService, @unchecked Sendable {
-    private weak var transcriber: AzureWhisperTranscriber?
-    init(transcriber: AzureWhisperTranscriber) { self.transcriber = transcriber }
-
-    var providerType: ASRProviderType { .whisper }
-
-    var resultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        transcriber?.liveResultPublisher
-            ?? Fail(error: NSError(domain: "", code: -1)).eraseToAnyPublisher()
-    }
-
-    func startRecognition(language: Locale) async throws {}
-    func stopRecognition() async {}
-    func checkAvailability() async -> Bool { true }
-    func requestPermission() async -> Bool { true }
-    var supportedLanguages: [Locale] { Locale.availableIdentifiers.map { Locale(identifier: $0) } }
 }

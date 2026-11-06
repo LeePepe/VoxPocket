@@ -38,6 +38,10 @@
           { "context": "SPM VoxApplication" },
           { "context": "SPM VoxPresentation" },
           { "context": "SPM VoxUITesting" },
+          { "context": "SPM VoxKit" },
+          { "context": "iOS SDK" },
+          { "context": "App unit tests" },
+          { "context": "App unit tests (iOS)" },
           { "context": "App target" },
           { "context": "Lint & policy" }
         ]

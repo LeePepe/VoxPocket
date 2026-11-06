@@ -1,3 +1,4 @@
+import TranscriptionKitCombine
 import Foundation
 import Combine
 import TranscriptionKit

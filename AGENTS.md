@@ -4,8 +4,7 @@ Last-Reviewed: 2026-11-06
 
 VoxPocket is a SwiftUI voice recording and transcription app for macOS and iOS
 (default speech locale `zh-Hans`, text refinement with Apple Intelligence or a
-configured provider). Every agent that edits it follows the protocol below.
-Tool-specific files (CLAUDE.md etc.) only point here.
+configured provider). Every agent follows this protocol; tool-specific files (CLAUDE.md etc.) only point here.
 
 ## Read first
 
@@ -71,9 +70,7 @@ scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one 
 
 ## Required checks
 
-Merging to `main` requires (must match the live ruleset `main protection`, mirrored in
-`scripts/rulesets/main-protection.json`):
-
+`scripts/rulesets/main-protection.json` defines these target checks; the four new SDK/App checks await Owner-authorized apply:
 - `quality / aggregate`
 - `codex-review-target / codex-review`
 - `SPM VoxDomain`
@@ -81,6 +78,10 @@ Merging to `main` requires (must match the live ruleset `main protection`, mirro
 - `SPM VoxApplication`
 - `SPM VoxPresentation`
 - `SPM VoxUITesting`
+- `SPM VoxKit`
+- `iOS SDK`
+- `App unit tests`
+- `App unit tests (iOS)`
 - `App target`
 - `Lint & policy`
 

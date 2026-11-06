@@ -1,3 +1,4 @@
+import TranscriptionKitCombine
 import XCTest
 import Combine
 import Foundation

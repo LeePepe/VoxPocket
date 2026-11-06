@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Combine
 import Foundation
 import Synchronization
@@ -9,7 +11,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let probe = QuickRecordingEffectProbe()
         let source = QuickRecordingTestProvider.apple.make(probe)
         let selections = Mutex(0)
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) {
+        let router = makeSelectableCoordinator(permissionCoordinator: source) {
             selections.withLock { $0 += 1 }; return source
         }
         try router.prepareQuickRecording()
@@ -25,7 +27,7 @@ final class SelectableTranscriptionTests: XCTestCase {
     func testEligibleQuickAppleRetainsFinalAndOldRouterTokenCannotStopNextSession() async throws {
         let probe = QuickRecordingEffectProbe()
         let source = QuickRecordingTestProvider.apple.make(probe)
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        let router = makeSelectableCoordinator(permissionCoordinator: source) { source }
         let finals = Mutex(0)
         let subscription = router.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { _ in
             finals.withLock { $0 += 1 }
@@ -37,6 +39,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let old = try router.freezeQuickRecordingRelease()
         try await router.completeQuickRecordingRelease(old)
         probe.send("synthetic delayed final", type: .final)
+        await assertEventually { finals.withLock { $0 } == 1 }
         XCTAssertEqual(finals.withLock { $0 }, 1)
         try router.prepareQuickRecording()
         try await router.start(language: .current)
@@ -46,6 +49,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let next = try router.freezeQuickRecordingRelease()
         XCTAssertFalse(next.hasRecognizedSpeech)
         try await router.completeQuickRecordingRelease(next)
+        await assertEventually { finals.withLock { $0 } == 1 }
         XCTAssertEqual(finals.withLock { $0 }, 1)
     }
 
@@ -53,7 +57,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let gate = QuickRecordingEffectGate()
         let probe = QuickRecordingEffectProbe(cleanupGate: gate)
         let source = QuickRecordingTestProvider.apple.make(probe)
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        let router = makeSelectableCoordinator(permissionCoordinator: source) { source }
         try router.prepareQuickRecording()
         try await router.start(language: .current)
         let frozen = try router.freezeQuickRecordingRelease()
@@ -69,7 +73,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         for provider in QuickRecordingTestProvider.allCases {
             let probe = QuickRecordingEffectProbe(realtime: provider == .realtime)
             let source = provider.make(probe)
-            let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+            let router = makeSelectableCoordinator(permissionCoordinator: source) { source }
             let finals = Mutex(0)
             let subscription = router.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { _ in
                 finals.withLock { $0 += 1 }
@@ -92,7 +96,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let probe = QuickRecordingEffectProbe()
         let source = QuickRecordingTestProvider.apple.make(probe)
         let gate = FakeSelectionGate()
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) {
+        let router = makeSelectableCoordinator(permissionCoordinator: source) {
             await gate.wait(); return source
         }
         try router.prepareQuickRecording()
@@ -112,7 +116,7 @@ final class SelectableTranscriptionTests: XCTestCase {
     func testQuickEligibleDecisionCanBeExplicitlyDiscardedThroughRouter() async throws {
         let probe = QuickRecordingEffectProbe()
         let source = QuickRecordingTestProvider.apple.make(probe)
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        let router = makeSelectableCoordinator(permissionCoordinator: source) { source }
         try router.prepareQuickRecording()
         try await router.start(language: .current)
         probe.send("synthetic apple")
@@ -125,7 +129,7 @@ final class SelectableTranscriptionTests: XCTestCase {
 
     func testQuickUnsupportedSourceFailsWithoutStartingOrNormalStop() async throws {
         let source = FakeSelectableTranscriber()
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) { source }
+        let router = makeSelectableCoordinator(permissionCoordinator: source) { source }
         try router.prepareQuickRecording()
         do { try await router.start(language: .current); XCTFail("Expected unsupported capability") }
         catch { XCTAssertTrue(error is QuickRecordingReleaseError) }
@@ -139,7 +143,7 @@ final class SelectableTranscriptionTests: XCTestCase {
             let failed = QuickRecordingEffectProbe(startFails: true)
             let failedSource = provider.make(failed)
             let selection = Mutex<any TranscriptionCoordinator>(failedSource)
-            let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: failedSource) {
+            let router = makeSelectableCoordinator(permissionCoordinator: failedSource) {
                 selection.withLock { $0 }
             }
             try router.prepareQuickRecording()
@@ -168,7 +172,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let firstSelection = Mutex(true)
         let probe = QuickRecordingEffectProbe()
         let source = QuickRecordingTestProvider.batch.make(probe)
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: source) {
+        let router = makeSelectableCoordinator(permissionCoordinator: source) {
             let first = firstSelection.withLock { first in defer { first = false }; return first }
             if first {
                 await withTaskCancellationHandler { await gate.wait() } onCancel: { cancelled.fulfill() }
@@ -212,7 +216,7 @@ final class SelectableTranscriptionTests: XCTestCase {
 
     func testSystemSpeechFinalCanArriveAfterStopReturns() async throws {
         let fake = FakeSelectableTranscriber()
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: fake) { fake }
+        let router = makeSelectableCoordinator(permissionCoordinator: fake) { fake }
         let seen = Mutex<[String]>([])
         let subscription = router.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { value in
             seen.withLock { $0.append(value.text) }
@@ -222,6 +226,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         await router.stop()
         XCTAssertFalse(router.isTranscribing)
         fake.sendFinal("delayed system final")
+        await assertEventually { seen.withLock { $0 } == ["delayed system final"] }
         XCTAssertEqual(seen.withLock { $0 }, ["delayed system final"])
     }
 
@@ -229,7 +234,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let first = FakeSelectableTranscriber()
         let second = FakeSelectableTranscriber()
         let selection = Mutex<any TranscriptionCoordinator>(first)
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: first) { selection.withLock { $0 } }
+        let router = makeSelectableCoordinator(permissionCoordinator: first) { selection.withLock { $0 } }
         let received = Mutex<[String]>([])
         let finals = router.finalResultPublisher.sink(receiveCompletion: { _ in }, receiveValue: { value in
             received.withLock { $0.append(value.text) }
@@ -240,10 +245,12 @@ final class SelectableTranscriptionTests: XCTestCase {
         XCTAssertTrue(first.isTranscribing)
         XCTAssertFalse(second.isTranscribing)
         first.sendFinal("first")
+        await assertEventually { received.withLock { $0 } == ["first"] }
         await router.stop()
         try await router.start(language: .current)
         first.sendFinal("stale")
         second.sendFinal("second")
+        await assertEventually { received.withLock { $0 } == ["first", "second"] }
         XCTAssertEqual(received.withLock { $0 }, ["first", "second"])
         await router.stop()
         XCTAssertFalse(router.isTranscribing)
@@ -253,7 +260,7 @@ final class SelectableTranscriptionTests: XCTestCase {
         let fake = FakeSelectableTranscriber()
         let gate = FakeSelectionGate()
         let cancelled = expectation(description: "selection lookup cancelled")
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: fake) {
+        let router = makeSelectableCoordinator(permissionCoordinator: fake) {
             await withTaskCancellationHandler { await gate.wait() } onCancel: { cancelled.fulfill() }
             return fake
         }
@@ -273,18 +280,20 @@ final class SelectableTranscriptionTests: XCTestCase {
         let first = FakeSelectableTranscriber()
         let second = FakeSelectableTranscriber()
         let selection = Mutex<any TranscriptionCoordinator>(first)
-        let router = DefaultSelectableTranscriptionCoordinator(permissionCoordinator: first) { selection.withLock { $0 } }
+        let router = makeSelectableCoordinator(permissionCoordinator: first) { selection.withLock { $0 } }
         let seen = Mutex<[String]>([])
         let subscriber = router.liveResultPublisher.sink(receiveCompletion: { _ in XCTFail("Shared stream must remain usable") },
                                                         receiveValue: { value in seen.withLock { $0.append(value.text) } })
         defer { subscriber.cancel() }
         try await router.start(language: .current)
         first.fail()
-        XCTAssertEqual(router.state, .error("语音识别失败，请重试。"))
+        await assertEventually { router.audioCaptureService.state == .error("语音识别失败，请重试。") }
+        XCTAssertEqual(router.audioCaptureService.state, .error("语音识别失败，请重试。"))
         await router.stop()
         selection.withLock { $0 = second }
         try await router.start(language: .current)
         second.sendLive("next")
+        await assertEventually { seen.withLock { $0 } == ["next"] }
         XCTAssertEqual(seen.withLock { $0 }, ["next"])
         await router.stop()
     }

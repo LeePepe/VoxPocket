@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Combine
 import Foundation
 import XCTest
@@ -13,7 +15,7 @@ final class LoadingFallbackTranscriptionCoordinatorTests: XCTestCase {
             providerType: .apple,
             initialLoadingState: .ready
         )
-        let sut = LoadingFallbackTranscriptionCoordinator(primary: primary, fallback: fallback)
+        let sut = CombineTranscriptionCoordinator.wrap(LoadingFallbackTranscriptionCoordinator(primary: testSource(primary), fallback: testSource(fallback)))
 
         try await sut.start(language: Locale(identifier: "zh-Hans"))
 
@@ -33,7 +35,7 @@ final class LoadingFallbackTranscriptionCoordinatorTests: XCTestCase {
             providerType: .apple,
             initialLoadingState: .ready
         )
-        let sut = LoadingFallbackTranscriptionCoordinator(primary: primary, fallback: fallback)
+        let sut = CombineTranscriptionCoordinator.wrap(LoadingFallbackTranscriptionCoordinator(primary: testSource(primary), fallback: testSource(fallback)))
 
         try await sut.start(language: Locale(identifier: "zh-Hans"))
 

@@ -1,8 +1,6 @@
-import VoxCore
 import AVFoundation
-import Combine
 import Foundation
-import LokiKit
+import VoxCore
 import Speech
 
 /// Apple Speech + Azure Whisper 混合转录器
@@ -27,55 +25,59 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
 
     // MARK: - Publishers
 
-    private let liveResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    private let finalResultSubject = PassthroughSubject<TranscriptionResult, Error>()
-    fileprivate let captureStateSubject = CurrentValueSubject<AudioCaptureState, Never>(.idle)
+    let sessionRelay = SpeechSessionRelay()
+    fileprivate let captureStateSubject = AsyncValueRelay<AudioCaptureState>(.idle)
 
     // MARK: - State
 
-    private let logger: Logger
+    private let temporaryAudioStore: TemporaryAudioStore?
+    private let logger: any VoxLogger
     private let recording = HybridRecordingLifecycle()
     private let sessionEffects: QuickRecordingSessionEffects?
 
     // MARK: - 多识别器结果合并
 
-    /// 可选的 LLM 合并器；在 ServiceContainer 初始化阶段（单线程）设置，之后只读
-    public nonisolated(unsafe) var merger: (any TranscriptionMerger)?
+    /// 可选的 LLM 合并器；在构造时注入，之后不可变。
+    public let merger: (any TranscriptionMerger)?
 
     // MARK: - Sub-services
 
-    private lazy var _audioCaptureService: HybridAudioCapture = HybridAudioCapture(transcriber: self)
-    private lazy var _speechRecognitionService: HybridSpeechRecognition = HybridSpeechRecognition(transcriber: self)
 
     // MARK: - Init
 
     public init(
         whisperConfig: AzureWhisperConfig,
         realtimeConfig: AzureRealtimeTranscriptionConfig? = nil,
-        logger: Logger = PrintLogger(subsystem: "HybridWhisperTranscriber"),
-        session: URLSession = .shared
+        logger: any VoxLogger = NoopVoxLogger(),
+        session: URLSession = .shared,
+        merger: (any TranscriptionMerger)? = nil,
+        storageLocations: VoxStorageLocations
     ) {
-        self.recorder = MicrophoneRecorder(logger: PrintLogger(subsystem: "HybridWhisperTranscriber.Mic"))
+        self.recorder = MicrophoneRecorder(logger: logger, storageLocations: storageLocations)
+        self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
         self.whisperEngine = WhisperEngine(config: whisperConfig, session: session,
-                                           logger: PrintLogger(subsystem: "WhisperEngine"))
+                                           logger: logger, storageLocations: storageLocations)
         self.speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         self.speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         self.realtimeSessionMaker = DefaultRealtimeSessionMaker()
         self.logger = logger
         self.realtimeConfig = realtimeConfig
+        self.merger = merger
         self.sessionEffects = nil
         super.init()
     }
 
-    init(whisperConfig: AzureWhisperConfig, effects: QuickRecordingSessionEffects) {
-        recorder = MicrophoneRecorder()
-        whisperEngine = WhisperEngine(config: whisperConfig)
+    init(whisperConfig: AzureWhisperConfig, effects: QuickRecordingSessionEffects, merger: (any TranscriptionMerger)? = nil) {
+        recorder = SyntheticAudioBufferSource()
+        temporaryAudioStore = nil
+        whisperEngine = EffectOnlyBatchTranscriber()
         speechRecognizerProvider = SystemSpeechRecognizer(locale: Locale(identifier: "zh-Hans"))
         speechAuthorizationProvider = SystemSpeechAuthorizationProvider()
         realtimeSessionMaker = DefaultRealtimeSessionMaker()
         realtimeConfig = nil
-        logger = PrintLogger(subsystem: "HybridWhisperTranscriber")
+        logger = NoopVoxLogger()
         sessionEffects = effects
+        self.merger = merger
         super.init()
     }
 
@@ -85,7 +87,10 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
                   whisperEngine: any BatchTranscribing,
                   realtimeSessionMaker: any RealtimeSessionMaking,
                   realtimeConfig: AzureRealtimeTranscriptionConfig? = nil,
-                  logger: Logger = PrintLogger(subsystem: "HybridWhisperTranscriber")) {
+                  logger: any VoxLogger = NoopVoxLogger(),
+                  merger: (any TranscriptionMerger)? = nil,
+                  storageLocations: VoxStorageLocations) {
+        self.temporaryAudioStore = TemporaryAudioStore(storageLocations: storageLocations)
         self.recorder = recorder
         self.speechRecognizerProvider = speechRecognizer
         self.speechAuthorizationProvider = speechAuthorizationProvider
@@ -93,6 +98,7 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
         self.realtimeSessionMaker = realtimeSessionMaker
         self.realtimeConfig = realtimeConfig
         self.logger = logger
+        self.merger = merger
         self.sessionEffects = nil
         super.init()
     }
@@ -100,29 +106,33 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable {
 
 // MARK: - TranscriptionCoordinator
 
-extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
+extension HybridWhisperTranscriber: SpeechAvailabilityProviding, SessionDriving, MultiRecognizerSpeechSource {
 
-    public var audioCaptureService: AudioCaptureService { _audioCaptureService }
-    public var speechRecognitionService: SpeechRecognitionService { _speechRecognitionService }
 
-    public var finalResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        finalResultSubject.eraseToAnyPublisher()
+    public var isSpeechAvailable: Bool { hasSpeechPermission && speechRecognizerProvider.isAvailable }
+    public var providerKind: ASRProviderType { .whisper }
+    public var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }
+    public var isActive: Bool { isTranscribing }
+    public var hasMicrophonePermission: Bool { recorder.hasPermission }
+    public var hasSpeechPermission: Bool { speechAuthorizationProvider.speechAuthorizationStatus == .authorized }
+    public func requestMicrophonePermission() async -> Bool { await recorder.requestPermission() }
+    public func requestSpeechPermission() async -> Bool { await speechAuthorizationProvider.requestSpeechAuthorization() }
+    public func captureStates() -> AsyncStream<AudioCaptureState> { captureStateSubject.stream() }
+    public func audioLevels() -> AsyncStream<Float> { recorder.audioLevels() }
+    func captureDeviceStates() -> AsyncStream<AudioCaptureState> { recorder.captureStates() }
+    func interruptCapture() async {
+        await stop()
+        captureStateSubject.send(.interrupted)
+        sessionRelay.send(.state(.interrupted))
     }
 
-    public var liveResultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        liveResultSubject.eraseToAnyPublisher()
-    }
-
-    public var audioLevelPublisher: AnyPublisher<Float, Never> {
-        recorder.audioLevelPublisher
-    }
 
     public var isTranscribing: Bool {
         recording.isRecording
     }
 
     public func start(language: Locale) async throws {
-        logger.info("start() language: \(language.identifier)")
+        logger.info("start()", fields: [.label("language", .source("locale"))])
 
         let id = try recording.begin(locale: language)
         do {
@@ -131,7 +141,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                     self?.receiveAppleResult(result, id: id)
                 }
                 try recording.didStart(id)
-                captureStateSubject.send(.recording)
+                captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
             } else {
                 try await startRecording(language: language, id: id)
             }
@@ -169,12 +179,12 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             _ = recorder.stop()
             recognitionRequest = nil
             recognitionTask = nil
-            captureStateSubject.send(.idle)
+            captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
             throw error
         }
         await realtime.0?.start(language: language)
         try recording.didStart(id)
-        captureStateSubject.send(.recording)
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
         logger.info("Recording + Apple Speech started")
     }
 
@@ -193,8 +203,8 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
             self?.receiveCloudText(text, id: id, locale: language)
         }, onFallback: { [weak self] in
             guard let self, let text = self.recording.restoreApplePreview(id), !text.isEmpty else { return }
-            self.liveResultSubject.send(TranscriptionResult(text: text, type: .partial, confidence: nil,
-                                                           timestamp: Date(), locale: language))
+            self.sessionRelay.send(.partial(TranscriptionResult(text: text, type: .partial, confidence: nil,
+                                                           timestamp: Date(), locale: language)))
         })
         return (pipeline, { await pipeline.cancelQuickRecording() })
     }
@@ -208,17 +218,19 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                     confidence: update.confidence.map(Double.init), timestamp: Date(), locale: language), id: id)
             }
             if let recognitionError = update.error {
-                self.logger.error("Apple Speech failed, code=\((recognitionError as NSError).code)")
+                self.logger.error("Apple Speech failed", fields: [.int("error_code", (recognitionError as NSError).code)])
             }
         }
     }
 
     private func receiveAppleResult(_ result: TranscriptionResult, id: UUID) {
         guard recording.receiveApple(result.text, id: id) else { return }
-        liveResultSubject.send(result)
+        sessionRelay.send(.partial(result))
     }
 
     public func stop() async {
+        defer { sessionRelay.finish() }
+
         switch recording.requestStop() {
         case .none: return
         case .cancelStart(let session):
@@ -267,9 +279,10 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
                 text: finalText, type: .final,
                 confidence: nil, timestamp: Date(), locale: snapshot.locale
             )
-            if !useMerger { liveResultSubject.send(result) }
-            finalResultSubject.send(result)
+            if !useMerger { sessionRelay.send(.partial(result)) }
+            sessionRelay.send(.final(result))
         } catch {
+            sessionRelay.finish(throwing: error)
             logger.error("ASR finalization failed")
         }
 
@@ -283,7 +296,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         }
         return try await RealtimeASRFinalizer.resolve {
             let text = try await realtime.finish()
-            self.logger.info("ASR completed, actual_path=realtime, chars=\(text.count)")
+            self.logger.info("ASR completed", fields: [.label("path", .source("realtime")), .int("text_length", text.count)])
             return text
         } fallback: {
             self.logger.warning("Realtime ASR unavailable; actual_path=batch_fallback")
@@ -295,7 +308,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         if let sessionEffects {
             let url = await sessionEffects.stopCapture()
             sessionEffects.cancelApple()
-            captureStateSubject.send(.idle)
+            captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
             return url
         }
         return await MainActor.run { self.stopRecorder() }
@@ -311,17 +324,17 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
 
     private func removeAudio(_ file: URL?) async throws {
         if let sessionEffects { try await sessionEffects.removeAudio(file) }
-        else { await Self.removeAudio(file) }
+        else if let file, let store = temporaryAudioStore { try await Task.detached { try store.remove(file) }.value }
     }
 
     public func pause() {
         recorder.pause()
-        captureStateSubject.send(.paused)
+        captureStateSubject.send(.paused); sessionRelay.send(.state(.paused))
     }
 
     public func resume() {
         recorder.resume()
-        captureStateSubject.send(.recording)
+        captureStateSubject.send(.recording); sessionRelay.send(.state(.recording))
     }
 
     // MARK: - Private
@@ -329,13 +342,8 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
     func receiveCloudText(_ text: String, id: UUID, locale: Locale) {
         let active = recording.receiveCloud(text, id: id)
         guard active, !text.isEmpty else { return }
-        liveResultSubject.send(TranscriptionResult(text: text, type: .partial, confidence: nil,
-                                                   timestamp: Date(), locale: locale))
-    }
-
-    private static func removeAudio(_ url: URL?) async {
-        guard let url else { return }
-        await Task.detached { try? FileManager.default.removeItem(at: url) }.value
+        sessionRelay.send(.partial(TranscriptionResult(text: text, type: .partial, confidence: nil,
+                                                   timestamp: Date(), locale: locale)))
     }
 
     @discardableResult
@@ -344,7 +352,7 @@ extension HybridWhisperTranscriber: MultiRecognizerTranscriber {
         recognitionRequest = nil
         recognitionTask?.cancel()
         recognitionTask = nil
-        captureStateSubject.send(.idle)
+        captureStateSubject.send(.idle); sessionRelay.send(.state(.idle))
         return url
     }
 }
@@ -369,55 +377,4 @@ extension HybridWhisperTranscriber: QuickRecordingReleaseControlling {
             try await discardRecording(session)
         }
     }
-}
-
-// MARK: - Internal AudioCaptureService
-
-private final class HybridAudioCapture: AudioCaptureService, @unchecked Sendable {
-    private weak var transcriber: HybridWhisperTranscriber?
-    init(transcriber: HybridWhisperTranscriber) { self.transcriber = transcriber }
-
-    var state: AudioCaptureState { transcriber?.captureStateSubject.value ?? .idle }
-
-    var statePublisher: AnyPublisher<AudioCaptureState, Never> {
-        transcriber?.captureStateSubject.eraseToAnyPublisher() ?? Just(.idle).eraseToAnyPublisher()
-    }
-
-    var audioLevelPublisher: AnyPublisher<Float, Never> {
-        transcriber?.audioLevelPublisher ?? Just(0).eraseToAnyPublisher()
-    }
-
-    func startCapture() async throws {}
-    func stopCapture() async {}
-    func pauseCapture() { transcriber?.pause() }
-    func resumeCapture() { transcriber?.resume() }
-    func requestPermission() async -> Bool { await transcriber?.recorder.requestPermission() ?? false }
-    var hasPermission: Bool { transcriber?.recorder.hasPermission ?? false }
-}
-
-// MARK: - Internal SpeechRecognitionService
-
-private final class HybridSpeechRecognition: SpeechRecognitionService, @unchecked Sendable {
-    private weak var transcriber: HybridWhisperTranscriber?
-    init(transcriber: HybridWhisperTranscriber) { self.transcriber = transcriber }
-
-    var providerType: ASRProviderType { .whisper }
-
-    var resultPublisher: AnyPublisher<TranscriptionResult, Error> {
-        transcriber?.liveResultPublisher
-            ?? Fail(error: NSError(domain: "", code: -1)).eraseToAnyPublisher()
-    }
-
-    func startRecognition(language: Locale) async throws {}
-    func stopRecognition() async {}
-    func checkAvailability() async -> Bool {
-        transcriber?.speechAuthorizationProvider.speechAuthorizationStatus == .authorized
-            && transcriber?.speechRecognizerProvider.isAvailable == true
-    }
-
-    func requestPermission() async -> Bool {
-        await transcriber?.speechAuthorizationProvider.requestSpeechAuthorization() ?? false
-    }
-
-    var supportedLanguages: [Locale] { SFSpeechRecognizer.supportedLocales().map { $0 } }
 }

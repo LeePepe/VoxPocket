@@ -22,6 +22,7 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
     targets: [
         .target(name: "VoxPocket", dependencies: [
             .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
+            .product(name: "TranscriptionKitCombine", package: "VoxInfrastructure"),
             .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
             .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "LLMKit", package: "VoxInfrastructure"),

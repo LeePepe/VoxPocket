@@ -10,6 +10,9 @@ import SwiftUI
 import SwiftData
 import Combine
 import TranscriptionKit
+import TranscriptionKitCombine
+import VoxKitBridge
+import VoxCore
 import LLMKit
 import UseCases
 import CoreModels
@@ -30,6 +33,7 @@ import PlatformUI
 public final class ServiceContainer: ObservableObject {
     internal let preferencesStore: any PreferencesStore
     private let logger: Logger
+    private let sdk: SDKHostConfiguration
     private let persistenceStartup = AppPersistenceStartup()
     private var llmPreferencesBinding: LLMPreferenceBinding?
 
@@ -114,6 +118,10 @@ public final class ServiceContainer: ObservableObject {
         VoxPocketLogging.start(); logger = PrintLogger(subsystem: "ServiceContainer")
         let telemetryCoordinator = Self.makeTelemetryService()
         self.telemetryCoordinator = telemetryCoordinator; telemetryService = telemetryCoordinator
+        let sdk = SDKHostConfiguration(storageLocations: SDKHostConfiguration.storageLocations(),
+            logger: LokiVoxLogger(logger: logger), telemetry: LokiVoxTelemetry(service: telemetryCoordinator),
+            credentials: SDKHostConfiguration.credentials(environment: environment))
+        self.sdk = sdk
         let productTelemetry = ProductTelemetryAssembly.make(
             preferences: productTelemetryPreferences, environment: processEnvironment ?? ProcessInfo.processInfo.environment, arguments: processArguments,
             configuration: productTelemetryConfiguration, bootstrapFactory: productTelemetryBootstrapFactory,
@@ -122,17 +130,17 @@ public final class ServiceContainer: ObservableObject {
         self.productTelemetryPreferences = productTelemetry.preferences; productTelemetryInstrumentation = productTelemetry.instrumentation
         let azureConfig = Self.makeAzureFoundryConfig(environment: environment)
         #if os(macOS)
-        let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings)
+        let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings, logger: sdk.logger)
         let configuredLLM = textModels.main; let configuredQuickLLM = textModels.quick
         quickLLMService = configuredQuickLLM; llmService = configuredLLM
         #else
-        let configuredLLM = llmServiceFactory?() ?? DefaultLLMService(azureFoundryConfig: azureConfig)
+        let configuredLLM = llmServiceFactory?() ?? DefaultLLMService(logger: sdk.logger, azureFoundryConfig: azureConfig)
         llmService = configuredLLM
         #endif
         #if os(macOS)
-        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore) { configuredLLM.configure($0) }
+        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore, merger: LLMTranscriptionMerger(llmService: configuredLLM, logger: sdk.logger), sdk: sdk) { configuredLLM.configure($0) }
         #else
-        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore)
+        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore, merger: LLMTranscriptionMerger(llmService: configuredLLM, logger: sdk.logger), sdk: sdk)
         #endif
 #if os(macOS)
         clipboardService = MacOSClipboardService.shared; accessibilityService = MacOSAccessibilityService.shared
@@ -146,7 +154,7 @@ public final class ServiceContainer: ObservableObject {
             backing: InMemorySessionUseCase()) { await productTelemetryInstrumentation.sessionDidComplete() }
         deepLinkRouter = DefaultDeepLinkRouter()
 #if os(macOS)
-        quickTranscriber = Self.makeQuickTranscriber(environment: environment, preferences: preferencesStore) { configuredQuickLLM.configure($0) }; quickEditingUseCase = DefaultEditingUseCase()
+        quickTranscriber = Self.makeQuickTranscriber(environment: environment, preferences: preferencesStore, merger: LLMTranscriptionMerger(llmService: configuredLLM, logger: sdk.logger), sdk: sdk) { configuredQuickLLM.configure($0) }; quickEditingUseCase = DefaultEditingUseCase()
         quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService); quickTranscriptionUseCase = DefaultTranscriptionUseCase(coordinator: quickTranscriber, editing: quickEditingUseCase, telemetry: telemetryService); quickRefinementUseCase = DefaultRefinementUseCase(llmService: configuredQuickLLM, editing: quickEditingUseCase, telemetry: telemetryService)
         quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(editing: quickEditingUseCase, transcription: quickTranscriptionUseCase, refinement: quickRefinementUseCase)
 #endif
@@ -154,9 +162,8 @@ public final class ServiceContainer: ObservableObject {
     }
 
     private func finishInitialization(environment: [String: String], notificationCenter: NotificationCenter) {
-        injectMergerIfNeeded(into: transcriber)
         #if os(macOS)
-        injectMergerIfNeeded(into: quickTranscriber)
+        _ = notificationCenter
         #else
         llmPreferencesBinding = LLMPreferenceBinding(service: llmService, environment: environment,
                                                     preferences: preferencesStore, notificationCenter: notificationCenter,
@@ -167,104 +174,86 @@ public final class ServiceContainer: ObservableObject {
 
     private static func makePrimaryTranscriber(
         environment: [String: String], preferences: any PreferencesStore,
+        merger: (any TranscriptionMerger)?, sdk: SDKHostConfiguration,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
     ) -> (any TranscriptionCoordinator, (any ModelLoadingObservable)?) {
-        switch LLMAppConfig.defaultTranscriberProvider {
-        case .localWhisperKit:
-            let whisper = makeLocalWhisperTranscriber(preloadOnStart: true)
-            return (
-                LoadingFallbackTranscriptionCoordinator(
-                    primary: whisper,
-                    fallback: AppleSpeechTranscriber()
-                ),
-                whisper
-            )
-        case .hybridLocalWhisper:
-            let hybrid = makeHybridLocalWhisperTranscriber(preloadOnStart: true)
-            return (hybrid, hybrid)
-        default:
-            return (
-                makeTranscriber(preloadOnStart: true, environment: environment, preferences: preferences, beforeSession: beforeSession),
-                nil
-            )
+        let wrapped = makeTranscriber(environment: environment, preferences: preferences, merger: merger, sdk: sdk, beforeSession: beforeSession)
+        if let source = (wrapped.core as? any ModelLoadingStateProviding)
+            ?? (wrapped.core as? LoadingFallbackTranscriptionCoordinator)?.primaryModelLoadingSource {
+            return (wrapped, CombineModelLoadingObservable(source: source))
         }
+        return (wrapped, nil)
     }
 
     func waitForPendingLLMPreferenceChanges() async { await llmPreferencesBinding?.waitForPendingChanges() }
 
     static func makeTranscriber(
-        preloadOnStart: Bool = true,
-        environment: [String: String]? = nil,
+        preloadOnStart: Bool = true, environment: [String: String]? = nil,
         preferences: any PreferencesStore = UserDefaultsPreferencesStore.shared,
+        provider: TranscriberProvider = LLMAppConfig.defaultTranscriberProvider,
+        merger: (any TranscriptionMerger)? = nil, sdk: SDKHostConfiguration? = nil,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
-    ) -> any TranscriptionCoordinator {
+    ) -> CombineTranscriptionCoordinator {
         let environment = environment ?? LLMAppConfig.runtimeEnvironment
-        switch LLMAppConfig.defaultTranscriberProvider {
+        let sdk = sdk ?? SDKHostConfiguration(storageLocations: SDKHostConfiguration.storageLocations(),
+            logger: LokiVoxLogger(logger: PrintLogger(subsystem: "ServiceContainer")),
+            telemetry: NoopVoxTelemetry(), credentials: SDKHostConfiguration.credentials(environment: environment))
+        let core: any SpeechSessionSource
+        switch provider {
         case .localWhisperKit:
-            return LoadingFallbackTranscriptionCoordinator(
-                primary: makeLocalWhisperTranscriber(preloadOnStart: preloadOnStart),
-                fallback: AppleSpeechTranscriber()
-            )
+            core = LoadingFallbackTranscriptionCoordinator(
+                primary: WhisperKitTranscriber(config: LocalWhisperKitConfig(preloadOnStart: preloadOnStart),
+                    logger: sdk.logger, telemetry: sdk.telemetry, storageLocations: sdk.storageLocations),
+                fallback: AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations))
         case .hybridWhisper:
             #if os(macOS)
-            return StageModelRouting.makeTranscriber(environment: environment, preferences: preferences,
-                                                    beforeSession: beforeSession)
+            core = StageModelRouting.makeTranscriber(environment: environment, preferences: preferences, sdk: sdk,
+                                                     beforeSession: beforeSession)
             #else
-            return makeIOSHybridTranscriber(environment: environment)
+            core = makeIOSHybridSource(environment: environment, sdk: sdk)
             #endif
         case .azureWhisper:
             if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
-                return AzureWhisperTranscriber(config: config)
-            }
-            return AppleSpeechTranscriber()
+                core = AzureWhisperTranscriber(config: config, logger: sdk.logger, storageLocations: sdk.storageLocations)
+            } else { core = AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations) }
         case .hybridLocalWhisper:
-            return HybridLocalWhisperTranscriber(
-                config: LocalWhisperKitConfig(
-                    model: LocalWhisperKitConfig.platformDefaultModel,
-                    preloadOnStart: preloadOnStart
-                ),
-                storageLocations: SDKHostConfiguration.storageLocations()
-            )
+            core = makeHybridLocalWhisperTranscriber(preloadOnStart: preloadOnStart, merger: merger, sdk: sdk)
         case .appleSpeech:
-            return AppleSpeechTranscriber()
+            core = AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations)
         }
+        return CombineTranscriptionCoordinator.wrap(core)
     }
 
     static func makeQuickTranscriber(environment: [String: String]? = nil,
                                     preferences: any PreferencesStore = UserDefaultsPreferencesStore.shared,
-                                    beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil) -> any TranscriptionCoordinator {
-        makeTranscriber(preloadOnStart: true, environment: environment, preferences: preferences, beforeSession: beforeSession)
+                                    provider: TranscriberProvider = LLMAppConfig.defaultTranscriberProvider,
+                                    merger: (any TranscriptionMerger)? = nil, sdk: SDKHostConfiguration? = nil,
+                                    beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil) -> CombineTranscriptionCoordinator {
+        makeTranscriber(environment: environment, preferences: preferences, provider: provider,
+                        merger: merger, sdk: sdk, beforeSession: beforeSession)
     }
 
-    static func makeIOSHybridTranscriber(environment: [String: String]) -> any TranscriptionCoordinator {
+    static func makeIOSHybridTranscriber(environment: [String: String]) -> CombineTranscriptionCoordinator {
+        let sdk = SDKHostConfiguration(storageLocations: SDKHostConfiguration.storageLocations(),
+            logger: LokiVoxLogger(logger: PrintLogger(subsystem: "ServiceContainer")),
+            telemetry: NoopVoxTelemetry(), credentials: SDKHostConfiguration.credentials(environment: environment))
+        return CombineTranscriptionCoordinator.wrap(makeIOSHybridSource(environment: environment, sdk: sdk))
+    }
+
+    private static func makeIOSHybridSource(environment: [String: String], sdk: SDKHostConfiguration) -> any SpeechSessionSource {
         if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
-            return HybridWhisperTranscriber(
-                whisperConfig: config,
-                realtimeConfig: LLMAppConfig.realtimeTranscriptionConfig(environment: environment)
-            )
+            return HybridWhisperTranscriber(whisperConfig: config,
+                realtimeConfig: LLMAppConfig.realtimeTranscriptionConfig(environment: environment),
+                logger: sdk.logger, storageLocations: sdk.storageLocations)
         }
         PrintLogger(subsystem: "ServiceContainer").warning("Azure transcription configuration missing; actual_provider=appleSpeech")
-        return AppleSpeechTranscriber()
+        return AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations)
     }
 
-    private static func makeLocalWhisperTranscriber(preloadOnStart: Bool) -> WhisperKitTranscriber {
-        WhisperKitTranscriber(
-            config: LocalWhisperKitConfig(
-                model: LocalWhisperKitConfig.platformDefaultModel,
-                preloadOnStart: preloadOnStart
-            ),
-                storageLocations: SDKHostConfiguration.storageLocations()
-        )
-    }
-
-    private static func makeHybridLocalWhisperTranscriber(preloadOnStart: Bool) -> HybridLocalWhisperTranscriber {
-        HybridLocalWhisperTranscriber(
-            config: LocalWhisperKitConfig(
-                model: LocalWhisperKitConfig.platformDefaultModel,
-                preloadOnStart: preloadOnStart
-            ),
-                storageLocations: SDKHostConfiguration.storageLocations()
-        )
+    private static func makeHybridLocalWhisperTranscriber(preloadOnStart: Bool,
+        merger: (any TranscriptionMerger)?, sdk: SDKHostConfiguration) -> HybridLocalWhisperTranscriber {
+        HybridLocalWhisperTranscriber(config: LocalWhisperKitConfig(preloadOnStart: preloadOnStart),
+            logger: sdk.logger, merger: merger, storageLocations: sdk.storageLocations)
     }
 
     static func makeAzureFoundryConfig(environment: [String: String]) -> LLMProviderConfig? {
@@ -273,14 +262,6 @@ public final class ServiceContainer: ObservableObject {
             return LLMProviderConfig(providerType: .azureFoundry, modelIdentifier: LLMAppConfig.azureModelIdentifier(environment: environment))
         }
         return deployment.providerConfig
-    }
-
-    /// 若 transcriber 遵循 MultiRecognizerTranscriber，注入 LLM 合并器
-    private func injectMergerIfNeeded(into coordinator: any TranscriptionCoordinator) {
-        // 云端终稿已有标点，不为每次转写再强制追加 LLM 合并。
-        guard !(coordinator is HybridWhisperTranscriber) else { return }
-        guard var multiRecognizer = coordinator as? any MultiRecognizerTranscriber else { return }
-        multiRecognizer.merger = LLMTranscriptionMerger(llmService: llmService)
     }
 
     static func makeProviderConfig(

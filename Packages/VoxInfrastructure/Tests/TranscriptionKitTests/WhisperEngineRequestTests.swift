@@ -1,5 +1,7 @@
+import TranscriptionKitCombine
 import Foundation
 import Synchronization
+import VoxCore
 import XCTest
 @testable import TranscriptionKit
 
@@ -7,9 +9,10 @@ final class WhisperEngineRequestTests: XCTestCase {
     func testRecordingTemporaryFileIsInsideApplicationData() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let first = try MicrophoneRecorder.makeRecordingFileURL(applicationSupport: root)
-        let second = try MicrophoneRecorder.makeRecordingFileURL(applicationSupport: root)
-        XCTAssertEqual(first.deletingLastPathComponent(), root.appendingPathComponent("VoxPocket/TemporaryAudio", isDirectory: true))
+        let store = TemporaryAudioStore(storageLocations: VoxStorageLocations(temporaryAudio: root, modelCache: root))
+        let first = try store.makeRecordingFileURL()
+        let second = try store.makeRecordingFileURL()
+        XCTAssertEqual(first.deletingLastPathComponent().path, root.path)
         XCTAssertEqual(first.pathExtension, "wav")
         XCTAssertNotEqual(first, second)
         let directory = first.deletingLastPathComponent()
@@ -42,7 +45,7 @@ final class WhisperEngineRequestTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: file) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
-        let engine = WhisperEngine(config: .init(endpoint: URL(string: "https://example.invalid/audio/transcriptions")!, apiKey: "test-key"), session: URLSession(configuration: configuration))
+        let engine = WhisperEngine(config: .init(endpoint: URL(string: "https://example.invalid/audio/transcriptions")!, apiKey: "test-key"), session: URLSession(configuration: configuration), storageLocations: testStorageLocations)
         MockURLProtocol.status.withLock { $0 = 200 }
         let result = try await engine.transcribe(fileURL: file, language: Locale(identifier: "zh-Hans"))
         XCTAssertEqual(result, "几点开始？")
@@ -59,7 +62,7 @@ final class WhisperEngineRequestTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
         let engine = WhisperEngine(config: .init(endpoint: URL(string: "https://example.invalid/audio/transcriptions")!,
-                                                 apiKey: "test-key"), session: URLSession(configuration: configuration))
+                                                 apiKey: "test-key"), session: URLSession(configuration: configuration), storageLocations: testStorageLocations)
         MockURLProtocol.status.withLock { $0 = 200 }
         let result = try await engine.transcribe(audioData: Data("synthetic-memory-fixture".utf8),
                                                 language: Locale(identifier: "zh-Hans"))

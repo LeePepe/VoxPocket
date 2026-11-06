@@ -1,8 +1,10 @@
+import TranscriptionKitCombine
+import VoxCore
 import XCTest
 @testable import TranscriptionKit
 
 final class WhisperKitTranscriberCompileTests: XCTestCase {
     func testCanInstantiateWhisperKitTranscriber() {
-        _ = WhisperKitTranscriber(config: LocalWhisperKitConfig(preloadOnStart: false), storageLocations: testStorageLocations)
+        _ = CombineTranscriptionCoordinator.wrap(WhisperKitTranscriber(config: LocalWhisperKitConfig(preloadOnStart: false), storageLocations: testStorageLocations))
     }
 }

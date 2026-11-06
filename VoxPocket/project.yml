@@ -19,11 +19,11 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
 
 packages:
-  # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
   VoxKit:
     path: ../Packages/VoxKit
   VoxInfrastructure:
     path: ../Packages/VoxInfrastructure
+  # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
   VoxPresentation:
     path: ../Packages/VoxPresentation
   # 外部 UI 测试桥接包
@@ -54,6 +54,8 @@ targets:
     dependencies:
       - package: VoxKit
         product: VoxCore
+      - package: VoxInfrastructure
+        product: TranscriptionKitCombine
       - package: VoxInfrastructure
         product: VoxKitBridge
       - package: VoxPresentation

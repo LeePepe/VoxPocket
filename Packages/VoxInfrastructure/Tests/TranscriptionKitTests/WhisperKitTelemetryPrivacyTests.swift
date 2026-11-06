@@ -43,7 +43,7 @@ final class WhisperKitTelemetryPrivacyTests: XCTestCase {
 
     private func makeTranscriber(engine: any LocalWhisperEngine, telemetry: CanaryTelemetry, logger: CanaryLogger) -> WhisperKitTranscriber {
         WhisperKitTranscriber(config: .init(model: "synthetic-model", preloadOnStart: false), logger: logger,
-            recorder: MicrophoneRecorder(), telemetry: telemetry,
+            recorder: MicrophoneRecorder(logger: logger, storageLocations: testStorageLocations), telemetry: telemetry,
             permissionRequester: { true }, hasPermissionProvider: { true }, engineFactory: { _, _ in engine }, autoPreload: false)
     }
 }

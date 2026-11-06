@@ -1,3 +1,5 @@
+import TranscriptionKitCombine
+import VoxCore
 import Speech
 import XCTest
 @testable import TranscriptionKit

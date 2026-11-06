@@ -25,6 +25,7 @@ concurrency:
 
 env:
   VERIFY_MODE: ci
+  VOXKIT_IOS_DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.2
 
 jobs:
   quality:
@@ -37,7 +38,7 @@ jobs:
       contract-audit: true
       workflow-lint: true
 
-  # ---- REQUIRED: 5 SPM packages, one check per package ----
+  # ---- SPM packages, one check per package (new SDK gate awaits ruleset apply) ----
   spm:
     name: SPM ${{ matrix.package }}
     runs-on: macos-26
@@ -147,9 +148,65 @@ jobs:
       - name: iOS simulator build and test
         working-directory: repo
         run: scripts/ci/ios-simulator.sh
-      - name: App unit tests (iOS)
-        if: always()
-        run: echo "GoldenRoutingTests are executed by ios-simulator.sh"
+
+  # New SDK/App checks become required only after the post-merge ruleset apply.
+  ios-sdk:
+    name: iOS SDK
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: repo
+      - name: Select pinned Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+      - name: Inspect fixed simulator runtime
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices
+      - name: Verify iOS SDK
+        working-directory: repo
+        run: scripts/verify --ios-sdk
+
+  app-unit-tests:
+    name: App unit tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: repo
+      - name: Select pinned Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+      - name: Inspect fixed simulator runtime
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices
+      - name: Ensure xcodegen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Verify App unit tests
+        working-directory: repo
+        run: scripts/verify --app-unit-tests
+
+  app-unit-tests-ios:
+    name: App unit tests (iOS)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: repo
+      - name: Select pinned Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+      - name: Inspect fixed simulator runtime
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices
+      - name: Ensure xcodegen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Verify App unit tests (iOS)
+        working-directory: repo
+        run: scripts/verify --app-unit-tests-ios
 
   # ---- REQUIRED: lint + policy (same entry as the local hook) ----
   policy:
