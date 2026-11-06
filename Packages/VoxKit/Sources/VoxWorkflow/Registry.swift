@@ -12,19 +12,27 @@ public struct NodeSignature: Sendable, Equatable {
     public let inputTypes: [PortType]
     public let outputType: PortType
     public let defaultConcurrency: Int?
+    public let inputPorts: [String: PortType]
+    public let outputPorts: [String: PortType]
 
     public init(
         kind: NodeKindID,
         allowedEntries: Set<WorkflowEntry>,
         inputTypes: [PortType] = [],
         outputType: PortType,
-        defaultConcurrency: Int? = nil
+        defaultConcurrency: Int? = nil,
+        inputPorts: [String: PortType]? = nil,
+        outputPorts: [String: PortType]? = nil
     ) {
         self.kind = kind
         self.allowedEntries = allowedEntries
-        self.inputTypes = inputTypes
+        self.inputTypes = inputPorts.map { ports in ports.keys.sorted().compactMap { ports[$0] } } ?? inputTypes
         self.outputType = outputType
         self.defaultConcurrency = defaultConcurrency
+        self.inputPorts = inputPorts ?? Dictionary(uniqueKeysWithValues: inputTypes.enumerated().map {
+            ($0.offset == 0 ? "in" : "in\($0.offset)", $0.element)
+        })
+        self.outputPorts = outputPorts ?? ["out": outputType, outputType.rawValue: outputType]
     }
 }
 
@@ -103,7 +111,10 @@ public final class NodeRegistry: Sendable {
             .init(kind: .mergeLLM, allowedEntries: speech, inputTypes: [.text, .text], outputType: .text),
             .init(kind: .analyzeIntent, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
             .init(kind: .analyzeTone, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
-            .init(kind: .refinePrompt, allowedEntries: refine, inputTypes: [.text, .analysis], outputType: .prompt),
+            .init(kind: .analyzeEntities, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
+            .init(kind: .analyzeTags, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
+            .init(kind: .analyzeParams, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
+            .init(kind: .refinePrompt, allowedEntries: refine, inputTypes: [.text, .analysis, .analysis, .analysis, .analysis, .analysis], outputType: .prompt),
             .init(kind: .llmApple, allowedEntries: refine, inputTypes: [.prompt], outputType: .text),
             .init(kind: .llmAzure, allowedEntries: refine, inputTypes: [.prompt], outputType: .text),
             .init(kind: .outputText, allowedEntries: both, inputTypes: [.text], outputType: .text),
@@ -123,6 +134,10 @@ public final class NodeRegistry: Sendable {
         case .mergeLLM: return .node("merge.llm")
         case .analyzeIntent: return .node("analyze.intent")
         case .analyzeTone: return .node("analyze.tone")
+        case .analyzeEntities: return .node("analyze.entities")
+        case .analyzeTags: return .node("analyze.tags")
+        case .analyzeParams: return .node("analyze.params")
+        case .refineInput: return .node("refine.input")
         case .refinePrompt: return .node("refine.prompt")
         case .llmApple: return .node("llm.apple")
         case .llmAzure: return .node("llm.azure")
@@ -131,8 +146,6 @@ public final class NodeRegistry: Sendable {
         }
     }
 }
-
-private struct BuiltInWorkflowNodeHandler: WorkflowNodeHandler {}
 
 public extension WorkflowDefinition {
     func validate(using registry: NodeRegistry = .builtIn) throws {
@@ -152,6 +165,9 @@ public extension WorkflowDefinition {
             guard node.inputs.count == signature.inputTypes.count else {
                 throw WorkflowValidationError(code: .portTypeMismatch, nodeID: node.id)
             }
+            if let limit = node.concurrency ?? signature.defaultConcurrency, limit < 1 {
+                throw WorkflowValidationError(code: .portTypeMismatch, nodeID: node.id)
+            }
         }
 
         for node in nodes {
@@ -160,7 +176,7 @@ public extension WorkflowDefinition {
                 guard let producer = byID[input.nodeID], let producerSignature = registry.signature(for: producer.kind) else {
                     throw WorkflowValidationError(code: .danglingReference, nodeID: node.id)
                 }
-                guard producerSignature.outputType == signature.inputTypes[index] else {
+                guard producerSignature.outputPorts[input.port] == signature.inputTypes[index] else {
                     throw WorkflowValidationError(code: .portTypeMismatch, nodeID: node.id)
                 }
             }
@@ -177,8 +193,10 @@ public extension WorkflowDefinition {
         var indegree = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, 0) })
         var edges = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, [String]()) })
         for node in nodes {
-            for input in node.inputs where byID[input.nodeID] != nil {
-                edges[input.nodeID, default: []].append(node.id)
+            var dependencies = node.inputs.map(\.nodeID)
+            if case .fallback(let fallbackID) = node.onFailure { dependencies.append(fallbackID) }
+            for dependency in Set(dependencies) {
+                edges[dependency, default: []].append(node.id)
                 indegree[node.id, default: 0] += 1
             }
         }

@@ -6,10 +6,64 @@ import Foundation
 import XCTest
 
 final class SpeechGoldenTraceTests: XCTestCase {
-    func testWorkflowPresetSpeechParity() throws {
-        let registry = NodeRegistry()
-        try Preset.default.speech.validate(using: registry)
-        XCTAssertTrue(Preset.default.exportedPipeline().realtime)
+    @MainActor func testWorkflowPresetSpeechParity() async throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "golden_c_speech", withExtension: "json", subdirectory: "Fixtures"))
+        let fixture = try GoldenFixtureCodec.decode(Data(contentsOf: url))
+        let traces = try XCTUnwrap(fixture["traces"] as? [[String: Any]])
+        for scenario in ["normalRecognition", "realtimeSuccess", "realtimeFallback"] {
+            let expected = try XCTUnwrap(traces.first { $0["scenario"] as? String == scenario })
+            let calls = GoldenEvents()
+            let recorder = try GoldenAudioSource(calls: calls)
+            let recognizer = GoldenRecognizer(calls: calls)
+            let pipeline = GoldenRealtime(calls: calls, minimumAudio: true, fails: scenario == "realtimeFallback")
+            let source: any SpeechSessionSource
+            if scenario == "normalRecognition" {
+                source = AppleSpeechTranscriber(recorder: recorder, speechRecognizer: recognizer,
+                    speechAuthorizationProvider: GoldenSpeechAuthorization(allowed: true, calls: calls), storageLocations: testStorageLocations)
+                _ = await source.requestSpeechPermission()
+            } else {
+                let config = try AzureRealtimeTranscriptionConfig(endpoint: XCTUnwrap(URL(string: "https://example.invalid")),
+                    apiKey: Credential(rawValue: "fixture-key"), deployment: "example-live")
+                source = HybridWhisperTranscriber(recorder: recorder, speechRecognizer: recognizer,
+                    speechAuthorizationProvider: GoldenSpeechAuthorization(allowed: true, calls: calls),
+                    whisperEngine: GoldenBatch(calls: calls), realtimeSessionMaker: pipeline, realtimeConfig: config,
+                    storageLocations: testStorageLocations)
+            }
+            let runtime = WorkflowRuntime(configuration: WorkflowExecutionConfiguration(providers: [:],
+                speechFactories: [.speechApple: GoldenWorkflowFactory(source: source)]))
+            var actual: [String] = []
+            var recordingCount = 0
+            for try await event in runtime.events(for: Preset.appleSpeech.speech) {
+                switch event {
+                case .state(.recording):
+                    recordingCount += 1
+                    if scenario == "normalRecognition" {
+                        if recordingCount == 1 { recorder.level(0.25) }
+                        else { recognizer.emit("synthetic final", final: true) }
+                    } else { recognizer.emit("synthetic apple") }
+                case .state(.paused): await (source as? AppleSpeechTranscriber)?.resume()
+                case .level(let value):
+                    if value == 0.25 { recognizer.emit("synthetic partial") }
+                case .partial(let result):
+                    actual.append("live:\(result.type.rawValue):\(result.text):\(result.confidence.map { String($0) } ?? "nil")")
+                    if result.text == "synthetic partial" { await (source as? AppleSpeechTranscriber)?.pause() }
+                    if result.text == "synthetic apple" { pipeline.partial() }
+                    if result.text == "synthetic cloud partial" {
+                        recognizer.emit("synthetic newer apple")
+                        if scenario == "realtimeFallback" { pipeline.fallback() }
+                        else { await (source as? HybridWhisperTranscriber)?.stop() }
+                    }
+                    if result.text == "synthetic newer apple" { await (source as? HybridWhisperTranscriber)?.stop() }
+                case .final(let result): actual.append("final:\(result.text)")
+                default: break
+                }
+            }
+            let expectedEvents = try XCTUnwrap(expected["events"] as? [String]).filter { $0.hasPrefix("live:") || $0.hasPrefix("final:") }
+            XCTAssertEqual(actual, expectedEvents)
+            XCTAssertEqual(calls.values, expected["calls"] as? [String])
+            XCTAssertFalse(source.isActive)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.file.path))
+        }
     }
 
     @MainActor func testAllSpeechAdaptersUseInjectedAuthorizationAndAvailability() async throws {
@@ -207,4 +261,9 @@ final class SpeechGoldenTraceTests: XCTestCase {
         return ["scenario": "mainAndQuickIsolation", "mainCalls": mainCalls.values, "quickCalls": quickCalls.values,
                 "mainEvents": mainProbe.values, "quickEvents": quickProbe.values, "recognizedAtRelease": frozen.hasRecognizedSpeech]
     }
+}
+
+private struct GoldenWorkflowFactory: SpeechSessionFactory {
+    let source: any SpeechSessionSource
+    func makeSource() async throws -> any SpeechSessionSource { source }
 }

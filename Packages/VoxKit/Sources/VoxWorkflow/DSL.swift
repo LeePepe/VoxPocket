@@ -61,7 +61,11 @@ public struct Preset: Sendable, Equatable, Codable {
             }
             if let value = overrides["analysis.skip"] { params["analysis.skip"] = .string(value) }
             if let value = overrides["refine.provider"] { params["refine.provider"] = .string(value) }
-            return NodeSpec(id: node.id, kind: node.kind, inputs: node.inputs, params: params,
+            let kind: NodeKindID
+            if [.llmApple, .llmAzure].contains(node.kind), let provider = overrides["refine.provider"] {
+                kind = provider == "azureFoundry" ? .llmAzure : .llmApple
+            } else { kind = node.kind }
+            return NodeSpec(id: node.id, kind: kind, inputs: node.inputs, params: params,
                             onFailure: node.onFailure, concurrency: node.concurrency)
         }
         return Preset(id: id, speech: speechDefinition,
@@ -78,9 +82,12 @@ public struct Preset: Sendable, Equatable, Codable {
             .map { $0.kind.rawValue }
         let hasRealtime = speech.nodes.contains { $0.kind == .speechAzureRealtime }
         let hasMerger = speech.nodes.contains { $0.kind == .mergeLLM }
-        let analysis = Dictionary(uniqueKeysWithValues: ["intent", "entities", "tags", "params", "tone"].map { key in
-            let node = refine.nodes.first { $0.kind.rawValue == "analyze.\(key)" || ($0.kind == .analyzeIntent && key != "tone") || ($0.kind == .analyzeTone && key == "tone") }
-            return (key, node?.params["analysis.\(key).provider"].flatMap(Self.stringValue) ?? "appleIntelligence")
+        let analysis = Dictionary(uniqueKeysWithValues: refine.nodes.compactMap { node -> (String, String)? in
+            guard node.kind.rawValue.hasPrefix("analyze.") else { return nil }
+            let key = String(node.kind.rawValue.dropFirst("analyze.".count))
+            if node.params["analysis.skip"] == .string("true") { return (key, "skipped") }
+            guard let provider = node.params["analysis.\(key).provider"].flatMap(Self.stringValue) else { return nil }
+            return (key, provider)
         })
         let refineProvider = refine.nodes.first { $0.kind == .llmAzure || $0.kind == .llmApple }?.params["refine.provider"].flatMap(Self.stringValue)
             ?? (refine.nodes.contains { $0.kind == .llmAzure } ? "azureFoundry" : "appleIntelligence")
@@ -117,11 +124,7 @@ public struct Preset: Sendable, Equatable, Codable {
             NodeSpec(id: "batch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")])
             NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "batch", port: "text")])
         }
-        case "realtime": return WorkflowDefinition(entry: .speech) {
-            NodeSpec(id: "capture", kind: .captureMicrophone)
-            NodeSpec(id: "realtime", kind: .speechAzureRealtime, inputs: [PortRef(nodeID: "capture", port: "audio")])
-            NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "realtime", port: "text")])
-        }
+        case "realtime": return Preset.hybridAzure.speech
         default: return Preset.default.speech
         }
     }

@@ -85,4 +85,22 @@ public enum WorkflowWhisperKit {
     }
 }
 
-private struct WhisperKitWorkflowNodeHandler: WorkflowNodeHandler {}
+private struct WhisperKitWorkflowNodeHandler: WorkflowNodeHandler {
+    func execute(context: WorkflowNodeContext) async throws -> WorkflowNodeValue {
+        if context.configuration.speechFactories[.speechWhisperKitLocal] != nil {
+            return try await BuiltInWorkflowNodeHandler.transcribe(context: context)
+        }
+        if case .speechSession = context.inputs.first {
+            return try await BuiltInWorkflowNodeHandler.transcribe(context: context)
+        }
+        if case .audio(let capture) = context.inputs.first, capture.suppliedSession != nil {
+            return try await BuiltInWorkflowNodeHandler.transcribe(context: context)
+        }
+        guard let storageLocations = context.configuration.storageLocations else { throw WorkflowRuntimeError.nodeFailed }
+        let source = WhisperKitTranscriber(config: LocalWhisperKitConfig(), logger: context.configuration.logger,
+            telemetry: context.configuration.telemetry, storageLocations: storageLocations)
+        guard await source.requestMicrophonePermission() else { throw WorkflowRuntimeError.nodeFailed }
+        let session = try await source.startSession(language: Locale(identifier: "zh-Hans"))
+        return try await BuiltInWorkflowNodeHandler.consume(session: session, context: context)
+    }
+}

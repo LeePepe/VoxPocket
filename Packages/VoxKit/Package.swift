@@ -62,8 +62,8 @@ let package = Package(
             dependencies: ["VoxWorkflow", "VoxSpeech", "VoxSpeechWhisperKit", "VoxLLM", "VoxRefine", "VoxCore"],
             resources: [.copy("Fixtures")]
         ),
-        .testTarget(name: "VoxWorkflowTests", dependencies: ["VoxWorkflow", "VoxCore", "VoxRefine"]),
-        .testTarget(name: "CanaryTests", dependencies: ["VoxWorkflow", "VoxWorkflowWhisperKit", "VoxCore", "VoxRefine"]),
+        .testTarget(name: "VoxWorkflowTests", dependencies: ["VoxWorkflow", "VoxCore", "VoxRefine", "VoxLLM", "VoxSpeech"]),
+        .testTarget(name: "CanaryTests", dependencies: ["VoxWorkflow", "VoxWorkflowWhisperKit", "VoxCore", "VoxRefine", "VoxLLM", "VoxSpeech"]),
     ],
     swiftLanguageModes: [.v6]
 )

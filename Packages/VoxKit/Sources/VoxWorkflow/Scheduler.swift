@@ -6,90 +6,92 @@ import VoxRefine
 
 public final class WorkflowRuntime: Sendable {
     private let registry: NodeRegistry
-    private let logger: any VoxLogger
-    private let telemetry: any VoxTelemetry
-    private let state = Mutex(State())
+    private let configuration: WorkflowExecutionConfiguration
+    private let executions = Mutex<[UUID: Task<Void, Never>]>([:])
 
-    private struct State: Sendable { var cancelled = false }
-
-    public init(
-        registry: NodeRegistry = .builtIn,
-        logger: any VoxLogger = NoopVoxLogger(),
-        telemetry: any VoxTelemetry = NoopVoxTelemetry()
-    ) {
+    public init(registry: NodeRegistry = .builtIn,
+                configuration: WorkflowExecutionConfiguration = WorkflowExecutionConfiguration()) {
         self.registry = registry
-        self.logger = logger
-        self.telemetry = telemetry
+        self.configuration = configuration
     }
 
-    public func validate(_ definition: WorkflowDefinition) throws {
-        try definition.validate(using: registry)
+    public convenience init(registry: NodeRegistry = .builtIn, logger: any VoxLogger,
+                            telemetry: any VoxTelemetry = NoopVoxTelemetry()) {
+        self.init(registry: registry, configuration: WorkflowExecutionConfiguration(logger: logger, telemetry: telemetry))
     }
 
-    public func cancel() { state.withLock { $0.cancelled = true } }
+    public func validate(_ definition: WorkflowDefinition) throws { try definition.validate(using: registry) }
+    public func cancel() { executions.withLock { tasks in tasks.values.forEach { $0.cancel() } } }
 
-    public func resetCancellation() { state.withLock { $0.cancelled = false } }
-
-    public func execute(_ definition: WorkflowDefinition, input: JSONValue? = nil) async throws -> [WorkflowEvent] {
-        resetCancellation()
-        try validate(definition)
-        let layers = try topologicalLayers(definition)
-        var outputs: [String: JSONValue] = [:]
-        var events: [WorkflowEvent] = []
-        if let input { outputs["input"] = input }
-
-        for layer in layers {
-            try Task.checkCancellation()
-            guard !state.withLock({ $0.cancelled }) else { throw CancellationError() }
-            let labels = layer.compactMap { registry.label(for: $0.kind) }
-            events.append(contentsOf: labels.map { .nodeStarted(label: $0) })
-            let results = try await withThrowingTaskGroup(of: (String, WorkflowNodeValue, VoxLabel, Bool).self,
-                                                           returning: [(String, WorkflowNodeValue, VoxLabel, Bool)].self) { group in
-                for node in layer {
-                    group.addTask { [registry, outputs] in
-                        let label = registry.label(for: node.kind) ?? .custom(index: -1)
-                        let values = node.inputs.map { outputs[$0.nodeID] ?? .null }
-                        guard let handler = registry.handler(for: node.kind) else {
-                            throw WorkflowValidationError(code: .unknownNodeKind, nodeID: node.id)
-                        }
-                        do {
-                            let result = try await handler.execute(context: WorkflowNodeContext(node: node, inputs: values))
-                            return (node.id, result, label, false)
-                        } catch {
-                            if Task.isCancelled { throw CancellationError() }
-                            switch node.onFailure {
-                            case .fail: throw error
-                            case .fallback(let fallbackID):
-                                guard let fallback = definition.nodes.first(where: { $0.id == fallbackID }),
-                                      let fallbackHandler = registry.handler(for: fallback.kind) else { throw error }
-                                let result = try await fallbackHandler.execute(context: WorkflowNodeContext(node: fallback, inputs: values))
-                                return (node.id, result, label, true)
-                            case .defaultValue(let value): return (node.id, .json(value), label, true)
-                            }
-                        }
-                    }
-                }
-                var values: [(String, WorkflowNodeValue, VoxLabel, Bool)] = []
-                for try await value in group { values.append(value) }
-                return values.sorted { $0.0 < $1.0 }
+    public func execute(_ definition: WorkflowDefinition, input: WorkflowNodeValue = .none) async throws -> [WorkflowEvent] {
+        let (stream, task) = start(definition, input: input)
+        return try await withTaskCancellationHandler {
+            do {
+                var events: [WorkflowEvent] = []
+                for try await event in stream { events.append(event) }
+                await task.value
+                try Task.checkCancellation()
+                return events
+            } catch {
+                task.cancel()
+                await task.value
+                throw error
             }
-            for (id, value, label, recovered) in results {
-                outputs[id] = value.jsonValue
-                if recovered { events.append(.nodeFailed(label: label, reason: .reason("node_failure"))) }
-                events.append(.nodeFinished(label: label))
-                telemetry.record(VoxTelemetryEvent(name: "workflow.node.completed", fields: [.label("node", label)]))
+        } onCancel: { task.cancel() }
+    }
+
+    public func events(for definition: WorkflowDefinition, input: WorkflowNodeValue = .none) -> AsyncThrowingStream<WorkflowEvent, Error> {
+        start(definition, input: input).0
+    }
+
+    private func start(_ definition: WorkflowDefinition, input: WorkflowNodeValue)
+        -> (AsyncThrowingStream<WorkflowEvent, Error>, Task<Void, Never>) {
+        let id = UUID()
+        let (stream, continuation) = AsyncThrowingStream<WorkflowEvent, Error>.makeStream()
+        let task = executions.withLock { tasks in
+            let task = Task { [self] in
+                do {
+                    try validate(definition)
+                    let execution = WorkflowExecution(definition: definition, input: input, registry: registry,
+                                                      configuration: configuration, continuation: continuation)
+                    try await execution.run()
+                    continuation.finish()
+                } catch is CancellationError { continuation.finish(throwing: CancellationError()) }
+                catch let error as WorkflowValidationError { continuation.finish(throwing: error) }
+                catch { continuation.finish(throwing: WorkflowRuntimeError.nodeFailed) }
+                _ = executions.withLock { $0.removeValue(forKey: id) }
             }
+            tasks[id] = task
+            return task
         }
-        events.append(.completed(nil))
-        logger.info("workflow.completed", fields: [.int("node_count", definition.nodes.count)])
-        return events
+        continuation.onTermination = { termination in
+            if case .cancelled = termination { task.cancel() }
+        }
+        return (stream, task)
     }
 
-    public func events(for definition: WorkflowDefinition, input: JSONValue? = nil) -> AsyncThrowingStream<WorkflowEvent, Error> {
-        AsyncThrowingStream { continuation in
+    public func refine(_ request: RefinementRequest, preset: Preset = .default) async throws -> RefinementResponse {
+        let events = try await execute(preset.refine, input: .refinementRequest(request))
+        for event in events.reversed() {
+            if case .completed(let response?) = event { return response }
+        }
+        throw WorkflowRuntimeError.nodeFailed
+    }
+
+    public func refineStreaming(_ request: RefinementRequest, preset: Preset = .default) async throws -> AsyncThrowingStream<String, Error> {
+        let nodes = preset.refine.nodes.map { node in
+            var params = node.params
+            if [.llmApple, .llmAzure].contains(node.kind) { params["streaming"] = .bool(true) }
+            return NodeSpec(id: node.id, kind: node.kind, inputs: node.inputs, params: params,
+                            onFailure: node.onFailure, concurrency: node.concurrency)
+        }
+        let events = events(for: WorkflowDefinition(entry: .refine, nodes: nodes), input: .refinementRequest(request))
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    for event in try await execute(definition, input: input) { continuation.yield(event) }
+                    for try await event in events {
+                        if case .refinedChunk(let chunk) = event { continuation.yield(chunk) }
+                    }
                     continuation.finish()
                 } catch { continuation.finish(throwing: error) }
             }
@@ -100,43 +102,152 @@ public final class WorkflowRuntime: Sendable {
     public func makeSpeechSource(preset: Preset, source: any SpeechSessionSource) -> WorkflowSpeechSessionSource {
         WorkflowSpeechSessionSource(source: source, preset: preset)
     }
+}
 
-    public func refine(_ request: RefinementRequest, service: any LLMService) async throws -> RefinementResponse {
-        try Task.checkCancellation()
-        let response = try await service.refine(request)
-        telemetry.record(VoxTelemetryEvent(name: "workflow.refine.completed", fields: [.int("text_length", request.text.count)]))
-        return response
+private actor WorkflowExecution {
+    let definition: WorkflowDefinition
+    let input: WorkflowNodeValue
+    let registry: NodeRegistry
+    let configuration: WorkflowExecutionConfiguration
+    let continuation: AsyncThrowingStream<WorkflowEvent, Error>.Continuation
+    let limiter = WorkflowConcurrencyLimiter()
+    var outputs: [String: WorkflowNodeValue] = [:]
+    var tasks: [String: Task<WorkflowNodeValue, Error>] = [:]
+
+    init(definition: WorkflowDefinition, input: WorkflowNodeValue, registry: NodeRegistry,
+         configuration: WorkflowExecutionConfiguration, continuation: AsyncThrowingStream<WorkflowEvent, Error>.Continuation) {
+        self.definition = definition
+        self.input = input
+        self.registry = registry
+        self.configuration = configuration
+        self.continuation = continuation
     }
 
-    public func refineStreaming(_ request: RefinementRequest, service: any LLMService) async throws -> AsyncThrowingStream<String, Error> {
-        try Task.checkCancellation()
-        return try await service.refineStreaming(request)
+    func run() async throws {
+        do { try await runGraph(); await finishCaptures(cancelled: false) }
+        catch { await finishCaptures(cancelled: true); throw error }
     }
 
-    private func topologicalLayers(_ definition: WorkflowDefinition) throws -> [[NodeSpec]] {
-        var pending = Dictionary(uniqueKeysWithValues: definition.nodes.map { ($0.id, $0) })
-        var completed = Set<String>()
-        var layers: [[NodeSpec]] = []
-        while !pending.isEmpty {
-            let layer = pending.values.filter { node in node.inputs.allSatisfy { completed.contains($0.nodeID) } }
-                .sorted { $0.id < $1.id }
-            guard !layer.isEmpty else { throw WorkflowValidationError(code: .cycleDetected) }
-            layers.append(layer)
-            for node in layer { pending.removeValue(forKey: node.id); completed.insert(node.id) }
+    private func finishCaptures(cancelled: Bool) async {
+        for value in outputs.values {
+            if case .audio(let capture) = value { await capture.finish(cancelled: cancelled) }
         }
-        return layers
+    }
+
+    private func runGraph() async throws {
+        let normalInputs = Set(definition.nodes.flatMap { $0.inputs.map(\.nodeID) })
+        let fallbackIDs = Set(definition.nodes.compactMap { node -> String? in
+            if case .fallback(let id) = node.onFailure { return id }; return nil
+        }).subtracting(normalInputs)
+        var pending = definition.nodes.filter { !fallbackIDs.contains($0.id) }
+        var completed = Set<String>()
+        while !pending.isEmpty {
+            try Task.checkCancellation()
+            let layer = pending.filter { node in node.inputs.allSatisfy { completed.contains($0.nodeID) } }
+            guard !layer.isEmpty else { throw WorkflowValidationError(code: .cycleDetected) }
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for node in layer { group.addTask { _ = try await self.resolve(node.id) } }
+                do { for try await _ in group {} }
+                catch { group.cancelAll(); throw error }
+            }
+            completed.formUnion(layer.map(\.id))
+            pending.removeAll { completed.contains($0.id) }
+        }
+        try Task.checkCancellation()
+        let terminal = definition.nodes.last { $0.kind == .outputText } ?? definition.nodes.last
+        if let terminal, let value = outputs[terminal.id] {
+            switch value {
+            case .response(let response): continuation.yield(.completed(response))
+            case .transcription(let result), .transcriptionResult(let result):
+                continuation.yield(.final(result)); continuation.yield(.completed(nil))
+            default: continuation.yield(.completed(nil))
+            }
+        }
+        configuration.logger.info("workflow.completed", fields: [.int("node_count", definition.nodes.count)])
+    }
+
+    func resolve(_ id: String) async throws -> WorkflowNodeValue {
+        try Task.checkCancellation()
+        if let output = outputs[id] { return output }
+        let task: Task<WorkflowNodeValue, Error>
+        if let existing = tasks[id] { task = existing }
+        else {
+            guard let node = definition.nodes.first(where: { $0.id == id }) else { throw WorkflowRuntimeError.nodeFailed }
+            task = Task { try await self.perform(node) }
+            tasks[id] = task
+        }
+        return try await withTaskCancellationHandler {
+            let value = try await task.value
+            outputs[id] = value
+            return value
+        } onCancel: { task.cancel() }
+    }
+
+    private func perform(_ node: NodeSpec) async throws -> WorkflowNodeValue {
+        var inputs: [WorkflowNodeValue] = []
+        for reference in node.inputs { inputs.append(try await resolve(reference.nodeID)) }
+        if node.inputs.isEmpty { inputs = [input] }
+        let label = registry.label(for: node.kind) ?? .custom(index: -1)
+        let limit = node.concurrency ?? registry.signature(for: node.kind)?.defaultConcurrency
+        let key = node.params["concurrency.key"]?.stringValue ?? node.kind.rawValue
+        await limiter.acquire(key: key, limit: limit)
+        do {
+            try Task.checkCancellation()
+            continuation.yield(.nodeStarted(label: label))
+            let value = try await invoke(node, inputs: inputs, label: label)
+            await limiter.release(key: key, limit: limit)
+            continuation.yield(.nodeFinished(label: label))
+            configuration.telemetry.record(VoxTelemetryEvent(name: "workflow.node.completed", fields: [.label("node", label)]))
+            return value
+        } catch {
+            await limiter.release(key: key, limit: limit)
+            if Task.isCancelled || error is CancellationError { throw CancellationError() }
+            continuation.yield(.nodeFailed(label: label, reason: .reason("node_failure")))
+            let recovered: WorkflowNodeValue
+            switch node.onFailure {
+            case .fail: throw WorkflowRuntimeError.nodeFailed
+            case .fallback(let id): recovered = try await resolve(id)
+            case .defaultValue(let value): recovered = .json(value)
+            }
+            continuation.yield(.nodeFinished(label: label))
+            return recovered
+        }
+    }
+
+    private func invoke(_ node: NodeSpec, inputs: [WorkflowNodeValue], label: VoxLabel) async throws -> WorkflowNodeValue {
+        guard let handler = registry.handler(for: node.kind) else { throw WorkflowRuntimeError.nodeFailed }
+        let fallbacks = Set(definition.nodes.compactMap { node -> String? in
+            if case .fallback(let id) = node.onFailure { return id }; return nil
+        })
+        let speechKinds = definition.nodes.filter { spec in
+            spec.inputs.contains { $0.nodeID == node.id } && !fallbacks.contains(spec.id) && spec.kind.rawValue.hasPrefix("speech.")
+        }.map(\.kind)
+        return try await handler.execute(context: WorkflowNodeContext(node: node, inputs: inputs, workflowInput: input,
+            configuration: configuration, speechNodeKinds: speechKinds, continuation: continuation))
+    }
+}
+
+private actor WorkflowConcurrencyLimiter {
+    var counts: [String: Int] = [:]
+    var waiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+
+    func acquire(key: String, limit: Int?) async {
+        guard let limit else { return }
+        if counts[key, default: 0] < limit { counts[key, default: 0] += 1; return }
+        await withCheckedContinuation { waiters[key, default: []].append($0) }
+    }
+
+    func release(key: String, limit: Int?) {
+        guard limit != nil else { return }
+        if !waiters[key, default: []].isEmpty { waiters[key]?.removeFirst().resume() }
+        else { counts[key, default: 0] -= 1 }
     }
 }
 
 public final class WorkflowSpeechSessionSource: SpeechSessionSource, MultiRecognizerSpeechSource, Sendable {
     private let source: any SpeechSessionSource
     public let preset: Preset
-
-    public init(source: any SpeechSessionSource, preset: Preset) {
-        self.source = source
-        self.preset = preset
-    }
-
+    public init(source: any SpeechSessionSource, preset: Preset) { self.source = source; self.preset = preset }
     public var merger: (any TranscriptionMerger)? { (source as? any MultiRecognizerSpeechSource)?.merger }
     public var supportedLanguages: [Locale] { source.supportedLanguages }
     public var providerKind: ASRProviderType { source.providerKind }
@@ -149,4 +260,3 @@ public final class WorkflowSpeechSessionSource: SpeechSessionSource, MultiRecogn
     public func audioLevels() -> AsyncStream<Float> { source.audioLevels() }
     public func startSession(language: Locale) async throws -> any SpeechSession { try await source.startSession(language: language) }
 }
-
