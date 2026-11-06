@@ -31,7 +31,7 @@ Last-Reviewed: 2026-11-06
 - **Preferences**:用户偏好,无依赖。
 
 ## 依赖
-- **仓库内**:`VoxDomain`(CoreModels/TextHistory) 与 `VoxKit`(VoxCore/VoxSpeech；私密基准测试另依赖 VoxSpeechWhisperKit/VoxRefine/VoxLLM)。
+- **仓库内**:`VoxDomain`(CoreModels/TextHistory)。
 - **外部**:`LokiKit` 与 `VoxKit`(`LeePepe/VoxKit`, exact `0.1.0`)(`LeePepe/shared-telemetry`,SwiftPM 远程依赖 `exact: "0.2.0"`,遥测/日志)。
   LokiKit 与 VoxKit 不进 `depends_on`(它不在本仓库,防腐脚本只校验本地 layer)。
 

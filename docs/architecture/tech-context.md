@@ -9,8 +9,6 @@ support:
     reason: CI, hooks, policy, release and local tooling; verified by scripts/verify --policy and CI
   - patterns: ["Packages/VoxKit/**"]
     reason: staged local SDK removal; retained only so the native package gate can run during the transition
-  - patterns: ["VoxKitSDK.xctestplan", "VoxKitSDK.xcworkspace/**"]
-    reason: staged removal of the local SDK workspace and test plan
 red_lines:
   - 依赖方向永远向下,任何反向依赖(层间或层内)都是红线(宪法 II)
   - VoxDomain 不得引入任何外部依赖或其他本地 layer

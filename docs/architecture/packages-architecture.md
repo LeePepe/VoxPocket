@@ -33,8 +33,8 @@ VoxPocket 采用经典的 **Clean Architecture** 分层设计，通过 Swift Pac
 `VoxDomain`, `LokiKit`, or App layers. `VoxInfrastructure` consumes it through
 `VoxKitBridge`; `VoxApplication`, `VoxPresentation`, and `VoxPocketApp` may depend
 on it downward. SDK redlines R1–R5 are checked by
-VoxKit 仓库自身的 SDK redlines. The leaf tech context is
-pre-staged in the root support patterns for T103b and is promoted only after that file exists.
+VoxKit 仓库自身的 SDK redlines. The SDK is consumed exclusively from the standalone
+`LeePepe/VoxKit` repository at exact version `0.1.0` as an external SwiftPM dependency.
 
 ## 依赖规则
 

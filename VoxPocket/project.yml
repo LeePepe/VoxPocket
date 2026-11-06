@@ -19,10 +19,14 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
 
 packages:
-  # VoxKit exact 0.1.0 and LokiKit exact 0.2.0 resolve through VoxInfrastructure/VoxPresentation;
-  # keeping them out of this top-level list leaves DependencyPackagesGroup empty before Xcode's sortedInsert.
+  # All local SPM layers are listed here as top-level XCLocalSwiftPackageReferences so zero
+  # `@ local` packages enter Xcode's DependencyPackagesGroup alongside remote packages.
+  VoxDomain:
+    path: ../Packages/VoxDomain
   VoxInfrastructure:
     path: ../Packages/VoxInfrastructure
+  VoxApplication:
+    path: ../Packages/VoxApplication
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
   VoxPresentation:
     path: ../Packages/VoxPresentation
