@@ -142,8 +142,6 @@ public final class ServiceContainer: ObservableObject {
         #if os(macOS)
         quickRefinementRunner = RefineWorkflowRunner(preset: initialPreset, configuration: workflowConfiguration,
                                                      azureTextConfigured: availability.textConfigured)
-        #else
-        quickRefinementRunner = refinementRunner
         #endif
         (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore,
             presetID: LLMAppConfig.defaultPresetID, sdk: sdk) { [weak refinementRunner] settings in
@@ -184,17 +182,16 @@ public final class ServiceContainer: ObservableObject {
         _ = notificationCenter
         #else
         let availability = StageModelRouting.availability(environment: environment)
+        let workflowConfiguration = Self.makeWorkflowConfiguration(environment: environment, sdk: sdk)
+        let runner = refinementRunner
         let binding = IOSPresetPreferenceBinding(batchConfigured: availability.batchConfigured,
             azureTextConfigured: availability.textConfigured, preferences: preferencesStore,
-            notificationCenter: notificationCenter, logger: sdk.logger)
+            notificationCenter: notificationCenter, logger: sdk.logger,
+            onPresetChange: { preset in
+                runner.configure(preset: preset, configuration: workflowConfiguration,
+                                 azureTextConfigured: availability.textConfigured)
+            })
         iosPresetPreferenceBinding = binding
-        Task { [weak self, weak binding] in
-            await binding?.waitForPendingChanges()
-            guard let self, let binding else { return }
-            self.refinementRunner.configure(preset: binding.preset,
-                configuration: Self.makeWorkflowConfiguration(environment: environment, sdk: self.sdk),
-                azureTextConfigured: availability.textConfigured)
-        }
         #endif
         logger.debug("Initialized")
     }

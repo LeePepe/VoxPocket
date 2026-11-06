@@ -61,8 +61,13 @@ final class WorkflowPresetMappingTests: XCTestCase {
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let store = UserDefaultsPreferencesStore(defaults: defaults)
         let center = NotificationCenter()
+        let runner = RefineWorkflowRunner(preset: .hybridAzure,
+            configuration: WorkflowExecutionConfiguration(), azureTextConfigured: true)
         let binding = IOSPresetPreferenceBinding(batchConfigured: true, azureTextConfigured: true,
-            preferences: store, notificationCenter: center)
+            preferences: store, notificationCenter: center,
+            onPresetChange: { preset in
+                runner.configure(preset: preset, configuration: WorkflowExecutionConfiguration(), azureTextConfigured: true)
+            })
 
         await binding.waitForPendingChanges()
         XCTAssertEqual(binding.currentProvider, .azureFoundry)
@@ -71,6 +76,7 @@ final class WorkflowPresetMappingTests: XCTestCase {
         center.post(name: PreferencesNotification.llmAnalysisSettingsDidChange, object: nil)
         await binding.waitForPendingChanges()
         XCTAssertEqual(binding.currentProvider, .appleIntelligence)
+        XCTAssertEqual(runner.currentProviderType, .appleIntelligence)
         let pipeline = binding.preset.exportedPipeline(batchConfigured: true, realtimeConfigured: false,
             azureTextConfigured: true)
         XCTAssertEqual(pipeline.analysis["entities"], "skipped")

@@ -160,6 +160,7 @@ public final class IOSPresetPreferenceBinding: @unchecked Sendable {
     private let preferences: any PreferencesStore
     private let notificationCenter: NotificationCenter
     private let logger: any VoxLogger
+    private let onPresetChange: (@MainActor @Sendable (Preset) -> Void)?
     private var observers: [NSObjectProtocol] = []
     private var pendingUpdate: Task<Void, Never>?
 
@@ -168,13 +169,15 @@ public final class IOSPresetPreferenceBinding: @unchecked Sendable {
         azureTextConfigured: Bool,
         preferences: any PreferencesStore,
         notificationCenter: NotificationCenter = .default,
-        logger: any VoxLogger = NoopVoxLogger()
+        logger: any VoxLogger = NoopVoxLogger(),
+        onPresetChange: (@MainActor @Sendable (Preset) -> Void)? = nil
     ) {
         self.batchConfigured = batchConfigured
         self.azureTextConfigured = azureTextConfigured
         self.preferences = preferences
         self.notificationCenter = notificationCenter
         self.logger = logger
+        self.onPresetChange = onPresetChange
         currentProvider = .azureFoundry
         preset = IOSPresetMapping.preset(batchConfigured: batchConfigured, azureTextConfigured: azureTextConfigured)
         for name in [PreferencesNotification.llmProviderDidChange,
@@ -211,6 +214,7 @@ public final class IOSPresetPreferenceBinding: @unchecked Sendable {
                     provider: self.currentProvider,
                     skipContentAnalysis: skip
                 )
+                self.onPresetChange?(self.preset)
                 if !self.batchConfigured {
                     self.logger.log(.warning, "Azure transcription configuration missing; actual_provider=appleSpeech", fields: [])
                 }
