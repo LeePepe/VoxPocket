@@ -96,7 +96,7 @@
 | T409 ✅ | VoxPocket | CI 删 VoxKit lane 与 SDK red lines；golden drift 检查改为对比 pin 版本 tag 中的副本；ruleset 映射文件 | T408 ✅ | US6-AC5 |
 | T410 ✅ | VoxPocket | `check_frontmatter.py` 外部化；宪法/tech-context/AGENTS Dependencies 段与本地覆盖说明 | T409 ✅ | US7-AC1, US7-AC2 |
 | GATE-4 ✅ | — | 全部既有测试 + App 侧 golden (b) 通过，且 T407c 已完成 | T410 ✅, T407c ✅ | US6-AC5 |
-| T411 | VoxPocket | 合并后 ruleset apply（Owner 批准）；revert 演练分支 CI 绿后关闭 | GATE-4 ✅ | US6-AC6 |
+| T411 ✅ | VoxPocket | 合并后 ruleset apply（Owner 批准）；revert 演练分支 CI 绿后关闭 | GATE-4 ✅ | US6-AC6 |
 
 ## 关键路径
 
