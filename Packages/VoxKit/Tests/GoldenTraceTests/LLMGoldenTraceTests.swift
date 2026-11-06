@@ -1,11 +1,85 @@
 import VoxCore
 import VoxLLM
 import VoxRefine
+import VoxWorkflow
 import Foundation
 import Synchronization
 import XCTest
 
 final class LLMGoldenTraceTests: XCTestCase {
+    func testWorkflowPresetRefineParity() async throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "golden_a_llm", withExtension: "json", subdirectory: "Fixtures"))
+        let fixture = try GoldenFixtureCodec.decode(Data(contentsOf: url))
+        let traces = try XCTUnwrap(fixture["traces"] as? [[String: Any]])
+        for expected in traces where expected["mode"] as? String != "merge" {
+            let routing = try XCTUnwrap(expected["scenario"] as? String)
+            let outcome = try XCTUnwrap(expected["outcome"] as? String)
+            let calls = GoldenProviderCalls()
+            let failed: Set<AnalysisStep> = outcome == "singleStepFailure" ? [.tone] : []
+            var providers: [LLMProviderType: any LLMProvider] = [
+                .appleIntelligence: GoldenProvider(type: .appleIntelligence, calls: calls, failedSteps: failed),
+                .azureFoundry: GoldenProvider(type: .azureFoundry, calls: calls, failedSteps: failed)]
+            let missing: LLMProviderType = routing == "allAzure" ? .azureFoundry : .appleIntelligence
+            if outcome == "providerMissing" { providers.removeValue(forKey: missing) }
+            let refine = outcome == "providerMissing" && missing == .azureFoundry ? "appleIntelligence" : "azureFoundry"
+            var overrides = options(routing).reduce(into: [String: String]()) { result, item in
+                result[String(item.key.dropLast(".provider".count))] = item.value
+            }
+            overrides["analysis.skip"] = String(routing == "skip")
+            overrides["refine.provider"] = refine
+            let preset = Preset.default.overriding(overrides)
+            let logger = GoldenLogger()
+            let runtime = WorkflowRuntime(configuration: WorkflowExecutionConfiguration(providers: providers, logger: logger))
+            let request = RefinementRequest(text: "synthetic input", customPrompt: "Keep the synthetic meaning.")
+            if expected["mode"] as? String == "refine" {
+                let response = try await runtime.refine(request, preset: preset)
+                XCTAssertEqual(responseTrace(response) as NSDictionary, try XCTUnwrap(expected["response"] as? NSDictionary))
+            } else {
+                let chunks = try await Array(runtime.refineStreaming(request, preset: preset))
+                XCTAssertEqual(chunks, expected["chunks"] as? [String])
+                XCTAssertEqual(chunks.joined(), expected["refinedText"] as? String)
+            }
+            XCTAssertEqual(normalizedStepCalls(calls.values.map(\.json)), normalizedStepCalls(try XCTUnwrap(expected["calls"] as? [[String: Any]])))
+            XCTAssertEqual(logger.messages, expected["logs"] as? [String])
+            XCTAssertEqual(logger.contextKeys, expected["logContextKeys"] as? [[String]])
+            let completions = calls.values.filter { $0.method != "analyze" }
+            XCTAssertEqual(completions.count, 1)
+            XCTAssertEqual(completions.first?.provider, refine)
+            if let completion = calls.values.firstIndex(where: { $0.method != "analyze" }) {
+                XCTAssertTrue(calls.values[completion...].allSatisfy { $0.method != "analyze" })
+            }
+        }
+        for expected in traces where expected["mode"] as? String == "merge" { try await workflowMergerParity(expected) }
+    }
+
+    private func normalizedStepCalls(_ calls: [[String: Any]]) -> [String] {
+        calls.flatMap { call -> [String] in
+            let steps = call["steps"] as? [String] ?? []
+            let prefix = "\(call["provider"] ?? "")|\(call["method"] ?? "")|\(call["input"] ?? "")|"
+            return steps.isEmpty ? [prefix] : steps.map { prefix + $0 }
+        }.sorted()
+    }
+
+    private func workflowMergerParity(_ expected: [String: Any]) async throws {
+        let scenario = try XCTUnwrap(expected["scenario"] as? String)
+        let calls = GoldenProviderCalls()
+        let provider = GoldenProvider(type: .azureFoundry, calls: calls,
+            output: scenario == "outputTooLong" ? String(repeating: "x", count: 40) : "merged",
+            throwsCompletion: scenario == "providerThrows")
+        let registry = NodeRegistry()
+        registry.register(NodeSignature(kind: "golden.input", allowedEntries: [.speech], outputType: .text), handler: GoldenInputHandler())
+        let definition = WorkflowDefinition(entry: .speech, nodes: [
+            NodeSpec(id: "apple", kind: "golden.input", params: ["text": .string(try XCTUnwrap(expected["apple"] as? String))]),
+            NodeSpec(id: "cloud", kind: "golden.input", params: ["text": .string("whisper")]),
+            NodeSpec(id: "merge", kind: .mergeLLM, inputs: [.init(nodeID: "apple", port: "text"), .init(nodeID: "cloud", port: "text")]),
+            NodeSpec(id: "output", kind: .outputText, inputs: [.init(nodeID: "merge", port: "text")])])
+        let events = try await WorkflowRuntime(registry: registry,
+            configuration: WorkflowExecutionConfiguration(providers: [.azureFoundry: provider])).execute(definition)
+        let final = events.compactMap { event -> String? in if case .final(let value) = event { value.text } else { nil } }
+        XCTAssertEqual(final, [try XCTUnwrap(expected["output"] as? String)])
+        XCTAssertEqual(normalizedStepCalls(calls.values.map(\.json)), normalizedStepCalls(try XCTUnwrap(expected["calls"] as? [[String: Any]])))
+    }
+
     func testAnalysisAndMergerGolden() async throws {
         var traces: [[String: Any]] = []
         for routing in ["skip", "allApple", "allAzure", "intentApple_toneAzure", "intentAzure_toneApple"] {
@@ -105,6 +179,13 @@ final class LLMGoldenTraceTests: XCTestCase {
         XCTAssertEqual(calls.values.count, ["identicalInputs", "emptyAppleText"].contains(scenario) ? 0 : 1)
         return ["scenario": scenario, "mode": "merge", "apple": apple, "whisper": "whisper", "output": output,
                 "calls": calls.values.map(\.json), "logs": logger.messages, "logContextKeys": logger.contextKeys, "telemetry": [String]()]
+    }
+}
+
+private struct GoldenInputHandler: WorkflowNodeHandler {
+    func execute(context: WorkflowNodeContext) async throws -> WorkflowNodeValue {
+        guard case .string(let text) = context.node.params["text"] else { throw WorkflowRuntimeError.nodeFailed }
+        return .transcriptionResult(TranscriptionResult(text: text, type: .final))
     }
 }
 

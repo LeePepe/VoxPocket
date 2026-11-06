@@ -45,7 +45,7 @@ func assertGolden(_ payload: [String: Any], name: String,
     XCTAssertEqual(payload as NSDictionary, expected, file: file, line: line)
 }
 
-private enum GoldenFixtureCodec {
+enum GoldenFixtureCodec {
     static func encode(_ payload: [String: Any]) throws -> Data {
         var values: [Any] = []
         var indices: [Data: Int] = [:]

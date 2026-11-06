@@ -99,8 +99,26 @@
         "VoxLLM/LLMService.swift",
         "VoxLLM/LLMTranscriptionMerger.swift"
       ]
+    },
+    "VoxWorkflow": {
+      "depends_on": ["VoxCore", "VoxSpeech", "VoxRefine", "VoxLLM"],
+      "files": [
+        "VoxWorkflow/AudioCapture.swift",
+        "VoxWorkflow/Configuration.swift",
+        "VoxWorkflow/Definition.swift",
+        "VoxWorkflow/DSL.swift",
+        "VoxWorkflow/Events.swift",
+        "VoxWorkflow/Handlers.swift",
+        "VoxWorkflow/Presets.swift",
+        "VoxWorkflow/Registry.swift",
+        "VoxWorkflow/Scheduler.swift"
+      ]
+    },
+    "VoxWorkflowWhisperKit": {
+      "depends_on": ["VoxWorkflow", "VoxSpeechWhisperKit", "VoxSpeech", "VoxCore"],
+      "files": ["VoxWorkflowWhisperKit/WhisperKitPresets.swift"]
     }
   },
   "combine_target": "VoxKitBridge",
-  "phase": 2
+  "phase": 3
 }

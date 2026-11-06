@@ -1,10 +1,10 @@
 # VoxPocket 依赖关系图
 
-## VoxKit SDK 边界（Phase 2）
+## VoxKit SDK 边界（Phase 3）
 
 ```mermaid
 graph LR
-    VoxKit[VoxKit SDK\nVoxCore · VoxSpeech · VoxSpeechWhisperKit · VoxRefine · VoxLLM]
+    VoxKit[VoxKit SDK\nVoxCore · VoxSpeech · VoxSpeechWhisperKit · VoxRefine · VoxLLM · VoxWorkflow]
     Bridge[VoxInfrastructure\nVoxKitBridge]
     App[VoxApplication]
     Presentation[VoxPresentation]
@@ -31,6 +31,9 @@ The five SDK products and their internal dependencies are defined in the current
 [leaf context](../../Packages/VoxKit/tech-context.md). SDK golden (a)/(c) stay byte-identical;
 App routing (b) and Combine/Loki mapping stay host-owned. Voice suites run both speech
 SDK targets plus Bridge; MinimalConsumer validates macOS/iOS without WhisperKit.
+`VoxWorkflow` owns graph validation, layered execution, provider presets and workflow events;
+`VoxWorkflowWhisperKit` is the optional local-model extension and preserves model-loading
+state semantics without making MinimalConsumer depend on WhisperKit.
 
 ## Historical records — all following sections are obsolete
 

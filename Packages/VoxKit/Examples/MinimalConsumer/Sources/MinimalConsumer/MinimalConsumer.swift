@@ -3,6 +3,7 @@ import VoxCore
 import VoxLLM
 import VoxRefine
 import VoxSpeech
+import VoxWorkflow
 
 @main
 struct MinimalConsumer {
@@ -15,5 +16,6 @@ struct MinimalConsumer {
         let provider: any LLMProvider = AppleIntelligenceProvider(logger: logger)
         let request = RefinementRequest(text: "synthetic example")
         _ = (speech.supportedLanguages, provider.isAvailable, request)
+        _ = Preset.default.exportedPipeline()
     }
 }

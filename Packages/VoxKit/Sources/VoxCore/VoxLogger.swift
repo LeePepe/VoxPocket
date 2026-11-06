@@ -1,6 +1,7 @@
 public enum VoxLogLevel: String, Sendable { case debug, info, warning, error }
 
 public enum VoxLabel: Sendable, Equatable {
+    case node(StaticString)
     case provider(StaticString)
     case step(StaticString)
     case reason(StaticString)
@@ -15,6 +16,7 @@ public enum VoxLabel: Sendable, Equatable {
 
     public var rawLabel: String {
         switch self {
+        case .node(let value): return "\(value)"
         case .provider(let value), .step(let value), .reason(let value), .source(let value): return "\(value)"
         case .custom(let index): return "\(index)"
         }
@@ -22,6 +24,7 @@ public enum VoxLabel: Sendable, Equatable {
 
     public var text: String {
         switch self {
+        case .node: return "node:\(rawLabel)"
         case .provider: return "provider:\(rawLabel)"
         case .step: return "step:\(rawLabel)"
         case .reason: return "reason:\(rawLabel)"
