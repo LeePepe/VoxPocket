@@ -19,10 +19,14 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
 
 packages:
-  VoxKit:
-    path: ../Packages/VoxKit
+  # All local SPM layers are listed here as top-level XCLocalSwiftPackageReferences so zero
+  # `@ local` packages enter Xcode's DependencyPackagesGroup alongside remote packages.
+  VoxDomain:
+    path: ../Packages/VoxDomain
   VoxInfrastructure:
     path: ../Packages/VoxInfrastructure
+  VoxApplication:
+    path: ../Packages/VoxApplication
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
   VoxPresentation:
     path: ../Packages/VoxPresentation
@@ -52,20 +56,6 @@ targets:
         buildPhase: resources
         destinationFilters: [iOS, macOS]
     dependencies:
-      - package: VoxKit
-        product: VoxCore
-      - package: VoxKit
-        product: VoxSpeech
-      - package: VoxKit
-        product: VoxSpeechWhisperKit
-      - package: VoxKit
-        product: VoxRefine
-      - package: VoxKit
-        product: VoxLLM
-      - package: VoxKit
-        product: VoxWorkflow
-      - package: VoxKit
-        product: VoxWorkflowWhisperKit
       - package: VoxInfrastructure
         product: VoxKitBridge
       - package: VoxPresentation
@@ -194,10 +184,6 @@ targets:
         buildPhase: resources
     dependencies:
       - target: VoxPocket
-      - package: VoxKit
-        product: VoxWorkflow
-      - package: VoxKit
-        product: VoxWorkflowWhisperKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.tests

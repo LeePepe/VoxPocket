@@ -6,8 +6,9 @@ import subprocess
 import tempfile
 
 
-def main():
+def main(scratch_path: Path | None = None):
     root = Path(__file__).resolve().parents[2]
+    scratch_path = scratch_path or Path(tempfile.gettempdir()) / "voxpocket-routing-harness-build"
     with tempfile.TemporaryDirectory(prefix="vox-realtime-config-") as temporary:
         package = Path(temporary)
         sources = package / "Sources/VoxPocket"
@@ -18,7 +19,7 @@ def main():
         (package / "Package.swift").write_text(f'''// swift-tools-version: 6.2
 import PackageDescription
 let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)],
-    dependencies: [.package(path: {json.dumps(str(infrastructure))}), .package(path: {json.dumps(str(root / "Packages/VoxKit"))})],
+    dependencies: [.package(path: {json.dumps(str(infrastructure))}), .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0")],
     targets: [
         .target(name: "VoxPocket", dependencies: [
             .product(name: "VoxSpeech", package: "VoxKit"),
@@ -45,7 +46,11 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
         (tests / "RealtimeTranscriberConfigurationTests.swift").symlink_to(
             root / "VoxPocket/VoxPocketTests/RealtimeTranscriberConfigurationTests.swift"
         )
-        subprocess.run(["swift", "test", "--package-path", str(package)], check=True, timeout=300)
+        subprocess.run(
+            ["swift", "test", "--package-path", str(package), "--scratch-path", str(scratch_path)],
+            check=True,
+            timeout=300,
+        )
 
 
 if __name__ == "__main__":

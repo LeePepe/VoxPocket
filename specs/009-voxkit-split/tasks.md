@@ -1,5 +1,9 @@
 # VoxKit 拆分任务（依赖顺序）
 
+> **TK4 status (2026-11-07, PR-4a):** T407a, T408, T409, and T410 are complete on
+> `feat/voxkit-p4a-remote-adopt`; T407b, T407c, and GATE-4 remain pending until PR-4c.
+> VoxKit consumers use remote exact `0.1.0` from `LeePepe/VoxKit`.
+>
 > **TK3-2 status (2026-11-06):** T101–T312 are complete on the Phase 3 implementation
 > branch. This includes the App Group workflow bridge, application runner migration,
 > preset-based app routing, benchmark/API visibility migration, and documentation updates.
@@ -67,31 +71,33 @@
 | T305 | VoxKit | `@WorkflowBuilder` + `Preset.overriding` | T304 | US3-AC1 |
 | T306 | VoxKit | 内置 presets（含 `VoxWorkflowWhisperKit`） | T305 | US3-AC7 |
 | T307 | VoxKit | SDK 侧 golden（复制 fixture + drift 检查）+ 金丝雀全 preset | T306 | US1-AC1, US3-AC3, US4-AC2 |
-| T308 | VoxInfrastructure/Bridge | `StageModelSettings` → preset 映射（逐步 `analysis.<step>`）+ 全组合测试；`WorkflowTranscriptionCoordinator`（转发 `ModelLoadingStartControlling`）；`RefineWorkflowRunner`；iOS 映射（batch 有→`hybrid.azure` 无 realtime / 否则 `apple.speech` + 同文 warning；intent/tone 固定 Apple，entities/tags/params 跟随 refine provider；初始 `azureFoundry`，合法存值才切换，通知时非法/删除保持当前；skip 偏好；通知重应用） | T307 | US3-AC3, US1-AC3 |
-| T309 | VoxApplication | `DefaultRefinementUseCase` 只依赖 `RefineWorkflowRunning` | T308 | US1-AC2 |
-| T310 | App 壳（含 VoxPocketTests、scripts/tests） | 同一 commit：删除 transcriber 分支/`TranscriberProvider`/`DefaultStageTextModelService`/`StageModelRouting.applyTextModels` 等（RB-8/RB-9）；golden (b) 改由 preset 导出 `pipeline`；每栈独立 runtime；iOS `ServiceContainer` 改接 iOS 映射；选择测试迁为 preset 测试（矩阵不缩小）；harness 同步 | T309 | US1-AC4, US1-AC7 |
-| T311a | VoxInfrastructure | 基准测试改用 public refine workflow / preset API | T310 | US1-AC2 |
-| T311 | VoxKit | `DefaultLLMService`/`LLMService` 降为 `package`；API 快照更新 | T311a | US2-AC4 |
-| T312 | docs | tech-context、CLAUDE preset 表 | T311 | US7-AC2 |
-| GATE-3 | — | golden 按 RB-12 规则相等（含 EB-7 iOS 行，由 `App unit tests (iOS)` 产出）；全部 required 绿，含 App macOS 与 iOS build/test | T312 | US1-AC1 |
+| T308 ✅ | VoxInfrastructure/Bridge | `StageModelSettings` → preset 映射（逐步 `analysis.<step>`）+ 全组合测试；`WorkflowTranscriptionCoordinator`（转发 `ModelLoadingStartControlling`）；`RefineWorkflowRunner`；iOS 映射（batch 有→`hybrid.azure` 无 realtime / 否则 `apple.speech` + 同文 warning；intent/tone 固定 Apple，entities/tags/params 跟随 refine provider；初始 `azureFoundry`，合法存值才切换，通知时非法/删除保持当前；skip 偏好；通知重应用） | T307 | US3-AC3, US1-AC3 |
+| T309 ✅ | VoxApplication | `DefaultRefinementUseCase` 只依赖 `RefineWorkflowRunning` | T308 ✅ | US1-AC2 |
+| T310 ✅ | App 壳（含 VoxPocketTests、scripts/tests） | 同一 commit：删除 transcriber 分支/`TranscriberProvider`/`DefaultStageTextModelService`/`StageModelRouting.applyTextModels` 等（RB-8/RB-9）；golden (b) 改由 preset 导出 `pipeline`；每栈独立 runtime；iOS `ServiceContainer` 改接 iOS 映射；选择测试迁为 preset 测试（矩阵不缩小）；harness 同步 | T309 ✅ | US1-AC4, US1-AC7 |
+| T311a ✅ | VoxInfrastructure | 基准测试改用 public refine workflow / preset API | T310 ✅ | US1-AC2 |
+| T311 ✅ | VoxKit | `DefaultLLMService`/`LLMService` 降为 `package`；API 快照更新 | T311a ✅ | US2-AC4 |
+| T312 ✅ | docs | tech-context、CLAUDE preset 表 | T311 ✅ | US7-AC2 |
+| GATE-3 ✅ | — | golden 按 RB-12 规则相等（含 EB-7 iOS 行，由 `App unit tests (iOS)` 产出）；全部 required 绿，含 App macOS 与 iOS build/test | T312 ✅ | US1-AC1 |
 
 ## 阶段 4：拆 repo
 
 | ID | 仓 | 任务 | 依赖 | AC |
 |---|---|---|---|---|
-| T401 | 临时 clone | 固定 main 来源 SHA、仅 clone main 且 `--no-tags`；filter-repo 导出 main 可达的新旧路径历史（含 `GoldenTraceTests`、`--mailmap` → noreply、`--replace-text`、`--replace-message`；规则文件不提交）；以 commit-map 关联阶段 squash 与 T210 来源 SHA；两个 clone 分别读取树作一致性检查，不向导出 clone 取回原始 refs（plan §9） | GATE-3 合并 | US6-AC1, US6-AC2 |
-| T402 | 临时 clone | 隐私预检（含音频 blob、作者列表），在处置后的历史上必须零发现；计数报告交 Owner | T401 | US6-AC2 |
-| T403 | VoxKit | 建 `LeePepe/VoxKit`（public，MIT），推 `main` | T402 + Owner 确认 | — |
-| T404 | VoxKit | `repo-kit init` PR（AGENTS/CLAUDE/verify/hooks/ci/review/PR 模板/CODEOWNERS/tech-context/`ai/`）；`.gitignore` 忽略本地私密配置 + 提交 `.example` 模板（Q2）；`audit` 零发现 | T403 | US6-AC3, US6-AC7 |
-| T405 | VoxKit | ruleset（分支 + tag 保护，Q6：`tags-immutable` = update/deletion/non_fast_forward、无任何 bypass；`tags-create` = creation、仅 Owner bypass）old→new 给 Owner，批准后设置并回读（断言两者 bypass 列表） | T404 | US6-AC3, US6-AC7 |
-| T406 | VoxKit | tag `0.1.0`（Q6）+ release notes；外部消费者 exact 版本验证（macOS + iOS Simulator） | T405 | US6-AC4, US2-AC1 |
-| T407 | VoxPocket（E2） | 所有 manifest + `project.yml` 同一 commit 切到远程 exact；删除 `Packages/VoxKit` | T406 | US6-AC5 |
-| T408 | VoxPocket | `.gitignore` 放行并提交 4 个 `Package.resolved` | T407 | US6-AC5 |
-| T409 | VoxPocket | CI 删 VoxKit lane 与 SDK red lines；golden drift 检查改为对比 pin 版本 tag 中的副本；ruleset 映射文件 | T408 | US6-AC5 |
-| T410 | VoxPocket | `check_frontmatter.py` 外部化；宪法/tech-context/AGENTS Dependencies 段与本地覆盖说明 | T409 | US7-AC1, US7-AC2 |
-| GATE-4 | — | 全部既有测试 + App 侧 golden (b) 通过 | T410 | US6-AC5 |
-| T411 | VoxPocket | 合并后 ruleset apply（Owner 批准）；revert 演练分支 CI 绿后关闭 | GATE-4 | US6-AC6 |
+| T401 ✅ | 临时 clone | 固定 main 来源 SHA、仅 clone main 且 `--no-tags`；filter-repo 导出 main 可达的新旧路径历史（含 `GoldenTraceTests`、`--mailmap` → noreply、`--replace-text`、`--replace-message`；规则文件不提交）；以 commit-map 关联阶段 squash 与 T210 来源 SHA；两个 clone 分别读取树作一致性检查，不向导出 clone 取回原始 refs（plan §9） | GATE-3 合并 | US6-AC1, US6-AC2 |
+| T402 ✅ | 临时 clone | 隐私预检（含音频 blob、作者列表），在处置后的历史上必须零发现；计数报告交 Owner | T401 ✅ | US6-AC2 |
+| T403 ✅ | VoxKit | 建 `LeePepe/VoxKit`（public，MIT），推 `main` | T402 + Owner 确认 | — |
+| T404 ✅ | VoxKit | `repo-kit init` PR（AGENTS/CLAUDE/verify/hooks/ci/review/PR 模板/CODEOWNERS/tech-context/`ai/`）；`.gitignore` 忽略本地私密配置 + 提交 `.example` 模板（Q2）；`audit` 零发现 | T403 ✅ | US6-AC3, US6-AC7 |
+| T405 ✅ | VoxKit | ruleset（分支 + tag 保护，Q6：`tags-immutable` = update/deletion/non_fast_forward、无任何 bypass；`tags-create` = creation、仅 Owner bypass）old→new 给 Owner，批准后设置并回读（断言两者 bypass 列表） | T404 ✅ | US6-AC3, US6-AC7 |
+| T406 ✅ | VoxKit | tag `0.1.0`（Q6）+ release notes；外部消费者 exact 版本验证（macOS + iOS Simulator） | T405 ✅ | US6-AC4, US2-AC1 |
+| T407a ✅ | VoxPocket（E2） | PR-4a：所有 manifest + `project.yml` + harness 切到远程 exact；移除重复顶层 VoxKit 包/产品声明；删除 `Packages/VoxKit/{tech-context.md,scripts,Examples}` 与 `Tests/GoldenTraceTests/**`，并移除其 manifest test target | T406 ✅ | US6-AC5 |
+| T407b | VoxPocket（E2） | PR-4b：删除 `Packages/VoxKit/Tests/{VoxSpeechTests,VoxWorkflowTests,VoxLLMTests,VoxSpeechWhisperKitTests,CanaryTests}` 与 `Sources/{VoxWorkflow,VoxWorkflowWhisperKit}` | T407a ✅ | US6-AC5 |
+| T407c | VoxPocket（E2） | PR-4c：删除剩余 `Packages/VoxKit/{Package.swift,Sources,Tests}` 与临时 tech-context support entry | T407b |
+| T408 ✅ | VoxPocket | `.gitignore` 放行并提交 4 个 `Package.resolved` | T407a ✅ | US6-AC5 |
+| T409 ✅ | VoxPocket | CI 删 VoxKit lane 与 SDK red lines；golden drift 检查改为对比 pin 版本 tag 中的副本；ruleset 映射文件 | T408 ✅ | US6-AC5 |
+| T410 ✅ | VoxPocket | `check_frontmatter.py` 外部化；宪法/tech-context/AGENTS Dependencies 段与本地覆盖说明 | T409 ✅ | US7-AC1, US7-AC2 |
+| GATE-4 | — | 全部既有测试 + App 侧 golden (b) 通过，且 T407c 已完成 | T410 ✅, T407c |
+| T411 | VoxPocket | 合并后 ruleset apply（Owner 批准）；revert 演练分支 CI 绿后关闭 | GATE-4 ✅ | US6-AC6 |
 
 ## 关键路径
 
-T001 → T003 → T004 → T101 → T102 → T102a（golden (b)(c) CI 闸门）→ T103 → T104 → T107 → T110 → T114 → T115 → GATE-1 → T117 → T201 → T202 → T204 → GATE-2 → T210 → T301 → T307 → T308 → T310 → GATE-3 → T401 → T402 → T404 → T405 → T406 → T407 → GATE-4 → T411
+T001 → T003 → T004 → T101 → T102 → T102a（golden (b)(c) CI 闸门）→ T103 → T104 → T107 → T110 → T114 → T115 → GATE-1 → T117 → T201 → T202 → T204 → GATE-2 → T210 → T301 → T307 → T308 → T310 → GATE-3 → T401 → T402 → T404 → T405 → T406 → T407a → T407b → T407c → GATE-4 → T411
