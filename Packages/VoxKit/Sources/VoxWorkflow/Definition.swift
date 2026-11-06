@@ -17,6 +17,7 @@ public struct NodeKindID: RawRepresentable, ExpressibleByStringLiteral, Codable,
     public static let speechAzureRealtime: Self = "speech.azure.realtime"
     public static let speechWhisperKitLocal: Self = "speech.whisperkit.local"
     public static let mergeLLM: Self = "merge.llm"
+    public static let selectText: Self = "select.text"
     public static let analyzeIntent: Self = "analyze.intent"
     public static let analyzeTone: Self = "analyze.tone"
     public static let refinePrompt: Self = "refine.prompt"

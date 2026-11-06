@@ -23,14 +23,14 @@ red_lines:
 ## 依赖
 - **仓库内**:通过 `VoxPresentation` 的 `UIShared`/`PlatformUI`/`WidgetUI` 产品,并直接 import
   `VoxInfrastructure`(VoxKitBridge/Persistence/PlatformAdapters/Preferences)、
-  `VoxKit`(VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM)、
+  `VoxKit`(VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM/VoxWorkflow/VoxWorkflowWhisperKit)、
   `VoxApplication`(UseCases)与 `VoxDomain`(CoreModels)的模块。
 - **外部**:`LokiKit` 由 SwiftPM 按 shared-telemetry 远程依赖 `exact: "0.2.0"` 解析；
   `AppleUITesting`(`UITestingBridge`)放在仓库同级目录,CI 由 `scripts/ci/fetch-external-deps.sh` 按固定 SHA 取出。
 
 ## ServiceContainer 初始化顺序
-`ServiceContainer.init()` 在主线程同步执行:Logger + 遥测 facade → 转写器(`LLMAppConfig.defaultTranscriberProvider`)
-→ `DefaultLLMService` 与 macOS 平台服务 → UseCases(Editing → Recording → Transcription → Refinement)
+`ServiceContainer.init()` 在主线程同步执行:Logger + 遥测 facade → preset 转录器(`LLMAppConfig.defaultPresetID`)
+与各栈独立的 `RefineWorkflowRunner` → macOS 平台服务 → UseCases(Editing → Recording → Transcription → Refinement)
 → `ProxySessionUseCase` 先用 `InMemorySessionUseCase`,首帧后 `initializePersistence()` 热切到
 `SwiftDataSessionUseCase` → macOS 独立的快捷录音栈(与主编辑器隔离,防状态串扰)。
 

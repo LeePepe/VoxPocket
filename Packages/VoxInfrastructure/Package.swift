@@ -38,7 +38,13 @@ let package = Package(
             dependencies: [
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
+                .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
+                .product(name: "VoxWorkflow", package: "VoxKit"),
+                .product(name: "VoxWorkflowWhisperKit", package: "VoxKit"),
+                .product(name: "VoxLLM", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
+                "Preferences",
             ]
         ),
         .target(
@@ -68,6 +74,8 @@ let package = Package(
                 .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
                 .product(name: "VoxLLM", package: "VoxKit"),
                 .product(name: "VoxRefine", package: "VoxKit"),
+                .product(name: "VoxWorkflow", package: "VoxKit"),
+                .product(name: "VoxWorkflowWhisperKit", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
             ],
             exclude: ["README.md"]
@@ -76,9 +84,13 @@ let package = Package(
             name: "VoxKitBridgeTests",
             dependencies: [
                 "VoxKitBridge",
+                .product(name: "VoxLLM", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
                 .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),
+                .product(name: "VoxWorkflow", package: "VoxKit"),
+                .product(name: "VoxWorkflowWhisperKit", package: "VoxKit"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
             ]
         ),

@@ -7,6 +7,7 @@ import XCTest
 import Preferences
 import VoxSpeech
 import VoxLLM
+import VoxWorkflow
 @testable import VoxPocket
 
 final class GoldenRoutingTests: XCTestCase {
@@ -38,41 +39,24 @@ final class GoldenRoutingTests: XCTestCase {
 
     @MainActor private func macOSRow(settings: StageModelSettings, config: String) async throws -> [String: Any] {
         let environment = macOSEnvironment(config)
-        let coordinator = StageModelRouting.resolveTranscriber(settings: settings, environment: environment)
-        let speech = StageModelRouting.resolvedSpeechModel(settings: settings, environment: environment)
-        XCTAssertEqual(coordinator is AppleSpeechTranscriber, speech == .appleSpeech)
-        XCTAssertEqual(coordinator is HybridWhisperTranscriber, speech != .appleSpeech)
-        let azure = LLMAppConfig.refinementAPIKey(environment: environment).flatMap { key in
-            LLMAppConfig.azureEndpoint(environment: environment).map { endpoint in
-                LLMProviderConfig(providerType: .azureFoundry, apiKey: Credential(rawValue: key), baseURL: endpoint,
-                                  modelIdentifier: LLMAppConfig.azureModelIdentifier(environment: environment))
-            }
-        }
-        let text = DefaultStageTextModelService(azureFoundryConfig: azure, settings: settings)
-        let analysis = DefaultLLMService(azureFoundryConfig: azure)
-        var failure = "none"
-        do { try StageModelRouting.applyTextModels(settings, to: analysis) }
-        catch { XCTAssertEqual(settings.refinement, .azureFoundry); XCTAssertNil(azure) }
-        if settings.refinement == .azureFoundry && azure == nil {
+        let availability = StageModelRouting.availability(environment: environment)
+        let realtimeConfigured = LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil
+        let preset = StagePresetMapping.preset(settings: settings,
+            batchConfigured: availability.batchConfigured,
+            realtimeConfigured: realtimeConfigured,
+            azureTextConfigured: availability.textConfigured)
+        let runner = RefineWorkflowRunner(preset: preset,
+            configuration: WorkflowExecutionConfiguration(),
+            azureTextConfigured: availability.textConfigured)
+        let snapshot = preset.exportedPipeline(batchConfigured: availability.batchConfigured,
+            realtimeConfigured: realtimeConfigured, azureTextConfigured: availability.textConfigured)
+        if !runner.isConfigured {
             do {
-                _ = try await text.refine(.init(text: "synthetic input"))
+                _ = try await runner.refine(.init(text: "synthetic input"))
                 XCTFail("Unconfigured Azure must fail before invoking a provider")
-            } catch DefaultStageTextModelService.ConfigurationError.unavailable { failure = "textModelUnavailable" }
-            XCTAssertNil(text.currentProviderType)
-        } else { XCTAssertEqual(text.currentProviderType?.rawValue, settings.refinement.rawValue) }
-        let route = StageModelRouting.analysisOptions(settings: settings)
-        var providers = analysis.resolvedAnalysisRouting.reduce(into: [String: String]()) { $0[$1.key.rawValue] = $1.value.rawValue }
-        if failure != "none" {
-            providers = Dictionary(uniqueKeysWithValues: AnalysisStep.allCases.map { ($0.rawValue, route["analysis.\($0.rawValue).provider"]!) })
+            } catch RefineWorkflowConfigurationError.unavailable {}
         }
-        if settings.skipAnalysis { providers = providers.mapValues { _ in "skipped" } }
-        var nodes = ["capture.microphone", "speech.apple"]
-        if speech == .realtime { nodes.append("speech.azure.realtime") }
-        if speech != .appleSpeech { nodes.append("speech.azure.batch") }
-        let pipeline: [String: Any] = ["speech": nodes, "realtime": speech == .realtime,
-                                      "merger": (coordinator as? any MultiRecognizerSpeechSource)?.merger != nil,
-                                      "analysis": providers, "refine": text.currentProviderType?.rawValue ?? settings.refinement.rawValue,
-                                      "configFailure": failure]
+        let pipeline = pipelineDictionary(snapshot)
         return ["settings": ["speech": settings.speech.rawValue, "intent": settings.intent.rawValue,
                              "tone": settings.tone.rawValue, "refinement": settings.refinement.rawValue, "skip": settings.skipAnalysis],
                 "configuration": config, "pipeline": pipeline]
@@ -113,7 +97,7 @@ final class GoldenRoutingTests: XCTestCase {
                 if !batch { environment["AZURE_TRANSCRIPTION_ENDPOINT"] = "invalid" }
                 if realtime { environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "example-live" }
                 let coordinator = ServiceContainer.makeIOSHybridTranscriber(environment: environment)
-                XCTAssertEqual((coordinator as? CombineTranscriptionCoordinator)?.core is HybridWhisperTranscriber, batch)
+                XCTAssertEqual(coordinator.core is HybridWhisperTranscriber, batch)
                 let configuredRealtime = try receivedRealtimeConfiguration(coordinator)
                 XCTAssertEqual(configuredRealtime, batch && LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil)
                 rows.append(["platform": platform, "configuration": ["batch": batch, "realtime": realtime],
@@ -131,43 +115,34 @@ final class GoldenRoutingTests: XCTestCase {
         var environment: [String: String] = [:]
         if batch { environment["AZURE_TRANSCRIPTION_ENDPOINT"] = "https://example.invalid/audio"; environment["whisperkey"] = "fixture-speech" }
         if azure { environment["AZURE_FOUNDRY_ENDPOINT"] = "https://example.invalid"; environment["kimikey"] = "fixture-text" }
-        let service = DefaultLLMService(azureFoundryConfig: ServiceContainer.makeAzureFoundryConfig(environment: environment))
         let notifications = NotificationCenter()
-        #if os(iOS)
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "GoldenRouting-\(UUID().uuidString)"))
-        let telemetryPreferences = ProductTelemetryPreferences(store: UserDefaultsPreferencesStore(defaults: defaults))
-        let container = ServiceContainer(productTelemetryPreferences: telemetryPreferences,
-                                         processEnvironment: environment, preferencesStore: preferences,
-                                         llmServiceFactory: { service }, llmNotificationCenter: notifications,
-                                         productTelemetryNotificationCenter: notifications, productTelemetryHostOverride: .test)
-        await container.waitForPendingLLMPreferenceChanges()
-        let coordinator = container.transcriber
-        #else
-        let binding = LLMPreferenceBinding(service: service, environment: environment, preferences: preferences, notificationCenter: notifications)
+        let binding = IOSPresetPreferenceBinding(batchConfigured: batch, azureTextConfigured: azure,
+            preferences: preferences, notificationCenter: notifications)
         await binding.waitForPendingChanges()
+        let runner = RefineWorkflowRunner(preset: binding.preset,
+            configuration: WorkflowExecutionConfiguration(azureFoundryConfig: ServiceContainer.makeAzureFoundryConfig(environment: environment)),
+            azureTextConfigured: azure)
         let coordinator = ServiceContainer.makeIOSHybridTranscriber(environment: environment)
-        #endif
-        XCTAssertEqual((coordinator as? CombineTranscriptionCoordinator)?.core is HybridWhisperTranscriber, batch)
+        XCTAssertEqual(coordinator.core is HybridWhisperTranscriber, batch)
         let realtime = try receivedRealtimeConfiguration(coordinator)
         XCTAssertEqual(realtime, batch && LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil)
-        XCTAssertEqual(service.currentProviderType, provider == "appleIntelligence" ? .appleIntelligence : .azureFoundry)
+        XCTAssertEqual(runner.currentProviderType, provider == "appleIntelligence" ? .appleIntelligence : .azureFoundry)
         let initial: [String: Any] = ["batch": batch, "provider": provider, "skip": skip, "azureText": azure]
-        var rows = [preferenceRow(service, coordinator: coordinator, realtime: realtime, initial: initial, event: "initial")]
+        var rows = [preferenceRow(runner, batch: batch, azureTextConfigured: azure, initial: initial, event: "initial")]
         for name in [PreferencesNotification.llmProviderDidChange, PreferencesNotification.llmAnalysisSettingsDidChange] {
             for mutation in ["valid", "invalid", "deleted"] {
                 let providerChange = name == PreferencesNotification.llmProviderDidChange
-                let previousProvider = service.currentProviderType
+                let previousProvider = runner.currentProviderType
                 try await mutate(preferences, providerChange: providerChange, mutation: mutation, skip: skip)
                 notifications.post(name: name, object: nil)
-                #if os(iOS)
-                await container.waitForPendingLLMPreferenceChanges()
-                #else
                 await binding.waitForPendingChanges()
-                #endif
+                runner.configure(preset: binding.preset,
+                    configuration: WorkflowExecutionConfiguration(azureFoundryConfig: ServiceContainer.makeAzureFoundryConfig(environment: environment)),
+                    azureTextConfigured: azure)
                 if providerChange {
-                    XCTAssertEqual(service.currentProviderType, mutation == "valid" ? .appleIntelligence : previousProvider)
-                } else { XCTAssertEqual(service.isContentAnalysisSkipped, mutation == "valid" ? !skip : false) }
-                rows.append(preferenceRow(service, coordinator: coordinator, realtime: realtime, initial: initial,
+                    XCTAssertEqual(runner.currentProviderType, mutation == "valid" ? .appleIntelligence : previousProvider)
+                } else { XCTAssertEqual(runner.isContentAnalysisSkipped, mutation == "valid" ? !skip : false) }
+                rows.append(preferenceRow(runner, batch: batch, azureTextConfigured: azure, initial: initial,
                                           event: "\(providerChange ? "provider" : "analysis").\(mutation)"))
             }
         }
@@ -183,7 +158,8 @@ final class GoldenRoutingTests: XCTestCase {
     }
 
     private func receivedRealtimeConfiguration(_ coordinator: any TranscriptionCoordinator) throws -> Bool {
-        guard let hybrid = (coordinator as? CombineTranscriptionCoordinator)?.core as? HybridWhisperTranscriber else { return false }
+        guard let workflow = coordinator as? WorkflowTranscriptionCoordinator,
+              let hybrid = workflow.core as? HybridWhisperTranscriber else { return false }
         let configuration = try XCTUnwrap(Mirror(reflecting: hybrid).children.first { $0.label == "realtimeConfig" })
         return configuration.value as? AzureRealtimeTranscriptionConfig != nil
     }
@@ -191,24 +167,27 @@ final class GoldenRoutingTests: XCTestCase {
     private func speechPipeline(_ coordinator: any TranscriptionCoordinator, realtime: Bool) -> [String: Any] {
         var nodes = ["capture.microphone", "speech.apple"]
         if realtime { nodes.append("speech.azure.realtime") }
-        if (coordinator as? CombineTranscriptionCoordinator)?.core is HybridWhisperTranscriber { nodes.append("speech.azure.batch") }
+        if (coordinator as? WorkflowTranscriptionCoordinator)?.core is HybridWhisperTranscriber { nodes.append("speech.azure.batch") }
         return ["speech": nodes, "realtime": realtime,
                 "merger": (coordinator as? any MultiRecognizerTranscriber)?.merger != nil]
     }
 
-    @MainActor private func preferenceRow(_ service: DefaultLLMService, coordinator: any TranscriptionCoordinator, realtime: Bool,
+    @MainActor private func preferenceRow(_ runner: RefineWorkflowRunner, batch: Bool, azureTextConfigured: Bool,
                                          initial: [String: Any], event: String) -> [String: Any] {
-        let routing = service.resolvedAnalysisRouting.reduce(into: [String: String]()) { $0[$1.key.rawValue] = $1.value.rawValue }
+        let routing = runner.resolvedAnalysisRouting.reduce(into: [String: String]()) { $0[$1.key.rawValue] = $1.value.rawValue }
         XCTAssertEqual(routing["intent"], "appleIntelligence"); XCTAssertEqual(routing["tone"], "appleIntelligence")
-        for step in ["entities", "tags", "params"] { XCTAssertEqual(routing[step], service.currentProviderType?.rawValue) }
-        var pipeline = speechPipeline(coordinator, realtime: realtime)
-        pipeline["analysis"] = routing.mapValues { service.isContentAnalysisSkipped ? "skipped" : $0 }
-        pipeline["refine"] = service.currentProviderType!.rawValue
-        pipeline["configFailure"] = service.currentProviderType == .azureFoundry && service.currentProvider?.isAvailable != true
-            ? "textModelUnavailable" : "none"
-        return ["initial": initial, "event": event, "routing": routing, "skip": service.isContentAnalysisSkipped, "pipeline": pipeline]
+        for step in ["entities", "tags", "params"] { XCTAssertEqual(routing[step], runner.currentProviderType?.rawValue) }
+        let snapshot = runner.activePreset.exportedPipeline(batchConfigured: batch, realtimeConfigured: false,
+            azureTextConfigured: azureTextConfigured)
+        return ["initial": initial, "event": event, "routing": routing, "skip": runner.isContentAnalysisSkipped,
+                "pipeline": pipelineDictionary(snapshot)]
     }
     #endif
+
+    private func pipelineDictionary(_ snapshot: WorkflowPipelineSnapshot) -> [String: Any] {
+        ["speech": snapshot.speech, "realtime": snapshot.realtime, "merger": snapshot.merger,
+         "analysis": snapshot.analysis, "refine": snapshot.refine, "configFailure": snapshot.configFailure]
+    }
 
     private func assertFixture(_ rows: [[String: Any]], name: String, platform: String? = nil) throws {
         let payload: [String: Any] = ["schema": "golden-trace/v1", "kind": "routing", "traces": rows]

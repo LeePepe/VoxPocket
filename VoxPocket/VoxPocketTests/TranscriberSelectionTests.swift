@@ -7,6 +7,7 @@ import Testing
 import VoxSpeech
 import VoxLLM
 import Preferences
+import VoxWorkflow
 
 struct TranscriberSelectionTests {
     @MainActor @Test func concurrentEntryPointsAwaitTheSameConfiguration() async throws {
@@ -18,7 +19,7 @@ struct TranscriberSelectionTests {
     }
 
     @MainActor @Test func defaultsSelectCloudFinalAndAzureRefinement() {
-        #expect(LLMAppConfig.defaultTranscriberProvider == .hybridWhisper)
+        #expect(LLMAppConfig.defaultPresetID == "hybrid.azure")
         #expect(LLMAppConfig.defaultProvider == .azureFoundry)
         #expect(LLMAppConfig.azureAPIStyle == .openAIV1)
         #expect(LLMAppConfig.azureAuthMode == .apiKey)
@@ -77,7 +78,8 @@ struct TranscriberSelectionTests {
         #expect(quick.core is HybridWhisperTranscriber)
         #endif
         #expect((main as AnyObject) !== (quick as AnyObject))
-        #expect((quick.core as? HybridWhisperTranscriber)?.merger == nil)
+        #expect(main.presetID == "hybrid.azure")
+        #expect(quick.presetID == "hybrid.azure")
     }
 
     @MainActor @Test func missingCloudConfigurationKeepsRecordingAvailableLocally() {
@@ -90,15 +92,14 @@ struct TranscriberSelectionTests {
     }
 
     @MainActor @Test func hybridLocalReceivesMergerInBothStacksAndCloudDoesNot() throws {
-        let merger = LLMTranscriptionMerger(llmService: DefaultLLMService())
         let main = ServiceContainer.makeTranscriber(preloadOnStart: false, environment: [:],
-            provider: .hybridLocalWhisper, merger: merger)
-        let quick = ServiceContainer.makeQuickTranscriber(environment: [:], provider: .hybridLocalWhisper, merger: merger)
+            presetID: "hybrid.local")
+        let quick = ServiceContainer.makeQuickTranscriber(environment: [:], presetID: "hybrid.local")
         let mainCore = try #require(main.core as? HybridLocalWhisperTranscriber)
         let quickCore = try #require(quick.core as? HybridLocalWhisperTranscriber)
         #expect(mainCore.merger != nil)
         #expect(quickCore.merger != nil)
-        let cloud = ServiceContainer.makeTranscriber(environment: cloudEnvironment, provider: .hybridWhisper, merger: merger)
+        let cloud = ServiceContainer.makeTranscriber(environment: cloudEnvironment, presetID: "hybrid.azure")
         #if os(iOS)
         let cloudCore = try #require(cloud.core as? HybridWhisperTranscriber)
         #expect(cloudCore.merger == nil)

@@ -8,6 +8,7 @@ import VoxLLM
 import LokiKit
 import Synchronization
 import VoxSpeech
+import VoxWorkflow
 import XCTest
 @testable import UseCases
 
@@ -16,7 +17,7 @@ final class DefaultRefinementTelemetryPrivacyTests: XCTestCase {
         let telemetry = CapturingRefinementTelemetry()
         let editing = RefinementPrivacyEditingUseCase(initialText: PrivateSentinel.transcript)
         let useCase = DefaultRefinementUseCase(
-            llmService: FailingRefinementLLMService(),
+            runner: FailingRefinementRunner(),
             editing: editing,
             telemetry: telemetry
         )
@@ -113,20 +114,12 @@ private enum RefinementPrivacyError: LocalizedError {
     }
 }
 
-private final class FailingRefinementLLMService: LLMService {
-    var availableProviders: [LLMProviderType] { [.appleIntelligence] }
-    var currentProvider: LLMProvider? { nil }
+private final class FailingRefinementRunner: RefineWorkflowRunning {
+    var isConfigured: Bool { true }
+    var activePreset: Preset { .default }
     var currentProviderType: LLMProviderType? { .appleIntelligence }
-
-    func setProvider(_ config: LLMProviderConfig) throws {}
-
-    func complete(prompt: String) async throws -> String {
-        throw RefinementPrivacyError.privateContent
-    }
-
-    func completeStreaming(prompt: String) async throws -> AsyncThrowingStream<String, Error> {
-        throw RefinementPrivacyError.privateContent
-    }
+    var resolvedAnalysisRouting: [AnalysisStep: LLMProviderType] { [:] }
+    var isContentAnalysisSkipped: Bool { false }
 
     func refine(_ request: RefinementRequest) async throws -> RefinementResponse {
         throw RefinementPrivacyError.privateContent
@@ -137,8 +130,6 @@ private final class FailingRefinementLLMService: LLMService {
     }
 
     func cancel() {}
-
-    func validateCurrentProvider() async -> Bool { true }
 }
 
 // CurrentValueSubject provides the synchronous Combine bridge required by EditingUseCase.

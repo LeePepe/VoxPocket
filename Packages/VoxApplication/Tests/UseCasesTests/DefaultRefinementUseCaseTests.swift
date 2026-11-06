@@ -4,13 +4,15 @@ import Combine
 import VoxLLM
 import CoreModels
 import VoxSpeech
+import VoxWorkflow
+import VoxKitBridge
 @testable import UseCases
 
 final class DefaultRefinementUseCaseTests: XCTestCase {
     func testRefineStreamingPassesThroughTranscriptionMetadata() async throws {
-        let llmService = CapturingLLMService()
+        let runner = CapturingRefinementRunner()
         let editing = CapturingEditingUseCase(initialText: "再看一下为什么有时候没有能够成功添加标点符号")
-        let useCase = DefaultRefinementUseCase(llmService: llmService, editing: editing)
+        let useCase = DefaultRefinementUseCase(runner: runner, editing: editing)
 
         let metadata = TranscriptionMetadata(
             type: .final,
@@ -21,26 +23,18 @@ final class DefaultRefinementUseCaseTests: XCTestCase {
         let stream = useCase.refineStreaming(customPrompt: nil, transcriptionMetadata: metadata)
         for try await _ in stream {}
 
-        XCTAssertEqual(llmService.lastRefineStreamingRequest?.transcriptionMetadata?.locale?.identifier, "zh-Hans")
+        XCTAssertEqual(runner.lastRefineStreamingRequest?.transcriptionMetadata?.locale?.identifier, "zh-Hans")
     }
 }
 
-private final class CapturingLLMService: LLMService, @unchecked Sendable {
-    var availableProviders: [LLMProviderType] { [.appleIntelligence] }
-    var currentProvider: LLMProvider? { nil }
+private final class CapturingRefinementRunner: RefineWorkflowRunning, @unchecked Sendable {
+    var isConfigured: Bool { true }
+    var activePreset: Preset { .default }
     var currentProviderType: LLMProviderType? { .appleIntelligence }
+    var resolvedAnalysisRouting: [AnalysisStep: LLMProviderType] { [:] }
+    var isContentAnalysisSkipped: Bool { false }
 
     private(set) var lastRefineStreamingRequest: RefinementRequest?
-
-    func setProvider(_ config: LLMProviderConfig) throws {}
-
-    func complete(prompt: String) async throws -> String { "" }
-
-    func completeStreaming(prompt: String) async throws -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            continuation.finish()
-        }
-    }
 
     func refine(_ request: RefinementRequest) async throws -> RefinementResponse {
         RefinementResponse(
@@ -61,7 +55,6 @@ private final class CapturingLLMService: LLMService, @unchecked Sendable {
     }
 
     func cancel() {}
-    func validateCurrentProvider() async -> Bool { true }
 }
 
 private final class CapturingEditingUseCase: EditingUseCase, @unchecked Sendable {

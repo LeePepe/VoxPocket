@@ -1,9 +1,9 @@
 import Foundation
 import VoxCore
 import VoxKitBridge
+import VoxWorkflow
 import Preferences
 import VoxSpeech
-import VoxLLM
 
 /// App 组合根将非敏感偏好映射到已有适配器；每次录音捕获一次选择。
 @MainActor
@@ -22,18 +22,22 @@ enum StageModelRouting {
                                beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)?, sdk: SDKHostConfiguration? = nil) -> any SpeechSessionSource {
         let sdk = sdk ?? defaultSDK(environment: environment)
         beforeSession?(settings)
-        return resolveTranscriber(settings: settings, environment: environment, sdk: sdk)
-    }
-
-    static func resolveTranscriber(settings: StageModelSettings, environment: [String: String], sdk: SDKHostConfiguration? = nil) -> any SpeechSessionSource {
-        let sdk = sdk ?? defaultSDK(environment: environment)
-        let selected = resolvedSpeechModel(settings: settings, environment: environment)
-        guard selected != .appleSpeech,
-              let batch = LLMAppConfig.transcriptionConfig(environment: environment) else { return AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations) }
-        let realtime = selected == .realtime
+        let availability = availability(environment: environment)
+        let realtimeConfigured = LLMAppConfig.realtimeTranscriptionConfig(
+            environment: environment, deploymentOverride: settings.realtimeDeployment) != nil
+        let preset = StagePresetMapping.preset(settings: settings,
+            batchConfigured: availability.batchConfigured,
+            realtimeConfigured: realtimeConfigured,
+            azureTextConfigured: availability.textConfigured)
+        guard preset.speech.nodes.contains(where: { $0.kind == .speechAzureBatch }),
+              let batch = LLMAppConfig.transcriptionConfig(environment: environment) else {
+            return AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations)
+        }
+        let realtime = preset.speech.nodes.contains(where: { $0.kind == .speechAzureRealtime })
             ? LLMAppConfig.realtimeTranscriptionConfig(environment: environment, deploymentOverride: settings.realtimeDeployment)
             : nil
-        return HybridWhisperTranscriber(whisperConfig: batch, realtimeConfig: realtime, logger: sdk.logger, storageLocations: sdk.storageLocations)
+        return HybridWhisperTranscriber(whisperConfig: batch, realtimeConfig: realtime,
+            logger: sdk.logger, storageLocations: sdk.storageLocations)
     }
 
     private static func defaultSDK(environment: [String: String]) -> SDKHostConfiguration {
@@ -52,30 +56,11 @@ enum StageModelRouting {
         return .batch
     }
 
-    nonisolated static func analysisOptions(settings: StageModelSettings) -> [String: String] {
-        ["analysis.intent.provider": settings.intent.rawValue,
-         "analysis.entities.provider": settings.intent.rawValue,
-         "analysis.tags.provider": settings.intent.rawValue,
-         "analysis.params.provider": settings.intent.rawValue,
-         "analysis.tone.provider": settings.tone.rawValue]
-    }
-
-    nonisolated static func applyTextModels(_ settings: StageModelSettings, to service: DefaultLLMService) throws {
-        let provider: LLMProviderType = settings.refinement == .azureFoundry ? .azureFoundry : .appleIntelligence
-        // 模型对象和凭据由启动配置创建；这里仅切换已注册模型，不把凭据写入偏好。
-        try service.setProvider(.init(providerType: provider, modelIdentifier: "configured",
-                                     options: analysisOptions(settings: settings)))
-        service.setSkipContentAnalysis(settings.skipAnalysis)
-    }
-
     static func availability(environment: [String: String]) -> ModelSettingsAvailability {
         let hasRealtimeCredentials = LLMAppConfig.realtimeTranscriptionConfig(environment: environment,
                                                                              deploymentOverride: "validation") != nil
         let textKey = LLMAppConfig.refinementAPIKey(environment: environment)
-        let textEndpoint = environment["AZURE_FOUNDRY_ENDPOINT"] ?? environment["AZURE_OPENAI_ENDPOINT"] ?? ""
-        let textURL = URL(string: textEndpoint)
-        let textConfigured = textKey != nil && textURL?.scheme == "https" && textURL?.host != nil
-            && textURL?.user == nil && textURL?.password == nil
+        let textConfigured = textKey != nil && LLMAppConfig.azureEndpoint(environment: environment) != nil
         return ModelSettingsAvailability(
             batchConfigured: LLMAppConfig.transcriptionConfig(environment: environment) != nil,
             realtimeCredentialsConfigured: hasRealtimeCredentials,

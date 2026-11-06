@@ -1,5 +1,9 @@
 # VoxKit 拆分任务（依赖顺序）
 
+> **TK3-2 status (2026-11-06):** T101–T312 are complete on the Phase 3 implementation
+> branch. This includes the App Group workflow bridge, application runner migration,
+> preset-based app routing, benchmark/API visibility migration, and documentation updates.
+
 格式：`T<阶段><序号>`（下游层在同一 PR 内可暂时编译失败，见 plan §1.1 例外 E3；PR head 必须全绿） · `[P]` = 同一 PR 内可与相邻 `[P]` 并行（不同层、无共享文件）· 依赖列未写 = 依赖上一行 · 每个任务 = 一个或多个同层 commit（「层」见 plan §1）；`GATE` 行不是 commit，是合并前必须满足的检查。AC 见 spec §4。
 
 ## 阶段 0：前置

@@ -7,11 +7,19 @@ import VoxCore
 /// 由模型综合两者优势输出更准确的最终文本。
 public final class LLMTranscriptionMerger: TranscriptionMerger, Sendable {
 
-    private let llmService: any LLMService
+    private let llmService: (any LLMService)?
+    private let provider: (any LLMProvider)?
     private let logger: any VoxLogger
 
-    public init(llmService: any LLMService, logger: any VoxLogger = NoopVoxLogger()) {
+    package init(llmService: any LLMService, logger: any VoxLogger = NoopVoxLogger()) {
         self.llmService = llmService
+        provider = nil
+        self.logger = logger
+    }
+
+    public init(provider: any LLMProvider, logger: any VoxLogger = NoopVoxLogger()) {
+        llmService = nil
+        self.provider = provider
         self.logger = logger
     }
 
@@ -35,7 +43,13 @@ public final class LLMTranscriptionMerger: TranscriptionMerger, Sendable {
 
         let output: String
         do {
-            output = try await llmService.complete(prompt: prompt)
+            if let provider {
+                output = try await provider.complete(prompt: prompt)
+            } else if let llmService {
+                output = try await llmService.complete(prompt: prompt)
+            } else {
+                return whisper
+            }
         } catch {
             logger.error("merge() — LLM call failed; falling back to Whisper")
             return whisper

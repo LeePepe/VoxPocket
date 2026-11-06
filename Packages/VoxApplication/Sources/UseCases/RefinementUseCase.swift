@@ -1,7 +1,6 @@
 import VoxRefine
 import Foundation
 import Combine
-import VoxLLM
 
 /// 优化状态
 public enum RefinementState: Equatable, Sendable {

@@ -53,6 +53,29 @@ import VoxSpeech
     #expect(preset.exportedPipeline().analysis == expectedAnalysis)
 }
 
+@Test func testHybridSpeechMergerOverrideKeepsCloudOutputAndFallback() async throws {
+    for choice in ["batch", "realtime"] {
+        for failing in [false, true] {
+            let preset = Preset.default.overriding(["speech": choice, "speech.merger": "false"])
+            try preset.speech.validate()
+            #expect(!preset.exportedPipeline().merger)
+            let calls = WorkflowCalls()
+            let events = try await WorkflowRuntime(configuration: workflowConfiguration(calls: calls, realtimeFails: failing))
+                .execute(preset.speech)
+            #expect(calls.values.contains("speech.apple"))
+            #expect(calls.values.contains("speech.azure.realtime") == (choice == "realtime"))
+            #expect(calls.values.contains("speech.azure.batch") == (choice == "batch" || failing))
+            #expect(!calls.values.contains { $0.hasPrefix("merge:") })
+            let expected = choice == "realtime" && !failing ? "speech.azure.realtime" : "speech.azure.batch"
+            #expect(events.contains { if case .final(let value) = $0 { value.text == expected } else { false } })
+        }
+    }
+    let disabled = Preset.default.overriding(["speech.merger": "false"])
+    #expect(!disabled.exportedPipeline().merger)
+    #expect(disabled.overriding(["speech.merger": "true"]) == Preset.default)
+    #expect(Preset.appleSpeech.overriding(["speech.merger": "false"]) == Preset.appleSpeech)
+}
+
 @Test func testPreExecutionValidationRejectsInvalidGraphsWithoutLeakingContent() {
     let registry = NodeRegistry()
     let cases: [(WorkflowDefinition, WorkflowValidationError.Code)] = [
@@ -83,7 +106,7 @@ import VoxSpeech
 
 @Test func testStageModelSettingsOverridingMatchesBaselinePipelineAndTraces() async throws {
     var count = 0
-    for speech in ["appleSpeech", "batch", "realtime", "hybridAzure", "localWhisperKit", "hybridLocalWhisper"] {
+    for speech in ["appleSpeech", "batch", "azureWhisper", "realtime", "hybridAzure", "localWhisperKit", "hybridLocalWhisper"] {
         for routing in ["apple", "azure", "mixed", "inverseMixed"] {
             for skip in [false, true] {
                 count += 1
@@ -96,6 +119,13 @@ import VoxSpeech
                     let preset = Preset.default.overriding(options)
                     let snapshot = preset.exportedPipeline()
                     #expect(snapshot.refine == refinement)
+                    if speech == "batch" {
+                        #expect(snapshot.speech == ["capture.microphone", "speech.apple", "speech.azure.batch"])
+                        #expect(snapshot.merger)
+                    } else if speech == "azureWhisper" {
+                        #expect(snapshot.speech == ["capture.microphone", "speech.azure.batch"])
+                        #expect(!snapshot.merger)
+                    }
                     #expect(snapshot.analysis == ["intent": skip ? "skipped" : intent, "entities": skip ? "skipped" : intent,
                         "tags": skip ? "skipped" : intent, "params": skip ? "skipped" : intent, "tone": skip ? "skipped" : tone])
                     try preset.speech.validate()
@@ -112,7 +142,7 @@ import VoxSpeech
                     let speechText: String
                     switch speech {
                     case "appleSpeech": speechText = "speech.apple"
-                    case "batch": speechText = "speech.azure.batch"
+                    case "azureWhisper": speechText = "speech.azure.batch"
                     case "localWhisperKit": speechText = "speech.whisperkit.local"
                     default: speechText = "merged"
                     }
@@ -130,7 +160,7 @@ import VoxSpeech
             }
         }
     }
-    #expect(count == 48)
+    #expect(count == 56)
 }
 
 @Test func testEveryAnalysisStepCanSelectItsProviderIndependently() async throws {

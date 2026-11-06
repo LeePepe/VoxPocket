@@ -24,7 +24,7 @@ Last-Reviewed: 2026-11-06
 
 ## 职责
 基础设施/宿主适配层。语音与 LLM 实现及其测试已迁至独立 VoxKit SDK:
-- **VoxKitBridge**:typed SDK 日志/遥测到 LokiKit 的适配器、宿主凭据快照，以及 `Combine/` 下的 App-owned 协议和 public async session 包装器。
+- **VoxKitBridge**:typed SDK 日志/遥测到 LokiKit 的适配器、宿主凭据快照，`Combine/` 下的 App-owned 协议和 public async session 包装器，以及 `WorkflowPresetMapping.swift` 中的 Stage/iOS preset 映射、偏好绑定、转录协调器和精炼 workflow runner。
 - **Persistence**:SwiftData 会话存储(`SessionRepository` / `SwiftDataSessionRepository`)。
 - **PlatformAdapters**:macOS 系统集成(Clipboard / Accessibility / GlobalHotkey / ClaudeInbox),
   每个都有跨平台协议 + `MacOS*` 实现。
@@ -48,5 +48,5 @@ Last-Reviewed: 2026-11-06
 ## 测试注意
 `swift test` 会一起编译本包所有 test target;某个 target 的既有失败会阻塞其他 target 运行
 (见 `VoxPocket/tech-context.md` 的测试说明)。定位单类用 `--filter`。
-`VoxKitBridgeTests` 只保留 Combine、Loki 与 legacy/App 事件名映射测试；SDK golden (a)(c)
+`VoxKitBridgeTests` 覆盖 Combine/Loki 适配、preset 映射、偏好通知保持规则与 runner 配置失败边界；SDK golden (a)(c)
 与语音/LLM 单元测试属于 VoxKit。私密基准测试只消费 public SDK API，默认跳过真实识别。

@@ -14,6 +14,8 @@ import VoxSpeech
 import VoxKitBridge
 import VoxCore
 import VoxLLM
+import VoxWorkflow
+import VoxWorkflowWhisperKit
 import UseCases
 import CoreModels
 import Persistence
@@ -35,7 +37,7 @@ public final class ServiceContainer: ObservableObject {
     private let logger: Logger
     private let sdk: SDKHostConfiguration
     private let persistenceStartup = AppPersistenceStartup()
-    private var llmPreferencesBinding: LLMPreferenceBinding?
+    private var iosPresetPreferenceBinding: IOSPresetPreferenceBinding?
 
     // MARK: - 单例
 
@@ -46,12 +48,7 @@ public final class ServiceContainer: ObservableObject {
     /// 主转录器：Apple 实时预览，配置齐全时使用 Azure 文件转写终稿。
     public let transcriber: any TranscriptionCoordinator
     public let localModelLoadingObservable: (any ModelLoadingObservable)?
-    #if os(macOS)
-    public let llmService: DefaultStageTextModelService
-    public let quickLLMService: DefaultStageTextModelService
-    #else
-    public let llmService: DefaultLLMService
-    #endif
+    public let refinementRunner: RefineWorkflowRunner
 
     // MARK: - Use Cases
 
@@ -83,6 +80,7 @@ public final class ServiceContainer: ObservableObject {
     public let quickTranscriptionUseCase: DefaultTranscriptionUseCase
     public let quickRefinementUseCase: DefaultRefinementUseCase
     public let quickStreamingInputCoordinator: DefaultStreamingInputCoordinator
+    public let quickRefinementRunner: RefineWorkflowRunner
 #endif
 
     // MARK: - 遥测
@@ -107,7 +105,6 @@ public final class ServiceContainer: ObservableObject {
         productTelemetryPreferences: ProductTelemetryPreferences = ProductTelemetryPreferences(),
         processEnvironment: [String: String]? = nil, processArguments: [String] = ProcessInfo.processInfo.arguments,
         preferencesStore: any PreferencesStore = UserDefaultsPreferencesStore.shared,
-        llmServiceFactory: (() -> DefaultLLMService)? = nil,
         llmNotificationCenter: NotificationCenter = .default,
         productTelemetryConfiguration: @escaping ProductTelemetryConfigurationProvider = { BlobTelemetryConfiguration() },
         productTelemetryBootstrapFactory: ProductTelemetryBootstrapFactory? = nil, productTelemetryNotificationCenter: NotificationCenter = .default,
@@ -129,33 +126,52 @@ public final class ServiceContainer: ObservableObject {
         )
         self.productTelemetryPreferences = productTelemetry.preferences; productTelemetryInstrumentation = productTelemetry.instrumentation
         let azureConfig = Self.makeAzureFoundryConfig(environment: environment)
+        let availability = StageModelRouting.availability(environment: environment)
         #if os(macOS)
-        let textModels = StageTextModelServices(azureConfig: azureConfig, settings: LLMAppConfig.initialStageModelSettings, logger: sdk.logger)
-        let configuredLLM = textModels.main; let configuredQuickLLM = textModels.quick
-        quickLLMService = configuredQuickLLM; llmService = configuredLLM
+        let initialPreset = StagePresetMapping.preset(settings: LLMAppConfig.initialStageModelSettings,
+            batchConfigured: availability.batchConfigured,
+            realtimeConfigured: LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil,
+            azureTextConfigured: availability.textConfigured)
         #else
-        let configuredLLM = llmServiceFactory?() ?? DefaultLLMService(logger: sdk.logger, azureFoundryConfig: azureConfig)
-        llmService = configuredLLM
+        let initialPreset = IOSPresetMapping.preset(batchConfigured: availability.batchConfigured,
+            azureTextConfigured: availability.textConfigured)
         #endif
+        let workflowConfiguration = Self.makeWorkflowConfiguration(environment: environment, sdk: sdk)
+        refinementRunner = RefineWorkflowRunner(preset: initialPreset, configuration: workflowConfiguration,
+                                                azureTextConfigured: availability.textConfigured)
         #if os(macOS)
-        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore, merger: LLMTranscriptionMerger(llmService: configuredLLM, logger: sdk.logger), sdk: sdk) { configuredLLM.configure($0) }
-        #else
-        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore, merger: LLMTranscriptionMerger(llmService: configuredLLM, logger: sdk.logger), sdk: sdk)
+        quickRefinementRunner = RefineWorkflowRunner(preset: initialPreset, configuration: workflowConfiguration,
+                                                     azureTextConfigured: availability.textConfigured)
         #endif
+        (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore,
+            presetID: LLMAppConfig.defaultPresetID, sdk: sdk) { [weak refinementRunner] settings in
+                let selected = StagePresetMapping.preset(settings: settings, batchConfigured: availability.batchConfigured,
+                    realtimeConfigured: LLMAppConfig.realtimeTranscriptionConfig(environment: environment,
+                        deploymentOverride: settings.realtimeDeployment) != nil, azureTextConfigured: availability.textConfigured)
+                refinementRunner?.configure(preset: selected, configuration: workflowConfiguration,
+                                            azureTextConfigured: availability.textConfigured)
+            }
 #if os(macOS)
         clipboardService = MacOSClipboardService.shared; accessibilityService = MacOSAccessibilityService.shared
         hotkeyService = MacOSGlobalHotkeyService.shared; claudeInboxService = MacOSClaudeInboxService.shared
 #endif
         editingUseCase = DefaultEditingUseCase(); historyUseCase = DefaultHistoryUseCase(editing: editingUseCase); recordingUseCase = DefaultRecordingUseCase(coordinator: transcriber, telemetry: telemetryService)
         transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase, telemetry: telemetryService)
-        refinementUseCase = DefaultRefinementUseCase(llmService: llmService, editing: editingUseCase, telemetry: telemetryService)
+        refinementUseCase = DefaultRefinementUseCase(runner: refinementRunner, editing: editingUseCase, telemetry: telemetryService)
         streamingInputCoordinator = DefaultStreamingInputCoordinator(editing: editingUseCase, transcription: transcriptionUseCase, refinement: refinementUseCase)
         let productTelemetryInstrumentation = self.productTelemetryInstrumentation!; sessionUseCase = ProxySessionUseCase(
             backing: InMemorySessionUseCase()) { await productTelemetryInstrumentation.sessionDidComplete() }
         deepLinkRouter = DefaultDeepLinkRouter()
 #if os(macOS)
-        quickTranscriber = Self.makeQuickTranscriber(environment: environment, preferences: preferencesStore, merger: LLMTranscriptionMerger(llmService: configuredLLM, logger: sdk.logger), sdk: sdk) { configuredQuickLLM.configure($0) }; quickEditingUseCase = DefaultEditingUseCase()
-        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService); quickTranscriptionUseCase = DefaultTranscriptionUseCase(coordinator: quickTranscriber, editing: quickEditingUseCase, telemetry: telemetryService); quickRefinementUseCase = DefaultRefinementUseCase(llmService: configuredQuickLLM, editing: quickEditingUseCase, telemetry: telemetryService)
+        quickTranscriber = Self.makeQuickTranscriber(environment: environment, preferences: preferencesStore,
+            presetID: LLMAppConfig.defaultPresetID, sdk: sdk) { [weak quickRefinementRunner] settings in
+                let selected = StagePresetMapping.preset(settings: settings, batchConfigured: availability.batchConfigured,
+                    realtimeConfigured: LLMAppConfig.realtimeTranscriptionConfig(environment: environment,
+                        deploymentOverride: settings.realtimeDeployment) != nil, azureTextConfigured: availability.textConfigured)
+                quickRefinementRunner?.configure(preset: selected, configuration: workflowConfiguration,
+                                                 azureTextConfigured: availability.textConfigured)
+            }; quickEditingUseCase = DefaultEditingUseCase()
+        quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService); quickTranscriptionUseCase = DefaultTranscriptionUseCase(coordinator: quickTranscriber, editing: quickEditingUseCase, telemetry: telemetryService); quickRefinementUseCase = DefaultRefinementUseCase(runner: quickRefinementRunner, editing: quickEditingUseCase, telemetry: telemetryService)
         quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(editing: quickEditingUseCase, transcription: quickTranscriptionUseCase, refinement: quickRefinementUseCase)
 #endif
         finishInitialization(environment: environment, notificationCenter: llmNotificationCenter)
@@ -165,19 +181,27 @@ public final class ServiceContainer: ObservableObject {
         #if os(macOS)
         _ = notificationCenter
         #else
-        llmPreferencesBinding = LLMPreferenceBinding(service: llmService, environment: environment,
-                                                    preferences: preferencesStore, notificationCenter: notificationCenter,
-                                                    logger: logger)
+        let availability = StageModelRouting.availability(environment: environment)
+        let workflowConfiguration = Self.makeWorkflowConfiguration(environment: environment, sdk: sdk)
+        let runner = refinementRunner
+        let binding = IOSPresetPreferenceBinding(batchConfigured: availability.batchConfigured,
+            azureTextConfigured: availability.textConfigured, preferences: preferencesStore,
+            notificationCenter: notificationCenter, logger: sdk.logger,
+            onPresetChange: { preset in
+                runner.configure(preset: preset, configuration: workflowConfiguration,
+                                 azureTextConfigured: availability.textConfigured)
+            })
+        iosPresetPreferenceBinding = binding
         #endif
         logger.debug("Initialized")
     }
 
     private static func makePrimaryTranscriber(
         environment: [String: String], preferences: any PreferencesStore,
-        merger: (any TranscriptionMerger)?, sdk: SDKHostConfiguration,
+        presetID: String, sdk: SDKHostConfiguration,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
     ) -> (any TranscriptionCoordinator, (any ModelLoadingObservable)?) {
-        let wrapped = makeTranscriber(environment: environment, preferences: preferences, merger: merger, sdk: sdk, beforeSession: beforeSession)
+        let wrapped = makeTranscriber(environment: environment, preferences: preferences, presetID: presetID, sdk: sdk, beforeSession: beforeSession)
         if let source = (wrapped.core as? any ModelLoadingStateProviding)
             ?? (wrapped.core as? LoadingFallbackTranscriptionCoordinator)?.primaryModelLoadingSource {
             return (wrapped, CombineModelLoadingObservable(source: source))
@@ -185,59 +209,65 @@ public final class ServiceContainer: ObservableObject {
         return (wrapped, nil)
     }
 
-    func waitForPendingLLMPreferenceChanges() async { await llmPreferencesBinding?.waitForPendingChanges() }
+    func waitForPendingLLMPreferenceChanges() async { await iosPresetPreferenceBinding?.waitForPendingChanges() }
 
     static func makeTranscriber(
         preloadOnStart: Bool = true, environment: [String: String]? = nil,
         preferences: any PreferencesStore = UserDefaultsPreferencesStore.shared,
-        provider: TranscriberProvider = LLMAppConfig.defaultTranscriberProvider,
-        merger: (any TranscriptionMerger)? = nil, sdk: SDKHostConfiguration? = nil,
+        presetID: String = LLMAppConfig.defaultPresetID, sdk: SDKHostConfiguration? = nil,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
-    ) -> CombineTranscriptionCoordinator {
+    ) -> WorkflowTranscriptionCoordinator {
         let environment = environment ?? LLMAppConfig.runtimeEnvironment
         let sdk = sdk ?? SDKHostConfiguration(storageLocations: SDKHostConfiguration.storageLocations(),
             logger: LokiVoxLogger(logger: PrintLogger(subsystem: "ServiceContainer")),
             telemetry: NoopVoxTelemetry(), credentials: SDKHostConfiguration.credentials(environment: environment))
+        let availability = StageModelRouting.availability(environment: environment)
+        let preset = Self.preset(for: presetID, availability: availability, environment: environment)
         let core: any SpeechSessionSource
-        switch provider {
-        case .localWhisperKit:
+        switch presetID {
+        case "local.whisperkit":
             core = LoadingFallbackTranscriptionCoordinator(
                 primary: WhisperKitTranscriber(config: LocalWhisperKitConfig(preloadOnStart: preloadOnStart),
                     logger: sdk.logger, telemetry: sdk.telemetry, storageLocations: sdk.storageLocations),
                 fallback: AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations))
-        case .hybridWhisper:
+        case "hybrid.azure":
             #if os(macOS)
             core = StageModelRouting.makeTranscriber(environment: environment, preferences: preferences, sdk: sdk,
                                                      beforeSession: beforeSession)
             #else
             core = makeIOSHybridSource(environment: environment, sdk: sdk)
             #endif
-        case .azureWhisper:
+        case "azure.whisper":
             if let config = LLMAppConfig.transcriptionConfig(environment: environment) {
                 core = AzureWhisperTranscriber(config: config, logger: sdk.logger, storageLocations: sdk.storageLocations)
             } else { core = AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations) }
-        case .hybridLocalWhisper:
-            core = makeHybridLocalWhisperTranscriber(preloadOnStart: preloadOnStart, merger: merger, sdk: sdk)
-        case .appleSpeech:
+        case "hybrid.local":
+            let provider = Self.makeAzureFoundryConfig(environment: environment).map {
+                AzureFoundryProvider(config: $0, logger: sdk.logger)
+            }
+            core = makeHybridLocalWhisperTranscriber(preloadOnStart: preloadOnStart,
+                merger: provider.map { LLMTranscriptionMerger(provider: $0, logger: sdk.logger) }, sdk: sdk)
+        case "apple.speech":
+            core = AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations)
+        default:
             core = AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations)
         }
-        return CombineTranscriptionCoordinator.wrap(core)
+        return WorkflowTranscriptionCoordinator(source: core, preset: preset)
     }
 
     static func makeQuickTranscriber(environment: [String: String]? = nil,
                                     preferences: any PreferencesStore = UserDefaultsPreferencesStore.shared,
-                                    provider: TranscriberProvider = LLMAppConfig.defaultTranscriberProvider,
-                                    merger: (any TranscriptionMerger)? = nil, sdk: SDKHostConfiguration? = nil,
-                                    beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil) -> CombineTranscriptionCoordinator {
-        makeTranscriber(environment: environment, preferences: preferences, provider: provider,
-                        merger: merger, sdk: sdk, beforeSession: beforeSession)
+                                    presetID: String = LLMAppConfig.defaultPresetID, sdk: SDKHostConfiguration? = nil,
+                                    beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil) -> WorkflowTranscriptionCoordinator {
+        makeTranscriber(environment: environment, preferences: preferences, presetID: presetID,
+                        sdk: sdk, beforeSession: beforeSession)
     }
 
-    static func makeIOSHybridTranscriber(environment: [String: String]) -> CombineTranscriptionCoordinator {
+    static func makeIOSHybridTranscriber(environment: [String: String]) -> WorkflowTranscriptionCoordinator {
         let sdk = SDKHostConfiguration(storageLocations: SDKHostConfiguration.storageLocations(),
             logger: LokiVoxLogger(logger: PrintLogger(subsystem: "ServiceContainer")),
             telemetry: NoopVoxTelemetry(), credentials: SDKHostConfiguration.credentials(environment: environment))
-        return CombineTranscriptionCoordinator.wrap(makeIOSHybridSource(environment: environment, sdk: sdk))
+        return WorkflowTranscriptionCoordinator(source: makeIOSHybridSource(environment: environment, sdk: sdk), preset: .hybridAzure)
     }
 
     private static func makeIOSHybridSource(environment: [String: String], sdk: SDKHostConfiguration) -> any SpeechSessionSource {
@@ -254,6 +284,33 @@ public final class ServiceContainer: ObservableObject {
         merger: (any TranscriptionMerger)?, sdk: SDKHostConfiguration) -> HybridLocalWhisperTranscriber {
         HybridLocalWhisperTranscriber(config: LocalWhisperKitConfig(preloadOnStart: preloadOnStart),
             logger: sdk.logger, merger: merger, storageLocations: sdk.storageLocations)
+    }
+
+    private static func preset(for presetID: String, availability: ModelSettingsAvailability,
+                               environment: [String: String]) -> Preset {
+        switch presetID {
+        case "apple.speech": return .appleSpeech
+        case "local.whisperkit": return .localWhisperKit
+        case "hybrid.local": return .hybridLocal
+        case "azure.whisper": return .hybridAzure.overriding(["speech": "azureWhisper"])
+        default:
+            #if os(macOS)
+            return StagePresetMapping.preset(settings: LLMAppConfig.initialStageModelSettings,
+                batchConfigured: availability.batchConfigured,
+                realtimeConfigured: LLMAppConfig.realtimeTranscriptionConfig(environment: environment) != nil,
+                azureTextConfigured: availability.textConfigured)
+            #else
+            return IOSPresetMapping.preset(batchConfigured: availability.batchConfigured,
+                azureTextConfigured: availability.textConfigured)
+            #endif
+        }
+    }
+
+    private static func makeWorkflowConfiguration(environment: [String: String], sdk: SDKHostConfiguration) -> WorkflowExecutionConfiguration {
+        WorkflowExecutionConfiguration(azureFoundryConfig: makeAzureFoundryConfig(environment: environment),
+            whisperConfig: LLMAppConfig.transcriptionConfig(environment: environment),
+            realtimeConfig: LLMAppConfig.realtimeTranscriptionConfig(environment: environment),
+            logger: sdk.logger, telemetry: sdk.telemetry, storageLocations: sdk.storageLocations)
     }
 
     static func makeAzureFoundryConfig(environment: [String: String]) -> LLMProviderConfig? {
@@ -527,67 +584,6 @@ public final class ServiceContainer: ObservableObject {
 
     func waitForPendingProductTelemetrySessionCompletion() async {
         await productTelemetryInstrumentation.waitForPendingSessionCompletion()
-    }
-}
-
-@MainActor
-final class LLMPreferenceBinding {
-    let service: DefaultLLMService
-    private let environment: [String: String]
-    private let preferences: any PreferencesStore
-    private let notificationCenter: NotificationCenter
-    private let logger: Logger
-    private var observers: [any NSObjectProtocol] = []
-    private var pendingUpdate: Task<Void, Never>?
-
-    init(service: DefaultLLMService, environment: [String: String], preferences: any PreferencesStore,
-         notificationCenter: NotificationCenter, logger: Logger = PrintLogger(subsystem: "ServiceContainer")) {
-        self.service = service; self.environment = environment; self.preferences = preferences
-        self.notificationCenter = notificationCenter; self.logger = logger
-        configureLLMService()
-        for name in [PreferencesNotification.llmProviderDidChange, PreferencesNotification.llmAnalysisSettingsDidChange] {
-            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
-                MainActor.assumeIsolated { self?.enqueueUpdate(provider: notification.name == PreferencesNotification.llmProviderDidChange) }
-            })
-        }
-        pendingUpdate = Task { [weak self] in
-            await self?.applyProviderPreferenceIfExists()
-            await self?.applyAnalysisSettingsPreference()
-        }
-    }
-
-    isolated deinit { for observer in observers { notificationCenter.removeObserver(observer) } }
-
-    func waitForPendingChanges() async { await pendingUpdate?.value }
-
-    private func enqueueUpdate(provider: Bool) {
-        pendingUpdate = Task { [weak self] in
-            if provider { await self?.applyProviderPreferenceIfExists() }
-            else { await self?.applyAnalysisSettingsPreference() }
-        }
-    }
-
-    private func applyProviderPreferenceIfExists() async {
-        let stored: String? = await preferences.getValue(for: .llmProvider)
-        guard let stored, let preferred = LLMProviderType(rawValue: stored) else { return }
-        configureLLMService(preferredProvider: preferred)
-    }
-
-    private func applyAnalysisSettingsPreference() async {
-        let skip: Bool = await preferences.getValue(for: .llmSkipContentAnalysis, default: false)
-        service.setSkipContentAnalysis(skip)
-        logger.log(.debug, "Applied LLM analysis settings", context: ["skip_content_analysis": skip])
-    }
-
-    private func configureLLMService(preferredProvider: LLMProviderType? = nil) {
-        let provider = preferredProvider ?? LLMAppConfig.defaultProvider
-        let (config, optionsCount) = ServiceContainer.makeProviderConfig(provider, environment: environment)
-        do {
-            try service.setProvider(config)
-            logger.log(.debug, "Configured LLM provider", context: ["provider": provider.rawValue, "options_count": optionsCount])
-        } catch {
-            logger.log(.debug, "LLM configuration failed; using fallback", context: ["provider": provider.rawValue, "error": error.localizedDescription])
-        }
     }
 }
 

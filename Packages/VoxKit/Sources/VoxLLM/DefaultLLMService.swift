@@ -8,7 +8,7 @@ import AsyncAlgorithms
 ///
 /// 管理多个 LLM 提供者，代理请求到当前活跃的提供者。
 /// 初始化时自动注册 Apple Intelligence 提供者（如果设备支持）。
-public final class DefaultLLMService: LLMService, Sendable {
+package final class DefaultLLMService: LLMService, Sendable {
 
     private struct State: Sendable {
         var providers: [LLMProviderType: any LLMProvider] = [:]
@@ -21,7 +21,7 @@ public final class DefaultLLMService: LLMService, Sendable {
     private let state: Mutex<State>
     private let logger: any VoxLogger
 
-    public init(
+    package init(
         logger: (any VoxLogger)? = nil,
         azureFoundryConfig: LLMProviderConfig? = nil
     ) {
@@ -76,23 +76,23 @@ public final class DefaultLLMService: LLMService, Sendable {
 
     // MARK: - LLMService
 
-    public var availableProviders: [LLMProviderType] {
+    package var availableProviders: [LLMProviderType] {
         state.withLock { Array($0.providers.keys) }
     }
 
-    public var currentProvider: (any LLMProvider)? {
+    package var currentProvider: (any LLMProvider)? {
         state.withLock { $0.currentProvider }
     }
 
-    public var currentProviderType: LLMProviderType? {
+    package var currentProviderType: LLMProviderType? {
         state.withLock { $0.currentProvider?.providerType }
     }
 
-    public var resolvedAnalysisRouting: [AnalysisStep: LLMProviderType] {
+    package var resolvedAnalysisRouting: [AnalysisStep: LLMProviderType] {
         state.withLock { Self.analysisRouting(configuration: $0) }
     }
 
-    public var isContentAnalysisSkipped: Bool { state.withLock { $0.skipContentAnalysis } }
+    package var isContentAnalysisSkipped: Bool { state.withLock { $0.skipContentAnalysis } }
 
     private static func analysisRouting(configuration: State) -> [AnalysisStep: LLMProviderType] {
         guard let defaultProviderType = configuration.currentProvider?.providerType else { return [:] }
@@ -101,7 +101,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         })
     }
 
-    public func setProvider(_ config: LLMProviderConfig) throws {
+    package func setProvider(_ config: LLMProviderConfig) throws {
         try state.withLock { state in
             guard let provider = state.providers[config.providerType] else {
                 throw VoxKitError.llmProviderNotConfigured
@@ -111,7 +111,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         }
     }
 
-    public func setSkipContentAnalysis(_ skip: Bool) {
+    package func setSkipContentAnalysis(_ skip: Bool) {
         state.withLock { $0.skipContentAnalysis = skip }
     }
 
@@ -245,12 +245,12 @@ public final class DefaultLLMService: LLMService, Sendable {
 
     // MARK: - 通用文本完成
 
-    public func complete(prompt: String) async throws -> String {
+    package func complete(prompt: String) async throws -> String {
         let stream = try await completeStreaming(prompt: prompt)
         return try await collectToString(from: stream)
     }
 
-    public func completeStreaming(prompt: String) async throws -> AsyncThrowingStream<String, Error> {
+    package func completeStreaming(prompt: String) async throws -> AsyncThrowingStream<String, Error> {
         guard let provider = currentProvider else {
             throw VoxKitError.llmProviderNotConfigured
         }
@@ -259,7 +259,7 @@ public final class DefaultLLMService: LLMService, Sendable {
 
     // MARK: - 文本优化（便捷方法）
 
-    public func refine(_ request: RefinementRequest) async throws -> RefinementResponse {
+    package func refine(_ request: RefinementRequest) async throws -> RefinementResponse {
         let configuration = state.withLock { $0 }
         guard let provider = configuration.currentProvider else {
             throw VoxKitError.llmProviderNotConfigured
@@ -285,7 +285,7 @@ public final class DefaultLLMService: LLMService, Sendable {
         )
     }
 
-    public func refineStreaming(_ request: RefinementRequest) async throws -> AsyncThrowingStream<String, Error> {
+    package func refineStreaming(_ request: RefinementRequest) async throws -> AsyncThrowingStream<String, Error> {
         let configuration = state.withLock { $0 }
         guard let provider = configuration.currentProvider else {
             throw VoxKitError.llmProviderNotConfigured
@@ -318,11 +318,11 @@ public final class DefaultLLMService: LLMService, Sendable {
         }
     }
 
-    public func cancel() {
+    package func cancel() {
         currentProvider?.cancel()
     }
 
-    public func validateCurrentProvider() async -> Bool {
+    package func validateCurrentProvider() async -> Bool {
         guard let provider = currentProvider else {
             return false
         }

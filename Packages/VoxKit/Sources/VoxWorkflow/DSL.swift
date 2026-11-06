@@ -52,7 +52,22 @@ public struct Preset: Sendable, Equatable, Codable {
     }
 
     public func overriding(_ overrides: [String: String]) -> Preset {
-        let speechDefinition = overrides["speech"].map(Self.speechDefinition(for:)) ?? speech
+        let speechDefinition: WorkflowDefinition
+        if let speechChoice = overrides["speech"] {
+            speechDefinition = Self.speechDefinition(for: speechChoice, merger: overrides["speech.merger"] != "false")
+        } else if let merger = overrides["speech.merger"] {
+            let nodes = speech.nodes.map { node in
+                let kind: NodeKindID
+                if merger == "false", node.kind == .mergeLLM { kind = .selectText }
+                else if merger == "true", node.kind == .selectText { kind = .mergeLLM }
+                else { kind = node.kind }
+                return NodeSpec(id: node.id, kind: kind, inputs: node.inputs, params: node.params,
+                    onFailure: node.onFailure, concurrency: node.concurrency)
+            }
+            speechDefinition = WorkflowDefinition(entry: speech.entry, nodes: nodes, version: speech.version)
+        } else {
+            speechDefinition = speech
+        }
         let analysisProviderKeys = ["analysis.intent", "analysis.entities", "analysis.tags", "analysis.params", "analysis.tone"]
         let refinedNodes = refine.nodes.map { node in
             var params = node.params
@@ -104,7 +119,7 @@ public struct Preset: Sendable, Equatable, Codable {
         return value
     }
 
-    private static func speechDefinition(for choice: String) -> WorkflowDefinition {
+    private static func speechDefinition(for choice: String, merger: Bool) -> WorkflowDefinition {
         switch choice {
         case "appleSpeech": return Preset.appleSpeech.speech
         case "localWhisperKit": return WorkflowDefinition(entry: .speech) {
@@ -119,7 +134,35 @@ public struct Preset: Sendable, Equatable, Codable {
             NodeSpec(id: "merge", kind: .mergeLLM, inputs: [PortRef(nodeID: "apple", port: "text"), PortRef(nodeID: "local", port: "text")])
             NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "merge", port: "text")])
         }
-        case "batch": return WorkflowDefinition(entry: .speech) {
+        case let selection where ["batch", "realtime"].contains(selection) && !merger:
+            let cloudID = choice == "realtime" ? "azureRealtime" : "azureBatch"
+            var nodes = [
+                NodeSpec(id: "capture", kind: .captureMicrophone),
+                NodeSpec(id: "apple", kind: .speechApple, inputs: [PortRef(nodeID: "capture", port: "audio")])
+            ]
+            if choice == "realtime" {
+                nodes.append(NodeSpec(id: "azureRealtime", kind: .speechAzureRealtime,
+                    inputs: [PortRef(nodeID: "capture", port: "audio")], onFailure: .fallback(nodeID: "azureBatch")))
+            }
+            nodes += [
+                NodeSpec(id: "azureBatch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")]),
+                NodeSpec(id: "select", kind: .selectText,
+                    inputs: [PortRef(nodeID: "apple", port: "text"), PortRef(nodeID: cloudID, port: "text")]),
+                NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "select", port: "text")])
+            ]
+            return WorkflowDefinition(entry: .speech, nodes: nodes)
+        case "batch":
+            let combineKind: NodeKindID = merger ? .mergeLLM : .selectText
+            let combineID = merger ? "merge" : "select"
+            return WorkflowDefinition(entry: .speech) {
+                NodeSpec(id: "capture", kind: .captureMicrophone)
+                NodeSpec(id: "apple", kind: .speechApple, inputs: [PortRef(nodeID: "capture", port: "audio")])
+                NodeSpec(id: "azureBatch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")])
+                NodeSpec(id: combineID, kind: combineKind,
+                    inputs: [PortRef(nodeID: "apple", port: "text"), PortRef(nodeID: "azureBatch", port: "text")])
+                NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: combineID, port: "text")])
+            }
+        case "azureWhisper": return WorkflowDefinition(entry: .speech) {
             NodeSpec(id: "capture", kind: .captureMicrophone)
             NodeSpec(id: "batch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")])
             NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "batch", port: "text")])
