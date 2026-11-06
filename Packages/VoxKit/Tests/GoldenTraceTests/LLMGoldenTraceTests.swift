@@ -28,7 +28,8 @@ final class LLMGoldenTraceTests: XCTestCase {
             overrides["analysis.skip"] = String(routing == "skip")
             overrides["refine.provider"] = refine
             let preset = Preset.default.overriding(overrides)
-            let runtime = WorkflowRuntime(configuration: WorkflowExecutionConfiguration(providers: providers))
+            let logger = GoldenLogger()
+            let runtime = WorkflowRuntime(configuration: WorkflowExecutionConfiguration(providers: providers, logger: logger))
             let request = RefinementRequest(text: "synthetic input", customPrompt: "Keep the synthetic meaning.")
             if expected["mode"] as? String == "refine" {
                 let response = try await runtime.refine(request, preset: preset)
@@ -39,6 +40,8 @@ final class LLMGoldenTraceTests: XCTestCase {
                 XCTAssertEqual(chunks.joined(), expected["refinedText"] as? String)
             }
             XCTAssertEqual(normalizedStepCalls(calls.values.map(\.json)), normalizedStepCalls(try XCTUnwrap(expected["calls"] as? [[String: Any]])))
+            XCTAssertEqual(logger.messages, expected["logs"] as? [String])
+            XCTAssertEqual(logger.contextKeys, expected["logContextKeys"] as? [[String]])
             let completions = calls.values.filter { $0.method != "analyze" }
             XCTAssertEqual(completions.count, 1)
             XCTAssertEqual(completions.first?.provider, refine)

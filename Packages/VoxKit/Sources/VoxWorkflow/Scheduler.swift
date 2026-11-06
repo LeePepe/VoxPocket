@@ -71,14 +71,19 @@ public final class WorkflowRuntime: Sendable {
     }
 
     public func refine(_ request: RefinementRequest, preset: Preset = .default) async throws -> RefinementResponse {
+        configuration.logger.info("开始文本优化", fields: [.int("text_length", request.text.count)])
         let events = try await execute(preset.refine, input: .refinementRequest(request))
         for event in events.reversed() {
-            if case .completed(let response?) = event { return response }
+            if case .completed(let response?) = event {
+                configuration.logger.info("文本优化完成", fields: [.int("original_length", request.text.count), .int("refined_length", response.refinedText.count)])
+                return response
+            }
         }
         throw WorkflowRuntimeError.nodeFailed
     }
 
     public func refineStreaming(_ request: RefinementRequest, preset: Preset = .default) async throws -> AsyncThrowingStream<String, Error> {
+        configuration.logger.info("开始流式文本优化", fields: [.int("text_length", request.text.count)])
         let nodes = preset.refine.nodes.map { node in
             var params = node.params
             if [.llmApple, .llmAzure].contains(node.kind) { params["streaming"] = .bool(true) }
@@ -92,8 +97,12 @@ public final class WorkflowRuntime: Sendable {
                     for try await event in events {
                         if case .refinedChunk(let chunk) = event { continuation.yield(chunk) }
                     }
+                    configuration.logger.info("流式文本优化完成")
                     continuation.finish()
-                } catch { continuation.finish(throwing: error) }
+                } catch {
+                    configuration.logger.error("流式文本优化失败")
+                    continuation.finish(throwing: error)
+                }
             }
             continuation.onTermination = { _ in task.cancel() }
         }
@@ -111,6 +120,7 @@ private actor WorkflowExecution {
     let configuration: WorkflowExecutionConfiguration
     let continuation: AsyncThrowingStream<WorkflowEvent, Error>.Continuation
     let limiter = WorkflowConcurrencyLimiter()
+    let eventState = WorkflowEventState()
     var outputs: [String: WorkflowNodeValue] = [:]
     var tasks: [String: Task<WorkflowNodeValue, Error>] = [:]
 
@@ -159,7 +169,8 @@ private actor WorkflowExecution {
             switch value {
             case .response(let response): continuation.yield(.completed(response))
             case .transcription(let result), .transcriptionResult(let result):
-                continuation.yield(.final(result)); continuation.yield(.completed(nil))
+                if !eventState.hasFinal { continuation.yield(.final(result)) }
+                continuation.yield(.completed(nil))
             default: continuation.yield(.completed(nil))
             }
         }
@@ -222,8 +233,11 @@ private actor WorkflowExecution {
         let speechKinds = definition.nodes.filter { spec in
             spec.inputs.contains { $0.nodeID == node.id } && !fallbacks.contains(spec.id) && spec.kind.rawValue.hasPrefix("speech.")
         }.map(\.kind)
-        return try await handler.execute(context: WorkflowNodeContext(node: node, inputs: inputs, workflowInput: input,
-            configuration: configuration, speechNodeKinds: speechKinds, continuation: continuation))
+        let emitsFinal = definition.nodes.contains { $0.kind == .outputText && $0.inputs.contains { $0.nodeID == node.id } }
+        var context = WorkflowNodeContext(node: node, inputs: inputs, workflowInput: input,
+            configuration: configuration, speechNodeKinds: speechKinds, emitsFinal: emitsFinal, continuation: continuation)
+        context.eventState = eventState
+        return try await handler.execute(context: context)
     }
 }
 

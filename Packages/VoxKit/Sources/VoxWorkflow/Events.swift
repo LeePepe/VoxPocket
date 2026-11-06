@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import VoxCore
 import VoxRefine
 
@@ -66,19 +67,32 @@ public struct WorkflowNodeContext: Sendable {
     public let workflowInput: WorkflowNodeValue
     public let configuration: WorkflowExecutionConfiguration
     public let speechNodeKinds: [NodeKindID]
+    public let emitsFinal: Bool
+    package var eventState: WorkflowEventState?
     private let continuation: AsyncThrowingStream<WorkflowEvent, Error>.Continuation?
 
     public init(node: NodeSpec, inputs: [WorkflowNodeValue], workflowInput: WorkflowNodeValue = .none,
                 configuration: WorkflowExecutionConfiguration = WorkflowExecutionConfiguration(),
                 speechNodeKinds: [NodeKindID] = [],
+                emitsFinal: Bool = false,
                 continuation: AsyncThrowingStream<WorkflowEvent, Error>.Continuation? = nil) {
         self.node = node
         self.inputs = inputs
         self.workflowInput = workflowInput
         self.configuration = configuration
         self.speechNodeKinds = speechNodeKinds
+        self.emitsFinal = emitsFinal
         self.continuation = continuation
     }
 
-    public func emit(_ event: WorkflowEvent) { continuation?.yield(event) }
+    public func emit(_ event: WorkflowEvent) {
+        if case .final = event { eventState?.markFinal() }
+        continuation?.yield(event)
+    }
+}
+
+package final class WorkflowEventState: Sendable {
+    private let finalEmitted = Mutex(false)
+    package func markFinal() { finalEmitted.withLock { $0 = true } }
+    package var hasFinal: Bool { finalEmitted.withLock { $0 } }
 }

@@ -16,37 +16,47 @@ final class SpeechGoldenTraceTests: XCTestCase {
             let recorder = try GoldenAudioSource(calls: calls)
             let recognizer = GoldenRecognizer(calls: calls)
             let pipeline = GoldenRealtime(calls: calls, minimumAudio: true, fails: scenario == "realtimeFallback")
+            let logger = GoldenLogger()
             let source: any SpeechSessionSource
             if scenario == "normalRecognition" {
                 source = AppleSpeechTranscriber(recorder: recorder, speechRecognizer: recognizer,
-                    speechAuthorizationProvider: GoldenSpeechAuthorization(allowed: true, calls: calls), storageLocations: testStorageLocations)
+                    speechAuthorizationProvider: GoldenSpeechAuthorization(allowed: true, calls: calls), logger: logger, storageLocations: testStorageLocations)
                 _ = await source.requestSpeechPermission()
             } else {
                 let config = try AzureRealtimeTranscriptionConfig(endpoint: XCTUnwrap(URL(string: "https://example.invalid")),
                     apiKey: Credential(rawValue: "fixture-key"), deployment: "example-live")
                 source = HybridWhisperTranscriber(recorder: recorder, speechRecognizer: recognizer,
                     speechAuthorizationProvider: GoldenSpeechAuthorization(allowed: true, calls: calls),
-                    whisperEngine: GoldenBatch(calls: calls), realtimeSessionMaker: pipeline, realtimeConfig: config,
+                    whisperEngine: GoldenBatch(calls: calls), realtimeSessionMaker: pipeline, realtimeConfig: config, logger: logger,
                     storageLocations: testStorageLocations)
             }
             let runtime = WorkflowRuntime(configuration: WorkflowExecutionConfiguration(providers: [:],
                 speechFactories: [.speechApple: GoldenWorkflowFactory(source: source)]))
-            var actual: [String] = []
+            var levels = source.audioLevels().makeAsyncIterator()
+            var states = source.captureStates().makeAsyncIterator()
+            let initialLevel = await levels.next()
+            let initialState = await states.next()
+            var actual = ["level:\(try XCTUnwrap(initialLevel))", "state:\(try XCTUnwrap(initialState))"]
             var recordingCount = 0
             for try await event in runtime.events(for: Preset.appleSpeech.speech) {
                 switch event {
                 case .state(.recording):
+                    actual.append("state:recording")
                     recordingCount += 1
                     if scenario == "normalRecognition" {
                         if recordingCount == 1 { recorder.level(0.25) }
                         else { recognizer.emit("synthetic final", final: true) }
                     } else { recognizer.emit("synthetic apple") }
-                case .state(.paused): await (source as? AppleSpeechTranscriber)?.resume()
+                case .state(.paused):
+                    actual.append("state:paused")
+                    (source as? AppleSpeechTranscriber)?.resume()
+                case .state(let state): actual.append("state:\(state)")
                 case .level(let value):
+                    actual.append("level:\(value)")
                     if value == 0.25 { recognizer.emit("synthetic partial") }
                 case .partial(let result):
                     actual.append("live:\(result.type.rawValue):\(result.text):\(result.confidence.map { String($0) } ?? "nil")")
-                    if result.text == "synthetic partial" { await (source as? AppleSpeechTranscriber)?.pause() }
+                    if result.text == "synthetic partial" { (source as? AppleSpeechTranscriber)?.pause() }
                     if result.text == "synthetic apple" { pipeline.partial() }
                     if result.text == "synthetic cloud partial" {
                         recognizer.emit("synthetic newer apple")
@@ -58,9 +68,11 @@ final class SpeechGoldenTraceTests: XCTestCase {
                 default: break
                 }
             }
-            let expectedEvents = try XCTUnwrap(expected["events"] as? [String]).filter { $0.hasPrefix("live:") || $0.hasPrefix("final:") }
+            let expectedEvents = try XCTUnwrap(expected["events"] as? [String])
             XCTAssertEqual(actual, expectedEvents)
             XCTAssertEqual(calls.values, expected["calls"] as? [String])
+            XCTAssertEqual(logger.messages, expected["logs"] as? [String])
+            XCTAssertEqual(logger.contextKeys, expected["logContextKeys"] as? [[String]])
             XCTAssertFalse(source.isActive)
             XCTAssertFalse(FileManager.default.fileExists(atPath: recorder.file.path))
         }

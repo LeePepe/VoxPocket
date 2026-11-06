@@ -9,7 +9,12 @@ package struct BuiltInWorkflowNodeHandler: WorkflowNodeHandler {
         try Task.checkCancellation()
         switch context.node.kind {
         case .captureMicrophone: return try await capture(context: context)
-        case .refineInput: return .refinementRequest(try request(from: context))
+        case .refineInput:
+            let request = try request(from: context)
+            if context.node.params["analysis.skip"] != .string("true") {
+                context.configuration.logger.info("开始内容分析", fields: [.int("text_length", request.text.count)])
+            }
+            return .refinementRequest(request)
         case .speechApple, .speechAzureBatch, .speechAzureRealtime, .speechWhisperKitLocal:
             return try await Self.transcribe(context: context)
         case .mergeLLM: return try await merge(context: context)
@@ -65,7 +70,10 @@ package struct BuiltInWorkflowNodeHandler: WorkflowNodeHandler {
             try Task.checkCancellation()
             switch event {
             case .partial(let result): context.emit(.partial(result))
-            case .final(let result): final = result; break events
+            case .final(let result):
+                final = result
+                if context.emitsFinal { context.emit(.final(result)) }
+                break events
             case .level(let value): context.emit(.level(value))
             case .state(let value): lastState = value; context.emit(.state(value))
             }
@@ -125,6 +133,9 @@ package struct BuiltInWorkflowNodeHandler: WorkflowNodeHandler {
         if partial.entities == nil { missing.insert(.entities) }
         if partial.tags == nil { missing.insert(.tags) }
         if partial.params == nil { missing.insert(.params) }
+        if context.node.params["analysis.skip"] != .string("true") {
+            context.configuration.logger.info("内容分析完成", fields: [.int("entities_count", partial.entities?.count ?? 0), .int("tags_count", partial.tags?.count ?? 0)])
+        }
         return WorkflowPrompt(request: request,
             text: RefinementPromptBuilder.build(text: request.text, customPrompt: request.customPrompt),
             analysis: partial, missingSteps: missing)
