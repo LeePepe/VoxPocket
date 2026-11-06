@@ -11,6 +11,15 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RedlineCoverageTests(unittest.TestCase):
+    def testR5CoversGoldenJSONFixtures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture = root / "golden.json"
+            fixture.write_text('{"product": "VoxPocket"}')
+            self.assertEqual(len(MODULE.scan_rule("R5", [root])), 1)
+            fixture.write_text('{"product": "example-sdk"}')
+            self.assertEqual(MODULE.scan_rule("R5", [root]), [])
+
     def testGeneratedBuildCheckoutsAreNotSDKCode(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

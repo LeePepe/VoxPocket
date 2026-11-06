@@ -25,6 +25,7 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
             .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
             .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "VoxLLM", package: "VoxKit"),
+            .product(name: "VoxRefine", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")]),
         .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket"])
     ])

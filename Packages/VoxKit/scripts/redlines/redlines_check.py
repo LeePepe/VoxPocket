@@ -26,6 +26,15 @@ def swift_files(paths: list[Path]):
         elif path.is_dir(): yield from (file for file in sorted(path.rglob("*.swift")) if ".build" not in file.relative_to(path).parts)
 
 
+def text_files(paths: list[Path]):
+    suffixes = {".swift", ".json", ".md", ".txt", ".yaml", ".yml", ".toml"}
+    for path in paths:
+        if path.is_file() and path.suffix in suffixes: yield path
+        elif path.is_dir():
+            yield from (file for file in sorted(path.rglob("*"))
+                        if file.is_file() and file.suffix in suffixes and ".build" not in file.relative_to(path).parts)
+
+
 def strip_comments(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     return re.sub(r"//.*", "", text)
@@ -33,7 +42,8 @@ def strip_comments(text: str) -> str:
 
 def scan_rule(rule: str, paths: list[Path]) -> list[str]:
     findings: list[str] = []
-    for path in swift_files(paths):
+    files = text_files(paths) if rule == "R5" else swift_files(paths)
+    for path in files:
         raw = path.read_text(encoding="utf-8")
         text = strip_comments(raw)
         lines = raw.splitlines()
