@@ -3,25 +3,24 @@ import VoxRefine
 import VoxKitBridge
 import Foundation
 import Combine
-import VoxLLM
 import CoreModels
 import VoxSpeech
 import LokiKit
 
 /// LLM 优化用例默认实现
 ///
-/// 桥接 `LLMService` 到 `RefinementUseCase` 协议。
+/// 桥接 `RefineWorkflowRunning` 到 `RefinementUseCase` 协议。
 /// 读取当前文本，调用 LLM 优化，将结果提交到编辑历史。
 public final class DefaultRefinementUseCase: @unchecked Sendable {
 
-    private let llmService: LLMService
+    private let runner: any RefineWorkflowRunning
     private let editingUseCase: EditingUseCase
     private let telemetry: any TelemetryService
 
     private let stateSubject = CurrentValueSubject<RefinementState, Never>(.idle)
 
-    public init(llmService: LLMService, editing: EditingUseCase, telemetry: any TelemetryService = NoopTelemetryService()) {
-        self.llmService = llmService
+    public init(runner: any RefineWorkflowRunning, editing: EditingUseCase, telemetry: any TelemetryService = NoopTelemetryService()) {
+        self.runner = runner
         self.editingUseCase = editing
         self.telemetry = telemetry
     }
@@ -40,7 +39,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
     }
 
     public var isConfigured: Bool {
-        llmService.currentProvider != nil
+        runner.isConfigured
     }
 
     public func refine(customPrompt: String?) async throws {
@@ -52,7 +51,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
 
         do {
             let request = RefinementRequest(text: text, customPrompt: customPrompt)
-            let response = try await llmService.refine(request)
+            let response = try await runner.refine(request)
             try editingUseCase.replaceAll(with: response.refinedText)
             stateSubject.send(.completed)
             telemetry.track(name: VoxPocketTelemetryEventName.refinementCompleted.rawValue, properties: [
@@ -78,7 +77,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
 
         do {
             let request = RefinementRequest(text: selectedText, customPrompt: customPrompt)
-            let response = try await llmService.refine(request)
+            let response = try await runner.refine(request)
             let textRange = CoreModels.TextRange(location: range.location, length: range.length)
             try editingUseCase.applyEdit(range: textRange, newText: response.refinedText)
             stateSubject.send(.completed)
@@ -107,7 +106,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
             transcriptionMetadata: transcriptionMetadata
         )
         nonisolated(unsafe) let stateSubject = self.stateSubject
-        let llmService = self.llmService
+        let runner = self.runner
 
         let telemetry = self.telemetry
 
@@ -121,7 +120,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
 
                 do {
                     // 获取流式响应
-                    let innerStream = try await llmService.refineStreaming(request)
+                    let innerStream = try await runner.refineStreaming(request)
 
                     // 发送文本块
                     for try await chunk in innerStream {
@@ -164,7 +163,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
 
         let request = RefinementRequest(text: text, customPrompt: customPrompt)
         nonisolated(unsafe) let stateSubject = self.stateSubject
-        let llmService = self.llmService
+        let runner = self.runner
         let telemetry = self.telemetry
 
         return AsyncThrowingStream { continuation in
@@ -175,7 +174,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                 continuation.yield(.state(refiningState))
 
                 do {
-                    let innerStream = try await llmService.refineStreaming(request)
+                    let innerStream = try await runner.refineStreaming(request)
                     for try await chunk in innerStream {
                         guard !Task.isCancelled else { break }
                         continuation.yield(.chunk(chunk))
@@ -204,7 +203,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
     }
 
     public func cancel() {
-        llmService.cancel()
+        runner.cancel()
         stateSubject.send(.idle)
     }
 
@@ -236,7 +235,7 @@ extension DefaultRefinementUseCase: RefinementUseCase {
                 transcriptionMetadata: metadata
             )
 
-            let response = try await llmService.refine(request)
+            let response = try await runner.refine(request)
 
             try editingUseCase.replaceAll(with: response.refinedText)
             stateSubject.send(.completed)

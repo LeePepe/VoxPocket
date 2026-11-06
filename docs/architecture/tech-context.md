@@ -42,7 +42,7 @@ VoxUITesting(standalone,不参与运行时依赖链)
 | VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, VoxKit, LokiKit(ext) |
 | VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxKit, LokiKit(ext) |
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
-| VoxKit | VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM 独立 SDK | `Packages/VoxKit/tech-context.md` | (无) |
+| VoxKit | VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM/VoxWorkflow/VoxWorkflowWhisperKit 独立 SDK | `Packages/VoxKit/tech-context.md` | (无) |
 | VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxKit, AppleUITesting(ext), LokiKit(ext) |
 
 > **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `exact: "0.2.0"`

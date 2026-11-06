@@ -4,6 +4,8 @@ import Testing
 import Preferences
 import VoxLLM
 import VoxSpeech
+import VoxKitBridge
+import VoxWorkflow
 @testable import VoxPocket
 
 struct RealtimeTranscriberConfigurationTests {
@@ -48,22 +50,19 @@ struct RealtimeTranscriberConfigurationTests {
     @MainActor @Test func stageSelectionsDriveTheActualSpeechRoute() {
         var values = environment
         values["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "fixture-live"
-        #if os(macOS)
-        #expect(StageModelRouting.resolvedSpeechModel(settings: .init(), environment: values) == .realtime)
-        #else
-        #expect(StageModelRouting.resolvedSpeechModel(settings: .init(), environment: values) == .batch)
-        #endif
-        #expect(StageModelRouting.resolvedSpeechModel(settings: .init(speech: .batch), environment: values) == .batch)
-        #expect(StageModelRouting.resolvedSpeechModel(settings: .init(speech: .appleSpeech), environment: values) == .appleSpeech)
-        #expect(StageModelRouting.resolvedSpeechModel(settings: .init(), environment: environment) == .batch)
-        #expect(StageModelRouting.resolvedSpeechModel(settings: .init(), environment: [:]) == .appleSpeech)
+        let availability = StageModelRouting.availability(environment: values)
+        #expect(StagePresetMapping.preset(settings: .init(), batchConfigured: availability.batchConfigured,
+            realtimeConfigured: availability.realtimeCredentialsConfigured, azureTextConfigured: availability.textConfigured)
+            .exportedPipeline().realtime == availability.realtimeCredentialsConfigured)
+        #expect(StagePresetMapping.preset(settings: .init(speech: .batch), batchConfigured: true,
+            realtimeConfigured: true, azureTextConfigured: true).exportedPipeline().realtime == false)
+        #expect(StagePresetMapping.preset(settings: .init(speech: .appleSpeech), batchConfigured: true,
+            realtimeConfigured: true, azureTextConfigured: true).exportedPipeline().speech == ["capture.microphone", "speech.apple"])
+        #expect(StageModelRouting.availability(environment: [:]).batchConfigured == false)
     }
 
     @MainActor @Test func settingsDeploymentEnablesLegacyConfigurationWithoutChangingKeys() {
         let settings = StageModelSettings(realtimeDeployment: "fixture-live-override")
-        #if os(macOS)
-        #expect(StageModelRouting.resolvedSpeechModel(settings: settings, environment: environment) == .realtime)
-        #endif
         let availability = StageModelRouting.availability(environment: environment)
         #expect(availability.batchConfigured)
         #if os(macOS)
@@ -77,39 +76,41 @@ struct RealtimeTranscriberConfigurationTests {
 
     @MainActor @Test func analysisRoutingUsesIndependentIntentAndToneSelections() {
         let settings = StageModelSettings(intent: .azureFoundry, tone: .appleIntelligence, refinement: .azureFoundry)
-        let options = StageModelRouting.analysisOptions(settings: settings)
-        #expect(options["analysis.intent.provider"] == "azureFoundry")
-        #expect(options["analysis.entities.provider"] == "azureFoundry")
-        #expect(options["analysis.tone.provider"] == "appleIntelligence")
+        let preset = StagePresetMapping.preset(settings: settings, batchConfigured: true,
+            realtimeConfigured: true, azureTextConfigured: true)
+        let pipeline = preset.exportedPipeline()
+        #expect(pipeline.analysis["intent"] == "azureFoundry")
+        #expect(pipeline.analysis["entities"] == "azureFoundry")
+        #expect(pipeline.analysis["tone"] == "appleIntelligence")
     }
 
     @MainActor @Test func unavailableTextConfigurationDoesNotBlockSpeechSetupOrUseWrongTextModel() async {
-        let text = DefaultStageTextModelService(azureFoundryConfig: nil, settings: .init())
-        let speech = StageModelRouting.prepareSession(settings: .init(), environment: [:], beforeSession: { text.configure($0) })
+        let speech = StageModelRouting.prepareSession(settings: .init(), environment: [:], beforeSession: nil)
         #expect(speech is AppleSpeechTranscriber)
-        #expect(text.currentProvider == nil)
+        let preset = StagePresetMapping.preset(settings: .init(), batchConfigured: false,
+            realtimeConfigured: false, azureTextConfigured: false)
+        let runner = RefineWorkflowRunner(preset: preset,
+            configuration: WorkflowExecutionConfiguration(), azureTextConfigured: false)
         do {
-            _ = try await text.refine(.init(text: "synthetic input"))
+            _ = try await runner.refine(.init(text: "synthetic input"))
             Issue.record("Unconfigured selected cloud model must not silently use Apple")
+        } catch RefineWorkflowConfigurationError.unavailable {
         } catch {
-            #expect(error is DefaultStageTextModelService.ConfigurationError)
+            Issue.record("Unexpected configuration error: \(error)")
         }
     }
 
     @MainActor @Test func recordingChannelsOwnDifferentTextSnapshots() throws {
         let config = LLMProviderConfig(providerType: .azureFoundry, apiKey: Credential(rawValue: "fixture-key"),
                                        baseURL: URL(string: "https://example.invalid"), modelIdentifier: "fixture-text")
-        let channels = StageTextModelServices(azureConfig: config, settings: .init())
-        #expect(channels.main !== channels.quick)
-        let mainProvider = try #require(channels.main.currentProvider)
-        #expect(mainProvider !== channels.quick.currentProvider)
-        channels.quick.configure(.init(refinement: .appleIntelligence))
-        #expect(channels.main.currentProvider === mainProvider)
-        #expect(channels.main.currentProviderType == .azureFoundry)
-        #expect(channels.quick.currentProviderType == .appleIntelligence)
-        channels.main.configure(.init(refinement: .appleIntelligence))
-        #expect(mainProvider.config.modelIdentifier == "fixture-text")
-        #expect(channels.main.currentProvider !== mainProvider)
+        let configuration = WorkflowExecutionConfiguration(azureFoundryConfig: config)
+        let main = RefineWorkflowRunner(preset: .default, configuration: configuration, azureTextConfigured: true)
+        let quick = RefineWorkflowRunner(preset: .default, configuration: configuration, azureTextConfigured: true)
+        #expect(ObjectIdentifier(main) != ObjectIdentifier(quick))
+        #expect(main.currentProviderType == .azureFoundry)
+        quick.configure(preset: .appleSpeech, configuration: configuration, azureTextConfigured: true)
+        #expect(main.currentProviderType == .azureFoundry)
+        #expect(quick.currentProviderType == .appleIntelligence)
     }
 
     @MainActor @Test func unconfiguredTextModelNeverDisplaysInventedDeployment() {

@@ -28,6 +28,8 @@ let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)]
             .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "VoxLLM", package: "VoxKit"),
             .product(name: "VoxRefine", package: "VoxKit"),
+            .product(name: "VoxWorkflow", package: "VoxKit"),
+            .product(name: "VoxWorkflowWhisperKit", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")]),
         .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket",
             .product(name: "VoxSpeech", package: "VoxKit"),
@@ -35,12 +37,14 @@ let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)]
             .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "VoxLLM", package: "VoxKit"),
             .product(name: "VoxRefine", package: "VoxKit"),
+            .product(name: "VoxWorkflow", package: "VoxKit"),
+            .product(name: "VoxWorkflowWhisperKit", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")],
             resources: [.copy("golden_b_macos.json")],
             swiftSettings: [.define("VOX_ROUTING_HARNESS")])
     ])
 ''')
-        for name in ("StageModelRouting", "DefaultStageTextModelService", "LLMAppConfig", "SDKHostConfiguration"):
+        for name in ("StageModelRouting", "LLMAppConfig", "SDKHostConfiguration"):
             (sources / f"{name}.swift").symlink_to(root / f"VoxPocket/VoxPocket/{name}.swift")
         (tests / "GoldenRoutingTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/GoldenRoutingTests.swift")
         (tests / "golden_b_macos.json").symlink_to(root / "scripts/tests/golden/golden_b_macos.json")

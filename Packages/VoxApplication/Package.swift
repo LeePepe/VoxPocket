@@ -31,7 +31,6 @@ let package = Package(
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
                 .product(name: "VoxRefine", package: "VoxKit"),
-                .product(name: "VoxLLM", package: "VoxKit"),
                 .product(name: "Persistence", package: "VoxInfrastructure"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),

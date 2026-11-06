@@ -62,6 +62,10 @@ targets:
         product: VoxRefine
       - package: VoxKit
         product: VoxLLM
+      - package: VoxKit
+        product: VoxWorkflow
+      - package: VoxKit
+        product: VoxWorkflowWhisperKit
       - package: VoxInfrastructure
         product: VoxKitBridge
       - package: VoxPresentation
@@ -190,6 +194,10 @@ targets:
         buildPhase: resources
     dependencies:
       - target: VoxPocket
+      - package: VoxKit
+        product: VoxWorkflow
+      - package: VoxKit
+        product: VoxWorkflowWhisperKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.tests

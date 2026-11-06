@@ -23,13 +23,14 @@ targets: [UseCases]
 - **RecordingUseCase / TranscriptionUseCase / RefinementUseCase**:录音→转写→精炼主链。
   `DefaultTranscriptionUseCase` 桥接 `TranscriptionCoordinator` 到两个 publisher
   (`liveTextPublisher` 实时可变 / `finalResultPublisher` 稳定一次)。
+- `DefaultRefinementUseCase` 只依赖 `RefineWorkflowRunning`，由宿主注入独立的 workflow runner；应用层不再依赖 `LLMService`。
 - **SessionUseCase**:会话生命周期。`ProxySessionUseCase` 包裹任意实现,运行时热切换
   `InMemorySessionUseCase` → `SwiftDataSessionUseCase`(不改调用点)。
 - **EditingUseCase / HistoryUseCase**:文本编辑与 patch 撤销/重做。
 - **StreamingInputCoordinator**:流式输入协调。
 
 ## 依赖
-- **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/Persistence/PlatformAdapters) + `VoxKit`(VoxCore/VoxSpeech/VoxRefine/VoxLLM)。
+- **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/Persistence/PlatformAdapters) + `VoxKit`(VoxCore/VoxSpeech/VoxRefine/VoxLLM/VoxWorkflow)。
 - **外部**:`LokiKit`(遥测)。所有 UseCase 的 telemetry 参数默认 `NoopTelemetryService`。
 
 ## 约束 / 红线投影

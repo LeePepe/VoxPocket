@@ -26,7 +26,7 @@ The package must remain independent from VoxDomain, LokiKit, shared-telemetry, a
 - `VoxSpeech`: Apple speech, Azure batch/realtime recognition and selectable async sessions; depends on VoxCore and AsyncAlgorithms.
 - `VoxSpeechWhisperKit`: isolated local-model adapters; depends on VoxCore, VoxSpeech and WhisperKit.
 - `VoxRefine`: refinement requests, responses, analysis values and prompt building; depends only on VoxCore.
-- `VoxLLM`: Apple Intelligence/Azure providers and refinement services; depends on VoxCore, VoxRefine and AsyncAlgorithms.
+- `VoxLLM`: Apple Intelligence/Azure providers and refinement services; depends on VoxCore, VoxRefine and AsyncAlgorithms. `LLMService` and `DefaultLLMService` are package-scoped implementation details; public consumers use providers or workflow APIs.
 - `VoxWorkflow`: validated workflow definitions, layered async execution, DSL and provider presets; depends on the phase-2 SDK modules.
 - `VoxWorkflowWhisperKit`: local WhisperKit workflow presets and model-loading-preserving source adapters; depends on VoxWorkflow and VoxSpeechWhisperKit.
 

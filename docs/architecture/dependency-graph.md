@@ -4,7 +4,7 @@
 
 ```mermaid
 graph LR
-    VoxKit[VoxKit SDK\nVoxCore · VoxSpeech · VoxSpeechWhisperKit · VoxRefine · VoxLLM · VoxWorkflow]
+    VoxKit[VoxKit SDK\nVoxCore · VoxSpeech · VoxSpeechWhisperKit · VoxRefine · VoxLLM · VoxWorkflow · VoxWorkflowWhisperKit]
     Bridge[VoxInfrastructure\nVoxKitBridge]
     App[VoxApplication]
     Presentation[VoxPresentation]
@@ -34,6 +34,9 @@ SDK targets plus Bridge; MinimalConsumer validates macOS/iOS without WhisperKit.
 `VoxWorkflow` owns graph validation, layered execution, provider presets and workflow events;
 `VoxWorkflowWhisperKit` is the optional local-model extension and preserves model-loading
 state semantics without making MinimalConsumer depend on WhisperKit.
+`VoxKitBridge` owns host-facing `StagePresetMapping`/`IOSPresetMapping`,
+`WorkflowTranscriptionCoordinator`, and independent `RefineWorkflowRunner` instances;
+the app shell selects preset IDs and does not construct the package-scoped `LLMService`.
 
 ## Historical records — all following sections are obsolete
 

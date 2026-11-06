@@ -6,7 +6,7 @@ import Foundation
 ///
 /// 管理多个 LLM 提供者，提供统一的接口用于文本生成任务。
 /// 支持通用的文本完成（completion）以及特化的优化（refinement）功能。
-public protocol LLMService: AnyObject, Sendable {
+package protocol LLMService: AnyObject, Sendable {
 
     /// 可用的提供者类型列表
     var availableProviders: [LLMProviderType] { get }

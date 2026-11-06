@@ -100,6 +100,17 @@ class RedlineCoverageTests(unittest.TestCase):
             run.return_value.returncode = 1
             self.assertEqual(MODULE.run_checks(ROOT / "Packages/VoxKit", []), 1)
 
+    def testLLMServiceSurfaceMustRemainPackageScoped(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "Sources/VoxLLM"
+            source.mkdir(parents=True)
+            public = source / "Public.swift"
+            public.write_text("public protocol LLMService {}\npublic final class DefaultLLMService {}\n")
+            self.assertTrue(MODULE.scan_rule("R4b", [root / "Sources"]))
+            public.write_text("package protocol LLMService {}\npackage final class DefaultLLMService {}\n")
+            self.assertEqual(MODULE.scan_rule("R4b", [root / "Sources"]), [])
+
 
 if __name__ == "__main__":
     unittest.main()

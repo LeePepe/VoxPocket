@@ -107,6 +107,8 @@ def scan_rule(rule: str, paths: list[Path]) -> list[str]:
                     if not host.group(1).lower().startswith("example"):
                         findings.append(f"{path}:{i}:{line.strip()}")
         elif rule == "R4b":
+            if re.search(r"\b(?:public|open)\s+(?:protocol|class)\s+(?:LLMService|DefaultLLMService)\b", text):
+                findings.append(f"{path}:LLMService must remain package-scoped")
             # Inspect declaration text rather than matching ordinary return arrows.
             declarations = re.findall(r"\b(?:public|open)\b[^{};\n]*(?:\n[^{};\n]*)*(?:\{|;|$)", text)
             for declaration in declarations:

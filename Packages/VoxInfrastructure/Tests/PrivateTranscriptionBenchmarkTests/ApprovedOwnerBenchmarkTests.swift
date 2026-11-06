@@ -155,7 +155,7 @@ struct BenchmarkExecution: Sendable {
                 let before = benchmarkNow()
                 llm.reset()
                 mergeText = await mergedTranscription(appleSpeech: appleResult.text, whisper: text,
-                    merger: LLMTranscriptionMerger(llmService: llm, logger: SilentBenchmarkLogger()))
+                    merger: LLMTranscriptionMerger(provider: llm.provider, logger: SilentBenchmarkLogger()))
                 run.mergeSeconds = benchmarkNow() - before
                 run.mergedScore = BenchmarkScoring.score(reference: context.manifest.reference_text, recognized: mergeText)
                 run.mergeDisposition = appleResult.text == text || appleResult.text.isEmpty ? "skipped" :

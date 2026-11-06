@@ -10,6 +10,7 @@ import Preferences
 import Speech
 import Synchronization
 import VoxSpeech
+import VoxWorkflow
 
 struct AppleBenchmarkResult: Sendable {
     let text: String
@@ -125,14 +126,20 @@ struct BenchmarkCloudConfiguration: Sendable {
 }
 
 /// 只记录合并调用是否失败及返回长度，让生产合并器的回退可观察而不保存日志正文。
-final class BenchmarkLLMService: LLMService {
-    let base: DefaultLLMService
+final class BenchmarkLLMService: Sendable {
+    let provider: AzureFoundryProvider
+    let runtime: WorkflowRuntime
+    let preset: Preset
     private struct State: Sendable { var failed = false; var outputLength: Int? }
     private let state = Mutex(State())
     init(config: LLMProviderConfig) throws {
-        base = DefaultLLMService(logger: SilentBenchmarkLogger(), azureFoundryConfig: config)
-        try base.setProvider(config)
-        base.setSkipContentAnalysis(true)
+        provider = AzureFoundryProvider(config: config, logger: SilentBenchmarkLogger())
+        preset = Preset.default.overriding([
+                "refine.provider": LLMProviderType.azureFoundry.rawValue,
+                "analysis.skip": "true"
+            ])
+        runtime = WorkflowRuntime(configuration: WorkflowExecutionConfiguration(azureFoundryConfig: config,
+            logger: SilentBenchmarkLogger()))
     }
     func reset() { state.withLock { $0 = State() } }
     func disposition(maxLength: Int) -> String {
@@ -141,23 +148,12 @@ final class BenchmarkLLMService: LLMService {
     }
     func complete(prompt: String) async throws -> String {
         do {
-            let result = try await base.complete(prompt: prompt)
+            let result = try await provider.complete(prompt: prompt)
             state.withLock { $0.outputLength = result.count }
             return result
         } catch { state.withLock { $0.failed = true }; throw BenchmarkFailure.recognitionFailed }
     }
-    var availableProviders: [LLMProviderType] { base.availableProviders }
-    var currentProvider: (any LLMProvider)? { base.currentProvider }
-    var currentProviderType: LLMProviderType? { base.currentProviderType }
-    func setProvider(_ config: LLMProviderConfig) throws { try base.setProvider(config) }
-    func completeStreaming(prompt: String) async throws -> AsyncThrowingStream<String, Error> {
-        try await base.completeStreaming(prompt: prompt)
-    }
-    func refine(_ request: RefinementRequest) async throws -> RefinementResponse { try await base.refine(request) }
-    func refineStreaming(_ request: RefinementRequest) async throws -> AsyncThrowingStream<String, Error> {
-        try await base.refineStreaming(request)
-    }
-    func cancel() { base.cancel() }
-    func validateCurrentProvider() async -> Bool { await base.validateCurrentProvider() }
+    func refine(_ request: RefinementRequest) async throws -> RefinementResponse { try await runtime.refine(request, preset: preset) }
+    func cancel() { runtime.cancel() }
 }
 #endif

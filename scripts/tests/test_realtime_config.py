@@ -26,18 +26,21 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
             .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "VoxLLM", package: "VoxKit"),
             .product(name: "VoxRefine", package: "VoxKit"),
+            .product(name: "VoxWorkflow", package: "VoxKit"),
+            .product(name: "VoxWorkflowWhisperKit", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")]),
         .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket",
             .product(name: "VoxCore", package: "VoxKit"),
             .product(name: "VoxSpeech", package: "VoxKit"),
             .product(name: "VoxRefine", package: "VoxKit"),
             .product(name: "VoxLLM", package: "VoxKit"),
-            .product(name: "VoxKitBridge", package: "VoxInfrastructure")])
+            .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
+            .product(name: "VoxWorkflow", package: "VoxKit"),
+            .product(name: "VoxWorkflowWhisperKit", package: "VoxKit")])
     ])
 ''')
         (sources / "LLMAppConfig.swift").symlink_to(root / "VoxPocket/VoxPocket/LLMAppConfig.swift")
         (sources / "StageModelRouting.swift").symlink_to(root / "VoxPocket/VoxPocket/StageModelRouting.swift")
-        (sources / "DefaultStageTextModelService.swift").symlink_to(root / "VoxPocket/VoxPocket/DefaultStageTextModelService.swift")
         (sources / "SDKHostConfiguration.swift").symlink_to(root / "VoxPocket/VoxPocket/SDKHostConfiguration.swift")
         (tests / "RealtimeTranscriberConfigurationTests.swift").symlink_to(
             root / "VoxPocket/VoxPocketTests/RealtimeTranscriberConfigurationTests.swift"
