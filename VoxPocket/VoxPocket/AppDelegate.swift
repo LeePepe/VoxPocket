@@ -16,7 +16,7 @@ import UIShared
 import UseCases
 import Preferences
 import LokiKit
-import TranscriptionKit
+import VoxSpeech
 
 /// macOS 应用代理
 ///

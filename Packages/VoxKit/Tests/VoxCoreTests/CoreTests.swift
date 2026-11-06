@@ -9,6 +9,9 @@ import Testing
     #expect("value=\(credential)" == "value=Credential(<redacted>)")
     #expect(Mirror(reflecting: credential).children.isEmpty)
     #expect(!String(describing: credential).contains("canary-secret"))
+    #expect(Set([credential, Credential(rawValue: "canary-secret"), Credential(rawValue: "different-secret")]).count == 2)
+    #expect(!credential.isEmpty)
+    #expect(Credential(rawValue: " \n\t").isEmpty)
 }
 
 @Test func coreContractsRecordSafeValues() {

@@ -1,11 +1,12 @@
-import TranscriptionKitCombine
+import VoxRefine
+import VoxKitBridge
 import VoxCore
 import Foundation
 import CoreFoundation
 import XCTest
 import Preferences
-import TranscriptionKit
-@testable import LLMKit
+import VoxSpeech
+import VoxLLM
 @testable import VoxPocket
 
 final class GoldenRoutingTests: XCTestCase {
@@ -43,7 +44,7 @@ final class GoldenRoutingTests: XCTestCase {
         XCTAssertEqual(coordinator is HybridWhisperTranscriber, speech != .appleSpeech)
         let azure = LLMAppConfig.refinementAPIKey(environment: environment).flatMap { key in
             LLMAppConfig.azureEndpoint(environment: environment).map { endpoint in
-                LLMProviderConfig(providerType: .azureFoundry, apiKey: key, baseURL: endpoint,
+                LLMProviderConfig(providerType: .azureFoundry, apiKey: Credential(rawValue: key), baseURL: endpoint,
                                   modelIdentifier: LLMAppConfig.azureModelIdentifier(environment: environment))
             }
         }

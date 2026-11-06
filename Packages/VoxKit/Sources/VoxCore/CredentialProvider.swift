@@ -1,6 +1,9 @@
-public struct Credential: Sendable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+import Foundation
+
+public struct Credential: Sendable, Equatable, Hashable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
+    public var isEmpty: Bool { rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var description: String { "Credential(<redacted>)" }
     public var debugDescription: String { "Credential(<redacted>)" }
     public var customMirror: Mirror { Mirror(self, children: EmptyCollection()) }

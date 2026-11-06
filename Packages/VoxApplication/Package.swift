@@ -27,11 +27,11 @@ let package = Package(
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
                 .product(name: "TextHistory", package: "VoxDomain"),
-                .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-                .product(name: "TranscriptionKitCombine", package: "VoxInfrastructure"),
                 .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
                 .product(name: "VoxCore", package: "VoxKit"),
-                .product(name: "LLMKit", package: "VoxInfrastructure"),
+                .product(name: "VoxSpeech", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
+                .product(name: "VoxLLM", package: "VoxKit"),
                 .product(name: "Persistence", package: "VoxInfrastructure"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
@@ -39,7 +39,16 @@ let package = Package(
         ),
         .testTarget(
             name: "UseCasesTests",
-            dependencies: ["UseCases"]
+            dependencies: [
+                "UseCases",
+                .product(name: "CoreModels", package: "VoxDomain"),
+                .product(name: "LokiKit", package: "shared-telemetry"),
+                .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
+                .product(name: "VoxCore", package: "VoxKit"),
+                .product(name: "VoxSpeech", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
+                .product(name: "VoxLLM", package: "VoxKit"),
+            ]
         ),
     ]
 )

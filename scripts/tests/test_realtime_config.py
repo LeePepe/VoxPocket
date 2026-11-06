@@ -21,13 +21,18 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
     dependencies: [.package(path: {json.dumps(str(infrastructure))}), .package(path: {json.dumps(str(root / "Packages/VoxKit"))})],
     targets: [
         .target(name: "VoxPocket", dependencies: [
-            .product(name: "TranscriptionKit", package: "VoxInfrastructure"),
-            .product(name: "TranscriptionKitCombine", package: "VoxInfrastructure"),
+            .product(name: "VoxSpeech", package: "VoxKit"),
             .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
             .product(name: "VoxCore", package: "VoxKit"),
-            .product(name: "LLMKit", package: "VoxInfrastructure"),
+            .product(name: "VoxLLM", package: "VoxKit"),
+            .product(name: "VoxRefine", package: "VoxKit"),
             .product(name: "Preferences", package: "VoxInfrastructure")]),
-        .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket"])
+        .testTarget(name: "VoxPocketTests", dependencies: ["VoxPocket",
+            .product(name: "VoxCore", package: "VoxKit"),
+            .product(name: "VoxSpeech", package: "VoxKit"),
+            .product(name: "VoxRefine", package: "VoxKit"),
+            .product(name: "VoxLLM", package: "VoxKit"),
+            .product(name: "VoxKitBridge", package: "VoxInfrastructure")])
     ])
 ''')
         (sources / "LLMAppConfig.swift").symlink_to(root / "VoxPocket/VoxPocket/LLMAppConfig.swift")

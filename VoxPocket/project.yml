@@ -54,8 +54,14 @@ targets:
     dependencies:
       - package: VoxKit
         product: VoxCore
-      - package: VoxInfrastructure
-        product: TranscriptionKitCombine
+      - package: VoxKit
+        product: VoxSpeech
+      - package: VoxKit
+        product: VoxSpeechWhisperKit
+      - package: VoxKit
+        product: VoxRefine
+      - package: VoxKit
+        product: VoxLLM
       - package: VoxInfrastructure
         product: VoxKitBridge
       - package: VoxPresentation

@@ -8,7 +8,8 @@ Public product
 
 Depends on
 - VoxDomain (`CoreModels`, `TextHistory`)
-- VoxInfrastructure (`TranscriptionKit`, `LLMKit`, `Persistence`, `PlatformAdapters`, `Preferences`)
+- VoxInfrastructure (`VoxKitBridge`, `Persistence`, `PlatformAdapters`, `Preferences`)
+- VoxKit (`VoxCore`, `VoxSpeech`, `VoxRefine`, `VoxLLM`)
 - LokiKit
 
 Primary entry points

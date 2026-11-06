@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import LLMKit
+import VoxLLM
 
 /// 优化面板视图状态协议
 @MainActor

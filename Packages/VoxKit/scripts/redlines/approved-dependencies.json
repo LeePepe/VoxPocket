@@ -1,0 +1,11 @@
+{
+  "swift-argument-parser": ["https://github.com/apple/swift-argument-parser.git","1.8.2","6a52f3251125d74daf04fcbd5e6f08a75d074382"],
+  "swift-asn1": ["https://github.com/apple/swift-asn1.git","1.7.4","917b472dbe53ba699cbb0495f9a95a084bc6364d"],
+  "swift-async-algorithms": ["https://github.com/apple/swift-async-algorithms","1.1.7","13713a4ffdee8abd929f92568ee9462a46ae26e0"],
+  "swift-collections": ["https://github.com/apple/swift-collections.git","1.7.5","f96b909e1a9e469620bc5037c1e24e00153f376f"],
+  "swift-crypto": ["https://github.com/apple/swift-crypto.git","4.5.2","da9d28d69ebe3894b18376c8f2395c2f37b8448f"],
+  "swift-jinja": ["https://github.com/huggingface/swift-jinja.git","2.5.2","1e4d0dc69f7ec1277131fb3853808229c5991825"],
+  "swift-transformers": ["https://github.com/huggingface/swift-transformers.git","1.1.9","150169bfba0889c229a2ce7494cf8949f18e6906"],
+  "whisperkit": ["https://github.com/argmaxinc/WhisperKit","0.18.0","e2adabbe7d98dc4d0ab9a5b75424ecc42a9cdbef"],
+  "yyjson": ["https://github.com/ibireme/yyjson.git","0.12.0","8b4a38dc994a110abaec8a400615567bd996105f"]
+}

@@ -1,8 +1,9 @@
+import VoxCore
 import Foundation
 import Testing
 import Preferences
-import LLMKit
-import TranscriptionKit
+import VoxLLM
+import VoxSpeech
 @testable import VoxPocket
 
 struct RealtimeTranscriberConfigurationTests {
@@ -65,7 +66,11 @@ struct RealtimeTranscriberConfigurationTests {
         #endif
         let availability = StageModelRouting.availability(environment: environment)
         #expect(availability.batchConfigured)
+        #if os(macOS)
         #expect(availability.realtimeCredentialsConfigured)
+        #else
+        #expect(!availability.realtimeCredentialsConfigured)
+        #endif
         #expect(availability.realtimeDeployment.isEmpty)
         #expect(availability.textModelName == "默认文本模型")
     }
@@ -92,7 +97,7 @@ struct RealtimeTranscriberConfigurationTests {
     }
 
     @MainActor @Test func recordingChannelsOwnDifferentTextSnapshots() throws {
-        let config = LLMProviderConfig(providerType: .azureFoundry, apiKey: "fixture-key",
+        let config = LLMProviderConfig(providerType: .azureFoundry, apiKey: Credential(rawValue: "fixture-key"),
                                        baseURL: URL(string: "https://example.invalid"), modelIdentifier: "fixture-text")
         let channels = StageTextModelServices(azureConfig: config, settings: .init())
         #expect(channels.main !== channels.quick)
@@ -118,3 +123,4 @@ struct RealtimeTranscriberConfigurationTests {
         #expect(StageModelRouting.availability(environment: values).textModelName.isEmpty)
     }
 }
+import VoxRefine

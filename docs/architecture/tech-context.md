@@ -23,25 +23,26 @@ red_lines:
 
 ## 既有架构文档(权威来源)
 
-- 包架构梳理:[`packages-architecture.md`](./packages-architecture.md)
-- 依赖关系图(mermaid):[`dependency-graph.md`](./dependency-graph.md)
+- 当前包架构与依赖图:[`dependency-graph.md`](./dependency-graph.md)
+- 迁移前历史记录:[`packages-architecture.md`](./packages-architecture.md)
 - 快速索引:[`../index.md`](../index.md) · 记录索引:[`../records/index.md`](../records/index.md)
 
 ## Layer 划分(inter-layer 轴,权威事实源 = 各层 frontmatter 的 `depends_on`)
 
 ```
-VoxPresentation → VoxApplication → VoxInfrastructure → LokiKit(外部) → VoxDomain / VoxKit
+VoxPresentation → VoxApplication → VoxInfrastructure → VoxDomain / VoxKit
+VoxInfrastructure / VoxApplication / VoxPresentation → LokiKit(外部)
 VoxUITesting(standalone,不参与运行时依赖链)
 ```
 
 | Layer | 一句话职责 | tech-context | depends_on |
 |---|---|---|---|
 | VoxDomain | 纯领域模型(CoreModels, TextHistory),无外部依赖 | `Packages/VoxDomain/tech-context.md` | (无) |
-| VoxInfrastructure | 转写 / LLM / 持久化 / 平台适配 / 偏好 | `Packages/VoxInfrastructure/tech-context.md` | VoxDomain, VoxKit, LokiKit(ext) |
+| VoxInfrastructure | SDK Combine/Loki 桥接 / 持久化 / 平台适配 / 偏好 | `Packages/VoxInfrastructure/tech-context.md` | VoxDomain, VoxKit, LokiKit(ext) |
 | VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, VoxKit, LokiKit(ext) |
 | VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxKit, LokiKit(ext) |
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
-| VoxKit | 独立语音与精炼 SDK(VoxCore 等),无本地层依赖 | `Packages/VoxKit/tech-context.md` | (无) |
+| VoxKit | VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM 独立 SDK | `Packages/VoxKit/tech-context.md` | (无) |
 | VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxKit, AppleUITesting(ext), LokiKit(ext) |
 
 > **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `exact: "0.2.0"`

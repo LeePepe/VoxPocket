@@ -2,12 +2,14 @@ import VoxCore
 #if os(macOS)
 import AVFoundation
 import Foundation
-import LLMKit
+import VoxLLM
+import VoxRefine
+import VoxSpeechWhisperKit
 import LokiKit
 import Preferences
 import Speech
 import Synchronization
-@testable import TranscriptionKit
+import VoxSpeech
 
 struct AppleBenchmarkResult: Sendable {
     let text: String
@@ -105,9 +107,9 @@ struct BenchmarkCloudConfiguration: Sendable {
             "openai/deployments/\(speechName)/audio/transcriptions"), resolvingAgainstBaseURL: false)
         components?.queryItems = [URLQueryItem(name: "api-version", value: "2024-02-01")]
         guard let endpoint = components?.url else { throw BenchmarkFailure.invalidConfiguration }
-        return Self(speech: AzureWhisperConfig(endpoint: endpoint, apiKey: key),
+        return Self(speech: AzureWhisperConfig(endpoint: endpoint, apiKey: Credential(rawValue: key)),
                     refinement: AzureFoundryDeployment(name: "benchmark", endpoint: root, model: textName,
-                        apiKey: key, authMode: .apiKey, apiStyle: .openAIV1, reasoningEffort: "none"))
+                        apiKey: Credential(rawValue: key), authMode: .apiKey, apiStyle: .openAIV1, reasoningEffort: "none"))
     }
 
     // 主机权威来自已批准的私密配置（生产加载器同样校验）；不接受环境覆盖，不硬编码供应商域名。

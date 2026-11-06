@@ -6,13 +6,16 @@
         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="VoxCore" BuildableName="VoxCore" BlueprintName="VoxCore" ReferencedContainer="container:Packages/VoxKit"/>
       </BuildActionEntry>
       <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
-        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="TranscriptionKit" BuildableName="TranscriptionKit" BlueprintName="TranscriptionKit" ReferencedContainer="container:Packages/VoxInfrastructure"/>
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="VoxSpeech" BuildableName="VoxSpeech" BlueprintName="VoxSpeech" ReferencedContainer="container:Packages/VoxKit"/>
       </BuildActionEntry>
       <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
-        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="TranscriptionKitCombine" BuildableName="TranscriptionKitCombine" BlueprintName="TranscriptionKitCombine" ReferencedContainer="container:Packages/VoxInfrastructure"/>
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="VoxSpeechWhisperKit" BuildableName="VoxSpeechWhisperKit" BlueprintName="VoxSpeechWhisperKit" ReferencedContainer="container:Packages/VoxKit"/>
       </BuildActionEntry>
       <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
-        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="LLMKit" BuildableName="LLMKit" BlueprintName="LLMKit" ReferencedContainer="container:Packages/VoxInfrastructure"/>
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="VoxRefine" BuildableName="VoxRefine" BlueprintName="VoxRefine" ReferencedContainer="container:Packages/VoxKit"/>
+      </BuildActionEntry>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="VoxLLM" BuildableName="VoxLLM" BlueprintName="VoxLLM" ReferencedContainer="container:Packages/VoxKit"/>
       </BuildActionEntry>
       <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="VoxKitBridge" BuildableName="VoxKitBridge" BlueprintName="VoxKitBridge" ReferencedContainer="container:Packages/VoxInfrastructure"/>

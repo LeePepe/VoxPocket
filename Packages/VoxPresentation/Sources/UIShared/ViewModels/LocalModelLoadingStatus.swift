@@ -1,7 +1,8 @@
-import TranscriptionKitCombine
+import VoxCore
+import VoxKitBridge
 import Foundation
 import Combine
-import TranscriptionKit
+import VoxSpeech
 
 /// 本地模型加载状态的 ObservableObject 包装
 ///

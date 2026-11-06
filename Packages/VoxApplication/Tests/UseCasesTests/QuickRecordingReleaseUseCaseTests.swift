@@ -1,9 +1,10 @@
-import TranscriptionKitCombine
+import VoxCore
+import VoxKitBridge
 import XCTest
 import Combine
 import Foundation
 import Synchronization
-import TranscriptionKit
+import VoxSpeech
 @testable import UseCases
 
 final class QuickRecordingReleaseUseCaseTests: XCTestCase {

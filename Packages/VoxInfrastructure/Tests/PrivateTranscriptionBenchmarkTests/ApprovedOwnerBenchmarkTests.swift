@@ -2,10 +2,12 @@ import VoxCore
 #if os(macOS)
 import AVFoundation
 import Foundation
-import LLMKit
+import VoxLLM
+import VoxRefine
+import VoxSpeech
+import VoxSpeechWhisperKit
 import LokiKit
 import XCTest
-@testable import TranscriptionKit
 
 enum BenchmarkGroup: String, CaseIterable, Codable, Sendable {
     case appleAutomatic, appleOnDevice, azure, localBase, localTurbo
@@ -175,7 +177,7 @@ struct BenchmarkExecution: Sendable {
         guard let folder else { throw BenchmarkFailure.missingModel }
         let engine = LocalWhisperKitEngine(config: LocalWhisperKitConfig(model: model, preloadOnStart: false),
                                           logger: SilentBenchmarkLogger(), preparedModelFolder: folder, storageLocations: testStorageLocations)
-        try await engine.prepare(onProgress: nil)
+        try await engine.prepare()
         return engine
     }
 

@@ -1,3 +1,4 @@
+import VoxSpeechWhisperKit
 //
 //  ServiceContainer.swift
 //  VoxPocket
@@ -9,11 +10,10 @@ import Foundation
 import SwiftUI
 import SwiftData
 import Combine
-import TranscriptionKit
-import TranscriptionKitCombine
+import VoxSpeech
 import VoxKitBridge
 import VoxCore
-import LLMKit
+import VoxLLM
 import UseCases
 import CoreModels
 import Persistence
@@ -269,7 +269,7 @@ public final class ServiceContainer: ObservableObject {
     ) -> (LLMProviderConfig, Int) {
         var options: [String: String] = LLMAppConfig.analysisOptions()
         let modelIdentifier: String
-        let apiKey: String?
+        let apiKey: Credential?
         let baseURL: URL?
         switch provider {
         case .azureFoundry:
@@ -316,7 +316,7 @@ public final class ServiceContainer: ObservableObject {
             name: "default",
             endpoint: endpoint,
             model: LLMAppConfig.azureModelIdentifier(environment: environment),
-            apiKey: apiKey,
+            apiKey: Credential(rawValue: apiKey),
             apiVersion: LLMAppConfig.azureAPIVersion,
             authMode: LLMAppConfig.azureAuthMode,
             apiStyle: LLMAppConfig.azureAPIStyle,

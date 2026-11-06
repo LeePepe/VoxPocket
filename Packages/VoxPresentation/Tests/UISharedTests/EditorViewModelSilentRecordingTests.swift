@@ -1,7 +1,8 @@
+import VoxCore
 import Combine
 import CoreModels
-import LLMKit
-import TranscriptionKit
+import VoxLLM
+import VoxSpeech
 import TextHistory
 import UIShared
 import UseCases

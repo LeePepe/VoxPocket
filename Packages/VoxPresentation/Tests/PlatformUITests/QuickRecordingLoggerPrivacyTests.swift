@@ -1,11 +1,13 @@
+import VoxCore
+import VoxRefine
 #if os(macOS)
 import XCTest
 import Combine
 import Foundation
 import Synchronization
 import PlatformAdapters
-import LLMKit
-import TranscriptionKit
+import VoxLLM
+import VoxSpeech
 import UseCases
 import LokiKit
 @testable import PlatformUI

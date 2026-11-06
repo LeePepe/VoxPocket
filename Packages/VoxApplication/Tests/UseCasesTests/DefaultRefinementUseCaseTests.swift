@@ -1,8 +1,9 @@
+import VoxRefine
 import XCTest
 import Combine
-import LLMKit
+import VoxLLM
 import CoreModels
-import TranscriptionKit
+import VoxSpeech
 @testable import UseCases
 
 final class DefaultRefinementUseCaseTests: XCTestCase {

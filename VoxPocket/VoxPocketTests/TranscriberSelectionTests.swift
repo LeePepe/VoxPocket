@@ -1,10 +1,11 @@
-import TranscriptionKitCombine
+import VoxSpeechWhisperKit
+import VoxKitBridge
 import VoxCore
 import Foundation
 import Testing
 @testable import VoxPocket
-import TranscriptionKit
-import LLMKit
+import VoxSpeech
+import VoxLLM
 import Preferences
 
 struct TranscriberSelectionTests {
@@ -26,7 +27,7 @@ struct TranscriberSelectionTests {
     @MainActor @Test func cloudConfigurationUsesDeploymentAndSharedKey() throws {
         let config = try #require(LLMAppConfig.transcriptionConfig(environment: cloudEnvironment))
         #expect(config.endpoint.absoluteString == "https://example.invalid/openai/deployments/fixture-asr/audio/transcriptions?api-version=2024-02-01")
-        #expect(config.apiKey == "test-key")
+        #expect(config.apiKey == Credential(rawValue: "test-key"))
     }
 
     @MainActor @Test func privateFileFeedsExistingCloudConfigurationMapper() async throws {
@@ -40,7 +41,7 @@ struct TranscriberSelectionTests {
         let runtime = try await DefaultPrivateModelConfigurationLoader(fileURL: url).load(environment: [:])
         let config = try #require(LLMAppConfig.transcriptionConfig(environment: runtime.environmentValues))
         #expect(config.endpoint.path.contains("/deployments/private-asr/"))
-        #expect(config.apiKey == "test-key")
+        #expect(config.apiKey == Credential(rawValue: "test-key"))
         #expect(LLMAppConfig.refinementAPIKey(environment: runtime.environmentValues) == "test-key")
         #expect(runtime.environmentValues["AZURE_FOUNDRY_MODEL"] == "private-llm")
     }
@@ -59,10 +60,10 @@ struct TranscriberSelectionTests {
         environment["kimikey"] = "old-text-key"
         environment["whisperkey"] = "old-audio-key"
         #expect(LLMAppConfig.refinementAPIKey(environment: environment) == "test-key")
-        #expect(LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey == "test-key")
+        #expect(LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey == Credential(rawValue: "test-key"))
         environment["AZURE_API_KEY"] = "  "
         #expect(LLMAppConfig.refinementAPIKey(environment: environment) == "old-text-key")
-        #expect(LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey == "old-audio-key")
+        #expect(LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey == Credential(rawValue: "old-audio-key"))
     }
 
     @MainActor @Test func mainAndQuickUseSeparateCloudCoordinatorsWithoutMerger() {

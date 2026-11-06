@@ -3,14 +3,14 @@ import AppKit
 import Combine
 import CoreModels
 import Foundation
-import LLMKit
+import VoxLLM
 import LokiKit
 import PlatformAdapters
 import PlatformUI
 import Preferences
 import Synchronization
 import Testing
-import TranscriptionKit
+import VoxSpeech
 import UIShared
 import UseCases
 @testable import VoxPocket

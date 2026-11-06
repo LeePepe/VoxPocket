@@ -1,4 +1,5 @@
-import TranscriptionKitCombine
+import VoxCore
+import VoxKitBridge
 //
 //  ContentView.swift
 //  VoxPocket
@@ -9,7 +10,7 @@ import TranscriptionKitCombine
 import SwiftUI
 import UIShared
 import UseCases
-import TranscriptionKit
+import VoxSpeech
 import Combine
 #if os(macOS)
 import PlatformAdapters

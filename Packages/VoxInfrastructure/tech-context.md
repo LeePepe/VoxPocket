@@ -1,6 +1,6 @@
 ---
 layer: VoxInfrastructure
-role: 转写 · LLM · 持久化 · 平台适配 · 偏好 —— 对接外部系统与框架的适配层
+role: SDK 桥接 · 持久化 · 平台适配 · 偏好 —— 宿主适配层
 owns: [Packages/VoxInfrastructure/**]
 depends_on: [VoxDomain, VoxKit]
 gate: {build: "swift build --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error"}
@@ -11,30 +11,28 @@ red_lines:
   - 端点/资源标识来自 config/env,禁止硬编码 Microsoft/Azure 标识(宪法 V)
   - 主线程禁止阻塞调用(Thread.sleep/同步 I/O);流式用 AsyncThrowingStream(宪法 III)
 roles:
-  Types:   [Protocols, Models]
+  Types:   [TranscriptionCoordinator, AudioCaptureService, SpeechRecognitionService, ModelLoadingObservable, MultiRecognizerTranscriber]
   Config:  [Preferences]
-  Repo:    [Persistence, PlatformAdapters, Providers]
-  Service: [Services, Utilities, LLMKit, TranscriptionKit]
+  Repo:    [Persistence, PlatformAdapters]
+  Service: [VoxKitBridge]
 test: swift test --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error
-targets: [TranscriptionKit, TranscriptionKitCombine, VoxKitBridge, LLMKit, Persistence, PlatformAdapters, Preferences]
+targets: [VoxKitBridge, Persistence, PlatformAdapters, Preferences]
+Last-Reviewed: 2026-11-06
 ---
 
 # VoxInfrastructure Tech Context
 
 ## 职责
-基础设施/适配层。SDK async targets 与独立的 App 桥接 targets 对接不同外部系统:
-- **TranscriptionKit**:语音识别(AppleSpeech / WhisperKit / Azure Whisper),`SpeechSessionSource`（无 Combine）。
-- **TranscriptionKitCombine**:App-owned Combine 协议和 async session 包装器。
-- **VoxKitBridge**:typed SDK 日志/遥测到 LokiKit 的适配器与宿主凭据快照。
-- **LLMKit**:LLM 服务与 provider(`AppleIntelligenceProvider` 等),流式 `RefinementEvent`。
+基础设施/宿主适配层。语音与 LLM 实现及其测试已迁至独立 VoxKit SDK:
+- **VoxKitBridge**:typed SDK 日志/遥测到 LokiKit 的适配器、宿主凭据快照，以及 `Combine/` 下的 App-owned 协议和 public async session 包装器。
 - **Persistence**:SwiftData 会话存储(`SessionRepository` / `SwiftDataSessionRepository`)。
 - **PlatformAdapters**:macOS 系统集成(Clipboard / Accessibility / GlobalHotkey / ClaudeInbox),
   每个都有跨平台协议 + `MacOS*` 实现。
 - **Preferences**:用户偏好,无依赖。
 
 ## 依赖
-- **仓库内**:`VoxDomain`(CoreModels/TextHistory) 与 `VoxKit`(VoxCore)。
-- **外部**:`LokiKit`(`LeePepe/shared-telemetry`,SwiftPM 远程依赖 `exact: "0.2.0"`,遥测/日志)+ `swift-async-algorithms` + `WhisperKit`。
+- **仓库内**:`VoxDomain`(CoreModels/TextHistory) 与 `VoxKit`(VoxCore/VoxSpeech；私密基准测试另依赖 VoxSpeechWhisperKit/VoxRefine/VoxLLM)。
+- **外部**:`LokiKit`(`LeePepe/shared-telemetry`,SwiftPM 远程依赖 `exact: "0.2.0"`,遥测/日志)。
   LokiKit 不进 `depends_on`(它不在本仓库,防腐脚本只校验本地 layer)。
 
 ## 约束 / 红线投影
@@ -44,9 +42,11 @@ targets: [TranscriptionKit, TranscriptionKitCombine, VoxKitBridge, LLMKit, Persi
 - **供应商卫生**:无硬编码 Azure/Microsoft 标识;端点走 config。
 
 ## 层内轴
-`Types(Protocols/Models)` ← `Config(Preferences)` ← `Repo(Persistence/PlatformAdapters/Providers)`
-← `Service(LLMKit/TranscriptionKit/Services/Utilities)`。低角色不得 import 高角色。
+`Types(Combine 协议)` ← `Config(Preferences)` ← `Repo(Persistence/PlatformAdapters)`
+← `Service(VoxKitBridge)`。低角色不得 import 高角色。
 
 ## 测试注意
 `swift test` 会一起编译本包所有 test target;某个 target 的既有失败会阻塞其他 target 运行
 (见 `VoxPocket/tech-context.md` 的测试说明)。定位单类用 `--filter`。
+`VoxKitBridgeTests` 只保留 Combine、Loki 与 legacy/App 事件名映射测试；SDK golden (a)(c)
+与语音/LLM 单元测试属于 VoxKit。私密基准测试只消费 public SDK API，默认跳过真实识别。

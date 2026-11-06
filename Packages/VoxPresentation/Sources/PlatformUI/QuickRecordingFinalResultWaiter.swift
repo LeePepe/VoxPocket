@@ -1,8 +1,9 @@
+import VoxCore
 #if os(macOS)
 import Combine
 import Foundation
 import Synchronization
-import TranscriptionKit
+import VoxSpeech
 
 /// 在停止录音前同步订阅，避免 Passthrough 终稿先于等待任务到达。
 @MainActor

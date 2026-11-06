@@ -1,9 +1,9 @@
-import TranscriptionKitCombine
+import VoxCore
 import VoxKitBridge
 import Foundation
 import Combine
 import LokiKit
-import TranscriptionKit
+import VoxSpeech
 import CoreModels
 import Synchronization
 

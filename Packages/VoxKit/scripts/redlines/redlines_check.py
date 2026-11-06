@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic VoxKit red-line scanner and fixture harness."""
 from __future__ import annotations
-import argparse, json, platform, re, subprocess, sys
+import argparse, json, platform, re, subprocess, sys, tempfile
 from pathlib import Path
 
 R1_PATTERNS = [
@@ -18,12 +18,60 @@ R5_PRODUCT = re.compile(r"VoxPocket|MY-[0-9]+|com\.leepepe", re.I)
 R5_GUID = re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b")
 R5_HOST = re.compile(r"\b([A-Za-z0-9_-]+)\.(services\.ai|openai|cognitiveservices)\.azure\.com\b", re.I)
 ALLOW_R1 = {"TemporaryAudioStore.swift", "WhisperKitModelCacheAdapter.swift"}
+APPROVED_DEPENDENCIES = json.loads((Path(__file__).parent / "approved-dependencies.json").read_text())
+
+
+def normalized_url(url: str) -> str:
+    return url.removesuffix(".git").rstrip("/").lower()
+
+
+def check_sendable_invariants(root: Path) -> list[str]:
+    baseline = json.loads((root / "scripts/redlines/pre-migration-baseline.json").read_text())["sendable_baseline"]
+    findings = []
+    for target in sorted((root / "Sources").iterdir()):
+        if not target.is_dir(): continue
+        count = 0
+        for path in swift_files([target]):
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                declaration = line.split("//", 1)[0]
+                count += len(re.findall(r"@unchecked\s+Sendable|nonisolated\(unsafe\)", declaration))
+                if re.search(r"@unchecked\s+Sendable|nonisolated\(unsafe\)", declaration):
+                    rationale = line.partition("// Sendable:")[2].strip()
+                    if not rationale or "Combine" in rationale:
+                        findings.append(f"{path}:{number}: invalid Sendable rationale")
+        limit = baseline.get(target.name, {}).get("target_count_after_T110", 0)
+        if count > limit:
+            findings.append(f"{target.name}: Sendable {count}>{limit}")
+    return findings
+
+
+def validate_manifest_and_resolved(root: Path) -> None:
+    manifest = (root / "Package.swift").read_text()
+    if re.search(r"\.package\s*\(\s*path:", manifest):
+        raise ValueError("local dependency")
+    approved_urls = {normalized_url(pin[0]) for pin in APPROVED_DEPENDENCIES.values()}
+    for url in re.findall(r'\.package\s*\(\s*url:\s*"([^"]+)"', manifest):
+        if normalized_url(url) not in approved_urls:
+            raise ValueError("manifest denied")
+    pins = json.loads((root / "Package.resolved").read_text())["pins"]
+    resolved = {pin["identity"]: [pin["location"], pin["state"]["version"], pin["state"]["revision"]] for pin in pins}
+    if resolved != APPROVED_DEPENDENCIES or any(pin["kind"] != "remoteSourceControl" for pin in pins):
+        raise ValueError("pin drift")
 
 
 def swift_files(paths: list[Path]):
     for path in paths:
         if path.is_file() and path.suffix == ".swift": yield path
-        elif path.is_dir(): yield from sorted(path.rglob("*.swift"))
+        elif path.is_dir(): yield from (file for file in sorted(path.rglob("*.swift")) if ".build" not in file.relative_to(path).parts)
+
+
+def text_files(paths: list[Path]):
+    suffixes = {".swift", ".json", ".md", ".txt", ".yaml", ".yml", ".toml"}
+    for path in paths:
+        if path.is_file() and path.suffix in suffixes: yield path
+        elif path.is_dir():
+            yield from (file for file in sorted(path.rglob("*"))
+                        if file.is_file() and file.suffix in suffixes and ".build" not in file.relative_to(path).parts)
 
 
 def strip_comments(text: str) -> str:
@@ -33,7 +81,8 @@ def strip_comments(text: str) -> str:
 
 def scan_rule(rule: str, paths: list[Path]) -> list[str]:
     findings: list[str] = []
-    for path in swift_files(paths):
+    files = text_files(paths) if rule == "R5" else swift_files(paths)
+    for path in files:
         raw = path.read_text(encoding="utf-8")
         text = strip_comments(raw)
         lines = raw.splitlines()
@@ -71,9 +120,10 @@ def scan_rule(rule: str, paths: list[Path]) -> list[str]:
     return findings
 
 
-def compile_fixture(path: Path, modules: Path) -> tuple[int, str]:
-    sdk_path = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True).strip()
+def compile_fixture(path: Path, modules: Path, sdk: str = "macosx") -> tuple[int, str]:
+    sdk_path = subprocess.check_output(["xcrun", "--sdk", sdk, "--show-sdk-path"], text=True).strip()
     arch = platform.machine()
+    target = f"{arch}-apple-macosx26.0" if sdk == "macosx" else f"{arch}-apple-ios26.0-simulator"
     result = subprocess.run(
         [
             "xcrun",
@@ -84,7 +134,7 @@ def compile_fixture(path: Path, modules: Path) -> tuple[int, str]:
             "-sdk",
             sdk_path,
             "-target",
-            f"{arch}-apple-macosx26.0",
+            target,
             "-I",
             str(modules),
             str(path),
@@ -110,16 +160,75 @@ def build_modules(root: Path) -> Path:
 
 def run_checks(root: Path, paths: list[Path]) -> int:
     failed = False
+    invariants = check_sendable_invariants(root)
+    if invariants:
+        print("\n".join(invariants)); failed = True
     for rule in ("R1", "R2", "R3b", "R4a", "R4b", "R5"):
-        findings = scan_rule(rule, paths)
+        scoped = paths if rule == "R5" else [root / "Sources"]
+        findings = scan_rule(rule, scoped)
         if findings:
             print(f"{rule} violation:")
             print("\n".join(findings))
             failed = True
     deps = subprocess.run(["swift", "package", "--package-path", str(root), "show-dependencies", "--format", "json"], text=True, capture_output=True)
-    if deps.returncode == 0 and re.search(r"LokiKit|SharedTelemetry", deps.stdout, re.I):
-        print("R2 dependency closure contains forbidden telemetry package"); failed = True
+    if deps.returncode != 0:
+        print("R2 resolution failed"); failed = True
+    else:
+        try:
+            graph = json.loads(deps.stdout)
+            validate_dependencies(graph)
+            validate_manifest_and_resolved(root)
+        except (ValueError, KeyError, TypeError, OSError) as error:
+            print(f"R2: {error}"); failed = True
+    if not check_minimal_consumer(root): failed = True
     return 1 if failed else 0
+
+
+def validate_dependencies(graph: dict) -> None:
+    for dependency in graph["dependencies"]:
+        serialized = json.dumps(dependency)
+        if re.search(r"LokiKit|SharedTelemetry|shared-telemetry", serialized, re.I):
+            raise ValueError("telemetry dependency")
+        if not re.match(r"(?:https?://|ssh://|git@)", dependency["url"]):
+            raise ValueError("local dependency")
+        identity = dependency.get("identity", "").lower()
+        approved = APPROVED_DEPENDENCIES.get(identity)
+        if approved is None or normalized_url(dependency["url"]) != normalized_url(approved[0]):
+            raise ValueError("unapproved dependency")
+        if dependency.get("version") != approved[1]:
+            raise ValueError("version drift")
+        validate_dependencies(dependency)
+
+
+def check_minimal_consumer(root: Path) -> bool:
+    consumer = root / "Examples/MinimalConsumer"
+    build = subprocess.run(["swift", "build", "--package-path", str(consumer)], capture_output=True, text=True)
+    if build.returncode != 0:
+        print("consumer build:\n" + build.stderr); return False
+    bin_path = Path(subprocess.check_output(["swift", "build", "--package-path", str(consumer), "--show-bin-path"], text=True).strip())
+    binary = bin_path / "MinimalConsumer"
+    symbols = subprocess.run(["xcrun", "nm", str(binary)], capture_output=True, text=True)
+    if symbols.returncode != 0 or re.search(r"WhisperKit", symbols.stdout):
+        print("consumer symbols: WhisperKit or unreadable"); return False
+    modules = list(bin_path.rglob("*WhisperKit*.swiftmodule"))
+    if modules:
+        print("consumer: WhisperKit modules"); return False
+    with tempfile.TemporaryDirectory(prefix="voxkit-consumer-ios-") as temporary:
+        sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], text=True).strip()
+        target = f"{platform.machine()}-apple-ios26.0-simulator"
+        command = ["swift", "build", "--package-path", str(consumer), "--build-system", "native",
+                   "--scratch-path", temporary, "--triple", target, "--sdk", sdk, "--target", "MinimalConsumer"]
+        build = subprocess.run(command, capture_output=True, text=True)
+        if build.returncode != 0:
+            print("iOS consumer build:\n" + build.stdout + build.stderr); return False
+        ios_modules = Path(temporary) / target.replace("26.0", "") / "debug/Modules"
+        for module in ("VoxCore", "VoxSpeech", "VoxRefine", "VoxLLM", "MinimalConsumer"):
+            if not (ios_modules / f"{module}.swiftmodule").exists():
+                print(f"iOS consumer missing: {module}"); return False
+        if list(Path(temporary).rglob("*WhisperKit*.swiftmodule")):
+            print("iOS consumer: WhisperKit modules"); return False
+    print("consumer: PASS macOS/iOS, no WhisperKit")
+    return True
 
 
 def self_test(root: Path) -> int:
@@ -138,7 +247,24 @@ def self_test(root: Path) -> int:
     if bad_code == 0 or not re.search(expected, bad_output) or good_code != 0:
         print(f"compile fixture self-test failed: R3a\\n{bad_output}\\n{good_output}"); return 1
     print("self-test R3a compile: pass")
-    return run_checks(root, [root / "Sources"])
+    with tempfile.TemporaryDirectory(prefix="voxcore-ios-fixtures-") as temporary:
+        ios_modules = Path(temporary)
+        sdk = subprocess.check_output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"], text=True).strip()
+        result = subprocess.run([
+            "xcrun", "swiftc", "-emit-module", "-parse-as-library", "-swift-version", "6",
+            "-module-name", "VoxCore", "-package-name", "voxkit", "-sdk", sdk,
+            "-target", f"{platform.machine()}-apple-ios26.0-simulator",
+            "-emit-module-path", str(ios_modules / "VoxCore.swiftmodule"),
+            *map(str, sorted((root / "Sources/VoxCore").glob("*.swift"))),
+        ], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("iOS fixture build:\n" + result.stderr); return 1
+        bad_code, bad_output = compile_fixture(bad, ios_modules, "iphonesimulator")
+        good_code, good_output = compile_fixture(good, ios_modules, "iphonesimulator")
+        if bad_code == 0 or not re.search(expected, bad_output) or good_code != 0:
+            print(f"R3a iOS fixture failed\n{bad_output}\n{good_output}"); return 1
+    print("R3a iOS: pass")
+    return run_checks(root, [root / "Sources", root / "Tests", root / "Examples"])
 
 
 def generate_baseline(root: Path) -> int:
@@ -190,7 +316,7 @@ def main() -> int:
     root = args.root.resolve()
     if args.write_baseline: return generate_baseline(root)
     if args.self_test: return self_test(root)
-    requested = [root / "Sources", root / "Tests", *args.paths]
+    requested = [root / "Sources", root / "Tests", root / "Examples", *args.paths]
     paths = list(dict.fromkeys(p.resolve() if p.exists() else (root / p).resolve() for p in requested))
     missing = [str(path) for path in paths if not path.exists()]
     if missing:

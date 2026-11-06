@@ -2,8 +2,8 @@ import Foundation
 import VoxCore
 import VoxKitBridge
 import Preferences
-import TranscriptionKit
-import LLMKit
+import VoxSpeech
+import VoxLLM
 
 /// App 组合根将非敏感偏好映射到已有适配器；每次录音捕获一次选择。
 @MainActor

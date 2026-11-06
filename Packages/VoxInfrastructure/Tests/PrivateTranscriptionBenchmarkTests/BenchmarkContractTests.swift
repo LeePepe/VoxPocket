@@ -4,7 +4,8 @@ import Foundation
 import Darwin
 import Speech
 import XCTest
-@testable import TranscriptionKit
+import VoxSpeech
+import VoxSpeechWhisperKit
 
 final class BenchmarkContractTests: XCTestCase {
     func testScoringDeterministicAndMixedEnglishIsOneToken() {

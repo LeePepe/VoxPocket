@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 import CoreModels
-import LLMKit
+import VoxLLM
 
 /// 主编辑器视图状态协议
 ///
