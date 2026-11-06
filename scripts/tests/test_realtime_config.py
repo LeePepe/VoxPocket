@@ -6,8 +6,9 @@ import subprocess
 import tempfile
 
 
-def main():
+def main(scratch_path: Path | None = None):
     root = Path(__file__).resolve().parents[2]
+    scratch_path = scratch_path or Path(tempfile.gettempdir()) / "voxpocket-routing-harness-build"
     with tempfile.TemporaryDirectory(prefix="vox-realtime-config-") as temporary:
         package = Path(temporary)
         sources = package / "Sources/VoxPocket"
@@ -45,7 +46,11 @@ let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)
         (tests / "RealtimeTranscriberConfigurationTests.swift").symlink_to(
             root / "VoxPocket/VoxPocketTests/RealtimeTranscriberConfigurationTests.swift"
         )
-        subprocess.run(["swift", "test", "--package-path", str(package)], check=True, timeout=300)
+        subprocess.run(
+            ["swift", "test", "--package-path", str(package), "--scratch-path", str(scratch_path)],
+            check=True,
+            timeout=300,
+        )
 
 
 if __name__ == "__main__":

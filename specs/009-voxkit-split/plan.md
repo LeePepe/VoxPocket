@@ -412,12 +412,14 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 4. **`repo-kit init`（VK-1 PR）**：按 shared-ci@<当时发布的 40 位 SHA> 模板：AGENTS.md（≤150 行；Read first / Protocol / Verify / Required checks / Red lines / Delivery / Dependencies）、thin CLAUDE.md、`scripts/verify`（macOS `swift build/test`、iOS Simulator `xcodebuild test`（目的地同 `VOXKIT_IOS_DESTINATION`）、`scripts/redlines/check.sh` + self-test）、`.githooks/pre-push`、caller `ci.yml`（`runs-on: macos-26`；build/test 输入含 iOS Simulator，计入 `quality / aggregate`；contract audit；workflow-lint；PR body 检查）、`review.yml` caller、PR 模板、CODEOWNERS（`/.github/`、`/AGENTS.md`、`/Package.swift`、`/scripts/redlines/`、`/ai/`、`/.gitignore`）、根 `tech-context.md` layer 表（每个 module 一个 layer）；`ai/` 七件套（README/USAGE/INTEGRATION/EXAMPLES/COMPATIBILITY/MIGRATION/registry.json）。**非公开配置（Owner Q2）**：`.gitignore` 忽略 `*.private.*`、`*.local.*`、`config.private.json`；需要真实 endpoint 的只有可选（默认跳过）的集成测试，它们由测试 harness 读取 gitignore 的 `Tests/Integration/azure.local.json`，仓内提交 `Tests/Integration/azure.example.json`（只含 `example` 主机与空 key）；AGENTS「Red lines」写明该规则；`scripts/verify` 与 CI 运行 gitleaks 与 R5 模式扫描，命中即失败。验收：shared-ci `audit` 零发现。
 5. **ruleset**：old→new 给 Owner，批准后设置：禁直推；required `quality / aggregate` 与 `codex-review-target / codex-review`；**tag 保护**（Owner Q6）：GitHub 的 bypass 作用于整个 ruleset，因此拆为**两个** tag ruleset，均作用于 `refs/tags/*`：(A) `tags-immutable`：规则 `update`、`deletion`、`non_fast_forward`，**bypass actor 列表为空**（包括 repository admin/Owner 在内，任何人都不能移动或删除已发布 tag，保证 `exact:` 依赖的供应链不可变）；(B) `tags-create`：只有规则 `creation`，bypass actor 只有 repository admin（Owner），即只有 Owner 能创建 tag。若日后用 release workflow 建 tag，须把该 workflow 的 App 加为 (B) 的 bypass actor，并经 Owner 批准；**(A) 永远不加 bypass actor**。回读时断言 (A) 的 `bypass_actors` 为空、(B) 只含 Owner；回读 `rules/branches/main` 与两个 tag ruleset。
 6. **Tag**：`0.1.0`（Owner 已定，§12 Q6；由 Owner 或其批准的发布流程在 tag 保护生效后创建），release notes 指向 `ai/`；按 W5 用 `ai/INTEGRATION.md` 的外部消费者 fixture 在干净目录以 `exact: "0.1.0"` 在 macOS 与 iOS Simulator 构建。
-7. **VoxPocket `repo-kit adopt`（PR-4）**：
-   - 4.1（E2）：VoxInfrastructure/Application/Presentation 的 `Package.swift` 与 `project.yml` 同一 commit 改为 `.package(url: "https://github.com/LeePepe/VoxKit", exact: "0.1.0")`，删除 `Packages/VoxKit`。
+7. **VoxPocket `repo-kit adopt`（PR-4a/4b/4c，顺序切片）**：由于删除 `Packages/VoxKit`（约 699 KB）单次超过 `codex-review-target` 的 `REVIEW_MAX_BYTES=300000`，PR-4 采用三个顺序切片；每个相邻切片的字节 diff 必须小于 290000，且 PR-4c 完成后才满足 GATE-4。
+ - **T407a / PR-4a (`feat/voxkit-p4a-remote-adopt`)**：VoxInfrastructure/Application/Presentation 的 `Package.swift`、`project.yml` 与 harness 同步切到远程 `LeePepe/VoxKit` `exact: "0.1.0"`；移除重复的顶层 XcodeGen `VoxKit` 包声明和 App target 直接产品声明；删除 `Packages/VoxKit/{tech-context.md,scripts,Examples}` 与 `Packages/VoxKit/Tests/GoldenTraceTests/**`，并从 `Packages/VoxKit/Package.swift` 移除该 test target。
+ - **T407b / PR-4b (`feat/voxkit-p4b-remove-voxkit-1`)**：删除 `Packages/VoxKit/Tests/{VoxSpeechTests,VoxWorkflowTests,VoxLLMTests,VoxSpeechWhisperKitTests,CanaryTests}` 与 `Packages/VoxKit/Sources/{VoxWorkflow,VoxWorkflowWhisperKit}`。
+ - **T407c / PR-4c (`feat/voxkit-p4c-remove-voxkit-2`)**：删除剩余 `Packages/VoxKit/{Package.swift,Sources,Tests}`，以及临时 `Packages/VoxKit/**` support entry；完成后 T407 与 GATE-4 才闭合。
    - 4.2：`.gitignore` 只放行 `Packages/VoxInfrastructure/Package.resolved`、`Packages/VoxApplication/Package.resolved`、`Packages/VoxPresentation/Package.resolved` 与 `VoxPocket/VoxPocket.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`，并提交这 4 个文件（合同第 7 项比对依据）。
    - 4.3：CI 删除 `SPM VoxKit`、`iOS SDK` 中的 VoxKit 部分（改由 VoxKit repo required 保证）与 `VoxKitSDK.xcworkspace`/scheme/test plan（改为只含 `VoxKitBridge` 测试或删除），`Lint & policy` 删 SDK red lines 步骤；`App unit tests (iOS)` 保留；ruleset 映射 old→new 经 Owner 批准，合并后 apply。
    - 4.4：`check_frontmatter.py` 视 VoxKit 为外部；宪法 Additional Constraints、tech-context、AGENTS「Dependencies」段（`VoxKit 0.1.0` + `…/0.1.0/ai/` 链接）；本地切 path 依赖的方法（`swift package edit` / Xcode 本地覆盖）写入 AGENTS，**不得提交**。
-   - App 侧 golden (b) 与 Bridge 映射测试、全部既有测试通过。
+ - App 侧 golden (b) 与 Bridge 映射测试、全部既有测试通过；T407a/T408/T409/T410 可在 PR-4a 完成，T407b/T407c 与 GATE-4 保持 pending 至 PR-4c。
 8. **回滚演练**：从 PR-4 开 revert 草稿分支跑 CI，绿后关闭（US6-AC6）。
 
 ## 10. PR / 阶段总览
@@ -430,7 +432,9 @@ tech-context：新增 `Packages/VoxKit/tech-context.md`（layer `VoxKit`，`depe
 | PR-2 | 2 搬迁 | VoxPocket | PR-1 + ruleset apply | 依赖变更、E1 |
 | PR-3 | 3 引擎 + 替换 | VoxPocket | PR-2 | RB-8、RB-9、RB-12 |
 | VK-1 | 4 init | VoxKit | PR-3 + 隐私预检 | 预检结果、ruleset 与 tag 保护、tag |
-| PR-4 | 4 adopt | VoxPocket | VK-1 tag | 依赖 pin、E2、ruleset 映射 |
+| PR-4a | 4 adopt / staged T407a | VoxPocket | VK-1 tag | 依赖 pin、Xcode package graph 修复、slice diff < 290 KB |
+| PR-4b | 4 staged T407b | VoxPocket | PR-4a | 中间 SDK 删除、slice diff < 290 KB |
+| PR-4c | 4 staged T407c | VoxPocket | PR-4b | 完成 SDK 删除、GATE-4、ruleset 映射 |
 
 ## 11. Plan-Review Loop 记录
 

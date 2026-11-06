@@ -57,11 +57,6 @@ let package = Package(
         .testTarget(name: "VoxSpeechWhisperKitTests", dependencies: ["VoxSpeechWhisperKit", "VoxSpeech", "VoxCore"]),
         .testTarget(name: "VoxRefineTests", dependencies: ["VoxRefine", "VoxCore"]),
         .testTarget(name: "VoxLLMTests", dependencies: ["VoxLLM", "VoxRefine", "VoxCore"]),
-        .testTarget(
-            name: "GoldenTraceTests",
-            dependencies: ["VoxWorkflow", "VoxSpeech", "VoxSpeechWhisperKit", "VoxLLM", "VoxRefine", "VoxCore"],
-            resources: [.copy("Fixtures")]
-        ),
         .testTarget(name: "VoxWorkflowTests", dependencies: ["VoxWorkflow", "VoxCore", "VoxRefine", "VoxLLM", "VoxSpeech"]),
         .testTarget(name: "CanaryTests", dependencies: ["VoxWorkflow", "VoxWorkflowWhisperKit", "VoxCore", "VoxRefine", "VoxLLM", "VoxSpeech"]),
     ],

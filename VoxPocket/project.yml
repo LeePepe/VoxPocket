@@ -19,9 +19,8 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
 
 packages:
-  VoxKit:
-    url: https://github.com/LeePepe/VoxKit.git
-    exactVersion: 0.1.0
+  # VoxKit exact 0.1.0 and LokiKit exact 0.2.0 resolve through VoxInfrastructure/VoxPresentation;
+  # keeping them out of this top-level list leaves DependencyPackagesGroup empty before Xcode's sortedInsert.
   VoxInfrastructure:
     path: ../Packages/VoxInfrastructure
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
@@ -53,20 +52,6 @@ targets:
         buildPhase: resources
         destinationFilters: [iOS, macOS]
     dependencies:
-      - package: VoxKit
-        product: VoxCore
-      - package: VoxKit
-        product: VoxSpeech
-      - package: VoxKit
-        product: VoxSpeechWhisperKit
-      - package: VoxKit
-        product: VoxRefine
-      - package: VoxKit
-        product: VoxLLM
-      - package: VoxKit
-        product: VoxWorkflow
-      - package: VoxKit
-        product: VoxWorkflowWhisperKit
       - package: VoxInfrastructure
         product: VoxKitBridge
       - package: VoxPresentation
@@ -195,10 +180,6 @@ targets:
         buildPhase: resources
     dependencies:
       - target: VoxPocket
-      - package: VoxKit
-        product: VoxWorkflow
-      - package: VoxKit
-        product: VoxWorkflowWhisperKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.tests
