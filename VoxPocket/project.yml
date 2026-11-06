@@ -20,7 +20,8 @@ settings:
 
 packages:
   VoxKit:
-    path: ../Packages/VoxKit
+    url: https://github.com/LeePepe/VoxKit.git
+    exactVersion: 0.1.0
   VoxInfrastructure:
     path: ../Packages/VoxInfrastructure
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）

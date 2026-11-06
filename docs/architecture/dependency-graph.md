@@ -1,6 +1,6 @@
 # VoxPocket 依赖关系图
 
-## VoxKit SDK 边界（Phase 3）
+## VoxKit SDK 边界（Phase 4，远程 exact 0.1.0）
 
 ```mermaid
 graph LR
@@ -24,11 +24,11 @@ graph LR
 ```
 
 `VoxKit` is standalone and has zero dependency on `VoxDomain`, `LokiKit`, or App layers.
-The SDK redlines R1–R5 are checked by `Packages/VoxKit/scripts/redlines/check.sh --self-test`.
+The SDK redlines R1–R5 are checked by the pinned `LeePepe/VoxKit` repository.
 
 Infrastructure exports VoxKitBridge, Persistence, PlatformAdapters and Preferences.
 The five SDK products and their internal dependencies are defined in the current
-[leaf context](../../Packages/VoxKit/tech-context.md). SDK golden (a)/(c) stay byte-identical;
+remote `LeePepe/VoxKit` exact `0.1.0`. SDK golden (a)/(c) stay byte-identical;
 App routing (b) and Combine/Loki mapping stay host-owned. Voice suites run both speech
 SDK targets plus Bridge; MinimalConsumer validates macOS/iOS without WhisperKit.
 `VoxWorkflow` owns graph validation, layered execution, provider presets and workflow events;

@@ -11,6 +11,11 @@ LOKIKIT_TAG="v0.2.0"
 LOKIKIT_TAG_OBJECT="8d85333eb3c039378f116f082d0f59b0b08207a5"
 LOKIKIT_SHA="903f4b9bc01cfcfeba3ce96e13519d841781b40a"
 
+VOXKIT_REPO="LeePepe/VoxKit"
+VOXKIT_TAG="0.1.0"
+VOXKIT_TAG_OBJECT="7c86c6594aaf0132bd15ef07a7bb4034a90426d2"
+VOXKIT_SHA="5190fe56ece8a56ecb2bfb08885b1f2c544cecbc"
+
 APPLE_UI_TESTING_REPO="LeePepe/AppleUITesting"
 APPLE_UI_TESTING_SHA="e6be2fcdf83341a9f3000a4cc489237655461a07"
 
@@ -43,6 +48,29 @@ verify_lokikit_tag() {
     echo "[deps] LokiKit $LOKIKIT_TAG $LOKIKIT_TAG_OBJECT -> $LOKIKIT_SHA"
 }
 
+# Manifests select exact 0.1.0; this guard fails if its annotated tag is retargeted.
+verify_voxkit_tag() {
+    local refs sha ref peeled="" plain=""
+    if ! refs="$(git ls-remote "https://github.com/$VOXKIT_REPO.git" "refs/tags/$VOXKIT_TAG^{}" "refs/tags/$VOXKIT_TAG")"; then
+        refs=""
+    fi
+    while read -r sha ref; do
+        case "$ref" in
+            "refs/tags/$VOXKIT_TAG^{}") peeled="$sha" ;;
+            "refs/tags/$VOXKIT_TAG") plain="$sha" ;;
+        esac
+    done <<< "$refs"
+    if [ -z "$plain" ] || [ -z "$peeled" ]; then
+        echo "[deps] error: cannot verify annotated VoxKit $VOXKIT_TAG from $VOXKIT_REPO" >&2
+        exit 1
+    fi
+    if [ "$plain" != "$VOXKIT_TAG_OBJECT" ] || [ "$peeled" != "$VOXKIT_SHA" ]; then
+        echo "[deps] error: VoxKit $VOXKIT_TAG object/commit is $plain/$peeled, expected $VOXKIT_TAG_OBJECT/$VOXKIT_SHA" >&2
+        exit 1
+    fi
+    echo "[deps] VoxKit $VOXKIT_TAG $VOXKIT_TAG_OBJECT -> $VOXKIT_SHA"
+}
+
 fetch() {
     local repo="$1" sha="$2" dir="$dest/$3"
     if [ -e "$dir" ]; then
@@ -61,4 +89,5 @@ fetch() {
 }
 
 verify_lokikit_tag
+verify_voxkit_tag
 fetch "$APPLE_UI_TESTING_REPO" "$APPLE_UI_TESTING_SHA" AppleUITesting

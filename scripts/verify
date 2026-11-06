@@ -42,7 +42,6 @@ layer=""
 case "${1:-}" in
     ""|--changed) mode="changed" ;;
     --all) mode="all" ;;
-    --ios-sdk) mode="ios-sdk" ;;
     --app-unit-tests) mode="app-unit-tests" ;;
     --app-unit-tests-ios) mode="app-unit-tests-ios" ;;
     --policy) mode="policy" ;;
@@ -52,11 +51,6 @@ case "${1:-}" in
 esac
 
 case "$mode" in
-    ios-sdk)
-        fetch_deps
-        xcodebuild test -workspace VoxKitSDK.xcworkspace -scheme VoxKitSDK -testPlan VoxKitSDK \
-            -destination "$VOXKIT_IOS_DESTINATION" -skipMacroValidation CODE_SIGNING_ALLOWED=NO
-        exit 0 ;;
     app-unit-tests|app-unit-tests-ios)
         fetch_deps
         (cd VoxPocket && xcodegen generate --spec project.yml)
@@ -101,6 +95,7 @@ policy() {
     python3 scripts/ci/tests/test_review_raven.py
     bash scripts/ci/kimi-review.contract.test.sh
     python3 scripts/tests/test_testflight_schedule.py
+    python3 scripts/tests/test_golden_drift.py
     if command -v gitleaks >/dev/null 2>&1; then
         gitleaks detect --no-banner --config .gitleaks.toml --redact
     elif [ "${VERIFY_MODE:-}" = "ci" ]; then
@@ -109,10 +104,6 @@ policy() {
         echo "[verify] gitleaks not installed; secret scan left to CI"
     fi
     no_transcript_in_logs
-    Packages/VoxKit/scripts/redlines/check.sh --self-test
-    Packages/VoxKit/scripts/redlines/check.sh
-    python3 Packages/VoxKit/scripts/redlines/module-map.py
-    python3 Packages/VoxKit/scripts/redlines/redlines_check.py Packages/VoxKit
 }
 
 # Privacy (constitution IV): transcript/refined text must never reach logs.
@@ -146,10 +137,6 @@ case "$mode" in
     layer)
         fetch_deps
         run_layer "$layer"
-        if [ "$layer" = "VoxKit" ]; then
-            Packages/VoxKit/scripts/redlines/check.sh --self-test
-            Packages/VoxKit/scripts/redlines/check.sh
-        fi
         echo "[verify] ok: $layer"
         exit 0
         ;;

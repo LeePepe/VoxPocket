@@ -28,7 +28,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../VoxDomain"),
-        .package(path: "../VoxKit"),
+        .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0"),
         // LokiKit from the immutable shared-telemetry v0.2.0 release; tag integrity is checked by scripts/ci/fetch-external-deps.sh.
         .package(url: "https://github.com/LeePepe/shared-telemetry.git", exact: "0.2.0"),
     ],

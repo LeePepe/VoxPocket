@@ -2,10 +2,10 @@
 layer: VoxInfrastructure
 role: SDK 桥接 · 持久化 · 平台适配 · 偏好 —— 宿主适配层
 owns: [Packages/VoxInfrastructure/**]
-depends_on: [VoxDomain, VoxKit]
+depends_on: [VoxDomain]
 gate: {build: "swift build --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxInfrastructure --explicit-target-dependency-import-check error"}
 red_lines:
-  - 只能依赖 VoxDomain/VoxKit(+ 外部 LokiKit);禁止 import VoxApplication/VoxPresentation(宪法 II)
+  - 只能依赖 VoxDomain(+ 外部 LokiKit、VoxKit);禁止 import VoxApplication/VoxPresentation(宪法 II)
   - API key/secret 来自环境变量;Azure 可读取受保护的沙箱私密配置,不进源码/日志/安装包,启动校验(宪法 V)
   - 转写文本/音频/精炼内容禁止写入日志或遥测负载,遥测只带指标(宪法 IV)
   - 端点/资源标识来自 config/env,禁止硬编码 Microsoft/Azure 标识(宪法 V)
@@ -32,8 +32,8 @@ Last-Reviewed: 2026-11-06
 
 ## 依赖
 - **仓库内**:`VoxDomain`(CoreModels/TextHistory) 与 `VoxKit`(VoxCore/VoxSpeech；私密基准测试另依赖 VoxSpeechWhisperKit/VoxRefine/VoxLLM)。
-- **外部**:`LokiKit`(`LeePepe/shared-telemetry`,SwiftPM 远程依赖 `exact: "0.2.0"`,遥测/日志)。
-  LokiKit 不进 `depends_on`(它不在本仓库,防腐脚本只校验本地 layer)。
+- **外部**:`LokiKit` 与 `VoxKit`(`LeePepe/VoxKit`, exact `0.1.0`)(`LeePepe/shared-telemetry`,SwiftPM 远程依赖 `exact: "0.2.0"`,遥测/日志)。
+  LokiKit 与 VoxKit 不进 `depends_on`(它不在本仓库,防腐脚本只校验本地 layer)。
 
 ## 约束 / 红线投影
 - **secrets**:环境变量优先；Azure 模型可从沙箱 `config.private.json` 加载，安全边界见宪法 V。

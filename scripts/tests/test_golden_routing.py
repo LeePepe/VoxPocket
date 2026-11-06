@@ -20,7 +20,7 @@ def main() -> None:
         (package / "Package.swift").write_text(f'''// swift-tools-version: 6.2
 import PackageDescription
 let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)],
-    dependencies: [.package(path: {infrastructure}), .package(path: {json.dumps(str(root / "Packages/VoxKit"))})],
+    dependencies: [.package(path: {infrastructure}), .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0")],
     targets: [
         .target(name: "VoxPocket", dependencies: [
             .product(name: "VoxSpeech", package: "VoxKit"),

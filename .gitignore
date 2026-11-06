@@ -25,6 +25,10 @@ DerivedData/
 # Swift Package Manager
 .swiftpm/
 Package.resolved
+!/Packages/VoxInfrastructure/Package.resolved
+!/Packages/VoxApplication/Package.resolved
+!/Packages/VoxPresentation/Package.resolved
+!/VoxPocket/VoxPocket.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Archives
 *.zip
