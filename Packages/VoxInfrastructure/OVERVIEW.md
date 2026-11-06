@@ -22,12 +22,7 @@ Primary entry points
 - `Packages/VoxInfrastructure/Sources/Preferences/`
 
 Recommended read order
-1) `Packages/VoxInfrastructure/Package.swift`
-2) `Packages/VoxInfrastructure/Sources/VoxKitBridge/`
-3) `Packages/VoxInfrastructure/Sources/Persistence/`
-4) `Packages/VoxInfrastructure/Sources/PlatformAdapters/`
-5) `Packages/VoxInfrastructure/Sources/Preferences/`
-6) [LokiKit (shared-telemetry v0.2.0)](https://github.com/LeePepe/shared-telemetry/tree/v0.2.0)
+Follow the entry points above, then [LokiKit v0.2.0](https://github.com/LeePepe/shared-telemetry/tree/v0.2.0).
 
 Notes for LLM context
 - Start with service boundaries and protocols, then implementations.

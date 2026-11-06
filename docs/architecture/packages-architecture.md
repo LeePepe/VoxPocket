@@ -1,6 +1,6 @@
 # VoxPocket 包架构梳理（历史记录：Phase 2 之前）
 
-> Historical only. Superseded by [current Phase 2 architecture](voxkit-phase2.md).
+> Historical only. Superseded by [current Phase 2 architecture](dependency-graph.md).
 
 ## 概览
 

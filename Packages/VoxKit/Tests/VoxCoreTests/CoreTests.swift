@@ -9,13 +9,7 @@ import Testing
     #expect("value=\(credential)" == "value=Credential(<redacted>)")
     #expect(Mirror(reflecting: credential).children.isEmpty)
     #expect(!String(describing: credential).contains("canary-secret"))
-}
-
-@Test func credentialValueSemantics() {
-    let credential = Credential(rawValue: "canary-secret")
-    #expect(credential == Credential(rawValue: "canary-secret"))
-    #expect(credential != Credential(rawValue: "different-secret"))
-    #expect(Set([credential, Credential(rawValue: "canary-secret")]).count == 1)
+    #expect(Set([credential, Credential(rawValue: "canary-secret"), Credential(rawValue: "different-secret")]).count == 2)
     #expect(!credential.isEmpty)
     #expect(Credential(rawValue: " \n\t").isEmpty)
 }

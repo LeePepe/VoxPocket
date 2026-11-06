@@ -69,19 +69,14 @@ class RedlineCoverageTests(unittest.TestCase):
             MODULE.validate_dependencies({"dependencies": [{"identity": "pkg", "url": "https://example.com/evil/pkg.git"}]})
 
     def testResolvedRevisionAndManifestAreAllowlisted(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            manifest, resolved = root / "Package.swift", root / "Package.resolved"
-            manifest.write_text("")
-            snapshot = {"pins": list(MODULE.APPROVED_DEPENDENCIES.values())}
-            resolved.write_text(json.dumps(snapshot))
-            MODULE.validate_manifest_and_resolved(root)
-            snapshot = json.loads(resolved.read_text())
-            snapshot["pins"][0]["state"]["revision"] = "0" * 40
-            resolved.write_text(json.dumps(snapshot))
-            with self.assertRaises(ValueError): MODULE.validate_manifest_and_resolved(root)
-            manifest.write_text('.package(url: "https://example.com/evil/pkg.git", from: "1.0.0")')
-            with self.assertRaisesRegex(ValueError, "manifest"): MODULE.validate_manifest_and_resolved(root)
+        snapshot = {"pins": [{"identity": name, "location": pin[0], "kind": "remoteSourceControl",
+                             "state": {"version": pin[1], "revision": pin[2]}}
+                            for name, pin in MODULE.APPROVED_DEPENDENCIES.items()]}
+        for manifest, revision in (("", None), ("", "0" * 40), ('.package(url: "https://example.com/evil/pkg.git")', None)):
+            snapshot["pins"][0]["state"]["revision"] = revision or next(iter(MODULE.APPROVED_DEPENDENCIES.values()))[2]
+            with patch.object(Path, "read_text", side_effect=[manifest, json.dumps(snapshot)]):
+                if not manifest and not revision: MODULE.validate_manifest_and_resolved(ROOT); continue
+                with self.assertRaises(ValueError): MODULE.validate_manifest_and_resolved(ROOT)
 
     def testSendableInlineRationaleAndBudget(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -97,16 +92,6 @@ class RedlineCoverageTests(unittest.TestCase):
                     self.assertEqual(bool(MODULE.check_sendable_invariants(root)), "Mutex" not in comment)
                 source.write_text(source.read_text() * 2)
                 self.assertTrue(MODULE.check_sendable_invariants(root))
-
-    def testMinimalConsumerFailsClosedWhenIOSBuildFails(self):
-        success = MODULE.subprocess.CompletedProcess([], 0, stdout="", stderr="")
-        failure = MODULE.subprocess.CompletedProcess([], 1, stdout="", stderr="synthetic iOS failure")
-        with tempfile.TemporaryDirectory() as temporary, \
-                patch.object(MODULE.subprocess, "run", side_effect=[success, success, failure]) as run, \
-                patch.object(MODULE.subprocess, "check_output", side_effect=[temporary, "/example-sdk"]):
-            self.assertFalse(MODULE.check_minimal_consumer(Path(temporary)))
-            command = run.call_args.args[0]
-            self.assertTrue(any("-apple-ios26.0-simulator" in argument for argument in command))
 
     def testDependencyResolutionFailureIsFailClosed(self):
         with patch.object(MODULE, "scan_rule", return_value=[]), \

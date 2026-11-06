@@ -85,14 +85,14 @@ package protocol SpeechRecognizing: AnyObject, Sendable {
                         handler: @escaping @Sendable (RecognitionUpdate) -> Void) throws -> any SpeechRecognitionTasking
 }
 
-package final class SystemSpeechRecognitionTask: SpeechRecognitionTasking, @unchecked Sendable { // Sendable: Apple Speech task cancellation/finish are thread-safe boundary operations.
+package final class SystemSpeechRecognitionTask: SpeechRecognitionTasking, @unchecked Sendable { // Sendable: Apple Speech task finish/cancel are thread-safe.
     private let task: SFSpeechRecognitionTask
     package init(_ task: SFSpeechRecognitionTask) { self.task = task }
     package func finish() { task.finish() }
     package func cancel() { task.cancel() }
 }
 
-package final class SystemSpeechRecognizer: SpeechRecognizing, @unchecked Sendable { // Sendable: the immutable Apple recognizer is used only through framework callback APIs.
+package final class SystemSpeechRecognizer: SpeechRecognizing, @unchecked Sendable { // Sendable: immutable Apple recognizer is used only via framework callbacks.
     private let recognizer: SFSpeechRecognizer?
     package init(locale: Locale) { recognizer = SFSpeechRecognizer(locale: locale) }
     package var isAvailable: Bool { recognizer?.isAvailable ?? false }

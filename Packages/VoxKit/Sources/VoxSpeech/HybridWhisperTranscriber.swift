@@ -20,7 +20,7 @@ public final class HybridWhisperTranscriber: NSObject, @unchecked Sendable { // 
     fileprivate let speechRecognizerProvider: any SpeechRecognizing
     fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
     private let realtimeSessionMaker: any RealtimeSessionMaking
-    private struct State: @unchecked Sendable { // Sendable: Apple Speech request/task references are guarded by stateMutex; only framework-safe append/end/finish/cancel operations cross the callback boundary.
+    private struct State: @unchecked Sendable { // Sendable: Apple Speech request/task callback references are guarded by stateMutex.
         var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
         var recognitionTask: (any SpeechRecognitionTasking)?
     }

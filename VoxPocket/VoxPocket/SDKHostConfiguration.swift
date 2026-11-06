@@ -24,14 +24,15 @@ struct SDKHostConfiguration: Sendable {
 
     @MainActor static func credentials(environment: [String: String]) -> EnvironmentCredentialProvider {
         var snapshot: [CredentialKey: Credential] = [:]
-        let values: [(CredentialKey, String?)] = [
+        let refinement = LLMAppConfig.refinementAPIKey(environment: environment).map(Credential.init(rawValue:))
+        let values: [(CredentialKey, Credential?)] = [
             (.azureSpeechKey, LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey),
             (.whisperKey, LLMAppConfig.transcriptionConfig(environment: environment)?.apiKey),
-            (.azureFoundryAPIKey, LLMAppConfig.refinementAPIKey(environment: environment)),
-            (.llmAPIKey, LLMAppConfig.refinementAPIKey(environment: environment))
+            (.azureFoundryAPIKey, refinement),
+            (.llmAPIKey, refinement)
         ]
         for (key, value) in values {
-            if let value, !value.isEmpty { snapshot[key] = Credential(rawValue: value) }
+            if let value, !value.isEmpty { snapshot[key] = value }
         }
         return EnvironmentCredentialProvider(snapshot: snapshot)
     }

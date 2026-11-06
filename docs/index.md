@@ -12,7 +12,6 @@ Last-Reviewed: 2026-11-06
 - Xcode project source: `VoxPocket/project.yml` (XcodeGen)
 - Build and delivery policy: `AGENTS.md` → Red lines (TestFlight-only delivery); release mechanics: `docs/testflight-release.md`
 - Runtime architecture notes (flows, providers, env vars, telemetry): `docs/architecture/runtime-notes.md`
-- Current package ownership and dependency graph: `docs/architecture/voxkit-phase2.md`
 - Verification entry: `scripts/verify` (see `docs/local-gates.md`)
 - Private runtime model configuration: `docs/architecture/private-model-config.md`
 

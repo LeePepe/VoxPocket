@@ -31,6 +31,6 @@ public final class SyntheticAudioBufferSource: AudioBufferSource, Sendable {
     }
 }
 
-private struct PCMBufferConsumer: @unchecked Sendable { // Sendable: the immutable consumer is invoked synchronously at the Apple PCM boundary, like an audio tap.
+private struct PCMBufferConsumer: @unchecked Sendable { // Sendable: immutable consumer runs synchronously at the Apple PCM boundary.
     let consume: (AVAudioPCMBuffer) -> Void
 }

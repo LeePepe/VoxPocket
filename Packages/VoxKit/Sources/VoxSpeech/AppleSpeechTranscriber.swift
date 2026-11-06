@@ -14,7 +14,7 @@ public final class AppleSpeechTranscriber: NSObject, @unchecked Sendable { // Se
     fileprivate let recorder: any AudioBufferSource
     fileprivate let speechRecognizerProvider: any SpeechRecognizing
     fileprivate let speechAuthorizationProvider: any SpeechAuthorizationProviding
-    private struct State: @unchecked Sendable { // Sendable: Apple Speech request/task references are guarded by stateMutex; only framework-safe append/end/finish/cancel operations cross the callback boundary.
+    private struct State: @unchecked Sendable { // Sendable: Apple Speech request/task callback references are guarded by stateMutex.
         var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
         var recognitionTask: (any SpeechRecognitionTasking)?
     }

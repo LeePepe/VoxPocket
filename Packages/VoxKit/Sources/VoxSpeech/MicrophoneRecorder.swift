@@ -9,12 +9,12 @@ import Synchronization
 /// 并通过 `bufferHandler` 同步回调将每个 PCM buffer 分发给外部消费者（如语音识别引擎）。
 /// 不包含任何转录逻辑。
 // Sendable: lock serializes audio engine
-public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked Sendable { // Sendable: AVFoundation audio tap and notification callbacks access mutable capture state only through lock.
+public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked Sendable { // Sendable: AVFoundation callbacks access mutable capture state only through lock.
 
     // MARK: - Private state
 
     private let audioEngine = AVAudioEngine()
-    private struct State: @unchecked Sendable { // Sendable: AVFoundation engine, file and notification tokens are confined to the enclosing Mutex; realtime tap access ends before engine teardown.
+    private struct State: @unchecked Sendable { // Sendable: AVFoundation engine/file/tokens are Mutex-confined; tap ends before teardown.
         var audioFile: AVAudioFile?
         var tempFileURL: URL?
         var interruptedFileURL: URL?
@@ -102,9 +102,9 @@ public final class MicrophoneRecorder: NSObject, AudioBufferSource, @unchecked S
         // MainActor isolation. AVAudioEngine calls it on the realtime audio thread;
         // if the closure were @MainActor, Swift's runtime isolation check would crash.
         // Sendable: the tap invokes this handler only on the AVAudioEngine callback thread.
-        nonisolated(unsafe) let handler = bufferHandler // Sendable: immutable callback is invoked synchronously only at the AVFoundation realtime audio tap boundary.
+        nonisolated(unsafe) let handler = bufferHandler // Sendable: immutable callback runs synchronously at the AVFoundation tap boundary.
         // Sendable: AVAudioEngine retains this callback; configuration stays on MainActor.
-        nonisolated(unsafe) let tapBlock: (AVAudioPCMBuffer, AVAudioTime) -> Void = { [weak self] buffer, _ in // Sendable: AVFoundation invokes this realtime tap; shared recorder state is guarded by lock.
+        nonisolated(unsafe) let tapBlock: (AVAudioPCMBuffer, AVAudioTime) -> Void = { [weak self] buffer, _ in // Sendable: AVFoundation tap accesses shared state only under lock.
             guard let self else { return }
             self.lock.withLock { state in
                 try? state.audioFile?.write(from: buffer)
