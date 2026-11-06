@@ -40,8 +40,8 @@ class CheckFrontmatterTests(unittest.TestCase):
     def test_package_local_dependency_missing_from_depends_on_fails(self):
         path = self.repo / "Packages" / "VoxApplication" / "tech-context.md"
         content = path.read_text(encoding="utf-8").replace(
+            "depends_on: [VoxDomain, VoxInfrastructure, VoxKit]",
             "depends_on: [VoxDomain, VoxInfrastructure]",
-            "depends_on: [VoxDomain]",
         )
         self.write("Packages/VoxApplication/tech-context.md", content)
         manifest = self.repo / "Packages" / "VoxApplication" / "Package.swift"
@@ -56,28 +56,33 @@ class CheckFrontmatterTests(unittest.TestCase):
     def test_phantom_layer_in_depends_on_fails(self):
         path = self.repo / "Packages" / "VoxInfrastructure" / "tech-context.md"
         content = path.read_text(encoding="utf-8").replace(
-            "depends_on: [VoxDomain]",
-            "depends_on: [VoxDomain, VoxGhost]",
+            "depends_on: [VoxDomain, VoxKit]",
+            "depends_on: [VoxDomain, VoxKit, VoxGhost]",
         )
         self.write("Packages/VoxInfrastructure/tech-context.md", content)
         self.assertNotEqual(self.run_check(), 0)
 
-    def test_external_dependency_is_not_a_local_layer(self):
-        path = self.repo / "Packages" / "VoxInfrastructure" / "tech-context.md"
-        manifest = self.repo / "Packages" / "VoxInfrastructure" / "Package.swift"
-        self.write("Packages/VoxInfrastructure/Package.swift",
-                   manifest.read_text(encoding="utf-8").replace(
-                       '        .package(path: "../VoxDomain"),',
-                       '        .package(path: "../VoxDomain"),\n'
-                       '        .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0"),',
-                   ))
+    def test_non_voxkit_staged_dependency_fails_but_voxkit_passes(self):
         self.assertEqual(self.run_check(), 0)
+        path = self.repo / "Packages" / "VoxInfrastructure" / "tech-context.md"
+        content = path.read_text(encoding="utf-8").replace(
+            "depends_on: [VoxDomain, VoxKit]",
+            "depends_on: [VoxDomain, VoxKit, VoxApplication]",
+        )
+        root = self.repo / "docs" / "architecture" / "tech-context.md"
+        root_content = root.read_text(encoding="utf-8").replace(
+            "VoxDomain, VoxKit, LokiKit(ext)",
+            "VoxDomain, VoxKit, VoxApplication, LokiKit(ext)",
+        )
+        self.write("Packages/VoxInfrastructure/tech-context.md", content)
+        self.write("docs/architecture/tech-context.md", root_content)
+        self.assertNotEqual(self.run_check(), 0)
 
     def test_leaf_depends_on_mismatch_with_root_table_fails(self):
         root = self.repo / "docs" / "architecture" / "tech-context.md"
         content = root.read_text(encoding="utf-8").replace(
-            "VoxDomain, VoxKit(ext), LokiKit(ext)",
-            "VoxKit(ext), LokiKit(ext)",
+            "VoxDomain, VoxInfrastructure, VoxKit, LokiKit(ext)",
+            "VoxDomain, VoxInfrastructure, LokiKit(ext)",
         )
         self.write("docs/architecture/tech-context.md", content)
         self.assertNotEqual(self.run_check(), 0)

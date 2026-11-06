@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxUITesting]
+        package: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxUITesting, VoxKit]
     steps:
       - name: Checkout VoxPocket
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -148,6 +148,25 @@ jobs:
       - name: iOS simulator build and test
         working-directory: repo
         run: scripts/ci/ios-simulator.sh
+
+  # New SDK/App checks become required only after the post-merge ruleset apply.
+  ios-sdk:
+    name: iOS SDK
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: repo
+      - name: Select pinned Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+      - name: Inspect fixed simulator runtime
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices
+      - name: Verify iOS SDK
+        working-directory: repo
+        run: scripts/verify --ios-sdk
 
   app-unit-tests:
     name: App unit tests

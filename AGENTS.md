@@ -16,7 +16,7 @@ configured provider). Every agent follows this protocol; tool-specific files (CL
 4. Index: `docs/index.md` · records map: `docs/records/index.md` · feature specs: `specs/`
    (Spec Kit, `.specify/`); historical plans: `docs/plans/`
 
-Layer map (dependencies point down only; `LokiKit`, `VoxKit`, and `AppleUITesting` are external):
+Layer map (dependencies point down only; `LokiKit` and `AppleUITesting` are external):
 
 ```
 VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, delivery
@@ -24,7 +24,7 @@ VoxPocketApp (VoxPocket/**, VoxPocketWidget/**)   Xcode app shell, assembly, del
   → VoxApplication    use cases
   → VoxInfrastructure SDK Combine/Loki bridge, persistence, platform adapters, preferences
   → VoxDomain         pure domain models, no external dependencies
-  (LokiKit and VoxKit are external SwiftPM dependencies)
+  → VoxKit            VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM; no local layer dependencies
 VoxUITesting          standalone test tooling (snapshot tests, Claude Vision UI eval)
 ```
 
@@ -57,13 +57,12 @@ scripts/verify            # changed layers vs origin/main + policy (what pre-pus
 scripts/verify --all      # every layer gate + policy (what CI runs)
 scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one layer
 ```
-- LokiKit is the SwiftPM remote dependency https://github.com/LeePepe/shared-telemetry exact `0.2.0`; tag
-  `8d85333eb3c039378f116f082d0f59b0b08207a5` → `903f4b9bc01cfcfeba3ce96e13519d841781b40a` is integrity evidence.
-  VoxKit is `https://github.com/LeePepe/VoxKit` exact `0.1.0`; tag `7c86c6594aaf0132bd15ef07a7bb4034a90426d2` →
-  `5190fe56ece8a56ecb2bfb08885b1f2c544cecbc`. Local overrides via `swift package edit VoxKit --path ../VoxKit`
-  or Xcode local package override must never be committed. Only `../AppleUITesting` lives next to the repository.
-  `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks out AppleUITesting at its pinned SHA when
-  missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
+- LokiKit is the SwiftPM remote dependency https://github.com/LeePepe/shared-telemetry at exact
+  `0.2.0`; tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` peels to
+  `903f4b9bc01cfcfeba3ce96e13519d841781b40a` as integrity evidence, not a selector.
+  Only `../AppleUITesting` lives next to the repository.
+  `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks out AppleUITesting
+  at its pinned SHA when missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
 - `pre-commit` keeps the fast staged-layer build/test plus docs map/freshness checks.
 - Local verification is SPM build/test plus deterministic scripts. The app-target
   `xcodebuild` runs in CI only (`RUN_HEAVY=1 scripts/verify` opts in locally).
@@ -71,7 +70,7 @@ scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one 
 
 ## Required checks
 
-`scripts/rulesets/main-protection.json` defines these target checks:
+`scripts/rulesets/main-protection.json` defines these target checks; the four new SDK/App checks await Owner-authorized apply:
 - `quality / aggregate`
 - `codex-review-target / codex-review`
 - `SPM VoxDomain`
@@ -79,6 +78,8 @@ scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one 
 - `SPM VoxApplication`
 - `SPM VoxPresentation`
 - `SPM VoxUITesting`
+- `SPM VoxKit`
+- `iOS SDK`
 - `App unit tests`
 - `App unit tests (iOS)`
 - `App target`
@@ -120,10 +121,9 @@ The constitution's 2026-10-16 `loki02v1` amendment records the sole approved
 repository-contract deviation; it creates no broader exception.
 
 ## Dependencies
-
+These are the current pins; changes require CI and AI review on the PR head.
 - `shared-ci` `838e10a059979e6732446cb26edc95d173cc7e3a` — https://github.com/LeePepe/shared-ci/blob/838e10a059979e6732446cb26edc95d173cc7e3a/ai/
-- `shared-telemetry` `0.2.0` (`LokiKit`, tag `v0.2.0` `8d85333eb3c039378f116f082d0f59b0b08207a5` → `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, guarded in `scripts/ci/fetch-external-deps.sh`) — https://github.com/LeePepe/shared-telemetry/tree/0.2.0/ai/ (https://github.com/LeePepe/shared-telemetry/blob/v0.2.0/ai/)
-- `VoxKit` `0.1.0` (tag `0.1.0` `7c86c6594aaf0132bd15ef07a7bb4034a90426d2` → `5190fe56ece8a56ecb2bfb08885b1f2c544cecbc`, guarded in `scripts/ci/fetch-external-deps.sh`) — https://github.com/LeePepe/VoxKit/blob/0.1.0/ai/
+- LokiKit from LeePepe/shared-telemetry exact `0.2.0` (annotated tag object `8d85333eb3c039378f116f082d0f59b0b08207a5` → commit `903f4b9bc01cfcfeba3ce96e13519d841781b40a`), exact-version selectors in the VoxInfrastructure, VoxApplication and VoxPresentation `Package.swift`; tag integrity guarded in `scripts/ci/fetch-external-deps.sh` — https://github.com/LeePepe/shared-telemetry/blob/v0.2.0/ai/
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
 ## Delivery

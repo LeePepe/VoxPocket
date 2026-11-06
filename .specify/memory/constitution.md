@@ -19,7 +19,7 @@ Dependencies flow one way only, and never reverse:
 ```
 VoxPocketApp → VoxPresentation → VoxApplication → VoxInfrastructure (VoxKitBridge)
                                       └──────────→ VoxKit SDK
-VoxKit (remote `LeePepe/VoxKit` exact `0.1.0`: VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow,
+VoxKit (VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow,
        VoxWorkflowWhisperKit) → no local or external runtime layer
 VoxInfrastructure → VoxDomain; VoxDomain → no dependencies
 ```
@@ -93,8 +93,9 @@ system boundary before use. Fail fast with a clear message. Never trust external
   test doubles are `Fake*` / `Mock*`. Depend on protocols, not concrete types.
 - **File organization**: many small focused files over few large ones. Functions < 50 lines,
   files < 800 lines, nesting ≤ 4 levels.
-- **VoxKit SDK boundary**: is consumed from `LeePepe/VoxKit` as a remote exact `0.1.0` dependency from phase 4 onward.
-  Its SDK redlines are governed by the VoxKit repository.
+- **VoxKit SDK boundary**: during phases 1–3 it is the staged package at `Packages/VoxKit`;
+  from phase 4 it is a remote exact-version dependency. VoxKit's SDK redlines R1–R5 are
+  verified by `Packages/VoxKit/scripts/redlines/check.sh --self-test`.
 - **Non-public project configuration**: Azure hostnames, internal endpoints, and internal issue
   numbers never enter Git; use gitignored local files and commit only synthetic `.example` templates
   (`config.private.json`/`config.example.json` patterns).
@@ -118,7 +119,9 @@ system boundary before use. Fail fast with a clear message. Never trust external
   cannot skip; heavy verification (`xcodebuild`, simulator) lives here, not in local hooks.
 - Repository-owned `.githooks/` run the deterministic checks directly, including docs-map and
   freshness on commit. Internal AI Reviewer and PR Actions review responsibilities are unchanged.
-- VoxKit `0.1.0` is verified through the pinned remote package and App iOS Simulator unit tests remain a governance gate.
+- VoxKit SDK redlines R1–R5 (`Packages/VoxKit/scripts/redlines/check.sh --self-test`), VoxKit
+  iOS Simulator tests, and App iOS Simulator unit tests are governance gates and are required
+  once their corresponding targets are staged.
 
 ## Governance
 

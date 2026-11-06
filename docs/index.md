@@ -22,7 +22,8 @@ Last-Reviewed: 2026-11-06
 - `VoxInfrastructure`: `VoxKitBridge`, `Persistence`, `PlatformAdapters`, `Preferences`
 - `LokiKit`: 独立日志与遥测包
 - `VoxDomain`: `CoreModels`, `TextHistory`
-- `VoxKit`: remote standalone SDK (`LeePepe/VoxKit`, exact `0.1.0`; `VoxCore`, `VoxSpeech`, `VoxSpeechWhisperKit`, `VoxRefine`, `VoxLLM`, `VoxWorkflow`)
+- `VoxKit`: standalone SDK (`VoxCore`, `VoxSpeech`, `VoxSpeechWhisperKit`, `VoxRefine`,
+  `VoxLLM`); Phase 2 modules under `Packages/VoxKit`; workflow products follow in Phase 3
 
 ## Common Paths
 

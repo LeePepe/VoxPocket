@@ -10,7 +10,6 @@ from test_realtime_config import main as run_realtime_harness
 
 def main() -> None:
     root = Path(__file__).resolve().parents[2]
-    scratch_path = Path(tempfile.gettempdir()) / "voxpocket-routing-harness-build"
     with tempfile.TemporaryDirectory(prefix="vox-golden-routing-") as temporary:
         package = Path(temporary)
         sources = package / "Sources/VoxPocket"
@@ -21,7 +20,7 @@ def main() -> None:
         (package / "Package.swift").write_text(f'''// swift-tools-version: 6.2
 import PackageDescription
 let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)],
-    dependencies: [.package(path: {infrastructure}), .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0")],
+    dependencies: [.package(path: {infrastructure}), .package(path: {json.dumps(str(root / "Packages/VoxKit"))})],
     targets: [
         .target(name: "VoxPocket", dependencies: [
             .product(name: "VoxSpeech", package: "VoxKit"),
@@ -49,21 +48,8 @@ let package = Package(name: "GoldenRoutingRegression", platforms: [.macOS(.v26)]
             (sources / f"{name}.swift").symlink_to(root / f"VoxPocket/VoxPocket/{name}.swift")
         (tests / "GoldenRoutingTests.swift").symlink_to(root / "VoxPocket/VoxPocketTests/GoldenRoutingTests.swift")
         (tests / "golden_b_macos.json").symlink_to(root / "scripts/tests/golden/golden_b_macos.json")
-        subprocess.run(
-            [
-                "swift",
-                "test",
-                "--package-path",
-                str(package),
-                "--scratch-path",
-                str(scratch_path),
-                "--explicit-target-dependency-import-check",
-                "error",
-            ],
-            check=True,
-            timeout=300,
-        )
-    run_realtime_harness(scratch_path)
+        subprocess.run(["swift", "test", "--package-path", str(package), "--explicit-target-dependency-import-check", "error"], check=True, timeout=300)
+    run_realtime_harness()
 
 
 if __name__ == "__main__":

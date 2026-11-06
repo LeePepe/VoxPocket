@@ -5,10 +5,8 @@ canonical_roles: [Types, Config, Repo, Service, Runtime, UI]
 support:
   - patterns: ["*.md", "LICENSE", "docs/**", "specs/**", "design/**", "artifacts/**", ".claude/**", ".codex/**", ".specify/**"]
     reason: documentation, specs, design records and agent/tool configuration; checked by docs lints and the contract audit
-  - patterns: [".github/**", ".githooks/**", "scripts/**", "tests/**", "fastlane/**", "docker/**", ".gitignore", ".gitleaks.toml", "config.example.json"]
+  - patterns: [".github/**", ".githooks/**", "scripts/**", "tests/**", "fastlane/**", "docker/**", ".gitignore", ".gitleaks.toml", "config.example.json", "VoxKitSDK.xcworkspace/**", "VoxKitSDK.xctestplan"]
     reason: CI, hooks, policy, release and local tooling; verified by scripts/verify --policy and CI
-  - patterns: ["Packages/VoxKit/**"]
-    reason: staged local SDK removal; retained only so the native package gate can run during the transition
 red_lines:
   - 依赖方向永远向下,任何反向依赖(层间或层内)都是红线(宪法 II)
   - VoxDomain 不得引入任何外部依赖或其他本地 layer
@@ -20,6 +18,9 @@ red_lines:
 这是**目录索引层**的技术总览。层间依赖图与详细职责已在同目录既有文档中维护,本文件不复制,
 只做指针 + 声明**层内轴**所需的 `canonical_roles`。
 
+> `VoxKit` 现已作为活动叶子层纳入架构；其叶子上下文位于
+> `Packages/VoxKit/tech-context.md`。
+
 ## 既有架构文档(权威来源)
 
 - 当前包架构与依赖图:[`dependency-graph.md`](./dependency-graph.md)
@@ -29,22 +30,22 @@ red_lines:
 ## Layer 划分(inter-layer 轴,权威事实源 = 各层 frontmatter 的 `depends_on`)
 
 ```
-VoxPresentation → VoxApplication → VoxInfrastructure → VoxDomain
-VoxInfrastructure / VoxApplication / VoxPresentation → VoxKit(ext)
-VoxInfrastructure / VoxApplication / VoxPresentation → LokiKit(ext)
+VoxPresentation → VoxApplication → VoxInfrastructure → VoxDomain / VoxKit
+VoxInfrastructure / VoxApplication / VoxPresentation → LokiKit(外部)
 VoxUITesting(standalone,不参与运行时依赖链)
 ```
 
 | Layer | 一句话职责 | tech-context | depends_on |
 |---|---|---|---|
 | VoxDomain | 纯领域模型(CoreModels, TextHistory),无外部依赖 | `Packages/VoxDomain/tech-context.md` | (无) |
-| VoxInfrastructure | SDK Combine/Loki 桥接 / 持久化 / 平台适配 / 偏好 | `Packages/VoxInfrastructure/tech-context.md` | VoxDomain, VoxKit(ext), LokiKit(ext) |
-| VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, VoxKit(ext), LokiKit(ext) |
-| VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxKit(ext), LokiKit(ext) |
+| VoxInfrastructure | SDK Combine/Loki 桥接 / 持久化 / 平台适配 / 偏好 | `Packages/VoxInfrastructure/tech-context.md` | VoxDomain, VoxKit, LokiKit(ext) |
+| VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, VoxKit, LokiKit(ext) |
+| VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxKit, LokiKit(ext) |
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
-| VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, AppleUITesting(ext), LokiKit(ext), VoxKit(ext) |
+| VoxKit | VoxCore/VoxSpeech/VoxSpeechWhisperKit/VoxRefine/VoxLLM/VoxWorkflow/VoxWorkflowWhisperKit 独立 SDK | `Packages/VoxKit/tech-context.md` | (无) |
+| VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxKit, AppleUITesting(ext), LokiKit(ext) |
 
-> **LokiKit 和 VoxKit 是外部包**:LokiKit 源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `exact: "0.2.0"`；VoxKit 源自 `LeePepe/VoxKit`,按 `exact: "0.1.0"`
+> **LokiKit 是外部包**:源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `exact: "0.2.0"`
 > 解析,不再使用仓库同级目录。不受本仓库门禁约束。各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer;
 > 外部依赖在正文与上表 `(ext)` 标注,不进 `depends_on`。
 

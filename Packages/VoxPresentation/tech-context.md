@@ -2,10 +2,10 @@
 layer: VoxPresentation
 role: SwiftUI 视图与 ViewModel —— 展示层,驱动录音/编辑/精炼的用户界面
 owns: [Packages/VoxPresentation/**]
-depends_on: [VoxDomain, VoxInfrastructure, VoxApplication]
+depends_on: [VoxDomain, VoxInfrastructure, VoxApplication, VoxKit]
 gate: {build: "swift build --package-path Packages/VoxPresentation --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxPresentation --explicit-target-dependency-import-check error"}
 red_lines:
-  - 可依赖下层四包 VoxDomain/VoxInfrastructure/VoxApplication(+ 外部 LokiKit、VoxKit);除 App 组装壳外不得被任何 layer 依赖(宪法 II)
+  - 可依赖下层四包 VoxDomain/VoxInfrastructure/VoxApplication/VoxKit(+ 外部 LokiKit);除 App 组装壳外不得被任何 layer 依赖(宪法 II)
   - 所有 ViewModel 与 UI 代码 @MainActor;禁止主线程阻塞调用(宪法 III)
   - 转写/精炼文本是用户敏感数据,禁止写入日志或遥测负载(宪法 IV)
   - ViewState 契约用协议;@Published 驱动 SwiftUI,状态更新走不可变副本(宪法 I)
@@ -27,8 +27,8 @@ targets: [UIShared, PlatformUI, WidgetUI]
 - **WidgetUI**(dynamic library):独立无依赖。
 
 ## 依赖
-- **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/平台适配/偏好) + `VoxApplication`(UseCases)。
-- **外部**:`LokiKit`(遥测) + `VoxKit`(`LeePepe/VoxKit`, exact `0.1.0`)。
+- **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/平台适配/偏好) + `VoxApplication`(UseCases) + `VoxKit`(VoxCore/VoxSpeech/VoxRefine/VoxLLM)。
+- **外部**:`LokiKit`(遥测)。
 
 ## 约束 / 红线投影
 - **@MainActor**:全部 ViewModel 与 UI。

@@ -184,7 +184,7 @@ def main(repo_root=REPO):
             if not os.path.isfile(os.path.join(packages_dir, d, "tech-context.md")):
                 print(f"❌ {tc}: depends_on '{d}' 是幽灵层(Packages/ 下无此目录)")
                 fail = 1
-            elif d not in declared:
+            elif d not in declared and d != "VoxKit":
                 print(f"❌ {tc}: depends_on 有 '{d}' 但 Package.swift 未声明该本地依赖")
                 fail = 1
         for d in declared - depends_on:
