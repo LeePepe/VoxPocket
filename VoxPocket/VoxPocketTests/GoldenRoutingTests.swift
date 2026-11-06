@@ -62,11 +62,6 @@ final class GoldenRoutingTests: XCTestCase {
                 "configuration": config, "pipeline": pipeline]
     }
 
-    private func pipelineDictionary(_ snapshot: WorkflowPipelineSnapshot) -> [String: Any] {
-        ["speech": snapshot.speech, "realtime": snapshot.realtime, "merger": snapshot.merger,
-         "analysis": snapshot.analysis, "refine": snapshot.refine, "configFailure": snapshot.configFailure]
-    }
-
     private func macOSEnvironment(_ config: String) -> [String: String] {
         var environment = ["AZURE_OPENAI_ENDPOINT": "https://example.invalid", "whisperkey": "fixture-speech",
                            "AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT": "example-live", "kimikey": "fixture-text",
@@ -188,6 +183,11 @@ final class GoldenRoutingTests: XCTestCase {
                 "pipeline": pipelineDictionary(snapshot)]
     }
     #endif
+
+    private func pipelineDictionary(_ snapshot: WorkflowPipelineSnapshot) -> [String: Any] {
+        ["speech": snapshot.speech, "realtime": snapshot.realtime, "merger": snapshot.merger,
+         "analysis": snapshot.analysis, "refine": snapshot.refine, "configFailure": snapshot.configFailure]
+    }
 
     private func assertFixture(_ rows: [[String: Any]], name: String, platform: String? = nil) throws {
         let payload: [String: Any] = ["schema": "golden-trace/v1", "kind": "routing", "traces": rows]
