@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import Synchronization
 import VoxCore
+import VoxSpeech
 import VoxLLM
 import VoxRefine
 import VoxWorkflow
@@ -24,8 +25,9 @@ public struct StagePresetMapping: Sendable {
         } else {
             speech = "batch"
         }
-        let overridden = Preset.default.overriding([
+        return Preset.default.overriding([
             "speech": speech,
+            "speech.merger": "false",
             "analysis.intent": settings.intent.rawValue,
             "analysis.entities": settings.intent.rawValue,
             "analysis.tags": settings.intent.rawValue,
@@ -34,7 +36,6 @@ public struct StagePresetMapping: Sendable {
             "analysis.skip": settings.skipAnalysis ? "true" : "false",
             "refine.provider": settings.refinement.rawValue
         ])
-        return Preset(id: overridden.id, speech: Self.speechDefinition(for: speech), refine: overridden.refine)
     }
 
     public static func makePreset(
@@ -59,27 +60,6 @@ public struct StagePresetMapping: Sendable {
                               azureTextConfigured: azureTextConfigured)
     }
 
-    private static func speechDefinition(for choice: String) -> WorkflowDefinition {
-        switch choice {
-        case "appleSpeech": return Preset.appleSpeech.speech
-        case "batch":
-            return WorkflowDefinition(entry: .speech) {
-                NodeSpec(id: "capture", kind: .captureMicrophone)
-                NodeSpec(id: "apple", kind: .speechApple, inputs: [PortRef(nodeID: "capture", port: "audio")])
-                NodeSpec(id: "batch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")])
-                NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "batch", port: "text")])
-            }
-        case "realtime":
-            return WorkflowDefinition(entry: .speech) {
-                NodeSpec(id: "capture", kind: .captureMicrophone)
-                NodeSpec(id: "apple", kind: .speechApple, inputs: [PortRef(nodeID: "capture", port: "audio")])
-                NodeSpec(id: "realtime", kind: .speechAzureRealtime, inputs: [PortRef(nodeID: "capture", port: "audio")])
-                NodeSpec(id: "batch", kind: .speechAzureBatch, inputs: [PortRef(nodeID: "capture", port: "audio")])
-                NodeSpec(id: "output", kind: .outputText, inputs: [PortRef(nodeID: "batch", port: "text")])
-            }
-        default: return Preset.default.speech
-        }
-    }
 }
 
 public struct IOSPresetMapping: Sendable {
@@ -112,8 +92,9 @@ public struct IOSPresetMapping: Sendable {
         skipContentAnalysis: Bool = false
     ) -> Preset {
         let base = batchConfigured ? Preset.hybridAzure : Preset.appleSpeech
-        let overridden = base.overriding([
+        return base.overriding([
             "speech": batchConfigured ? "batch" : "appleSpeech",
+            "speech.merger": "false",
             "analysis.intent": LLMProviderType.appleIntelligence.rawValue,
             "analysis.entities": provider.rawValue,
             "analysis.tags": provider.rawValue,
@@ -122,14 +103,6 @@ public struct IOSPresetMapping: Sendable {
             "analysis.skip": skipContentAnalysis ? "true" : "false",
             "refine.provider": provider.rawValue
         ])
-        let speech: WorkflowDefinition
-        if batchConfigured {
-            speech = StagePresetMapping.preset(settings: .init(speech: .batch),
-                batchConfigured: true, realtimeConfigured: false, azureTextConfigured: azureTextConfigured).speech
-        } else {
-            speech = Preset.appleSpeech.speech
-        }
-        return Preset(id: overridden.id, speech: speech, refine: overridden.refine)
     }
 
     public static func makePreset(
@@ -150,7 +123,7 @@ public struct IOSPresetMapping: Sendable {
 }
 
 @MainActor
-public final class IOSPresetPreferenceBinding: @unchecked Sendable {
+public final class IOSPresetPreferenceBinding {
     public private(set) var currentProvider: LLMProviderType
     public private(set) var preset: Preset
     public var activePreset: Preset { preset }
@@ -163,6 +136,7 @@ public final class IOSPresetPreferenceBinding: @unchecked Sendable {
     private let onPresetChange: (@MainActor @Sendable (Preset) -> Void)?
     private var observers: [NSObjectProtocol] = []
     private var pendingUpdate: Task<Void, Never>?
+    private var refreshGeneration: UInt64 = 0
 
     public init(
         batchConfigured: Bool,
@@ -199,12 +173,15 @@ public final class IOSPresetPreferenceBinding: @unchecked Sendable {
 
     private func scheduleApplyPreferences() {
         pendingUpdate?.cancel()
+        refreshGeneration += 1
+        let generation = refreshGeneration
         let preferences = self.preferences
         pendingUpdate = Task { [weak self] in
             let storedProvider: String? = await preferences.getValue(for: .llmProvider)
             let skip: Bool = await preferences.getValue(for: .llmSkipContentAnalysis, default: false)
             guard let self else { return }
             await MainActor.run {
+                guard !Task.isCancelled, self.refreshGeneration == generation else { return }
                 if let storedProvider, let provider = LLMProviderType(rawValue: storedProvider) {
                     self.currentProvider = provider
                 }
@@ -229,7 +206,7 @@ public final class IOSPresetPreferenceBinding: @unchecked Sendable {
 }
 
 public final class WorkflowTranscriptionCoordinator: TranscriptionCoordinator, ModelLoadingObservable,
-    ModelLoadingStartControlling, MultiRecognizerTranscriber, @unchecked Sendable {
+    ModelLoadingStartControlling, MultiRecognizerTranscriber, QuickRecordingReleaseControlling, @unchecked Sendable { // Sendable: App-side Combine bridge wrapper around CombineTranscriptionCoordinator; all mutable state is synchronized by the wrapped coordinator.
     public let presetID: String
     public let preset: Preset
     public let core: any SpeechSessionSource
@@ -262,6 +239,13 @@ public final class WorkflowTranscriptionCoordinator: TranscriptionCoordinator, M
     public func stop() async { await coordinator.stop() }
     public func pause() { coordinator.pause() }
     public func resume() { coordinator.resume() }
+    public func prepareQuickRecording() throws { try coordinator.prepareQuickRecording() }
+    public func freezeQuickRecordingRelease() throws -> QuickRecordingReleaseSnapshot {
+        try coordinator.freezeQuickRecordingRelease()
+    }
+    public func completeQuickRecordingRelease(_ snapshot: QuickRecordingReleaseSnapshot) async throws {
+        try await coordinator.completeQuickRecordingRelease(snapshot)
+    }
     public var merger: (any TranscriptionMerger)? { (core as? any MultiRecognizerSpeechSource)?.merger }
     public var modelLoadingState: ModelLoadingState { loading?.modelLoadingState ?? .idle }
     public var modelLoadingStatePublisher: AnyPublisher<ModelLoadingState, Never> {

@@ -18,6 +18,9 @@ package struct BuiltInWorkflowNodeHandler: WorkflowNodeHandler {
         case .speechApple, .speechAzureBatch, .speechAzureRealtime, .speechWhisperKitLocal:
             return try await Self.transcribe(context: context)
         case .mergeLLM: return try await merge(context: context)
+        case .selectText:
+            guard let value = context.inputs.last else { throw WorkflowRuntimeError.nodeFailed }
+            return value
         case .analyzeIntent, .analyzeTone, .analyzeEntities, .analyzeTags, .analyzeParams:
             return try await analyze(context: context)
         case .refinePrompt: return .prompt(try prompt(context: context))

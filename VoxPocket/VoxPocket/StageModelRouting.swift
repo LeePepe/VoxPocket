@@ -1,6 +1,7 @@
 import Foundation
 import VoxCore
 import VoxKitBridge
+import VoxWorkflow
 import Preferences
 import VoxSpeech
 
@@ -59,10 +60,7 @@ enum StageModelRouting {
         let hasRealtimeCredentials = LLMAppConfig.realtimeTranscriptionConfig(environment: environment,
                                                                              deploymentOverride: "validation") != nil
         let textKey = LLMAppConfig.refinementAPIKey(environment: environment)
-        let textEndpoint = environment["AZURE_FOUNDRY_ENDPOINT"] ?? environment["AZURE_OPENAI_ENDPOINT"] ?? ""
-        let textURL = URL(string: textEndpoint)
-        let textConfigured = textKey != nil && textURL?.scheme == "https" && textURL?.host != nil
-            && textURL?.user == nil && textURL?.password == nil
+        let textConfigured = textKey != nil && LLMAppConfig.azureEndpoint(environment: environment) != nil
         return ModelSettingsAvailability(
             batchConfigured: LLMAppConfig.transcriptionConfig(environment: environment) != nil,
             realtimeCredentialsConfigured: hasRealtimeCredentials,

@@ -242,7 +242,7 @@ public final class ServiceContainer: ObservableObject {
                 core = AzureWhisperTranscriber(config: config, logger: sdk.logger, storageLocations: sdk.storageLocations)
             } else { core = AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations) }
         case "hybrid.local":
-            let provider = LLMAppConfig.makeAzureFoundryConfig(environment: environment).map {
+            let provider = Self.makeAzureFoundryConfig(environment: environment).map {
                 AzureFoundryProvider(config: $0, logger: sdk.logger)
             }
             core = makeHybridLocalWhisperTranscriber(preloadOnStart: preloadOnStart,

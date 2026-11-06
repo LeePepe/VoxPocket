@@ -109,6 +109,7 @@ public final class NodeRegistry: Sendable {
             .init(kind: .speechAzureRealtime, allowedEntries: speech, inputTypes: [.audio], outputType: .text),
             .init(kind: .speechWhisperKitLocal, allowedEntries: speech, inputTypes: [.audio], outputType: .text),
             .init(kind: .mergeLLM, allowedEntries: speech, inputTypes: [.text, .text], outputType: .text),
+            .init(kind: .selectText, allowedEntries: speech, inputTypes: [.text, .text], outputType: .text),
             .init(kind: .analyzeIntent, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
             .init(kind: .analyzeTone, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
             .init(kind: .analyzeEntities, allowedEntries: refine, inputTypes: [.text], outputType: .analysis),
@@ -132,6 +133,7 @@ public final class NodeRegistry: Sendable {
         case .speechAzureRealtime: return .node("speech.azure.realtime")
         case .speechWhisperKitLocal: return .node("speech.whisperkit.local")
         case .mergeLLM: return .node("merge.llm")
+        case .selectText: return .node("select.text")
         case .analyzeIntent: return .node("analyze.intent")
         case .analyzeTone: return .node("analyze.tone")
         case .analyzeEntities: return .node("analyze.entities")

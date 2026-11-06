@@ -13,6 +13,14 @@ struct RealtimeTranscriberConfigurationTests {
         ["AZURE_OPENAI_ENDPOINT": "https://example.invalid", "AZURE_API_KEY": "fixture-key"]
     }
 
+    @MainActor @Test func textAvailabilityUsesStrictEndpointValidation() {
+        var values = environment
+        values["AZURE_FOUNDRY_ENDPOINT"] = "https://example.invalid"
+        #expect(StageModelRouting.availability(environment: values).textConfigured)
+        values["AZURE_FOUNDRY_ENDPOINT"] = "https://example.invalid#fragment"
+        #expect(!StageModelRouting.availability(environment: values).textConfigured)
+    }
+
     @MainActor @Test func realtimeIsOptInAndMacOSOnly() {
         #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: environment) == nil)
         var values = environment

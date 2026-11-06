@@ -84,6 +84,8 @@ let package = Package(
             name: "VoxKitBridgeTests",
             dependencies: [
                 "VoxKitBridge",
+                .product(name: "VoxLLM", package: "VoxKit"),
+                .product(name: "VoxRefine", package: "VoxKit"),
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
                 .product(name: "VoxSpeechWhisperKit", package: "VoxKit"),

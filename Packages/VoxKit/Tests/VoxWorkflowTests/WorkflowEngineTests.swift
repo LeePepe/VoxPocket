@@ -53,6 +53,29 @@ import VoxSpeech
     #expect(preset.exportedPipeline().analysis == expectedAnalysis)
 }
 
+@Test func testHybridSpeechMergerOverrideKeepsCloudOutputAndFallback() async throws {
+    for choice in ["batch", "realtime"] {
+        for failing in [false, true] {
+            let preset = Preset.default.overriding(["speech": choice, "speech.merger": "false"])
+            try preset.speech.validate()
+            #expect(!preset.exportedPipeline().merger)
+            let calls = WorkflowCalls()
+            let events = try await WorkflowRuntime(configuration: workflowConfiguration(calls: calls, realtimeFails: failing))
+                .execute(preset.speech)
+            #expect(calls.values.contains("speech.apple"))
+            #expect(calls.values.contains("speech.azure.realtime") == (choice == "realtime"))
+            #expect(calls.values.contains("speech.azure.batch") == (choice == "batch" || failing))
+            #expect(!calls.values.contains { $0.hasPrefix("merge:") })
+            let expected = choice == "realtime" && !failing ? "speech.azure.realtime" : "speech.azure.batch"
+            #expect(events.contains { if case .final(let value) = $0 { value.text == expected } else { false } })
+        }
+    }
+    let disabled = Preset.default.overriding(["speech.merger": "false"])
+    #expect(!disabled.exportedPipeline().merger)
+    #expect(disabled.overriding(["speech.merger": "true"]) == Preset.default)
+    #expect(Preset.appleSpeech.overriding(["speech.merger": "false"]) == Preset.appleSpeech)
+}
+
 @Test func testPreExecutionValidationRejectsInvalidGraphsWithoutLeakingContent() {
     let registry = NodeRegistry()
     let cases: [(WorkflowDefinition, WorkflowValidationError.Code)] = [

@@ -106,8 +106,12 @@ class RedlineCoverageTests(unittest.TestCase):
             source = root / "Sources/VoxLLM"
             source.mkdir(parents=True)
             public = source / "Public.swift"
-            public.write_text("public protocol LLMService {}\npublic final class DefaultLLMService {}\n")
-            self.assertTrue(MODULE.scan_rule("R4b", [root / "Sources"]))
+            for declaration in ["public protocol LLMService {}", "public final class DefaultLLMService {}",
+                                "open class DefaultLLMService {}", "public struct LLMService {}",
+                                "public actor DefaultLLMService {}", "public enum LLMService {}"]:
+                with self.subTest(declaration=declaration):
+                    public.write_text(declaration + "\n")
+                    self.assertTrue(MODULE.scan_rule("R4b", [root / "Sources"]))
             public.write_text("package protocol LLMService {}\npackage final class DefaultLLMService {}\n")
             self.assertEqual(MODULE.scan_rule("R4b", [root / "Sources"]), [])
 

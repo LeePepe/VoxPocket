@@ -4,6 +4,7 @@ import Foundation
 import VoxLLM
 import VoxSpeech
 import VoxWorkflow
+import VoxKitBridge
 import Preferences
 import OSLog
 
