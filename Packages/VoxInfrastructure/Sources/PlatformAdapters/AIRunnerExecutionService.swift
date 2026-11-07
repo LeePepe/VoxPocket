@@ -46,20 +46,10 @@ public final class DefaultAIRunnerExecutionService: AIRunnerExecutionService, Se
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: taskFile.path)
         let command = template.executableAndArguments(cwd: cwd, taskFile: taskFile.path)
         let (exitCode, output) = try await Task.detached(priority: nil) { [processRunner] in
-            if let processRunner { return try processRunner(command.executable, command.arguments, cwd) }
-#if os(macOS)
-            let process = Process(); let pipe = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = [command.executable] + command.arguments
-            process.currentDirectoryURL = URL(fileURLWithPath: cwd)
-            process.standardOutput = pipe; process.standardError = pipe
-            try process.run()
-            let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            return (process.terminationStatus, String(decoding: outputData, as: UTF8.self))
-#else
-            return (Int32(-1), "Runner execution is supported on macOS only")
-#endif
+            guard let processRunner else {
+                return (Int32(-1), "External CLI execution is disabled by the sandbox privacy boundary; configure an in-sandbox runner handler.")
+            }
+            return try processRunner(command.executable, command.arguments, cwd)
         }.value
         return AIRunnerExecutionResult(exitCode: exitCode, outputSummary: String(output.prefix(4096)), taskFilePath: taskFile.path, startedAt: startedAt, completedAt: Date())
     }

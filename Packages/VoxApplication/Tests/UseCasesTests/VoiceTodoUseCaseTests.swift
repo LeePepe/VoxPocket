@@ -39,5 +39,16 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         let executed = try await useCase.runTodoWithAI(todoID: converted.id, project: project, template: .herdrDefault)
         XCTAssertEqual(executed.executionState, .done)
         XCTAssertEqual(executed.lastExecutionSummary, "completed task")
+
+        let defaultUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(),
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            projects: { [project] }
+        )
+        let blocked = try await defaultUseCase.runTodoWithAI(todoID: converted.id, project: project, template: .herdrDefault)
+        XCTAssertEqual(blocked.executionState, .failed)
+        XCTAssertTrue(blocked.lastExecutionSummary?.contains("disabled by the sandbox privacy boundary") == true)
     }
 }

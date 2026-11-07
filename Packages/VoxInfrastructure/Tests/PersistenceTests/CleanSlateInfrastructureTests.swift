@@ -43,5 +43,10 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertFalse(fileContents.contains("title"))
         XCTAssertFalse(fileContents.contains("$(unsafe)"))
         XCTAssertTrue(fileContents.contains("\"project_key\":\"P\""))
+
+        let unconfiguredService = DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDirectory)
+        let disabledResult = try await unconfiguredService.execute(todo: VoiceTodo(title: "title", taskPrompt: "$(unsafe)"), project: project, template: .herdrDefault)
+        XCTAssertEqual(disabledResult.exitCode, -1)
+        XCTAssertTrue(disabledResult.outputSummary.contains("disabled by the sandbox privacy boundary"))
     }
 }
