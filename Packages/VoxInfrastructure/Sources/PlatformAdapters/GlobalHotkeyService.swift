@@ -26,8 +26,25 @@ public struct HotkeyDefinition: Codable, Equatable, Sendable, Hashable {
         if modifiers & (1 << 2) != 0 { parts.append("⇧") }  // Shift
         if modifiers & (1 << 3) != 0 { parts.append("⌘") }  // Command
 
-        // TODO: 根据 keyCode 转换为可读字符
-        parts.append("Key(\(keyCode))")
+        let keyLabel: String
+        switch keyCode {
+        case 49: keyLabel = "Space"
+        case 122: keyLabel = "F1"
+        case 120: keyLabel = "F2"
+        case 99: keyLabel = "F3"
+        case 118: keyLabel = "F4"
+        case 96: keyLabel = "F5"
+        case 97: keyLabel = "F6"
+        case 98: keyLabel = "F7"
+        case 100: keyLabel = "F8"
+        case 101: keyLabel = "F9"
+        case 109: keyLabel = "F10"
+        case 103: keyLabel = "F11"
+        case 111: keyLabel = "F12"
+        case 63: keyLabel = "Fn"
+        default: keyLabel = "Key(\(keyCode))"
+        }
+        parts.append(keyLabel)
 
         return parts.joined()
     }
@@ -38,6 +55,8 @@ public enum HotkeyIdentifier {
     public static let toggleRecording = "vox.hotkey.toggleRecording"
     public static let injectText = "vox.hotkey.injectText"
     public static let showPopover = "vox.hotkey.showPopover"
+    public static let directToText = "vox.hotkey.directToText"
+    public static let voiceToTodo = "vox.hotkey.voiceToTodo"
 }
 
 /// 全局快捷键服务协议 (macOS)

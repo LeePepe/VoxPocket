@@ -10,6 +10,14 @@ public enum PreferencesKey: String, CaseIterable, Sendable {
     case toneModel = "model.tone"
     case realtimeDeployment = "model.realtimeDeployment"
     case productTelemetryConsent = "telemetry.product.consent"
+    case directToTextHotkey = "hotkey.directToText"
+    case voiceToTodoHotkey = "hotkey.voiceToTodo"
+    case autoPasteRefinedText = "input.autoPasteRefinedText"
+    case defaultSpeechLocale = "speech.defaultLocale"
+    case projectBindings = "ai.projectBindings"
+    case aiRunnerTemplates = "ai.runnerTemplates"
+    case menuBarExtraEnabled = "ui.menuBarExtraEnabled"
+    case audioRetentionLimit = "audio.retentionLimit"
 }
 
 public actor ProductTelemetryPreferences {
