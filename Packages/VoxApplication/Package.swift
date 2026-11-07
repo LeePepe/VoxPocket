@@ -41,6 +41,8 @@ let package = Package(
             dependencies: [
                 "UseCases",
                 .product(name: "CoreModels", package: "VoxDomain"),
+                .product(name: "Persistence", package: "VoxInfrastructure"),
+                .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "LokiKit", package: "shared-telemetry"),
                 .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
                 .product(name: "VoxCore", package: "VoxKit"),

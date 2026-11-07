@@ -133,7 +133,7 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
             .store(in: &cancellables)
     }
 
-    private func handleDeepLinkAction(_ action: DeepLinkAction) async {
+    func handleDeepLinkAction(_ action: DeepLinkAction) async {
         deepLinkRouter?.pendingAction = nil
         switch action {
         case .startRecording:

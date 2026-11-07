@@ -36,7 +36,7 @@ public actor InMemoryCloudSyncTransport: CloudSyncTransport {
     public func todoMetadata() async throws -> Data? { todoData }
 }
 
-public final class UbiquitousKeyValueCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
+public final class UbiquitousKeyValueCloudSyncTransport: CloudSyncTransport, Sendable {
     private let directoryURL: URL
     private let captureURL: URL
     private let todoURL: URL
@@ -63,6 +63,7 @@ public final class UbiquitousKeyValueCloudSyncTransport: CloudSyncTransport, @un
 private struct CaptureStoreState: Sendable { var values: [UUID: VoiceCapture] = [:] }
 private struct TodoStoreState: Sendable { var values: [UUID: VoiceTodo] = [:] }
 
+// Sendable: Combine CurrentValueSubject is bridged while mutable dictionary state is guarded by Mutex<CaptureStoreState>.
 public final class DefaultVoiceCaptureRepository: VoiceCaptureRepository, @unchecked Sendable {
     private let state = Mutex(CaptureStoreState())
     private let subject = CurrentValueSubject<[VoiceCapture], Never>([])
@@ -93,6 +94,7 @@ public final class DefaultVoiceCaptureRepository: VoiceCaptureRepository, @unche
     private func load() { guard let fileURL, let data = try? Data(contentsOf: fileURL), let values = try? decoder.decode([VoiceCapture].self, from: data) else { return }; let sortedValues = sorted(Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) }).values); state.withLock { $0.values = Dictionary(uniqueKeysWithValues: sortedValues.map { ($0.id, $0) }) }; subject.send(sortedValues) }
 }
 
+// Sendable: Combine CurrentValueSubject is bridged while mutable dictionary state is guarded by Mutex<TodoStoreState>.
 public final class DefaultVoiceTodoRepository: VoiceTodoRepository, @unchecked Sendable {
     private let state = Mutex(TodoStoreState())
     private let subject = CurrentValueSubject<[VoiceTodo], Never>([])

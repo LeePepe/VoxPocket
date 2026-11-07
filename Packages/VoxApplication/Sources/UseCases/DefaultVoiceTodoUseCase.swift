@@ -34,7 +34,7 @@ public enum VoiceTodoUseCaseError: Error, LocalizedError, Sendable {
     }
 }
 
-public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase, @unchecked Sendable {
+public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase, Sendable {
     private let captures: any VoiceCaptureRepository
     private let todos: any VoiceTodoRepository
     private let extractor: any VoiceTodoExtractionRunning
