@@ -12,5 +12,6 @@
     "完成录音" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Finish recording" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "完成录音" } } } },
     "搜索待办" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Search todos" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "搜索待办" } } } },
     "转为 Todo" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Convert to Todo" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转为 Todo" } } } }
-  }
+  },
+  "version" : "1.0"
 }
