@@ -2,6 +2,7 @@ import SwiftUI
 #if os(iOS) && canImport(ActivityKit)
 import ActivityKit
 import AppIntents
+import WidgetKit
 
 public struct VoxCaptureActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable, Sendable {
