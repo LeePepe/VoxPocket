@@ -136,12 +136,14 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
         deepLinkRouter?.pendingAction = nil
 
         switch action {
-        case .startRecording:
+        case .startRecording, .startRecordingInMode:
             Task {
                 // 短暂延迟，确保 UI 和权限就绪
                 try? await Task.sleep(for: .milliseconds(300))
                 await editorState.startRecording()
             }
+        case .stopRecording:
+            Task { await editorState.stopRecording() }
         case .newSession:
             createNewSession()
         case .openSession(let id):

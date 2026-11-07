@@ -7,7 +7,7 @@ public protocol SandboxAudioStorageService: AnyObject, Sendable {
     func cleanRetainedFiles() async throws
 }
 
-public final class DefaultSandboxAudioStorageService: SandboxAudioStorageService, @unchecked Sendable {
+public final class DefaultSandboxAudioStorageService: SandboxAudioStorageService, Sendable {
     private let directory: URL
     private let retentionLimit: Int
 

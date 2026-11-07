@@ -36,6 +36,7 @@ public actor InMemoryCloudSyncTransport: CloudSyncTransport {
     public func todoMetadata() async throws -> Data? { todoData }
 }
 
+// Sendable: NSUbiquitousKeyValueStore and UserDefaults are Apple framework bridges; all access is confined to their thread-safe APIs.
 public final class UbiquitousKeyValueCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
     private let ubiquitousStore: NSUbiquitousKeyValueStore?
     private let defaults: UserDefaults

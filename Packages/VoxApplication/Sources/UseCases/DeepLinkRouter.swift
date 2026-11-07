@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreModels
 import LokiKit
 
 /// Deep Link 路由协议
@@ -44,7 +45,11 @@ public final class DefaultDeepLinkRouter: DeepLinkRouting, ObservableObject {
         guard url.scheme == "voxpocket" else { return nil }
         switch url.host {
         case "quickRecord":
-            return .startRecording
+            guard let modeValue = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "mode" })?.value else { return .startRecording }
+            guard let mode = CaptureMode(rawValue: modeValue) else { return nil }
+            return .startRecordingInMode(mode)
+        case "stopRecording":
+            return .stopRecording
         case "newSession":
             return .newSession
         case "session":

@@ -16,7 +16,7 @@ public protocol AIRunnerExecutionService: AnyObject, Sendable {
     func execute(todo: VoiceTodo, project: ProjectBinding, template: AIRunnerTemplate) async throws -> AIRunnerExecutionResult
 }
 
-public final class DefaultAIRunnerExecutionService: AIRunnerExecutionService, @unchecked Sendable {
+public final class DefaultAIRunnerExecutionService: AIRunnerExecutionService, Sendable {
     public typealias ProcessRunner = @Sendable (_ command: String, _ cwd: String) throws -> (Int32, String)
     private let processRunner: ProcessRunner?
 
