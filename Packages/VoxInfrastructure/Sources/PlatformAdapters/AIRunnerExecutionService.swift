@@ -1,0 +1,58 @@
+import Foundation
+import CoreModels
+
+public struct AIRunnerExecutionResult: Equatable, Sendable {
+    public let exitCode: Int32
+    public let outputSummary: String
+    public let taskFilePath: String
+    public let startedAt: Date
+    public let completedAt: Date
+    public init(exitCode: Int32, outputSummary: String, taskFilePath: String, startedAt: Date, completedAt: Date) {
+        self.exitCode = exitCode; self.outputSummary = outputSummary; self.taskFilePath = taskFilePath; self.startedAt = startedAt; self.completedAt = completedAt
+    }
+}
+
+public protocol AIRunnerExecutionService: AnyObject, Sendable {
+    func execute(todo: VoiceTodo, project: ProjectBinding, template: AIRunnerTemplate) async throws -> AIRunnerExecutionResult
+}
+
+public final class DefaultAIRunnerExecutionService: AIRunnerExecutionService, Sendable {
+    public typealias ProcessRunner = @Sendable (_ executable: String, _ arguments: [String], _ cwd: String) throws -> (Int32, String)
+    private let processRunner: ProcessRunner?
+    private let sandboxTasksDirectory: URL
+
+    public init(processRunner: ProcessRunner? = nil, sandboxTasksDirectory: URL? = nil) {
+        self.processRunner = processRunner
+        self.sandboxTasksDirectory = sandboxTasksDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("VoxPocket/Tasks", isDirectory: true)
+    }
+
+    public func execute(todo: VoiceTodo, project: ProjectBinding, template: AIRunnerTemplate) async throws -> AIRunnerExecutionResult {
+        let startedAt = Date()
+        let cwd = project.localDirectoryPath.isEmpty ? Self.fallbackDirectory() : project.localDirectoryPath
+        let taskDirectory = sandboxTasksDirectory
+        try FileManager.default.createDirectory(at: taskDirectory, withIntermediateDirectories: true)
+        var taskFile = taskDirectory.appendingPathComponent("\(todo.id.uuidString).json")
+        let metadata: [String: String] = [
+            "todo_id": todo.id.uuidString,
+            "project_key": project.projectKey,
+            "runner_kind": template.kind.rawValue,
+            "device_source": todo.deviceSource.rawValue
+        ]
+        let taskData = try JSONEncoder().encode(metadata)
+        try taskData.write(to: taskFile, options: .atomic)
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try taskFile.setResourceValues(resourceValues)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: taskFile.path)
+        let command = template.executableAndArguments(cwd: cwd, taskFile: taskFile.path)
+        let (exitCode, output) = try await Task.detached(priority: nil) { [processRunner] in
+            guard let processRunner else {
+                return (Int32(-1), "External CLI execution is disabled by the sandbox privacy boundary; configure an in-sandbox runner handler.")
+            }
+            return try processRunner(command.executable, command.arguments, cwd)
+        }.value
+        return AIRunnerExecutionResult(exitCode: exitCode, outputSummary: String(output.prefix(4096)), taskFilePath: taskFile.path, startedAt: startedAt, completedAt: Date())
+    }
+
+    private static func fallbackDirectory() -> String { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("VoxPocket").path ?? NSTemporaryDirectory() }
+}

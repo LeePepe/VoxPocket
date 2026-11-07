@@ -10,8 +10,8 @@ red_lines:
   - 共享可变状态用 Mutex<State> 守护;@MainActor 用于 UI 契约;禁止主线程阻塞(宪法 III)
   - 依赖协议而非具体类型;默认实现命名 Default*(宪法 Additional Constraints)
 roles:
-  Types:   [RecordingUseCase, TranscriptionUseCase, RefinementUseCase, SessionUseCase, EditingUseCase, HistoryUseCase, StreamingInputCoordinator, DeepLinkAction]
-  Service: [DefaultRecordingUseCase, DefaultTranscriptionUseCase, DefaultRefinementUseCase, DefaultSessionUseCase, DefaultEditingUseCase, DefaultHistoryUseCase, DefaultStreamingInputCoordinator, InMemorySessionUseCase, DeepLinkRouter]
+  Types:   [RecordingUseCase, TranscriptionUseCase, RefinementUseCase, SessionUseCase, EditingUseCase, HistoryUseCase, StreamingInputCoordinator, DeepLinkAction, VoiceTodoUseCase]
+  Service: [DefaultRecordingUseCase, DefaultTranscriptionUseCase, DefaultRefinementUseCase, DefaultSessionUseCase, DefaultEditingUseCase, DefaultHistoryUseCase, DefaultStreamingInputCoordinator, InMemorySessionUseCase, DeepLinkRouter, DefaultVoiceTodoUseCase]
 test: swift test --package-path Packages/VoxApplication --explicit-target-dependency-import-check error
 targets: [UseCases]
 ---

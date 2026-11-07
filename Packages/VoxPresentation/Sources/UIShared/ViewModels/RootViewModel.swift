@@ -25,6 +25,9 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
     @Published public var isDrawerOpen: Bool = false
     @Published public var showRawSheet: Bool = false
     @Published public var navigationPath: [Route] = []
+    @Published public private(set) var lastRequestedCaptureMode: CaptureMode = .text
+    public var onStartRecordingInMode: (@MainActor (CaptureMode) async -> Void)?
+    public var onStopRecordingInMode: (@MainActor (CaptureMode) async -> Void)?
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -126,21 +129,25 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
             .receive(on: DispatchQueue.main)
             .sink { [weak self] action in
                 guard let self else { return }
-                self.handleDeepLinkAction(action)
+                Task { await self.handleDeepLinkAction(action) }
             }
             .store(in: &cancellables)
     }
 
-    private func handleDeepLinkAction(_ action: DeepLinkAction) {
-        // 消费后立即清除
+    func handleDeepLinkAction(_ action: DeepLinkAction) async {
         deepLinkRouter?.pendingAction = nil
-
         switch action {
         case .startRecording:
-            Task {
-                // 短暂延迟，确保 UI 和权限就绪
-                try? await Task.sleep(for: .milliseconds(300))
-                await editorState.startRecording()
+            lastRequestedCaptureMode = .text
+            if let onStartRecordingInMode { await onStartRecordingInMode(.text) } else { await editorState.startRecording() }
+        case .startRecordingInMode(let mode):
+            lastRequestedCaptureMode = mode
+            if let onStartRecordingInMode { await onStartRecordingInMode(mode) } else { await editorState.startRecording() }
+        case .stopRecording:
+            if let onStopRecordingInMode {
+                await onStopRecordingInMode(lastRequestedCaptureMode)
+            } else {
+                await editorState.stopRecording()
             }
         case .newSession:
             createNewSession()

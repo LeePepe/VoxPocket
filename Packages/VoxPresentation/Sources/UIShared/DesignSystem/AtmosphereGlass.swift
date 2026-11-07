@@ -16,7 +16,7 @@ struct AtmosphereBlob: Equatable {
 
 enum AtmosphereGlass {
     /// 近白玻璃底色。
-    static let baseColor = Color(red: 0.97, green: 0.98, blue: 0.99)
+    static let baseColor = Color(.sRGB, red: 0.97, green: 0.98, blue: 0.99, opacity: 1)
     static let transitionDuration: TimeInterval = 0.9
 
     static func baseColor(for scheme: ColorScheme) -> Color {
@@ -54,56 +54,56 @@ enum AtmosphereGlass {
         case .idle:
             // 中性蓝灰多彩，最安静
             return [
-                Color(red: 0.58, green: 0.72, blue: 0.78),
-                Color(red: 0.56, green: 0.66, blue: 0.82),
-                Color(red: 0.68, green: 0.64, blue: 0.82),
-                Color(red: 0.80, green: 0.68, blue: 0.80),
-                Color(red: 0.62, green: 0.72, blue: 0.82)
+                Color(.sRGB, red: 0.58, green: 0.72, blue: 0.78, opacity: 1),
+                Color(.sRGB, red: 0.56, green: 0.66, blue: 0.82, opacity: 1),
+                Color(.sRGB, red: 0.68, green: 0.64, blue: 0.82, opacity: 1),
+                Color(.sRGB, red: 0.80, green: 0.68, blue: 0.80, opacity: 1),
+                Color(.sRGB, red: 0.62, green: 0.72, blue: 0.82, opacity: 1)
             ]
         case .listening:
             // 青绿主导（宝石柔调基调）
             return [
-                Color(red: 0.32, green: 0.74, blue: 0.72),
-                Color(red: 0.36, green: 0.58, blue: 0.88),
-                Color(red: 0.58, green: 0.50, blue: 0.90),
-                Color(red: 0.84, green: 0.54, blue: 0.82),
-                Color(red: 0.46, green: 0.70, blue: 0.84)
+                Color(.sRGB, red: 0.32, green: 0.74, blue: 0.72, opacity: 1),
+                Color(.sRGB, red: 0.36, green: 0.58, blue: 0.88, opacity: 1),
+                Color(.sRGB, red: 0.58, green: 0.50, blue: 0.90, opacity: 1),
+                Color(.sRGB, red: 0.84, green: 0.54, blue: 0.82, opacity: 1),
+                Color(.sRGB, red: 0.46, green: 0.70, blue: 0.84, opacity: 1)
             ]
         case .transcribing:
             // 蓝主导
             return [
-                Color(red: 0.34, green: 0.56, blue: 0.90),
-                Color(red: 0.44, green: 0.66, blue: 0.92),
-                Color(red: 0.56, green: 0.52, blue: 0.90),
-                Color(red: 0.40, green: 0.72, blue: 0.82),
-                Color(red: 0.48, green: 0.60, blue: 0.92)
+                Color(.sRGB, red: 0.34, green: 0.56, blue: 0.90, opacity: 1),
+                Color(.sRGB, red: 0.44, green: 0.66, blue: 0.92, opacity: 1),
+                Color(.sRGB, red: 0.56, green: 0.52, blue: 0.90, opacity: 1),
+                Color(.sRGB, red: 0.40, green: 0.72, blue: 0.82, opacity: 1),
+                Color(.sRGB, red: 0.48, green: 0.60, blue: 0.92, opacity: 1)
             ]
         case .refining:
             // 薰衣草紫主导
             return [
-                Color(red: 0.58, green: 0.50, blue: 0.90),
-                Color(red: 0.72, green: 0.54, blue: 0.90),
-                Color(red: 0.84, green: 0.56, blue: 0.84),
-                Color(red: 0.48, green: 0.54, blue: 0.90),
-                Color(red: 0.66, green: 0.54, blue: 0.92)
+                Color(.sRGB, red: 0.58, green: 0.50, blue: 0.90, opacity: 1),
+                Color(.sRGB, red: 0.72, green: 0.54, blue: 0.90, opacity: 1),
+                Color(.sRGB, red: 0.84, green: 0.56, blue: 0.84, opacity: 1),
+                Color(.sRGB, red: 0.48, green: 0.54, blue: 0.90, opacity: 1),
+                Color(.sRGB, red: 0.66, green: 0.54, blue: 0.92, opacity: 1)
             ]
         case .done:
             // 绿主导，安定
             return [
-                Color(red: 0.34, green: 0.74, blue: 0.60),
-                Color(red: 0.46, green: 0.78, blue: 0.66),
-                Color(red: 0.40, green: 0.72, blue: 0.78),
-                Color(red: 0.60, green: 0.80, blue: 0.58),
-                Color(red: 0.44, green: 0.76, blue: 0.68)
+                Color(.sRGB, red: 0.34, green: 0.74, blue: 0.60, opacity: 1),
+                Color(.sRGB, red: 0.46, green: 0.78, blue: 0.66, opacity: 1),
+                Color(.sRGB, red: 0.40, green: 0.72, blue: 0.78, opacity: 1),
+                Color(.sRGB, red: 0.60, green: 0.80, blue: 0.58, opacity: 1),
+                Color(.sRGB, red: 0.44, green: 0.76, blue: 0.68, opacity: 1)
             ]
         case .error:
             // 珊瑚红主导（唯一暖调，警示）
             return [
-                Color(red: 0.90, green: 0.46, blue: 0.50),
-                Color(red: 0.92, green: 0.56, blue: 0.52),
-                Color(red: 0.86, green: 0.50, blue: 0.62),
-                Color(red: 0.94, green: 0.62, blue: 0.54),
-                Color(red: 0.88, green: 0.52, blue: 0.56)
+                Color(.sRGB, red: 0.90, green: 0.46, blue: 0.50, opacity: 1),
+                Color(.sRGB, red: 0.92, green: 0.56, blue: 0.52, opacity: 1),
+                Color(.sRGB, red: 0.86, green: 0.50, blue: 0.62, opacity: 1),
+                Color(.sRGB, red: 0.94, green: 0.62, blue: 0.54, opacity: 1),
+                Color(.sRGB, red: 0.88, green: 0.52, blue: 0.56, opacity: 1)
             ]
         }
     }
