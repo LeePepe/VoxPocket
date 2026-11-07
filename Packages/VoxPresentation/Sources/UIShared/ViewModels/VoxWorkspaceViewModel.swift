@@ -8,6 +8,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     private let useCase: any VoiceCaptureAndTodoUseCase
     private let captureRecorder: (@Sendable (_ mode: CaptureMode) async throws -> (rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval))?
     private let recordingUseCase: (any RecordingUseCase)?
+    private let transcriptionUseCase: (any TranscriptionUseCase)?
+    private let editingUseCase: (any EditingUseCase)?
+    private let refinementUseCase: (any RefinementUseCase)?
     private var reloadTask: Task<Void, Never>?
 
     @Published public private(set) var captures: [VoiceCapture] = []
@@ -28,8 +31,24 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     @Published public var selectedTodoID: UUID?
     @Published public var selectedCaptureID: UUID?
 
-    public init(useCase: any VoiceCaptureAndTodoUseCase, projectBindings: [ProjectBinding] = [], runnerTemplates: [AIRunnerTemplate] = AIRunnerTemplate.defaultPresets, captureRecorder: (@Sendable (_ mode: CaptureMode) async throws -> (rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval))? = nil, recordingUseCase: (any RecordingUseCase)? = nil) {
-        self.useCase = useCase; self.projectBindings = projectBindings; self.runnerTemplates = runnerTemplates; self.captureRecorder = captureRecorder; self.recordingUseCase = recordingUseCase
+    public init(
+        useCase: any VoiceCaptureAndTodoUseCase,
+        projectBindings: [ProjectBinding] = [],
+        runnerTemplates: [AIRunnerTemplate] = AIRunnerTemplate.defaultPresets,
+        captureRecorder: (@Sendable (_ mode: CaptureMode) async throws -> (rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval))? = nil,
+        recordingUseCase: (any RecordingUseCase)? = nil,
+        transcriptionUseCase: (any TranscriptionUseCase)? = nil,
+        editingUseCase: (any EditingUseCase)? = nil,
+        refinementUseCase: (any RefinementUseCase)? = nil
+    ) {
+        self.useCase = useCase
+        self.projectBindings = projectBindings
+        self.runnerTemplates = runnerTemplates
+        self.captureRecorder = captureRecorder
+        self.recordingUseCase = recordingUseCase
+        self.transcriptionUseCase = transcriptionUseCase
+        self.editingUseCase = editingUseCase
+        self.refinementUseCase = refinementUseCase
         reloadTask = Task { [weak self] in await self?.reload() }
     }
 
@@ -46,21 +65,31 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public var isRecordingActive: Bool { if case .recording = captureState { return true }; return false }
     public func startCapture(mode: CaptureMode) {
         selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0; lastCopiedBannerText = nil
+        transcriptionUseCase?.clearLiveText()
         if let recordingUseCase { Task { try? await recordingUseCase.startRecording() } }
     }
     public func toggleCaptureModeDuringRecording() { guard case .recording = captureState else { return }; selectedCaptureMode = selectedCaptureMode == .text ? .todo : .text; captureState = .recording(mode: selectedCaptureMode) }
-    public func cancelCapture() { recordingUseCase?.cancelRecording(); captureState = .idle; recordingElapsedSeconds = 0; audioLevel = 0 }
+    public func cancelCapture() { recordingUseCase?.cancelRecording(); transcriptionUseCase?.clearLiveText(); captureState = .idle; recordingElapsedSeconds = 0; audioLevel = 0 }
     public func finishCapture() { Task { await completeCapture() } }
     public func completeCapture(rawTranscript: String = "", refinedText: String = "", localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac) async {
         let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
         captureState = .transcribing
+        let stoppedDuration = recordingUseCase?.state.duration ?? durationSeconds
         if let recordingUseCase { try? await recordingUseCase.stopRecording() }
+        if let transcriptionUseCase { try? await transcriptionUseCase.commitCurrentTranscription() }
         do {
             let recorded = try await captureRecorder?(mode)
-            let raw = recorded?.rawTranscript ?? rawTranscript
-            let refined = recorded?.refinedText ?? refinedText
+            let fallbackRaw = editingUseCase?.currentText ?? ""
+            let raw = recorded?.rawTranscript ?? (!rawTranscript.isEmpty ? rawTranscript : fallbackRaw)
+            var refined = recorded?.refinedText ?? refinedText
+            if refined.isEmpty, !raw.isEmpty, let refinementUseCase, refinementUseCase.isConfigured {
+                try? await refinementUseCase.refine(customPrompt: nil)
+                if let current = editingUseCase?.currentText, !current.isEmpty {
+                    refined = current
+                }
+            }
             let audio = recorded?.localAudioFileName ?? localAudioFileName
-            let duration = recorded?.durationSeconds ?? durationSeconds
+            let duration = recorded?.durationSeconds ?? stoppedDuration
             captureState = .refining(mode: mode)
             _ = try await useCase.recordCompletedCapture(mode: mode, rawTranscript: raw, refinedText: refined, localAudioFileName: audio, durationSeconds: duration, deviceSource: deviceSource)
             await reload()

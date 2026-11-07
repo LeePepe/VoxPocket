@@ -1,6 +1,10 @@
 name: VoxPocket
 options:
   bundleIdPrefix: com.leepepe
+  knownRegions:
+    - Base
+    - en
+    - zh-Hans
   deploymentTarget:
     iOS: "26.2"
     macOS: "26.2"

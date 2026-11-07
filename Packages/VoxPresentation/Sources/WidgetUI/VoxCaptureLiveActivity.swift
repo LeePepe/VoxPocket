@@ -24,17 +24,19 @@ public struct VoxCaptureLiveActivity: Widget {
                 Image(systemName: "waveform.and.mic").foregroundStyle(.tint)
                 VStack(alignment: .leading) { Text(context.state.mode); Text(Self.elapsed(context.state.elapsedSeconds)).monospacedDigit().contentTransition(.numericText()) }
                 Spacer()
-                Button(intent: FinishCaptureIntent()) { Image(systemName: "checkmark.circle.fill") }.accessibilityLabel("完成录音")
+                Link(destination: Self.stopRecordingURL) { Image(systemName: "checkmark.circle.fill") }.accessibilityLabel("完成录音")
             }.padding().activityBackgroundTint(.black.opacity(0.82))
         } dynamicIsland: { context in
-            DynamicIsland { DynamicIslandExpandedRegion(.leading) { Label(context.state.mode, systemImage: "waveform") }; DynamicIslandExpandedRegion(.trailing) { Text(Self.elapsed(context.state.elapsedSeconds)).monospacedDigit() }; DynamicIslandExpandedRegion(.bottom) { Button("完成录音", intent: FinishCaptureIntent()) } } compactLeading: { Image(systemName: "waveform") } compactTrailing: { Text(Self.elapsed(context.state.elapsedSeconds)).monospacedDigit() } minimal: { Image(systemName: "waveform") }
+            DynamicIsland { DynamicIslandExpandedRegion(.leading) { Label(context.state.mode, systemImage: "waveform") }; DynamicIslandExpandedRegion(.trailing) { Text(Self.elapsed(context.state.elapsedSeconds)).monospacedDigit() }; DynamicIslandExpandedRegion(.bottom) { Link("完成录音", destination: Self.stopRecordingURL) } } compactLeading: { Image(systemName: "waveform") } compactTrailing: { Text(Self.elapsed(context.state.elapsedSeconds)).monospacedDigit() } minimal: { Image(systemName: "waveform") }
         }
     }
+    public static let stopRecordingURL = URL(string: "voxpocket://stopRecording")!
     private static func elapsed(_ seconds: Int) -> String { String(format: "%02d:%02d", seconds / 60, seconds % 60) }
 }
 
 public struct FinishCaptureIntent: AppIntent {
     public static let title: LocalizedStringResource = "完成录音"
+    public static let openAppWhenRun: Bool = true
     public static let didRequestFinishNotification = Notification.Name("vox.liveActivity.finishCapture")
     public init() {}
     public func perform() async throws -> some IntentResult {

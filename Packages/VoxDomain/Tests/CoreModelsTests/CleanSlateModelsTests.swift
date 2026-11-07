@@ -22,7 +22,9 @@ final class CleanSlateModelsTests: XCTestCase {
         let value = "$(whoami); rm -rf /"
         let template = AIRunnerTemplate.herdrDefault
         XCTAssertTrue(template.interpolate(cwd: "/tmp", title: value, prompt: value, taskFile: "/tmp/task.md").contains("'$(whoami); rm -rf /'"))
-        XCTAssertEqual(template.executableAndArguments(cwd: "/tmp", title: value, prompt: value, taskFile: "/tmp/task.md").arguments.last, "/tmp/task.md")
+        let execArgs = template.executableAndArguments(cwd: "/tmp", taskFile: "/tmp/task.md")
+        XCTAssertEqual(execArgs.arguments.last, "/tmp/task.md")
+        XCTAssertFalse(execArgs.arguments.contains(value))
         XCTAssertEqual(ProjectBinding.matchProjectKey(in: "Please update VoxPocket voice", bindings: [ProjectBinding(projectKey: "VP", displayName: "VoxPocket", localDirectoryPath: "/tmp")]), "VP")
     }
 }

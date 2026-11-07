@@ -30,6 +30,8 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         let projectDirectory = directory.appendingPathComponent("project")
         let sandboxDirectory = directory.appendingPathComponent("sandbox")
         let service = DefaultAIRunnerExecutionService(processRunner: { executable, arguments, cwd in
+            XCTAssertFalse(arguments.contains("title"))
+            XCTAssertFalse(arguments.contains("$(unsafe)"))
             return (0, "ok")
         }, sandboxTasksDirectory: sandboxDirectory)
         let project = ProjectBinding(projectKey: "P", displayName: "P", localDirectoryPath: projectDirectory.path)

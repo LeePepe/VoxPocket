@@ -108,14 +108,20 @@ public struct AIRunnerTemplate: Identifiable, Codable, Equatable, Hashable, Send
             .replacingOccurrences(of: "{{task_file}}", with: Self.shellEscape(taskFile))
     }
 
-    public func executableAndArguments(cwd: String, title: String, prompt: String, taskFile: String) -> (executable: String, arguments: [String]) {
+    public func executableAndArguments(cwd: String, taskFile: String) -> (executable: String, arguments: [String]) {
         switch kind {
-        case .herdr: return ("herdr", ["run", "--cwd", cwd, "--title", title, "--prompt", prompt, "--task-file", taskFile])
-        case .claudeCode: return ("claude", ["--cwd", cwd, "--print", prompt])
-        case .codex: return ("codex", ["exec", "--cd", cwd, prompt])
+        case .herdr: return ("herdr", ["run", "--cwd", cwd, "--task-file", taskFile])
+        case .claudeCode: return ("claude", ["--cwd", cwd, "--task-file", taskFile])
+        case .codex: return ("codex", ["exec", "--cd", cwd, "--task-file", taskFile])
         case .customShell:
-            let values = ["{{cwd}}": cwd, "{{title}}": title, "{{prompt}}": prompt, "{{task_file}}": taskFile]
-            return (commandTemplate.split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? "", commandTemplate.split(whereSeparator: { $0.isWhitespace }).dropFirst().map { values[String($0)] ?? String($0) })
+            let values = ["{{cwd}}": cwd, "{{task_file}}": taskFile]
+            let tokens = commandTemplate.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            let executable = tokens.first ?? ""
+            let args = tokens.dropFirst().compactMap { token -> String? in
+                if token == "{{title}}" || token == "{{prompt}}" { return nil }
+                return values[token] ?? token
+            }
+            return (executable, args)
         }
     }
 }

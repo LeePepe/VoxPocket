@@ -62,6 +62,13 @@ public final class ServiceContainer: ObservableObject {
     /// 会话用例代理（启动时用内存实现，后台初始化后切换到 SwiftData）
     public let sessionUseCase: ProxySessionUseCase
 
+    /// Clean-Slate 语音速记与 AI Todo 用例
+    public let voiceCaptureRepository: DefaultVoiceCaptureRepository
+    public let voiceTodoRepository: DefaultVoiceTodoRepository
+    public let aiRunnerService: DefaultAIRunnerExecutionService
+    public let voiceCaptureAndTodoUseCase: DefaultVoiceCaptureAndTodoUseCase
+    public private(set) lazy var workspaceViewModel: VoxWorkspaceViewModel = makeWorkspaceViewModel()
+
     /// Deep Link 路由
     public let deepLinkRouter: DefaultDeepLinkRouter
 
@@ -161,6 +168,16 @@ public final class ServiceContainer: ObservableObject {
         streamingInputCoordinator = DefaultStreamingInputCoordinator(editing: editingUseCase, transcription: transcriptionUseCase, refinement: refinementUseCase)
         let productTelemetryInstrumentation = self.productTelemetryInstrumentation!; sessionUseCase = ProxySessionUseCase(
             backing: InMemorySessionUseCase()) { await productTelemetryInstrumentation.sessionDidComplete() }
+        voiceCaptureRepository = DefaultVoiceCaptureRepository(cloudSync: UbiquitousKeyValueCloudSyncTransport())
+        voiceTodoRepository = DefaultVoiceTodoRepository(cloudSync: UbiquitousKeyValueCloudSyncTransport())
+        aiRunnerService = DefaultAIRunnerExecutionService()
+        voiceCaptureAndTodoUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: voiceCaptureRepository,
+            todos: voiceTodoRepository,
+            extractor: DefaultVoiceTodoExtractor(),
+            runner: aiRunnerService,
+            telemetry: telemetryService
+        )
         deepLinkRouter = DefaultDeepLinkRouter()
 #if os(macOS)
         quickTranscriber = Self.makeQuickTranscriber(environment: environment, preferences: preferencesStore,
@@ -522,7 +539,33 @@ public final class ServiceContainer: ObservableObject {
     public func makeRootViewModel() -> RootViewModel<SessionListViewModel, EditorViewModel> {
         let editor = makeEditorViewModel()
         let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
-        return RootViewModel(sessionListState: sessionList, editorState: editor, deepLinkRouter: deepLinkRouter)
+        let root = RootViewModel(sessionListState: sessionList, editorState: editor, deepLinkRouter: deepLinkRouter)
+        root.onStartRecordingInMode = { [weak self, weak editor] mode in
+            self?.workspaceViewModel.selectedCaptureMode = mode
+            if mode == .todo {
+                self?.workspaceViewModel.startCapture(mode: .todo)
+            } else {
+                await editor?.startRecording()
+            }
+        }
+        root.onStopRecordingInMode = { [weak self, weak editor] mode in
+            if mode == .todo || self?.workspaceViewModel.isRecordingActive == true {
+                await self?.workspaceViewModel.completeCapture()
+            } else {
+                await editor?.stopRecording()
+            }
+        }
+        return root
+    }
+
+    public func makeWorkspaceViewModel() -> VoxWorkspaceViewModel {
+        VoxWorkspaceViewModel(
+            useCase: voiceCaptureAndTodoUseCase,
+            recordingUseCase: recordingUseCase,
+            transcriptionUseCase: transcriptionUseCase,
+            editingUseCase: editingUseCase,
+            refinementUseCase: refinementUseCase
+        )
     }
 
     /// 创建快速录音的 ViewModel（使用独立服务栈，不影响主编辑器状态）

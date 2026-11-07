@@ -37,7 +37,7 @@ public final class DefaultAIRunnerExecutionService: AIRunnerExecutionService, Se
         resourceValues.isExcludedFromBackup = true
         try taskFile.setResourceValues(resourceValues)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: taskFile.path)
-        let command = template.executableAndArguments(cwd: cwd, title: todo.title, prompt: todo.taskPrompt, taskFile: taskFile.path)
+        let command = template.executableAndArguments(cwd: cwd, taskFile: taskFile.path)
         let (exitCode, output) = try await Task.detached(priority: nil) { [processRunner] in
             if let processRunner { return try processRunner(command.executable, command.arguments, cwd) }
 #if os(macOS)

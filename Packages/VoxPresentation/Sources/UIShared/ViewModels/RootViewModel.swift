@@ -27,6 +27,7 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
     @Published public var navigationPath: [Route] = []
     @Published public private(set) var lastRequestedCaptureMode: CaptureMode = .text
     public var onStartRecordingInMode: (@MainActor (CaptureMode) async -> Void)?
+    public var onStopRecordingInMode: (@MainActor (CaptureMode) async -> Void)?
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -143,7 +144,11 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
             lastRequestedCaptureMode = mode
             if let onStartRecordingInMode { await onStartRecordingInMode(mode) } else { await editorState.startRecording() }
         case .stopRecording:
-            await editorState.stopRecording()
+            if let onStopRecordingInMode {
+                await onStopRecordingInMode(lastRequestedCaptureMode)
+            } else {
+                await editorState.stopRecording()
+            }
         case .newSession:
             createNewSession()
         case .openSession(let id):
