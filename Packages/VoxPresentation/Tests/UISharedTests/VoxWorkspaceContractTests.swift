@@ -76,7 +76,6 @@ final class VoxWorkspaceContractTests: XCTestCase {
         let binding = ProjectBinding(projectKey: "VP", displayName: "VoxPocket", matchKeywords: ["voxpocket"], localDirectoryPath: "/tmp")
         let useCase = FakeCaptureAndTodoUseCase()
         let editing = DefaultEditingUseCase()
-        try editing.replaceAll(with: "Fix VoxPocket shortcut")
         let vm = VoxWorkspaceViewModel(
             useCase: useCase,
             projectBindings: [binding],
@@ -84,6 +83,7 @@ final class VoxWorkspaceContractTests: XCTestCase {
         )
         vm.startCapture(mode: .todo)
         XCTAssertTrue(vm.isRecordingActive)
+        try editing.replaceAll(with: "Fix VoxPocket shortcut")
         await vm.completeCapture()
         XCTAssertFalse(vm.isRecordingActive)
         XCTAssertEqual(vm.captureState, .idle)

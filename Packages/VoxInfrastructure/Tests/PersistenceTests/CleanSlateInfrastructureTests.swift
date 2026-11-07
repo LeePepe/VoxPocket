@@ -39,6 +39,9 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.taskFilePath))
         XCTAssertFalse(FileManager.default.fileExists(atPath: projectDirectory.appendingPathComponent(".voxpocket/tasks").path))
-        XCTAssertTrue(try String(contentsOfFile: result.taskFilePath, encoding: .utf8).contains("$(unsafe)"))
+        let fileContents = try String(contentsOfFile: result.taskFilePath, encoding: .utf8)
+        XCTAssertFalse(fileContents.contains("title"))
+        XCTAssertFalse(fileContents.contains("$(unsafe)"))
+        XCTAssertTrue(fileContents.contains("\"project_key\":\"P\""))
     }
 }

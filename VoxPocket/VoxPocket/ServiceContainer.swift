@@ -168,8 +168,10 @@ public final class ServiceContainer: ObservableObject {
         streamingInputCoordinator = DefaultStreamingInputCoordinator(editing: editingUseCase, transcription: transcriptionUseCase, refinement: refinementUseCase)
         let productTelemetryInstrumentation = self.productTelemetryInstrumentation!; sessionUseCase = ProxySessionUseCase(
             backing: InMemorySessionUseCase()) { await productTelemetryInstrumentation.sessionDidComplete() }
-        voiceCaptureRepository = DefaultVoiceCaptureRepository(cloudSync: UbiquitousKeyValueCloudSyncTransport())
-        voiceTodoRepository = DefaultVoiceTodoRepository(cloudSync: UbiquitousKeyValueCloudSyncTransport())
+        let storageDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("VoxPocket", isDirectory: true)
+        voiceCaptureRepository = DefaultVoiceCaptureRepository(directoryURL: storageDirectory, cloudSync: UbiquitousKeyValueCloudSyncTransport())
+        voiceTodoRepository = DefaultVoiceTodoRepository(directoryURL: storageDirectory, cloudSync: UbiquitousKeyValueCloudSyncTransport())
         aiRunnerService = DefaultAIRunnerExecutionService()
         voiceCaptureAndTodoUseCase = DefaultVoiceCaptureAndTodoUseCase(
             captures: voiceCaptureRepository,

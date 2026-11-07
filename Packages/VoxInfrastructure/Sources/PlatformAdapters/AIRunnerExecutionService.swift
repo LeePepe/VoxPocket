@@ -29,10 +29,17 @@ public final class DefaultAIRunnerExecutionService: AIRunnerExecutionService, Se
     public func execute(todo: VoiceTodo, project: ProjectBinding, template: AIRunnerTemplate) async throws -> AIRunnerExecutionResult {
         let startedAt = Date()
         let cwd = project.localDirectoryPath.isEmpty ? Self.fallbackDirectory() : project.localDirectoryPath
-        try FileManager.default.createDirectory(at: sandboxTasksDirectory, withIntermediateDirectories: true)
-        var taskFile = sandboxTasksDirectory.appendingPathComponent("\(todo.id.uuidString).md")
-        let taskBody = "# Task\n\n\(todo.title)\n\n\(todo.taskPrompt)\n"
-        try taskBody.data(using: .utf8)?.write(to: taskFile, options: .atomic)
+        let taskDirectory = sandboxTasksDirectory
+        try FileManager.default.createDirectory(at: taskDirectory, withIntermediateDirectories: true)
+        var taskFile = taskDirectory.appendingPathComponent("\(todo.id.uuidString).json")
+        let metadata: [String: String] = [
+            "todo_id": todo.id.uuidString,
+            "project_key": project.projectKey,
+            "runner_kind": template.kind.rawValue,
+            "device_source": todo.deviceSource.rawValue
+        ]
+        let taskData = try JSONEncoder().encode(metadata)
+        try taskData.write(to: taskFile, options: .atomic)
         var resourceValues = URLResourceValues()
         resourceValues.isExcludedFromBackup = true
         try taskFile.setResourceValues(resourceValues)

@@ -65,8 +65,17 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public var isRecordingActive: Bool { if case .recording = captureState { return true }; return false }
     public func startCapture(mode: CaptureMode) {
         selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0; lastCopiedBannerText = nil
+        try? editingUseCase?.replaceAll(with: "")
         transcriptionUseCase?.clearLiveText()
-        if let recordingUseCase { Task { try? await recordingUseCase.startRecording() } }
+        if let recordingUseCase {
+            Task {
+                do {
+                    try await recordingUseCase.startRecording()
+                } catch {
+                    captureState = .failed(stage: .recording, reason: error.localizedDescription)
+                }
+            }
+        }
     }
     public func toggleCaptureModeDuringRecording() { guard case .recording = captureState else { return }; selectedCaptureMode = selectedCaptureMode == .text ? .todo : .text; captureState = .recording(mode: selectedCaptureMode) }
     public func cancelCapture() { recordingUseCase?.cancelRecording(); transcriptionUseCase?.clearLiveText(); captureState = .idle; recordingElapsedSeconds = 0; audioLevel = 0 }
@@ -75,22 +84,40 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
         captureState = .transcribing
         let stoppedDuration = recordingUseCase?.state.duration ?? durationSeconds
-        if let recordingUseCase { try? await recordingUseCase.stopRecording() }
-        if let transcriptionUseCase { try? await transcriptionUseCase.commitCurrentTranscription() }
+        if let recordingUseCase {
+            do {
+                try await recordingUseCase.stopRecording()
+            } catch {
+                captureState = .failed(stage: .recording, reason: error.localizedDescription)
+                return
+            }
+        }
+        if let transcriptionUseCase {
+            do {
+                try await transcriptionUseCase.commitCurrentTranscription()
+            } catch {
+                captureState = .failed(stage: .asr, reason: error.localizedDescription)
+                return
+            }
+        }
         do {
             let recorded = try await captureRecorder?(mode)
-            let fallbackRaw = editingUseCase?.currentText ?? ""
-            let raw = recorded?.rawTranscript ?? (!rawTranscript.isEmpty ? rawTranscript : fallbackRaw)
+            let fallbackRaw = (editingUseCase?.currentText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let raw = (recorded?.rawTranscript ?? (!rawTranscript.isEmpty ? rawTranscript : fallbackRaw)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !raw.isEmpty else {
+                captureState = .failed(stage: .asr, reason: "No transcription content produced")
+                return
+            }
             var refined = recorded?.refinedText ?? refinedText
-            if refined.isEmpty, !raw.isEmpty, let refinementUseCase, refinementUseCase.isConfigured {
-                try? await refinementUseCase.refine(customPrompt: nil)
+            captureState = .refining(mode: mode)
+            if refined.isEmpty, let refinementUseCase, refinementUseCase.isConfigured {
+                try await refinementUseCase.refine(customPrompt: nil)
                 if let current = editingUseCase?.currentText, !current.isEmpty {
                     refined = current
                 }
             }
             let audio = recorded?.localAudioFileName ?? localAudioFileName
             let duration = recorded?.durationSeconds ?? stoppedDuration
-            captureState = .refining(mode: mode)
             _ = try await useCase.recordCompletedCapture(mode: mode, rawTranscript: raw, refinedText: refined, localAudioFileName: audio, durationSeconds: duration, deviceSource: deviceSource)
             await reload()
             if mode == .text { lastCopiedBannerText = "已复制到剪贴板" }
