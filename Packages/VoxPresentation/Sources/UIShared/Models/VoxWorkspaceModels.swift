@@ -10,6 +10,6 @@ public enum WorkspaceSortOrder: Sendable {
     case oldestFirst
 }
 
-public enum WorkspaceSidebarSection: Equatable, Sendable {
+public enum WorkspaceSidebarSection: Equatable, Hashable, Sendable {
     case todoInbox, todoRunning, todoDone, todoAll, voiceNotes, project(String)
 }
