@@ -6,6 +6,8 @@ import UseCases
 @MainActor
 public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewState {
     private let useCase: any VoiceCaptureAndTodoUseCase
+    private let captureRecorder: (@Sendable (_ mode: CaptureMode) async throws -> (rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval))?
+    private let recordingUseCase: (any RecordingUseCase)?
     private var reloadTask: Task<Void, Never>?
 
     @Published public private(set) var captures: [VoiceCapture] = []
@@ -22,12 +24,12 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     @Published public var selectedTodoFilter: TodoStatusFilter = .all
     @Published public var selectedProjectFilter: String?
     @Published public var sortOrder: WorkspaceSortOrder = .newestFirst
-    @Published public var selectedSidebarSection: WorkspaceSidebarSection = .todoAll
+    @Published public var selectedSidebarSection: WorkspaceSidebarSection = .todoAll { didSet { applySidebarSelection(selectedSidebarSection) } }
     @Published public var selectedTodoID: UUID?
     @Published public var selectedCaptureID: UUID?
 
-    public init(useCase: any VoiceCaptureAndTodoUseCase, projectBindings: [ProjectBinding] = [], runnerTemplates: [AIRunnerTemplate] = AIRunnerTemplate.defaultPresets) {
-        self.useCase = useCase; self.projectBindings = projectBindings; self.runnerTemplates = runnerTemplates
+    public init(useCase: any VoiceCaptureAndTodoUseCase, projectBindings: [ProjectBinding] = [], runnerTemplates: [AIRunnerTemplate] = AIRunnerTemplate.defaultPresets, captureRecorder: (@Sendable (_ mode: CaptureMode) async throws -> (rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval))? = nil, recordingUseCase: (any RecordingUseCase)? = nil) {
+        self.useCase = useCase; self.projectBindings = projectBindings; self.runnerTemplates = runnerTemplates; self.captureRecorder = captureRecorder; self.recordingUseCase = recordingUseCase
         reloadTask = Task { [weak self] in await self?.reload() }
     }
 
@@ -41,10 +43,32 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public var projectCounts: [String: Int] { Dictionary(grouping: todos.compactMap(\.projectKey), by: { $0 }).mapValues(\.count) }
 
     public func clearSearchPreservingFilters() { searchQuery = "" }
-    public func startCapture(mode: CaptureMode) { selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0 }
+    public var isRecordingActive: Bool { if case .recording = captureState { return true }; return false }
+    public func startCapture(mode: CaptureMode) {
+        selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0; lastCopiedBannerText = nil
+        if let recordingUseCase { Task { try? await recordingUseCase.startRecording() } }
+    }
     public func toggleCaptureModeDuringRecording() { guard case .recording = captureState else { return }; selectedCaptureMode = selectedCaptureMode == .text ? .todo : .text; captureState = .recording(mode: selectedCaptureMode) }
-    public func cancelCapture() { captureState = .idle; recordingElapsedSeconds = 0; audioLevel = 0 }
-    public func finishCapture() { captureState = .completed }
+    public func cancelCapture() { recordingUseCase?.cancelRecording(); captureState = .idle; recordingElapsedSeconds = 0; audioLevel = 0 }
+    public func finishCapture() { Task { await completeCapture() } }
+    public func completeCapture(rawTranscript: String = "", refinedText: String = "", localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac) async {
+        let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
+        captureState = .transcribing
+        if let recordingUseCase { try? await recordingUseCase.stopRecording() }
+        do {
+            let recorded = try await captureRecorder?(mode)
+            let raw = recorded?.rawTranscript ?? rawTranscript
+            let refined = recorded?.refinedText ?? refinedText
+            let audio = recorded?.localAudioFileName ?? localAudioFileName
+            let duration = recorded?.durationSeconds ?? durationSeconds
+            captureState = .refining(mode: mode)
+            _ = try await useCase.recordCompletedCapture(mode: mode, rawTranscript: raw, refinedText: refined, localAudioFileName: audio, durationSeconds: duration, deviceSource: deviceSource)
+            await reload()
+            if mode == .text { lastCopiedBannerText = "已复制到剪贴板" }
+            captureState = .completed
+            captureState = .idle
+        } catch { captureState = .failed(stage: .ai, reason: error.localizedDescription) }
+    }
 
     public func convertCaptureToTodo(_ captureID: UUID) { perform { [weak self] in guard let self else { return }; _ = try await useCase.convertCaptureToTodo(captureID: captureID); await reload() } }
     public func retryCapture(_ captureID: UUID, mode: CaptureMode? = nil) { perform { [weak self] in guard let self else { return }; _ = try await useCase.retryCapture(id: captureID, targetMode: mode); await reload() } }
@@ -54,6 +78,16 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public func removeProjectBinding(id: UUID) { projectBindings.removeAll { $0.id == id } }
     public func updateRunnerTemplate(_ template: AIRunnerTemplate) { runnerTemplates.removeAll { $0.kind == template.kind }; runnerTemplates.append(template) }
 
+    private func applySidebarSelection(_ section: WorkspaceSidebarSection) {
+        switch section {
+        case .todoInbox: selectedTodoFilter = .inbox; selectedProjectFilter = nil
+        case .todoRunning: selectedTodoFilter = .running; selectedProjectFilter = nil
+        case .todoDone: selectedTodoFilter = .done; selectedProjectFilter = nil
+        case .todoAll: selectedTodoFilter = .all; selectedProjectFilter = nil
+        case .project(let key): selectedTodoFilter = .all; selectedProjectFilter = key
+        case .voiceNotes: break
+        }
+    }
     private func reload() async { do { captures = try await useCase.fetchCaptures(); todos = try await useCase.fetchTodos() } catch { } }
     private func perform(_ operation: @escaping () async throws -> Void) { Task { do { try await operation() } catch { captureState = .failed(stage: .ai, reason: error.localizedDescription) } } }
     private func count(_ state: TodoExecutionState) -> Int { todos.filter { $0.executionState == state }.count }

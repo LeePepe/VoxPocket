@@ -56,6 +56,10 @@ public struct VoiceCapture: Identifiable, Codable, Equatable, Hashable, Sendable
     public func withLinkedTodo(_ todoID: UUID?, updatedAt: Date = Date()) -> VoiceCapture {
         VoiceCapture(id: id, mode: mode, rawTranscript: rawTranscript, refinedText: refinedText, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource, state: state, linkedTodoID: todoID, createdAt: createdAt, updatedAt: updatedAt)
     }
+
+    public func sanitizedForCloudSync() -> VoiceCapture {
+        VoiceCapture(id: id, mode: mode, rawTranscript: "", refinedText: "", localAudioFileName: nil, durationSeconds: durationSeconds, deviceSource: deviceSource, state: state, linkedTodoID: linkedTodoID, createdAt: createdAt, updatedAt: updatedAt)
+    }
 }
 
 public enum TodoExecutionState: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
@@ -91,13 +95,28 @@ public struct AIRunnerTemplate: Identifiable, Codable, Equatable, Hashable, Send
     public static let customShellDefault = AIRunnerTemplate(kind: .customShell, name: "Custom shell", commandTemplate: "{{prompt}}", isBuiltIn: true)
     public static let defaultPresets = [herdrDefault, claudeCodeDefault, codexDefault, customShellDefault]
 
+    public static func shellEscape(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     public func interpolate(cwd: String, title: String, prompt: String, taskFile: String) -> String {
         precondition(!cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         precondition(!commandTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        return commandTemplate.replacingOccurrences(of: "{{cwd}}", with: cwd)
-            .replacingOccurrences(of: "{{title}}", with: title)
-            .replacingOccurrences(of: "{{prompt}}", with: prompt)
-            .replacingOccurrences(of: "{{task_file}}", with: taskFile)
+        return commandTemplate.replacingOccurrences(of: "{{cwd}}", with: Self.shellEscape(cwd))
+            .replacingOccurrences(of: "{{title}}", with: Self.shellEscape(title))
+            .replacingOccurrences(of: "{{prompt}}", with: Self.shellEscape(prompt))
+            .replacingOccurrences(of: "{{task_file}}", with: Self.shellEscape(taskFile))
+    }
+
+    public func executableAndArguments(cwd: String, title: String, prompt: String, taskFile: String) -> (executable: String, arguments: [String]) {
+        switch kind {
+        case .herdr: return ("herdr", ["run", "--cwd", cwd, "--title", title, "--prompt", prompt, "--task-file", taskFile])
+        case .claudeCode: return ("claude", ["--cwd", cwd, "--print", prompt])
+        case .codex: return ("codex", ["exec", "--cd", cwd, prompt])
+        case .customShell:
+            let values = ["{{cwd}}": cwd, "{{title}}": title, "{{prompt}}": prompt, "{{task_file}}": taskFile]
+            return (commandTemplate.split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? "", commandTemplate.split(whereSeparator: { $0.isWhitespace }).dropFirst().map { values[String($0)] ?? String($0) })
+        }
     }
 }
 
@@ -143,6 +162,6 @@ public struct VoiceTodo: Identifiable, Codable, Equatable, Hashable, Sendable {
     }
 
     public func sanitizedForCloudSync() -> VoiceTodo {
-        VoiceTodo(id: id, title: title, taskPrompt: taskPrompt, rawTranscript: rawTranscript, projectKey: projectKey, assignedRunnerKind: assignedRunnerKind, executionState: executionState, lastExecutionSummary: lastExecutionSummary, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: nil, durationSeconds: durationSeconds, deviceSource: deviceSource, createdAt: createdAt, updatedAt: updatedAt)
+        VoiceTodo(id: id, title: "", taskPrompt: "", rawTranscript: "", projectKey: projectKey, assignedRunnerKind: assignedRunnerKind, executionState: executionState, lastExecutionSummary: nil, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: nil, durationSeconds: durationSeconds, deviceSource: deviceSource, createdAt: createdAt, updatedAt: updatedAt)
     }
 }

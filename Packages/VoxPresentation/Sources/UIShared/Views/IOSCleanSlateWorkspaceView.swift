@@ -50,12 +50,12 @@ public struct IOSCleanSlateWorkspaceView: View {
 
     private var captureDock: some View {
         VStack(spacing: 12) {
-            if case .recording = viewModel.captureState { recordingControls } else { modeSwitcher }
-            Button { viewModel.captureState == .idle ? viewModel.startCapture(mode: viewModel.selectedCaptureMode) : viewModel.finishCapture() } label: {
-                Image(systemName: viewModel.captureState == .idle ? "mic.fill" : "stop.fill").font(.title2).frame(width: 52, height: 52)
+            if viewModel.isRecordingActive { recordingControls } else { modeSwitcher }
+            Button { viewModel.isRecordingActive ? viewModel.finishCapture() : viewModel.startCapture(mode: viewModel.selectedCaptureMode) } label: {
+                Image(systemName: viewModel.isRecordingActive ? "stop.fill" : "mic.fill").font(.title2).frame(width: 52, height: 52)
             }
-            .foregroundStyle(.white).background(viewModel.captureState == .idle ? (viewModel.selectedCaptureMode == .todo ? .orange : .accentColor) : .red, in: Circle())
-            .accessibilityLabel(viewModel.captureState == .idle ? "开始录音" : "停止录音")
+            .foregroundStyle(.white).background(viewModel.isRecordingActive ? .red : (viewModel.selectedCaptureMode == .todo ? .orange : .accentColor), in: Circle())
+            .accessibilityLabel(viewModel.isRecordingActive ? "停止录音" : "开始录音")
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
         .background(reduceTransparency ? AnyShapeStyle(.thickMaterial) : AnyShapeStyle(.ultraThinMaterial), in: Capsule())

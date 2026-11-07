@@ -35,7 +35,11 @@ public struct VoxCaptureLiveActivity: Widget {
 
 public struct FinishCaptureIntent: AppIntent {
     public static let title: LocalizedStringResource = "完成录音"
+    public static let didRequestFinishNotification = Notification.Name("vox.liveActivity.finishCapture")
     public init() {}
-    public func perform() async throws -> some IntentResult { .result() }
+    public func perform() async throws -> some IntentResult {
+        NotificationCenter.default.post(name: Self.didRequestFinishNotification, object: nil)
+        return .result()
+    }
 }
 #endif

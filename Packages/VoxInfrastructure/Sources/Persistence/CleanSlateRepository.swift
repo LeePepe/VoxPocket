@@ -36,22 +36,28 @@ public actor InMemoryCloudSyncTransport: CloudSyncTransport {
     public func todoMetadata() async throws -> Data? { todoData }
 }
 
-// Sendable: NSUbiquitousKeyValueStore and UserDefaults are Apple framework bridges; all access is confined to their thread-safe APIs.
 public final class UbiquitousKeyValueCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
-    private let ubiquitousStore: NSUbiquitousKeyValueStore?
-    private let defaults: UserDefaults
-    private let captureKey = "voxpocket.cloud.voiceCaptures"
-    private let todoKey = "voxpocket.cloud.voiceTodos"
+    private let directoryURL: URL
+    private let captureURL: URL
+    private let todoURL: URL
 
-    public init(store: UserDefaults? = nil, useICloud: Bool = true) {
-        self.ubiquitousStore = useICloud ? NSUbiquitousKeyValueStore.default : nil
-        self.defaults = store ?? .standard
+    public init(directoryURL: URL? = nil, store: UserDefaults? = nil, useICloud: Bool = true) {
+        let base = directoryURL ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("VoxPocket/SyncMetadata", isDirectory: true)
+        self.directoryURL = base
+        self.captureURL = base.appendingPathComponent("capture-sync-metadata.json")
+        self.todoURL = base.appendingPathComponent("todo-sync-metadata.json")
     }
 
-    public func saveCaptureMetadata(_ data: Data) async throws { ubiquitousStore?.set(data, forKey: captureKey); defaults.set(data, forKey: captureKey) }
-    public func saveTodoMetadata(_ data: Data) async throws { ubiquitousStore?.set(data, forKey: todoKey); defaults.set(data, forKey: todoKey) }
-    public func captureMetadata() async throws -> Data? { ubiquitousStore?.data(forKey: captureKey) ?? defaults.data(forKey: captureKey) }
-    public func todoMetadata() async throws -> Data? { ubiquitousStore?.data(forKey: todoKey) ?? defaults.data(forKey: todoKey) }
+    public func saveCaptureMetadata(_ data: Data) async throws {
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try data.write(to: captureURL, options: .atomic)
+    }
+    public func saveTodoMetadata(_ data: Data) async throws {
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try data.write(to: todoURL, options: .atomic)
+    }
+    public func captureMetadata() async throws -> Data? { try? Data(contentsOf: captureURL) }
+    public func todoMetadata() async throws -> Data? { try? Data(contentsOf: todoURL) }
 }
 
 private struct CaptureStoreState: Sendable { var values: [UUID: VoiceCapture] = [:] }
@@ -77,7 +83,7 @@ public final class DefaultVoiceCaptureRepository: VoiceCaptureRepository, @unche
         let values = state.withLock { state -> [VoiceCapture] in state.values[capture.id] = capture; return sorted(state.values.values) }
         try persist(values)
         subject.send(values)
-        if let cloud { try await cloud.saveCaptureMetadata(encoder.encode(values.map { VoiceCapture(id: $0.id, mode: $0.mode, rawTranscript: $0.rawTranscript, refinedText: $0.refinedText, durationSeconds: $0.durationSeconds, deviceSource: $0.deviceSource, state: $0.state, linkedTodoID: $0.linkedTodoID, createdAt: $0.createdAt, updatedAt: $0.updatedAt) })) }
+        if let cloud { try await cloud.saveCaptureMetadata(encoder.encode(values.map { $0.sanitizedForCloudSync() })) }
     }
     public func delete(by id: UUID) async throws { let values = state.withLock { state -> [VoiceCapture] in state.values.removeValue(forKey: id); return sorted(state.values.values) }; try persist(values); subject.send(values) }
     public func observe() -> AnyPublisher<[VoiceCapture], Never> { subject.eraseToAnyPublisher() }
