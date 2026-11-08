@@ -278,17 +278,30 @@ final class QuickRecordClipboardService: ClipboardService, Sendable {
 
 @MainActor
 final class TestGlobalHotkeyService: GlobalHotkeyService {
+    private var registered: [String: (HotkeyDefinition, @Sendable () -> Void)] = [:]
     private var pressHandler: (@concurrent @Sendable () async -> Void)?
     private var releaseHandler: (@concurrent @Sendable () async -> Void)?
 
     var hotkeyTriggeredPublisher: AnyPublisher<String, Never> {
         Empty().eraseToAnyPublisher()
     }
-    func register(_ hotkey: HotkeyDefinition, handler: @escaping @Sendable () -> Void) throws {}
-    func unregister(_ identifier: String) {}
-    func unregisterAll() {}
-    func update(_ identifier: String, to newHotkey: HotkeyDefinition) throws {}
-    func getRegistered(_ identifier: String) -> HotkeyDefinition? { nil }
+    func register(_ hotkey: HotkeyDefinition, handler: @escaping @Sendable () -> Void) throws {
+        registered[hotkey.identifier] = (hotkey, handler)
+    }
+    func unregister(_ identifier: String) {
+        registered.removeValue(forKey: identifier)
+    }
+    func unregisterAll() {
+        registered.removeAll()
+    }
+    func update(_ identifier: String, to newHotkey: HotkeyDefinition) throws {
+        if let existing = registered[identifier] {
+            registered[identifier] = (newHotkey, existing.1)
+        }
+    }
+    func getRegistered(_ identifier: String) -> HotkeyDefinition? {
+        registered[identifier]?.0
+    }
     func isAvailable(_ hotkey: HotkeyDefinition) -> Bool { true }
     func registerLongPress(
         _ hotkey: HotkeyDefinition,
@@ -297,6 +310,10 @@ final class TestGlobalHotkeyService: GlobalHotkeyService {
     ) {
         pressHandler = onPress
         releaseHandler = onRelease
+    }
+
+    func trigger(_ identifier: String) {
+        registered[identifier]?.1()
     }
 
     func press() async {

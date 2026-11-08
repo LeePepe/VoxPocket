@@ -10,6 +10,7 @@ import VoxKitBridge
 import Foundation
 import AppKit
 import Carbon
+import CoreModels
 import PlatformAdapters
 import PlatformUI
 import UIShared
@@ -51,6 +52,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickRecordSaveSession: (@MainActor @Sendable (String, String) async throws -> Void)?
     private let quickRecordTrack: (@MainActor @Sendable (String, [String: String]) -> Void)?
     var quickRecordRecognitionTimeout = QuickRecordingReleaseLifecycle.recognitionTimeout
+    private(set) var activeQuickCaptureMode: CaptureMode = .text
     private var quickRecordingSession: QuickRecordingSession?
     private struct QuickRecordingSession {
         let id: UUID
@@ -227,6 +229,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func registerHotkeys() async {
         hotkeyService.unregister(HotkeyIdentifier.showPopover)
         hotkeyService.unregister(HotkeyIdentifier.toggleRecording)
+        hotkeyService.unregister(HotkeyIdentifier.directToText)
+        hotkeyService.unregister(HotkeyIdentifier.voiceToTodo)
 
         // 快捷键定义
         // F7: 显示/隐藏完整面板
@@ -235,8 +239,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             default: Self.defaultShowPanelHotkey
         )
         let quickRecordHotkey = await resolvedQuickRecordHotkey()
+        let directToTextHotkey = await preferences.getValue(
+            for: .directToTextHotkey,
+            default: Self.defaultDirectToTextHotkey
+        )
+        let voiceToTodoHotkey = await preferences.getValue(
+            for: .voiceToTodoHotkey,
+            default: Self.defaultVoiceToTodoHotkey
+        )
         registerShowPanelHotkey(showPanelHotkey)
         registerQuickRecordHotkey(quickRecordHotkey)
+        registerDirectToTextHotkey(directToTextHotkey)
+        registerVoiceToTodoHotkey(voiceToTodoHotkey)
     }
 
     private func resolvedQuickRecordHotkey() async -> HotkeyDefinition {
@@ -274,7 +288,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyService.registerLongPress(
             hotkey,
             onPress: { [weak self] in
-                await self?.handleQuickRecordStart()
+                await self?.handleLongPressQuickRecordStart()
             },
             onRelease: { [weak self] in
                 await self?.handleQuickRecordStop()
@@ -285,6 +299,42 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             "display": hotkey.displayString,
             "mode": "press_release"
         ])
+    }
+
+    private func handleLongPressQuickRecordStart() async {
+        if quickRecordingSession == nil {
+            activeQuickCaptureMode = .text
+            serviceContainer.activeSessionCaptureMode = .text
+        }
+        await handleQuickRecordStart()
+    }
+
+    private func registerDirectToTextHotkey(_ hotkey: HotkeyDefinition) {
+        try? hotkeyService.register(hotkey) { [weak self] in
+            Task { @MainActor in
+                await self?.handleToggleQuickRecord(mode: .text)
+            }
+        }
+    }
+
+    private func registerVoiceToTodoHotkey(_ hotkey: HotkeyDefinition) {
+        try? hotkeyService.register(hotkey) { [weak self] in
+            Task { @MainActor in
+                await self?.handleToggleQuickRecord(mode: .todo)
+            }
+        }
+    }
+
+    private func handleToggleQuickRecord(mode: CaptureMode) async {
+        if let session = quickRecordingSession {
+            if !session.releaseLifecycle.isReleased {
+                await handleQuickRecordStop()
+            }
+            return
+        }
+        activeQuickCaptureMode = mode
+        serviceContainer.activeSessionCaptureMode = mode
+        await handleQuickRecordStart()
     }
 
     private func observePreferenceChanges() {
@@ -309,6 +359,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         keyCode: UInt16(kVK_Function),
         modifiers: 0,
         identifier: HotkeyIdentifier.toggleRecording
+    )
+
+    static let defaultDirectToTextHotkey = HotkeyDefinition(
+        keyCode: UInt16(kVK_Space),
+        modifiers: UInt(optionKey),
+        identifier: HotkeyIdentifier.directToText
+    )
+
+    static let defaultVoiceToTodoHotkey = HotkeyDefinition(
+        keyCode: UInt16(kVK_Space),
+        modifiers: UInt(optionKey | shiftKey),
+        identifier: HotkeyIdentifier.voiceToTodo
     )
 
     // MARK: - 快捷键处理

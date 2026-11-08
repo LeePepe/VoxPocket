@@ -68,6 +68,12 @@ public final class WindowManager: ObservableObject {
     public func showWindow(_ type: WindowType) {
         if type == .quickRecording { quickRecordingPrewarmer.cancelPending() }
         if let existingWindow = windows[type] {
+            if type == .fullPanel,
+               let hostingView = existingWindow.contentView as? NSHostingView<MacOSCleanSlateWorkspaceView> {
+                let refreshed = ServiceContainer.shared.makeWorkspaceViewModel()
+                viewModels[.fullPanel] = refreshed
+                hostingView.rootView = MacOSCleanSlateWorkspaceView(viewModel: refreshed)
+            }
             positionWindow(existingWindow, for: type)
             presentWindow(existingWindow, for: type)
             windowVisibility[type] = true
@@ -212,34 +218,25 @@ public final class WindowManager: ObservableObject {
 
     /// 创建完整面板窗口
     private func createFullPanel() -> NSPanel {
-        let viewModel = ServiceContainer.shared.makeRootViewModel()
+        let viewModel = ServiceContainer.shared.workspaceViewModel
         viewModels[.fullPanel] = viewModel
 
-        let contentView = FullPanelView(viewModel: viewModel)
+        let contentView = MacOSCleanSlateWorkspaceView(viewModel: viewModel)
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 420),
-            styleMask: [.borderless, .resizable, .nonactivatingPanel],
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
 
-        panel.level = .floating
-        panel.isFloatingPanel = true
-        panel.isMovableByWindowBackground = true
+        panel.title = "VoxPocket"
+        panel.isFloatingPanel = false
         panel.hidesOnDeactivate = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenPrimary]
+        panel.minSize = NSSize(width: 820, height: 520)
 
-        // 设置最小尺寸
-        panel.minSize = NSSize(width: 460, height: 320)
-
-        // 设置 SwiftUI 内容
         let hostingView = NSHostingView(rootView: contentView)
-        hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = 16
-        hostingView.layer?.masksToBounds = true
         panel.contentView = hostingView
 
         // 窗口关闭时更新状态

@@ -166,20 +166,25 @@ public final class ServiceContainer: ObservableObject {
         transcriptionUseCase = DefaultTranscriptionUseCase(coordinator: transcriber, editing: editingUseCase, telemetry: telemetryService)
         refinementUseCase = DefaultRefinementUseCase(runner: refinementRunner, editing: editingUseCase, telemetry: telemetryService)
         streamingInputCoordinator = DefaultStreamingInputCoordinator(editing: editingUseCase, transcription: transcriptionUseCase, refinement: refinementUseCase)
-        let productTelemetryInstrumentation = self.productTelemetryInstrumentation!; sessionUseCase = ProxySessionUseCase(
-            backing: InMemorySessionUseCase()) { await productTelemetryInstrumentation.sessionDidComplete() }
         let storageDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("VoxPocket", isDirectory: true)
         voiceCaptureRepository = DefaultVoiceCaptureRepository(directoryURL: storageDirectory, cloudSync: UbiquitousKeyValueCloudSyncTransport())
         voiceTodoRepository = DefaultVoiceTodoRepository(directoryURL: storageDirectory, cloudSync: UbiquitousKeyValueCloudSyncTransport())
         aiRunnerService = DefaultAIRunnerExecutionService()
-        voiceCaptureAndTodoUseCase = DefaultVoiceCaptureAndTodoUseCase(
+        let captureTodoUseCase = DefaultVoiceCaptureAndTodoUseCase(
             captures: voiceCaptureRepository,
             todos: voiceTodoRepository,
             extractor: DefaultVoiceTodoExtractor(),
             runner: aiRunnerService,
             telemetry: telemetryService
         )
+        voiceCaptureAndTodoUseCase = captureTodoUseCase
+        let productTelemetryInstrumentation = self.productTelemetryInstrumentation!
+        sessionUseCase = ProxySessionUseCase(
+            backing: InMemorySessionUseCase()
+        ) { _, _ in
+            await productTelemetryInstrumentation.sessionDidComplete()
+        }
         deepLinkRouter = DefaultDeepLinkRouter()
 #if os(macOS)
         quickTranscriber = Self.makeQuickTranscriber(environment: environment, preferences: preferencesStore,
@@ -197,9 +202,13 @@ public final class ServiceContainer: ObservableObject {
     }
 
     private func finishInitialization(environment: [String: String], notificationCenter: NotificationCenter) {
+        let productTelemetryInstrumentation = self.productTelemetryInstrumentation!
+        let captureTodoUseCase = self.voiceCaptureAndTodoUseCase
         #if os(macOS)
+        let captureDeviceSource: DeviceSource = .mac
         _ = notificationCenter
         #else
+        let captureDeviceSource: DeviceSource = .iPhone
         let availability = StageModelRouting.availability(environment: environment)
         let workflowConfiguration = Self.makeWorkflowConfiguration(environment: environment, sdk: sdk)
         let runner = refinementRunner
@@ -212,6 +221,15 @@ public final class ServiceContainer: ObservableObject {
             })
         iosPresetPreferenceBinding = binding
         #endif
+        sessionUseCase.onCompletedSession = { [weak self] rawText, refinedText in
+            await productTelemetryInstrumentation.sessionDidComplete()
+            let mode = await MainActor.run { self?.activeSessionCaptureMode ?? .text }
+            _ = try? await captureTodoUseCase.recordCompletedCapture(
+                mode: mode, rawTranscript: rawText, refinedText: refinedText,
+                localAudioFileName: nil, durationSeconds: 0, deviceSource: captureDeviceSource
+            )
+            await MainActor.run { self?.reloadWorkspaceViewModel() }
+        }
         logger.debug("Initialized")
     }
 
@@ -560,6 +578,16 @@ public final class ServiceContainer: ObservableObject {
         return root
     }
 
+    public var activeSessionCaptureMode: CaptureMode = .text {
+        didSet {
+            workspaceViewModel.selectedCaptureMode = activeSessionCaptureMode
+        }
+    }
+
+    public func reloadWorkspaceViewModel() {
+        workspaceViewModel = makeWorkspaceViewModel()
+    }
+
     public func makeWorkspaceViewModel() -> VoxWorkspaceViewModel {
         VoxWorkspaceViewModel(
             useCase: voiceCaptureAndTodoUseCase,
@@ -649,7 +677,7 @@ public enum RecordingSource: String {
 public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
 
     private var backing: SessionUseCase
-    private let onCompletedSession: @Sendable () async -> Void
+    var onCompletedSession: @Sendable (String, String) async -> Void
     private var sessionsSubscription: AnyCancellable?
     private var currentSessionSubscription: AnyCancellable?
     private let sessionsRelay = CurrentValueSubject<[Session], Error>([])
@@ -657,7 +685,7 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
 
     init(
         backing: SessionUseCase,
-        onCompletedSession: @escaping @Sendable () async -> Void = {}
+        onCompletedSession: @escaping @Sendable (String, String) async -> Void = { _, _ in }
     ) {
         self.backing = backing
         self.onCompletedSession = onCompletedSession
@@ -736,7 +764,7 @@ public final class ProxySessionUseCase: SessionUseCase, @unchecked Sendable {
             rawText: rawText,
             refinedText: refinedText
         )
-        await onCompletedSession()
+        await onCompletedSession(rawText, refinedText)
         return session
     }
 }
