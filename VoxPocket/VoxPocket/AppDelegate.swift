@@ -288,7 +288,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyService.registerLongPress(
             hotkey,
             onPress: { [weak self] in
-                await self?.handleLongPressQuickRecordStart()
+                await self?.handleLongPressQuickRecordStart(mode: .text)
             },
             onRelease: { [weak self] in
                 await self?.handleQuickRecordStop()
@@ -301,40 +301,36 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
     }
 
-    private func handleLongPressQuickRecordStart() async {
+    private func handleLongPressQuickRecordStart(mode: CaptureMode = .text) async {
         if quickRecordingSession == nil {
-            activeQuickCaptureMode = .text
-            serviceContainer.activeSessionCaptureMode = .text
+            activeQuickCaptureMode = mode
+            serviceContainer.activeSessionCaptureMode = mode
         }
         await handleQuickRecordStart()
     }
 
     private func registerDirectToTextHotkey(_ hotkey: HotkeyDefinition) {
-        try? hotkeyService.register(hotkey) { [weak self] in
-            Task { @MainActor in
-                await self?.handleToggleQuickRecord(mode: .text)
+        hotkeyService.registerLongPress(
+            hotkey,
+            onPress: { [weak self] in
+                await self?.handleLongPressQuickRecordStart(mode: .text)
+            },
+            onRelease: { [weak self] in
+                await self?.handleQuickRecordStop()
             }
-        }
+        )
     }
 
     private func registerVoiceToTodoHotkey(_ hotkey: HotkeyDefinition) {
-        try? hotkeyService.register(hotkey) { [weak self] in
-            Task { @MainActor in
-                await self?.handleToggleQuickRecord(mode: .todo)
+        hotkeyService.registerLongPress(
+            hotkey,
+            onPress: { [weak self] in
+                await self?.handleLongPressQuickRecordStart(mode: .todo)
+            },
+            onRelease: { [weak self] in
+                await self?.handleQuickRecordStop()
             }
-        }
-    }
-
-    private func handleToggleQuickRecord(mode: CaptureMode) async {
-        if let session = quickRecordingSession {
-            if !session.releaseLifecycle.isReleased {
-                await handleQuickRecordStop()
-            }
-            return
-        }
-        activeQuickCaptureMode = mode
-        serviceContainer.activeSessionCaptureMode = mode
-        await handleQuickRecordStart()
+        )
     }
 
     private func observePreferenceChanges() {
@@ -345,6 +341,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             Task { @MainActor in
                 await self?.registerHotkeys()
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("vox.openFullPanel"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.windowManager.showWindow(.fullPanel)
+                NSApp.activate(ignoringOtherApps: true)
             }
         }
     }

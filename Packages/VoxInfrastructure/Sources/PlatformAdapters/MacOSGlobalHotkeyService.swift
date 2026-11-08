@@ -24,6 +24,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         let definition: HotkeyDefinition
         let onPress: @Sendable () async -> Void
         let onRelease: @Sendable () async -> Void
+        var hotkeyRef: EventHotKeyRef?
         var isPressed: Bool = false
         var keyDownTime: Date?
         var hasTriggeredPress: Bool = false
@@ -73,13 +74,17 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
     // MARK: - Carbon Event Handler 设置
 
     private func setupCarbonEventHandler() {
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
 
         let handlerResult = InstallEventHandler(
             GetApplicationEventTarget(),
             { (_, event, userData) -> OSStatus in
-                guard let userData = userData else { return OSStatus(eventNotHandledErr) }
+                guard let userData = userData, let event = event else { return OSStatus(eventNotHandledErr) }
                 let service = Unmanaged<MacOSGlobalHotkeyService>.fromOpaque(userData).takeUnretainedValue()
+                let eventKind = GetEventKind(event)
 
                 var hotkeyID = EventHotKeyID()
                 let status = GetEventParameter(
@@ -94,14 +99,18 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
 
                 if status == noErr {
                     Task { @MainActor in
-                        service.handleHotkeyTriggered(id: hotkeyID.id)
+                        if eventKind == UInt32(kEventHotKeyReleased) {
+                            service.handleHotkeyReleased(id: hotkeyID.id)
+                        } else {
+                            service.handleHotkeyTriggered(id: hotkeyID.id)
+                        }
                     }
                 }
 
                 return noErr
             },
-            1,
-            &eventType,
+            eventTypes.count,
+            &eventTypes,
             Unmanaged.passUnretained(self).toOpaque(),
             &eventHandlerRef
         )
@@ -153,14 +162,52 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
     // MARK: - 事件处理
 
     private func handleHotkeyTriggered(id: UInt32) {
-        guard let identifier = hotkeyIdToIdentifier[id],
-              let info = registeredHotkeys[identifier] else {
+        guard let identifier = hotkeyIdToIdentifier[id] else {
             return
         }
 
-        logger.log(.debug, "Hotkey triggered", context: ["identifier": identifier])
-        hotkeySubject.send(identifier)
-        info.handler()
+        if let info = registeredHotkeys[identifier] {
+            logger.log(.debug, "Hotkey triggered", context: ["identifier": identifier])
+            hotkeySubject.send(identifier)
+            info.handler()
+            return
+        }
+
+        if var info = longPressHotkeys[identifier], !info.isPressed {
+            info.isPressed = true
+            info.keyDownTime = Date()
+            info.hasTriggeredPress = true
+            longPressHotkeys[identifier] = info
+            logger.log(.debug, "Long-press hotkey down", context: ["identifier": identifier])
+            hotkeySubject.send(identifier)
+            Task {
+                await info.onPress()
+            }
+        }
+    }
+
+    private func handleHotkeyReleased(id: UInt32) {
+        guard let identifier = hotkeyIdToIdentifier[id],
+              var info = longPressHotkeys[identifier],
+              info.isPressed else {
+            return
+        }
+
+        info.isPressed = false
+        info.keyDownTime = nil
+        let shouldRelease = info.hasTriggeredPress
+        info.hasTriggeredPress = false
+        longPressHotkeys[identifier] = info
+
+        logger.log(.debug, "Long-press hotkey up", context: [
+            "identifier": identifier,
+            "should_release": shouldRelease
+        ])
+        if shouldRelease {
+            Task {
+                await info.onRelease()
+            }
+        }
     }
 
     private func handleKeyEvent(_ event: NSEvent, source: String = "unknown") {
@@ -170,6 +217,9 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
 
         // 查找匹配的长按快捷键
         for (identifier, var info) in longPressHotkeys {
+            if info.hotkeyRef != nil {
+                continue
+            }
             // Fn 键是 flagsChanged 事件：按下即开始，抬起即结束
             if info.definition.keyCode == functionKeyCode {
                 guard keyCode == functionKeyCode, event.type == .flagsChanged else {
@@ -316,14 +366,21 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         }
 
         // 注销长按快捷键
-        longPressHotkeys.removeValue(forKey: identifier)
+        if let info = longPressHotkeys.removeValue(forKey: identifier) {
+            if let ref = info.hotkeyRef {
+                UnregisterEventHotKey(ref)
+            }
+            hotkeyIdToIdentifier = hotkeyIdToIdentifier.filter { $0.value != identifier }
+        }
     }
 
     public func unregisterAll() {
-        for identifier in registeredHotkeys.keys {
+        for identifier in Array(registeredHotkeys.keys) {
             unregister(identifier)
         }
-        longPressHotkeys.removeAll()
+        for identifier in Array(longPressHotkeys.keys) {
+            unregister(identifier)
+        }
     }
 
     public func update(_ identifier: String, to newHotkey: HotkeyDefinition) throws {
@@ -386,10 +443,29 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         // 先注销已有的同标识符快捷键
         unregister(hotkey.identifier)
 
+        var hotkeyRef: EventHotKeyRef?
+        if hotkey.keyCode != UInt16(kVK_Function) {
+            let hotkeyId = nextHotkeyId
+            nextHotkeyId += 1
+            let hotkeyID = EventHotKeyID(signature: OSType(0x564F5850), id: hotkeyId)
+            let status = RegisterEventHotKey(
+                UInt32(hotkey.keyCode),
+                UInt32(hotkey.modifiers),
+                hotkeyID,
+                GetApplicationEventTarget(),
+                0,
+                &hotkeyRef
+            )
+            if status == noErr, hotkeyRef != nil {
+                hotkeyIdToIdentifier[hotkeyId] = hotkey.identifier
+            }
+        }
+
         let info = LongPressInfo(
             definition: hotkey,
             onPress: onPress,
-            onRelease: onRelease
+            onRelease: onRelease,
+            hotkeyRef: hotkeyRef
         )
         longPressHotkeys[hotkey.identifier] = info
 
