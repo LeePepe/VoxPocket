@@ -321,23 +321,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         let hasMic = serviceContainer.quickTranscriber.audioCaptureService.hasPermission
         let hasSpeech = (serviceContainer.quickTranscriber as? CombineTranscriptionCoordinator)?.core.hasSpeechPermission ?? true
-        let hasAccessibility = (mode != .text) || serviceContainer.accessibilityService.checkPermission()
-        guard !hasMic || !hasSpeech || !hasAccessibility else { return true }
+        guard !hasMic || !hasSpeech else { return true }
 
         if !hasMic {
-            let granted = await serviceContainer.quickTranscriber.audioCaptureService.requestPermission()
-            if !granted, let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                NSWorkspace.shared.open(url)
-            }
+            _ = await serviceContainer.quickTranscriber.audioCaptureService.requestPermission()
         }
         if !hasSpeech {
-            let granted = await serviceContainer.quickTranscriber.speechRecognitionService.requestPermission()
-            if !granted, let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
-                NSWorkspace.shared.open(url)
-            }
-        }
-        if !hasAccessibility {
-            _ = await serviceContainer.accessibilityService.requestPermission()
+            _ = await serviceContainer.quickTranscriber.speechRecognitionService.requestPermission()
         }
         return false
     }
