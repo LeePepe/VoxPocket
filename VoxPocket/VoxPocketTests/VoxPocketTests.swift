@@ -41,6 +41,7 @@ struct VoxPocketTests {
         // must not overwrite the in-flight session's .todo capture mode.
         await fixture.hotkeys.press(HotkeyIdentifier.directToText)
         #expect(fixture.delegate?.activeQuickCaptureMode == .todo)
+        #expect(fixture.delegate != nil)
 
         fixture.refinement.finish()
         await fixture.clipboard.gate.release()
