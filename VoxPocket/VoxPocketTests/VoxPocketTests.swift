@@ -35,10 +35,19 @@ struct VoxPocketTests {
 
         fixture.hotkeys.trigger(HotkeyIdentifier.voiceToTodo)
         try await waitForDismissBoundary { fixture.refinement.isWaiting }
+
+        // Triggering directToText while the previous .todo session is still completing
+        // must not overwrite the in-flight session's .todo capture mode.
+        fixture.hotkeys.trigger(HotkeyIdentifier.directToText)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(fixture.delegate?.activeQuickCaptureMode == .todo)
+        #expect(fixture.delegate != nil)
+
         fixture.refinement.finish()
         await fixture.clipboard.gate.release()
         try await waitForDismissBoundary { fixture.saved.count == 1 }
         #expect(fixture.saved.count == 1)
+        #expect(fixture.delegate?.activeQuickCaptureMode == .todo)
         fixture.remove()
     }
     #else

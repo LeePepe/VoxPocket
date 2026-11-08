@@ -302,8 +302,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleLongPressQuickRecordStart() async {
-        activeQuickCaptureMode = .text
-        serviceContainer.workspaceViewModel.selectedCaptureMode = .text
+        if activeQuickRecordingSource() == nil, quickRecordingSession == nil {
+            activeQuickCaptureMode = .text
+            serviceContainer.activeSessionCaptureMode = .text
+        }
         await handleQuickRecordStart()
     }
 
@@ -324,15 +326,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleToggleQuickRecord(mode: CaptureMode) async {
-        if activeQuickRecordingSource() == .quickRecording,
-           let session = quickRecordingSession,
-           !session.releaseLifecycle.isReleased {
-            await handleQuickRecordStop()
-        } else {
-            activeQuickCaptureMode = mode
-            serviceContainer.workspaceViewModel.selectedCaptureMode = mode
-            await handleQuickRecordStart()
+        if activeQuickRecordingSource() == .quickRecording {
+            if let session = quickRecordingSession, !session.releaseLifecycle.isReleased {
+                await handleQuickRecordStop()
+            }
+            return
         }
+        guard quickRecordingSession == nil else { return }
+        activeQuickCaptureMode = mode
+        serviceContainer.activeSessionCaptureMode = mode
+        await handleQuickRecordStart()
     }
 
     private func observePreferenceChanges() {

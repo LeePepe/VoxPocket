@@ -223,7 +223,7 @@ public final class ServiceContainer: ObservableObject {
         #endif
         sessionUseCase.onCompletedSession = { [weak self] rawText, refinedText in
             await productTelemetryInstrumentation.sessionDidComplete()
-            let mode = await MainActor.run { self?.workspaceViewModel.selectedCaptureMode ?? .text }
+            let mode = await MainActor.run { self?.activeSessionCaptureMode ?? .text }
             _ = try? await captureTodoUseCase.recordCompletedCapture(
                 mode: mode, rawTranscript: rawText, refinedText: refinedText,
                 localAudioFileName: nil, durationSeconds: 0, deviceSource: captureDeviceSource
@@ -576,6 +576,12 @@ public final class ServiceContainer: ObservableObject {
             }
         }
         return root
+    }
+
+    public var activeSessionCaptureMode: CaptureMode = .text {
+        didSet {
+            workspaceViewModel.selectedCaptureMode = activeSessionCaptureMode
+        }
     }
 
     public func reloadWorkspaceViewModel() {
