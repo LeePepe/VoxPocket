@@ -131,5 +131,38 @@ struct RealtimeTranscriberConfigurationTests {
         values.removeValue(forKey: "AZURE_API_KEY")
         #expect(StageModelRouting.availability(environment: values).textModelName.isEmpty)
     }
+
+    @MainActor @Test func stageSpeechSessionFactoryReusesSourceWhenSettingsUnchangedAndReplacesWhenChanged() async throws {
+        let suiteName = "StageSpeechSessionFactoryTests.\(UUID())"
+        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
+        let store = UserDefaultsPreferencesStore(defaults: UserDefaults(suiteName: suiteName)!)
+        await store.setValue("appleSpeech", for: .speechModel)
+
+        var seenSettings: [StageModelSettings] = []
+        let sdk = SDKHostConfiguration(
+            storageLocations: SDKHostConfiguration.storageLocations(),
+            logger: NoopVoxLogger(),
+            telemetry: NoopVoxTelemetry(),
+            credentials: SDKHostConfiguration.credentials(environment: environment)
+        )
+        let factory = StageSpeechSessionFactory(
+            environment: environment,
+            preferences: store,
+            sdk: sdk,
+            beforeSession: { seenSettings.append($0) }
+        )
+
+        let first = try await factory.makeSource()
+        let second = try await factory.makeSource()
+        #expect(ObjectIdentifier(first as AnyObject) == ObjectIdentifier(second as AnyObject))
+        #expect(seenSettings.count == 2)
+        #expect(seenSettings.allSatisfy { $0.speech == .appleSpeech })
+
+        await store.setValue("batch", for: .speechModel)
+        let third = try await factory.makeSource()
+        #expect(ObjectIdentifier(third as AnyObject) != ObjectIdentifier(first as AnyObject))
+        #expect(seenSettings.count == 3)
+        #expect(seenSettings.last?.speech == .batch)
+    }
 }
 import VoxRefine

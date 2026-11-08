@@ -71,7 +71,7 @@ enum StageModelRouting {
     }
 }
 
-private final class StageSpeechSessionFactory: SpeechSessionFactory, @unchecked Sendable {
+internal final class StageSpeechSessionFactory: SpeechSessionFactory, @unchecked Sendable {
     let environment: [String: String]
     let preferences: any PreferencesStore
     let sdk: SDKHostConfiguration
