@@ -53,6 +53,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickRecordSaveSession: (@MainActor @Sendable (String, String) async throws -> Void)?
     private let quickRecordTrack: (@MainActor @Sendable (String, [String: String]) -> Void)?
     var quickRecordEnsurePermissions: (@MainActor @Sendable (CaptureMode) async -> Bool)?
+    var quickRecordHasMicPermission: (@MainActor @Sendable () -> Bool)?
+    var quickRecordRequestMicPermission: (@MainActor @Sendable () async -> Bool)?
+    var quickRecordHasSpeechPermission: (@MainActor @Sendable () -> Bool)?
+    var quickRecordRequestSpeechPermission: (@MainActor @Sendable () async -> Bool)?
     var quickRecordRecognitionTimeout = QuickRecordingReleaseLifecycle.recognitionTimeout
     private(set) var activeQuickCaptureMode: CaptureMode = .text
     private var quickRecordingSession: QuickRecordingSession?
@@ -316,18 +320,31 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if let quickRecordEnsurePermissions {
             return await quickRecordEnsurePermissions(mode)
         }
+        let hasCustomPermissionHooks = quickRecordHasMicPermission != nil
+            || quickRecordRequestMicPermission != nil
+            || quickRecordHasSpeechPermission != nil
+            || quickRecordRequestSpeechPermission != nil
         #if DEBUG
-        if quickRecordTryStart != nil { return true }
+        if !hasCustomPermissionHooks, quickRecordTryStart != nil { return true }
         #endif
-        let hasMic = serviceContainer.quickTranscriber.audioCaptureService.hasPermission
-        let hasSpeech = (serviceContainer.quickTranscriber as? CombineTranscriptionCoordinator)?.core.hasSpeechPermission ?? true
+        let hasMic = quickRecordHasMicPermission?() ?? serviceContainer.quickTranscriber.audioCaptureService.hasPermission
+        let hasSpeech = quickRecordHasSpeechPermission?()
+            ?? ((serviceContainer.quickTranscriber as? CombineTranscriptionCoordinator)?.core.hasSpeechPermission ?? true)
         guard !hasMic || !hasSpeech else { return true }
 
         if !hasMic {
-            _ = await serviceContainer.quickTranscriber.audioCaptureService.requestPermission()
+            if let quickRecordRequestMicPermission {
+                _ = await quickRecordRequestMicPermission()
+            } else {
+                _ = await serviceContainer.quickTranscriber.audioCaptureService.requestPermission()
+            }
         }
         if !hasSpeech {
-            _ = await serviceContainer.quickTranscriber.speechRecognitionService.requestPermission()
+            if let quickRecordRequestSpeechPermission {
+                _ = await quickRecordRequestSpeechPermission()
+            } else {
+                _ = await serviceContainer.quickTranscriber.speechRecognitionService.requestPermission()
+            }
         }
         return false
     }

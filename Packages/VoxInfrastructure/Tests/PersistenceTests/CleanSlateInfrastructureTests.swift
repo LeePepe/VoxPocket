@@ -105,6 +105,11 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         service.unregister(HotkeyIdentifier.voiceToTodo)
         XCTAssertNil(service.getRegistered(HotkeyIdentifier.directToText))
         XCTAssertNil(service.getRegistered(HotkeyIdentifier.voiceToTodo))
+
+        let clipboard = MacOSClipboardService.shared
+        clipboard.copy("synthetic-clipboard-test")
+        XCTAssertEqual(clipboard.paste(), "synthetic-clipboard-test")
+        try await clipboard.simulatePaste()
     }
     #endif
 }
