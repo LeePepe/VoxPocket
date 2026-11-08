@@ -47,11 +47,21 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
     public func simulatePaste() async throws {
         logger.debug("Simulating paste keyboard shortcut")
 
-        if AXIsProcessTrusted(),
-           let text = paste(),
-           (try? await MacOSAccessibilityService.shared.replaceSelectedTextInFocusedElement(text)) != nil {
-            logger.debug("Paste simulation complete")
-            return
+        let env = ProcessInfo.processInfo.environment
+        let isRunningTests = env["XCTestConfigurationFilePath"] != nil || env["XCTestSessionIdentifier"] != nil
+        if !isRunningTests && !AXIsProcessTrusted() {
+            let promptKey = "AXTrustedCheckOptionPrompt" as CFString
+            let options = [promptKey: kCFBooleanTrue!] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+        }
+
+        // 若用户刚松开 Space 但手指尚未完全离开 Option/Shift/Control，短暂等待物理修饰键释放，避免合成出 Cmd+Option+V
+        let conflictingModifiers: CGEventFlags = [.maskAlternate, .maskShift, .maskControl]
+        for _ in 0..<20 {
+            if CGEventSource.flagsState(.hidSystemState).intersection(conflictingModifiers).isEmpty {
+                break
+            }
+            usleep(10_000)
         }
 
         // 使用 .privateState 隔离物理按键状态（避免刚松开 ⌥Space 时的 Option 修饰位混入 Cmd+V）
@@ -82,6 +92,7 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
         guard let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: false) else {
             throw ClipboardError.eventCreationFailed
         }
+        cmdUp.flags = []
 
         // 同步发送全部事件——HID 事件队列按顺序处理，无需延迟。
         // 不可在此使用 Task.sleep：若外层 Task 被取消（如窗口关闭），
