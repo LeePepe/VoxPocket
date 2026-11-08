@@ -30,17 +30,16 @@ struct VoxPocketTests {
         #expect(todo?.keyCode == UInt16(kVK_Space))
         #expect(todo?.modifiers == UInt(optionKey | shiftKey))
 
-        fixture.hotkeys.trigger(HotkeyIdentifier.voiceToTodo)
+        await fixture.hotkeys.press(HotkeyIdentifier.voiceToTodo)
         try await waitForDismissBoundary { fixture.visible && fixture.recording.startCallCount == 1 }
         #expect(fixture.delegate?.activeQuickCaptureMode == .todo)
 
-        fixture.hotkeys.trigger(HotkeyIdentifier.voiceToTodo)
+        await fixture.hotkeys.release(HotkeyIdentifier.voiceToTodo)
         try await waitForDismissBoundary { fixture.refinement.isWaiting }
 
-        // Triggering directToText while the previous .todo session is still completing
+        // Pressing directToText while the previous .todo session is still completing
         // must not overwrite the in-flight session's .todo capture mode.
-        fixture.hotkeys.trigger(HotkeyIdentifier.directToText)
-        try await Task.sleep(for: .milliseconds(30))
+        await fixture.hotkeys.press(HotkeyIdentifier.directToText)
         #expect(fixture.delegate?.activeQuickCaptureMode == .todo)
         #expect(fixture.delegate != nil)
 

@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import AppKit
+import ApplicationServices
 import Carbon
 import LokiKit
 
@@ -46,8 +47,17 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
     public func simulatePaste() async throws {
         logger.debug("Simulating paste keyboard shortcut")
 
-        // 创建 Cmd+V 按键事件序列
-        let source = CGEventSource(stateID: .hidSystemState)
+        if !AXIsProcessTrusted() {
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+        } else if let text = paste(),
+                  (try? await MacOSAccessibilityService.shared.replaceSelectedTextInFocusedElement(text)) != nil {
+            logger.debug("Paste simulation complete")
+            return
+        }
+
+        // 使用 .privateState 隔离物理按键状态（避免刚松开 ⌥Space 时的 Option 修饰位混入 Cmd+V）
+        let source = CGEventSource(stateID: .privateState)
 
         // V 键的虚拟键码
         let vKeyCode: CGKeyCode = 9

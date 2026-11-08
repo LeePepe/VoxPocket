@@ -49,4 +49,38 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(disabledResult.exitCode, -1)
         XCTAssertTrue(disabledResult.outputSummary.contains("disabled by the sandbox privacy boundary"))
     }
+
+    #if os(macOS)
+    @MainActor
+    func testMacOSGlobalHotkeyServiceRegistersAndUnregistersCarbonLongPressHotkeys() async throws {
+        let service = MacOSGlobalHotkeyService.shared
+        let direct = HotkeyDefinition(keyCode: 49, modifiers: 2048, identifier: HotkeyIdentifier.directToText)
+        let todo = HotkeyDefinition(keyCode: 49, modifiers: 2560, identifier: HotkeyIdentifier.voiceToTodo)
+        var events: [String] = []
+        service.registerLongPress(direct, onPress: {
+            await MainActor.run { events.append("press") }
+        }, onRelease: {
+            await MainActor.run { events.append("release") }
+        })
+        service.registerLongPress(todo, onPress: {}, onRelease: {})
+        XCTAssertEqual(service.getRegistered(HotkeyIdentifier.directToText), direct)
+        XCTAssertEqual(service.getRegistered(HotkeyIdentifier.voiceToTodo), todo)
+
+        let id = try XCTUnwrap(service.registeredHotkeyID(for: HotkeyIdentifier.directToText))
+        service.handleHotkeyTriggered(id: id)
+        service.handleHotkeyTriggered(id: id)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(events, ["press"])
+
+        service.handleHotkeyReleased(id: id)
+        service.handleHotkeyReleased(id: id)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(events, ["press", "release"])
+
+        service.unregister(HotkeyIdentifier.directToText)
+        service.unregister(HotkeyIdentifier.voiceToTodo)
+        XCTAssertNil(service.getRegistered(HotkeyIdentifier.directToText))
+        XCTAssertNil(service.getRegistered(HotkeyIdentifier.voiceToTodo))
+    }
+    #endif
 }

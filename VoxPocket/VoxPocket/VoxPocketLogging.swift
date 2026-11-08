@@ -72,6 +72,7 @@ enum VoxPocketLogging {
         "Showing existing window", "Created and showing window", "Hiding window", "Closed window",
         "Registered show panel hotkey", "Failed to register show panel hotkey",
         "Registered quick record hotkey", "Show panel hotkey triggered",
+        "Long-press hotkey down", "Long-press hotkey up",
         "Quick record start triggered", "Quick record stop triggered",
         "Recording source mismatch on quick record stop", "Received live transcription update",
         "Prepared text for refinement", "Refinement completed", "Refinement stream completed",

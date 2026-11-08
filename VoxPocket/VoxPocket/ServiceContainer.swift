@@ -228,7 +228,12 @@ public final class ServiceContainer: ObservableObject {
                 mode: mode, rawTranscript: rawText, refinedText: refinedText,
                 localAudioFileName: nil, durationSeconds: 0, deviceSource: captureDeviceSource
             )
-            await MainActor.run { self?.reloadWorkspaceViewModel() }
+            await MainActor.run {
+                self?.reloadWorkspaceViewModel()
+                if mode == .todo {
+                    NotificationCenter.default.post(name: Notification.Name("vox.openFullPanel"), object: nil)
+                }
+            }
         }
         logger.debug("Initialized")
     }

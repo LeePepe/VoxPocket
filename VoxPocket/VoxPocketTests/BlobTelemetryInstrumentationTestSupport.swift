@@ -279,6 +279,11 @@ final class QuickRecordClipboardService: ClipboardService, Sendable {
 @MainActor
 final class TestGlobalHotkeyService: GlobalHotkeyService {
     private var registered: [String: (HotkeyDefinition, @Sendable () -> Void)] = [:]
+    private var longPressRegistered: [String: (
+        HotkeyDefinition,
+        @concurrent @Sendable () async -> Void,
+        @concurrent @Sendable () async -> Void
+    )] = [:]
     private var pressHandler: (@concurrent @Sendable () async -> Void)?
     private var releaseHandler: (@concurrent @Sendable () async -> Void)?
 
@@ -290,9 +295,11 @@ final class TestGlobalHotkeyService: GlobalHotkeyService {
     }
     func unregister(_ identifier: String) {
         registered.removeValue(forKey: identifier)
+        longPressRegistered.removeValue(forKey: identifier)
     }
     func unregisterAll() {
         registered.removeAll()
+        longPressRegistered.removeAll()
     }
     func update(_ identifier: String, to newHotkey: HotkeyDefinition) throws {
         if let existing = registered[identifier] {
@@ -300,7 +307,7 @@ final class TestGlobalHotkeyService: GlobalHotkeyService {
         }
     }
     func getRegistered(_ identifier: String) -> HotkeyDefinition? {
-        registered[identifier]?.0
+        registered[identifier]?.0 ?? longPressRegistered[identifier]?.0
     }
     func isAvailable(_ hotkey: HotkeyDefinition) -> Bool { true }
     func registerLongPress(
@@ -308,20 +315,31 @@ final class TestGlobalHotkeyService: GlobalHotkeyService {
         onPress: @escaping @concurrent @Sendable () async -> Void,
         onRelease: @escaping @concurrent @Sendable () async -> Void
     ) {
-        pressHandler = onPress
-        releaseHandler = onRelease
+        longPressRegistered[hotkey.identifier] = (hotkey, onPress, onRelease)
+        if hotkey.identifier == HotkeyIdentifier.toggleRecording {
+            pressHandler = onPress
+            releaseHandler = onRelease
+        }
     }
 
     func trigger(_ identifier: String) {
         registered[identifier]?.1()
     }
 
-    func press() async {
-        await pressHandler?()
+    func press(_ identifier: String = HotkeyIdentifier.toggleRecording) async {
+        if let entry = longPressRegistered[identifier] {
+            await entry.1()
+        } else {
+            await pressHandler?()
+        }
     }
 
-    func release() async {
-        await releaseHandler?()
+    func release(_ identifier: String = HotkeyIdentifier.toggleRecording) async {
+        if let entry = longPressRegistered[identifier] {
+            await entry.2()
+        } else {
+            await releaseHandler?()
+        }
     }
 }
 

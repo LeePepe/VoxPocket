@@ -38,7 +38,9 @@ private struct MacOSMenuBarContent: View {
     }
 
     var body: some View {
-        VoxMenuBarContent(configurationStatus: configurationStatus, onOpenSettings: {
+        VoxMenuBarContent(configurationStatus: configurationStatus, onOpenMainWindow: {
+            NotificationCenter.default.post(name: Notification.Name("vox.openFullPanel"), object: nil)
+        }, onOpenSettings: {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
         }, onQuit: {
