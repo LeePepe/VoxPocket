@@ -17,6 +17,7 @@ import UIShared
 import UseCases
 import Preferences
 import LokiKit
+import VoxCore
 import VoxSpeech
 
 /// macOS 应用代理
@@ -51,6 +52,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickRecordDismissWindow: (@MainActor @Sendable () -> Bool)?
     private let quickRecordSaveSession: (@MainActor @Sendable (String, String) async throws -> Void)?
     private let quickRecordTrack: (@MainActor @Sendable (String, [String: String]) -> Void)?
+    var quickRecordEnsurePermissions: (@MainActor @Sendable (CaptureMode) async -> Bool)?
     var quickRecordRecognitionTimeout = QuickRecordingReleaseLifecycle.recognitionTimeout
     private(set) var activeQuickCaptureMode: CaptureMode = .text
     private var quickRecordingSession: QuickRecordingSession?
@@ -302,11 +304,42 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleLongPressQuickRecordStart(mode: CaptureMode = .text) async {
+        guard await ensureQuickRecordingPermissions(mode: mode) else { return }
         if quickRecordingSession == nil {
             activeQuickCaptureMode = mode
             serviceContainer.activeSessionCaptureMode = mode
         }
         await handleQuickRecordStart()
+    }
+
+    private func ensureQuickRecordingPermissions(mode: CaptureMode) async -> Bool {
+        if let quickRecordEnsurePermissions {
+            return await quickRecordEnsurePermissions(mode)
+        }
+        #if DEBUG
+        if quickRecordTryStart != nil { return true }
+        #endif
+        let hasMic = serviceContainer.quickTranscriber.audioCaptureService.hasPermission
+        let hasSpeech = (serviceContainer.quickTranscriber as? CombineTranscriptionCoordinator)?.core.hasSpeechPermission ?? true
+        let hasAccessibility = (mode != .text) || serviceContainer.accessibilityService.checkPermission()
+        guard !hasMic || !hasSpeech || !hasAccessibility else { return true }
+
+        if !hasMic {
+            let granted = await serviceContainer.quickTranscriber.audioCaptureService.requestPermission()
+            if !granted, let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        if !hasSpeech {
+            let granted = await serviceContainer.quickTranscriber.speechRecognitionService.requestPermission()
+            if !granted, let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        if !hasAccessibility {
+            _ = await serviceContainer.accessibilityService.requestPermission()
+        }
+        return false
     }
 
     private func registerDirectToTextHotkey(_ hotkey: HotkeyDefinition) {
