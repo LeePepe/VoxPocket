@@ -105,10 +105,10 @@ emits but does not require. `iOS simulator` and `kimi-review` run on every PR an
 - No Microsoft/Azure resource identifiers, real endpoints, tenant IDs or other
   project-specific non-public values in Git (code, tests, fixtures, docs). Use synthetic
   `example-*` values; real values stay in gitignored local files with a committed template.
-- Delivery is TestFlight only: `.github/workflows/testflight.yml` checks `main` every 12 hours
-  (01:17/13:17 Asia/Shanghai) for new macOS commits; `workflow_dispatch` remains the manual/force fallback.
-  This supersedes per-push delivery. Agents do not create local archives, install, replace or launch
-  delivery builds, or sign in to App Store Connect. Upload success is not "testable"; the Owner verifies.
+- Delivery: `.github/workflows/local-install.yml` installs `main` to `/Applications/VoxPocket.app`
+  on the local runner upon merge; `.github/workflows/testflight.yml` checks `main` every 12 hours
+  (01:17/13:17 Asia/Shanghai) for new macOS commits (`workflow_dispatch` fallback). Agents do not
+  manually upload or sign in to App Store Connect; the Owner verifies TestFlight uploads.
 - Platforms: macOS is released via TestFlight. iOS is enabled for development with CI
   build/test; iOS TestFlight releases require separate Owner authorization.
 - `VoxPocket/project.yml` (XcodeGen) is the source of truth for the Xcode project.
