@@ -50,6 +50,10 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
         if !AXIsProcessTrusted() {
             let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
+        } else if let text = paste(),
+                  (try? await MacOSAccessibilityService.shared.replaceSelectedTextInFocusedElement(text)) != nil {
+            logger.debug("Paste simulation complete")
+            return
         }
 
         // 使用 .privateState 隔离物理按键状态（避免刚松开 ⌥Space 时的 Option 修饰位混入 Cmd+V）

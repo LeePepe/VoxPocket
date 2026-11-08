@@ -161,7 +161,11 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
 
     // MARK: - 事件处理
 
-    private func handleHotkeyTriggered(id: UInt32) {
+    internal func registeredHotkeyID(for identifier: String) -> UInt32? {
+        hotkeyIdToIdentifier.first(where: { $0.value == identifier })?.key
+    }
+
+    internal func handleHotkeyTriggered(id: UInt32) {
         guard let identifier = hotkeyIdToIdentifier[id] else {
             return
         }
@@ -186,7 +190,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         }
     }
 
-    private func handleHotkeyReleased(id: UInt32) {
+    internal func handleHotkeyReleased(id: UInt32) {
         guard let identifier = hotkeyIdToIdentifier[id],
               var info = longPressHotkeys[identifier],
               info.isPressed else {
@@ -456,8 +460,9 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                 0,
                 &hotkeyRef
             )
-            if status == noErr, hotkeyRef != nil {
-                hotkeyIdToIdentifier[hotkeyId] = hotkey.identifier
+            hotkeyIdToIdentifier[hotkeyId] = hotkey.identifier
+            if status != noErr {
+                hotkeyRef = nil
             }
         }
 
