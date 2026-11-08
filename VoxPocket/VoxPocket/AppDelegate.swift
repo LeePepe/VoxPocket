@@ -302,7 +302,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleLongPressQuickRecordStart() async {
-        if activeQuickRecordingSource() == nil, quickRecordingSession == nil {
+        if quickRecordingSession == nil {
             activeQuickCaptureMode = .text
             serviceContainer.activeSessionCaptureMode = .text
         }
@@ -326,13 +326,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleToggleQuickRecord(mode: CaptureMode) async {
-        if activeQuickRecordingSource() == .quickRecording {
-            if let session = quickRecordingSession, !session.releaseLifecycle.isReleased {
+        if let session = quickRecordingSession {
+            if !session.releaseLifecycle.isReleased {
                 await handleQuickRecordStop()
             }
             return
         }
-        guard quickRecordingSession == nil else { return }
         activeQuickCaptureMode = mode
         serviceContainer.activeSessionCaptureMode = mode
         await handleQuickRecordStart()

@@ -11,6 +11,7 @@ import AppKit
 import Carbon
 import CoreModels
 import PlatformAdapters
+import UseCases
 @testable import VoxPocket
 #endif
 
@@ -48,6 +49,16 @@ struct VoxPocketTests {
         try await waitForDismissBoundary { fixture.saved.count == 1 }
         #expect(fixture.saved.count == 1)
         #expect(fixture.delegate?.activeQuickCaptureMode == .todo)
+
+        let container = fixture.runtime.makeContainer()
+        container.activeSessionCaptureMode = .todo
+        _ = try await container.sessionUseCase.saveCompletedSession(
+            title: nil, rawText: "Fix hotkey mode", refinedText: "Fix hotkey mode."
+        )
+        let captures = try await container.voiceCaptureAndTodoUseCase.fetchCaptures()
+        let todos = try await container.voiceCaptureAndTodoUseCase.fetchTodos()
+        #expect(captures.contains(where: { $0.rawTranscript == "Fix hotkey mode" && $0.mode == .todo }))
+        #expect(todos.contains(where: { $0.rawTranscript == "Fix hotkey mode" }))
         fixture.remove()
     }
     #else
