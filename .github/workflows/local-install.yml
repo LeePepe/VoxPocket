@@ -1,0 +1,41 @@
+name: local-install
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Packages/**'
+      - 'VoxPocket/**'
+      - 'VoxPocketWidget/**'
+      - 'scripts/dev/**'
+      - '.github/workflows/local-install.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: local-install-main
+  cancel-in-progress: false
+
+jobs:
+  install-fixed-build:
+    name: Install fixed build on local Mac
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && (github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 25
+    steps:
+      - name: Checkout VoxPocket main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          path: repo
+      - name: Checkout AppleUITesting (external local dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: LeePepe/AppleUITesting
+          path: AppleUITesting
+      - name: Install fixed build to /Applications/VoxPocket.app
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          bash ./scripts/dev/install-fixed-build.sh
