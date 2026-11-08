@@ -28,6 +28,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         var isPressed: Bool = false
         var keyDownTime: Date?
         var hasTriggeredPress: Bool = false
+        var pressTask: Task<Void, Never>? = nil
     }
 
     // MARK: - 常量
@@ -185,19 +186,21 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
             let delay = carbonLongPressDuration
             if delay <= 0 {
                 info.hasTriggeredPress = true
+                let onPress = info.onPress
+                let task = Task { @MainActor in
+                    await onPress()
+                }
+                info.pressTask = task
                 longPressHotkeys[identifier] = info
                 logger.log(.debug, "Long-press hotkey down", context: ["identifier": identifier])
                 hotkeySubject.send(identifier)
-                let onPress = info.onPress
-                Task { @MainActor in
-                    await onPress()
-                }
                 return
             }
             info.hasTriggeredPress = false
+            info.pressTask = nil
             longPressHotkeys[identifier] = info
             logger.log(.debug, "Long-press hotkey down", context: ["identifier": identifier])
-            Task { @MainActor [weak self] in
+            let task = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(delay))
                 guard let self,
                       var current = self.longPressHotkeys[identifier],
@@ -211,6 +214,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
                 self.hotkeySubject.send(identifier)
                 await current.onPress()
             }
+            longPressHotkeys[identifier]?.pressTask = task
         }
     }
 
@@ -224,7 +228,9 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         info.isPressed = false
         info.keyDownTime = nil
         let shouldRelease = info.hasTriggeredPress
+        let pressTask = info.pressTask
         info.hasTriggeredPress = false
+        info.pressTask = nil
         longPressHotkeys[identifier] = info
 
         logger.log(.debug, "Long-press hotkey up", context: [
@@ -232,8 +238,10 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
             "should_release": shouldRelease
         ])
         if shouldRelease {
-            Task {
-                await info.onRelease()
+            let onRelease = info.onRelease
+            Task { @MainActor in
+                await pressTask?.value
+                await onRelease()
             }
         }
     }

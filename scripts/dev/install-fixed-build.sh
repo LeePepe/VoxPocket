@@ -66,25 +66,21 @@ cat > "$ENTITLEMENTS_TMP" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
 </dict>
 </plist>
 PLIST
 
-SIGN_IDENTITY="${VOXPOCKET_SIGN_IDENTITY:-}"
-if [ -z "$SIGN_IDENTITY" ]; then
-  SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk '/Apple Development|Apple Distribution|Developer ID Application/ {print $2; exit}')"
-fi
-if [ -z "$SIGN_IDENTITY" ]; then
-  SIGN_IDENTITY="-"
-fi
-
-echo "[install-fixed] signing VoxPocket.app (inside-out with identity $SIGN_IDENTITY + audio/automation entitlements)"
+echo "[install-fixed] signing VoxPocket.app (inside-out ad-hoc with sandbox + audio entitlements)"
 p1_list="$(mktemp)"
 find "$APP_SRC/Contents" -type f \( -perm +111 -o -name "*.dylib" \) \
   ! -path "$APP_SRC/Contents/MacOS/VoxPocket" \
@@ -94,7 +90,7 @@ while IFS= read -r -d '' leaf; do
   filetype="$(/usr/bin/file -b "$leaf")"
   case "$filetype" in
     *Mach-O*)
-      codesign --force --sign "$SIGN_IDENTITY" "$leaf"
+      codesign --force --sign - --entitlements "$ENTITLEMENTS_TMP" "$leaf"
       ;;
   esac
 done < "$p1_list"
@@ -106,26 +102,16 @@ find "$APP_SRC/Contents" -depth -type d \
   -print0 > "$p2_list"
 
 while IFS= read -r -d '' bundle; do
-  codesign --force --sign "$SIGN_IDENTITY" "$bundle"
+  codesign --force --sign - --entitlements "$ENTITLEMENTS_TMP" "$bundle"
 done < "$p2_list"
 rm -f "$p2_list"
 
-codesign --force --sign "$SIGN_IDENTITY" --entitlements "$ENTITLEMENTS_TMP" "$APP_SRC"
+codesign --force --sign - --entitlements "$ENTITLEMENTS_TMP" "$APP_SRC"
 codesign --verify --deep --strict "$APP_SRC"
 
-LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-
 if [ "${VOXPOCKET_BUILD_ONLY:-0}" = "1" ]; then
-  "$LSREGISTER" -u "$APP_SRC" >/dev/null 2>&1 || true
   echo "[install-fixed] VOXPOCKET_BUILD_ONLY=1 set; verified bundle at $APP_SRC"
   exit 0
-fi
-
-if [ -d "$APP_DST" ] && [ "$SIGN_IDENTITY" != "-" ]; then
-  if codesign -dvvv "$APP_DST" 2>&1 | grep -q "Signature=adhoc"; then
-    echo "[install-fixed] resetting stale ad-hoc Accessibility TCC entry for $BUNDLE_ID"
-    tccutil reset Accessibility "$BUNDLE_ID" >/dev/null 2>&1 || true
-  fi
 fi
 
 echo "[install-fixed] stopping existing $BUNDLE_ID instance (if running)"
@@ -143,10 +129,8 @@ echo "[install-fixed] installing to $APP_DST"
 STAGE_DST="${APP_DST}.staging.$$"
 rm -rf "$STAGE_DST"
 ditto "$APP_SRC" "$STAGE_DST"
-"$LSREGISTER" -u "$APP_SRC" >/dev/null 2>&1 || true
 rm -rf "$APP_DST"
 mv "$STAGE_DST" "$APP_DST"
-"$LSREGISTER" -f "$APP_DST" >/dev/null 2>&1 || true
 
 if [ "${VOXPOCKET_NO_RELAUNCH:-0}" != "1" ]; then
   echo "[install-fixed] launching $APP_DST"

@@ -55,14 +55,16 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
             _ = AXIsProcessTrustedWithOptions(options)
         }
 
-        // 若用户刚松开 Space 但手指尚未完全离开 Option/Shift/Control，短暂等待物理修饰键释放，避免合成出 Cmd+Option+V
+        // 若用户刚松开 Space 但手指尚未完全离开 Option/Shift/Control，在发出任何按键前异步等待物理修饰键释放，避免合成出 Cmd+Option+V
         let conflictingModifiers: CGEventFlags = [.maskAlternate, .maskShift, .maskControl]
         for _ in 0..<20 {
+            guard !Task.isCancelled else { return }
             if CGEventSource.flagsState(.hidSystemState).intersection(conflictingModifiers).isEmpty {
                 break
             }
-            usleep(10_000)
+            try? await Task.sleep(for: .milliseconds(10))
         }
+        guard !Task.isCancelled else { return }
 
         // 使用 .privateState 隔离物理按键状态（避免刚松开 ⌥Space 时的 Option 修饰位混入 Cmd+V）
         let source = CGEventSource(stateID: .privateState)
