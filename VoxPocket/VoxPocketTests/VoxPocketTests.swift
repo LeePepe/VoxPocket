@@ -94,6 +94,45 @@ struct VoxPocketTests {
         await fixture.clipboard.gate.release()
         try await waitForDismissBoundary { fixture.saved.count == 1 }
     }
+
+    @MainActor
+    @Test func ensureQuickRecordingPermissionsChecksMicAndSpeechWithoutRequiringAccessibility() async throws {
+        let fixture = ImmediateDismissFixture()
+        await fixture.launch()
+        defer { fixture.remove() }
+
+        var micPrompts = 0
+        var speechPrompts = 0
+        var hasMic = false
+        var hasSpeech = false
+        fixture.delegate?.quickRecordHasMicPermission = { hasMic }
+        fixture.delegate?.quickRecordRequestMicPermission = {
+            micPrompts += 1
+            return false
+        }
+        fixture.delegate?.quickRecordHasSpeechPermission = { hasSpeech }
+        fixture.delegate?.quickRecordRequestSpeechPermission = {
+            speechPrompts += 1
+            return false
+        }
+
+        await fixture.hotkeys.press(HotkeyIdentifier.directToText)
+        #expect(micPrompts == 1)
+        #expect(speechPrompts == 1)
+        #expect(fixture.visible == false)
+        #expect(fixture.recording.startCallCount == 0)
+
+        hasMic = true
+        hasSpeech = true
+        await fixture.hotkeys.press(HotkeyIdentifier.directToText)
+        try await waitForDismissBoundary { fixture.visible && fixture.recording.startCallCount == 1 }
+        #expect(fixture.visible == true)
+        await fixture.hotkeys.release(HotkeyIdentifier.directToText)
+        try await waitForDismissBoundary { fixture.refinement.isWaiting }
+        fixture.refinement.finish()
+        await fixture.clipboard.gate.release()
+        try await waitForDismissBoundary { fixture.saved.count == 1 }
+    }
     #else
     @Test func example() async throws {
         #expect(true)

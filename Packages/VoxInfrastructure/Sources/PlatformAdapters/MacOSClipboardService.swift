@@ -47,11 +47,9 @@ public final class MacOSClipboardService: ClipboardService, @unchecked Sendable 
     public func simulatePaste() async throws {
         logger.debug("Simulating paste keyboard shortcut")
 
-        if !AXIsProcessTrusted() {
-            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(options)
-        } else if let text = paste(),
-                  (try? await MacOSAccessibilityService.shared.replaceSelectedTextInFocusedElement(text)) != nil {
+        if AXIsProcessTrusted(),
+           let text = paste(),
+           (try? await MacOSAccessibilityService.shared.replaceSelectedTextInFocusedElement(text)) != nil {
             logger.debug("Paste simulation complete")
             return
         }
