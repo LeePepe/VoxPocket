@@ -77,14 +77,28 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(events, [])
 
         // Holding past carbonLongPressDuration triggers onPress once and onRelease on release
-        service.handleHotkeyTriggered(id: id)
-        service.handleHotkeyTriggered(id: id)
-        try await Task.sleep(for: .milliseconds(60))
+        let pressExp = expectation(description: "press")
+        let releaseExp = expectation(description: "release")
+        service.registerLongPress(direct, onPress: {
+            await MainActor.run {
+                events.append("press")
+                pressExp.fulfill()
+            }
+        }, onRelease: {
+            await MainActor.run {
+                events.append("release")
+                releaseExp.fulfill()
+            }
+        })
+        let refreshedId = try XCTUnwrap(service.registeredHotkeyID(for: HotkeyIdentifier.directToText))
+        service.handleHotkeyTriggered(id: refreshedId)
+        service.handleHotkeyTriggered(id: refreshedId)
+        await fulfillment(of: [pressExp], timeout: 2.0)
         XCTAssertEqual(events, ["press"])
 
-        service.handleHotkeyReleased(id: id)
-        service.handleHotkeyReleased(id: id)
-        try await Task.sleep(for: .milliseconds(30))
+        service.handleHotkeyReleased(id: refreshedId)
+        service.handleHotkeyReleased(id: refreshedId)
+        await fulfillment(of: [releaseExp], timeout: 2.0)
         XCTAssertEqual(events, ["press", "release"])
 
         service.unregister(HotkeyIdentifier.directToText)
