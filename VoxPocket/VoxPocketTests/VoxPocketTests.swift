@@ -60,6 +60,40 @@ struct VoxPocketTests {
         #expect(todos.contains(where: { $0.rawTranscript == "Fix hotkey mode" }))
         fixture.remove()
     }
+
+    @MainActor
+    @Test func missingPermissionOnFirstPressPromptsWithoutShowingQuickRecordingPanel() async throws {
+        let fixture = ImmediateDismissFixture()
+        await fixture.launch()
+        defer { fixture.remove() }
+
+        var permissionPrompts = 0
+        var isAuthorized = false
+        fixture.delegate?.quickRecordEnsurePermissions = { _ in
+            if !isAuthorized {
+                permissionPrompts += 1
+                return false
+            }
+            return true
+        }
+
+        // First press without permission requests permission and does not show the panel
+        await fixture.hotkeys.press(HotkeyIdentifier.directToText)
+        #expect(permissionPrompts == 1)
+        #expect(fixture.visible == false)
+        #expect(fixture.recording.startCallCount == 0)
+
+        // Subsequent press after permission is granted shows the panel and starts recording
+        isAuthorized = true
+        await fixture.hotkeys.press(HotkeyIdentifier.directToText)
+        try await waitForDismissBoundary { fixture.visible && fixture.recording.startCallCount == 1 }
+        #expect(fixture.visible == true)
+        await fixture.hotkeys.release(HotkeyIdentifier.directToText)
+        try await waitForDismissBoundary { fixture.refinement.isWaiting }
+        fixture.refinement.finish()
+        await fixture.clipboard.gate.release()
+        try await waitForDismissBoundary { fixture.saved.count == 1 }
+    }
     #else
     @Test func example() async throws {
         #expect(true)

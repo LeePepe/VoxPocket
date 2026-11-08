@@ -34,6 +34,7 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
 
     /// 长按检测阈值（秒）
     private static let longPressDuration: TimeInterval = 0.5
+    internal var carbonLongPressDuration: TimeInterval = 0.12
 
     // MARK: - 属性
 
@@ -178,14 +179,28 @@ public final class MacOSGlobalHotkeyService: GlobalHotkeyService {
         }
 
         if var info = longPressHotkeys[identifier], !info.isPressed {
+            let pressTime = Date()
             info.isPressed = true
-            info.keyDownTime = Date()
-            info.hasTriggeredPress = true
+            info.keyDownTime = pressTime
+            info.hasTriggeredPress = false
             longPressHotkeys[identifier] = info
             logger.log(.debug, "Long-press hotkey down", context: ["identifier": identifier])
-            hotkeySubject.send(identifier)
-            Task {
-                await info.onPress()
+            let delay = carbonLongPressDuration
+            Task { @MainActor [weak self] in
+                if delay > 0 {
+                    try? await Task.sleep(for: .seconds(delay))
+                }
+                guard let self,
+                      var current = self.longPressHotkeys[identifier],
+                      current.isPressed,
+                      current.keyDownTime == pressTime,
+                      !current.hasTriggeredPress else {
+                    return
+                }
+                current.hasTriggeredPress = true
+                self.longPressHotkeys[identifier] = current
+                self.hotkeySubject.send(identifier)
+                await current.onPress()
             }
         }
     }

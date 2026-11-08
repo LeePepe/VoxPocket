@@ -86,10 +86,14 @@ public final class QuickRecordingViewModel: ObservableObject {
         }
     }
 
-    /// 录音时展示原文；润色中展示实际返回的更新，空结果不清空原文。
+    /// 录音时展示原文；润色中展示实际返回的更新，空结果不清空原文；错误且无原文时展示错误消息。
     public var displayedTranscription: String {
         switch recorderStatus {
         case .idle: return ""
+        case .error:
+            return liveTranscription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? (errorMessage ?? "")
+                : liveTranscription
         case .refining, .done:
             return refinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? liveTranscription : refinedText
         default: return liveTranscription
