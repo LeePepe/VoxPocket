@@ -9,8 +9,6 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>LSMultipleInstancesProhibited</key>
-	<true/>
 	<key>LokiKitBlobEndpoint</key>
 	<string>$(TELEMETRY_BLOB_ENDPOINT)</string>
 	<key>LokiKitBlobSAS</key>

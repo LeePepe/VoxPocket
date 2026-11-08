@@ -303,6 +303,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleLongPressQuickRecordStart() async {
         activeQuickCaptureMode = .text
+        serviceContainer.workspaceViewModel.selectedCaptureMode = .text
         await handleQuickRecordStart()
     }
 
@@ -327,13 +328,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
            let session = quickRecordingSession,
            !session.releaseLifecycle.isReleased {
             await handleQuickRecordStop()
-            if let text = serviceContainer.clipboardService.paste(), !text.isEmpty {
-                _ = try? await serviceContainer.voiceCaptureAndTodoUseCase.recordCompletedCapture(
-                    mode: activeQuickCaptureMode, rawTranscript: text, refinedText: text,
-                    localAudioFileName: nil, durationSeconds: 0, deviceSource: .mac
-                )
-                serviceContainer.reloadWorkspaceViewModel()
-            }
         } else {
             activeQuickCaptureMode = mode
             serviceContainer.workspaceViewModel.selectedCaptureMode = mode
