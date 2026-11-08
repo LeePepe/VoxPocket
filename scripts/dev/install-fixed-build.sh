@@ -14,9 +14,19 @@ TMP_DD="$(mktemp -d "${TMPDIR:-/tmp}/voxpocket-fixed-build.XXXXXX")"
 ENTITLEMENTS_TMP="$(mktemp "${TMPDIR:-/tmp}/voxpocket-fixed-entitlements.XXXXXX.plist")"
 PRODUCTS="$TMP_DD/Build/Products/Release"
 
+PBXPROJ_PATH="$REPO_ROOT/VoxPocket/VoxPocket.xcodeproj/project.pbxproj"
+PBXPROJ_BACKUP="$(mktemp "${TMPDIR:-/tmp}/voxpocket-pbxproj-backup.XXXXXX")"
+HAD_PBXPROJ=0
+if [ -f "$PBXPROJ_PATH" ]; then
+  HAD_PBXPROJ=1
+  cp -p "$PBXPROJ_PATH" "$PBXPROJ_BACKUP"
+fi
+
 cleanup() {
-  rm -rf "$TMP_DD" "$ENTITLEMENTS_TMP"
-  git -C "$REPO_ROOT" checkout -- VoxPocket/VoxPocket.xcodeproj/project.pbxproj >/dev/null 2>&1 || true
+  if [ "$HAD_PBXPROJ" -eq 1 ] && [ -f "$PBXPROJ_BACKUP" ]; then
+    cp -p "$PBXPROJ_BACKUP" "$PBXPROJ_PATH" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$TMP_DD" "$ENTITLEMENTS_TMP" "$PBXPROJ_BACKUP"
 }
 trap cleanup EXIT
 

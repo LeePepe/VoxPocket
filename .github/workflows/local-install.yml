@@ -39,10 +39,3 @@ jobs:
           set -euo pipefail
           export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
           bash ./scripts/dev/install-fixed-build.sh
-      - name: Fast-forward local ~/Development/VoxPocket checkout (best-effort)
-        run: |
-          set -euo pipefail
-          LOCAL_REPO="$HOME/Development/VoxPocket"
-          if [ -d "$LOCAL_REPO/.git" ] && [ -z "$(git -C "$LOCAL_REPO" status --porcelain)" ] && [ "$(git -C "$LOCAL_REPO" branch --show-current)" = "main" ]; then
-            git -C "$LOCAL_REPO" pull --ff-only origin main || true
-          fi
