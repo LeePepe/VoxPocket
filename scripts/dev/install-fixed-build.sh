@@ -44,6 +44,7 @@ xcodebuild \
   -configuration Release \
   -destination 'generic/platform=macOS' \
   -derivedDataPath "$TMP_DD" \
+  OBJROOT="$TMP_DD/Build/Intermediates.noindex" \
   SYMROOT="$TMP_DD/Build/Products" \
   CONFIGURATION_BUILD_DIR="$PRODUCTS" \
   CODE_SIGN_IDENTITY=- \

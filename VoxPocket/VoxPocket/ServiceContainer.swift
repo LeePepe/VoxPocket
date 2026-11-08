@@ -560,6 +560,10 @@ public final class ServiceContainer: ObservableObject {
         return root
     }
 
+    public func reloadWorkspaceViewModel() {
+        workspaceViewModel = makeWorkspaceViewModel()
+    }
+
     public func makeWorkspaceViewModel() -> VoxWorkspaceViewModel {
         VoxWorkspaceViewModel(
             useCase: voiceCaptureAndTodoUseCase,
