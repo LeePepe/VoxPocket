@@ -67,8 +67,31 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(service.getRegistered(HotkeyIdentifier.voiceToTodo), todo)
 
         let id = try XCTUnwrap(service.registeredHotkeyID(for: HotkeyIdentifier.directToText))
+        XCTAssertEqual(service.carbonLongPressDuration, 0)
+
+        // Default zero-delay path triggers onPress immediately and orders onRelease after onPress
+        let immediatePressExp = expectation(description: "immediatePress")
+        let immediateReleaseExp = expectation(description: "immediateRelease")
+        service.registerLongPress(direct, onPress: {
+            await MainActor.run {
+                events.append("immediate-press")
+                immediatePressExp.fulfill()
+            }
+        }, onRelease: {
+            await MainActor.run {
+                events.append("immediate-release")
+                immediateReleaseExp.fulfill()
+            }
+        })
+        let immediateId = try XCTUnwrap(service.registeredHotkeyID(for: HotkeyIdentifier.directToText))
+        service.handleHotkeyTriggered(id: immediateId)
+        service.handleHotkeyReleased(id: immediateId)
+        await fulfillment(of: [immediatePressExp, immediateReleaseExp], timeout: 2.0)
+        XCTAssertEqual(events, ["immediate-press", "immediate-release"])
+        events.removeAll()
+
         service.carbonLongPressDuration = 0.04
-        defer { service.carbonLongPressDuration = 0.12 }
+        defer { service.carbonLongPressDuration = 0 }
 
         // Quick tap-release shorter than carbonLongPressDuration must not trigger onPress
         service.handleHotkeyTriggered(id: id)
