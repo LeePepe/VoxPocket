@@ -406,6 +406,10 @@ final class QuickRecordingViewModelTests: XCTestCase {
         XCTAssertEqual(clipboard.copiedText, "已识别原文")
         viewModel.recorderStatus = .idle
         XCTAssertTrue(viewModel.displayedTranscription.isEmpty)
+        viewModel.errorMessage = "语音识别失败，请重试。"
+        viewModel.liveTranscription = ""
+        viewModel.recorderStatus = .error
+        XCTAssertEqual(viewModel.displayedTranscription, "语音识别失败，请重试。")
     }
 
     func testCancelFromPanelStopsAndRequestsDismissalOnce() async {

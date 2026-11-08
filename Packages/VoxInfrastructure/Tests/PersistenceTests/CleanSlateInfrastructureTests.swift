@@ -67,9 +67,19 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(service.getRegistered(HotkeyIdentifier.voiceToTodo), todo)
 
         let id = try XCTUnwrap(service.registeredHotkeyID(for: HotkeyIdentifier.directToText))
+        service.carbonLongPressDuration = 0.04
+        defer { service.carbonLongPressDuration = 0.12 }
+
+        // Quick tap-release shorter than carbonLongPressDuration must not trigger onPress
+        service.handleHotkeyTriggered(id: id)
+        service.handleHotkeyReleased(id: id)
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(events, [])
+
+        // Holding past carbonLongPressDuration triggers onPress once and onRelease on release
         service.handleHotkeyTriggered(id: id)
         service.handleHotkeyTriggered(id: id)
-        try await Task.sleep(for: .milliseconds(30))
+        try await Task.sleep(for: .milliseconds(60))
         XCTAssertEqual(events, ["press"])
 
         service.handleHotkeyReleased(id: id)

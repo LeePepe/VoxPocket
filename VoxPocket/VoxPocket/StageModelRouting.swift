@@ -71,17 +71,48 @@ enum StageModelRouting {
     }
 }
 
-private struct StageSpeechSessionFactory: SpeechSessionFactory {
+private final class StageSpeechSessionFactory: SpeechSessionFactory, @unchecked Sendable {
     let environment: [String: String]
     let preferences: any PreferencesStore
     let sdk: SDKHostConfiguration
     let beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)?
+    @MainActor private var cachedSettings: StageModelSettings?
+    @MainActor private var cachedSource: (any SpeechSessionSource)?
+
+    @MainActor
+    init(
+        environment: [String: String],
+        preferences: any PreferencesStore,
+        sdk: SDKHostConfiguration,
+        beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)?
+    ) {
+        self.environment = environment
+        self.preferences = preferences
+        self.sdk = sdk
+        self.beforeSession = beforeSession
+        let initial = LLMAppConfig.initialStageModelSettings
+        self.cachedSettings = initial
+        self.cachedSource = StageModelRouting.prepareSession(
+            settings: initial, environment: environment,
+            beforeSession: nil, sdk: sdk
+        )
+    }
+
     func makeSource() async throws -> any SpeechSessionSource {
         let settings = await StageModelSettings.load(from: preferences)
         return try await MainActor.run {
             try Task.checkCancellation()
-            return StageModelRouting.prepareSession(settings: settings, environment: environment,
-                beforeSession: beforeSession, sdk: sdk)
+            if cachedSettings == settings, let cachedSource {
+                beforeSession?(settings)
+                return cachedSource
+            }
+            let created = StageModelRouting.prepareSession(
+                settings: settings, environment: environment,
+                beforeSession: beforeSession, sdk: sdk
+            )
+            cachedSettings = settings
+            cachedSource = created
+            return created
         }
     }
 }
