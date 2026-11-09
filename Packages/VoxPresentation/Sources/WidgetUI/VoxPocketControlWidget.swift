@@ -12,27 +12,12 @@ public struct VoxPocketControlWidget: ControlWidget {
 
     public var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.tianpli.VoxPocket.Recording") {
-            ControlWidgetButton(action: StartRecordingControlIntent()) {
-                Label("录音", systemImage: "mic.fill")
+            ControlWidgetButton(action: ToggleQuickCaptureIntent()) {
+                Label("快速录音", systemImage: "waveform.and.mic")
             }
         }
         .displayName("VoxPocket 录音")
-        .description("点按开始语音识别")
-    }
-}
-
-/// Control Center 专用 Intent
-///
-/// 与主 app 的 StartRecordingIntent 功能相同，
-/// 但定义在 Widget Extension 中以避免跨 target 依赖。
-@available(iOS 18.0, *)
-struct StartRecordingControlIntent: AppIntent {
-    static var title: LocalizedStringResource { "开始录音" }
-    static var description: IntentDescription { IntentDescription("启动 VoxPocket 并开始语音识别") }
-    static var openAppWhenRun: Bool { true }
-
-    func perform() async throws -> some IntentResult {
-        return .result()
+        .description("无需打开 App，点按后台开启或停止语音录入")
     }
 }
 #endif

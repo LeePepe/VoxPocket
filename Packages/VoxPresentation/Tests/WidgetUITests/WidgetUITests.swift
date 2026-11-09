@@ -7,4 +7,12 @@ final class WidgetUITests: XCTestCase {
         let widget = QuickRecordWidget()
         XCTAssertEqual(widget.kind, "com.tianpli.VoxPocket.QuickRecord")
     }
+
+    #if os(iOS)
+    @MainActor
+    func test_background_audio_recording_intents_do_not_open_app() {
+        XCTAssertFalse(ToggleQuickCaptureIntent.openAppWhenRun)
+        XCTAssertFalse(FinishCaptureIntent.openAppWhenRun)
+    }
+    #endif
 }
