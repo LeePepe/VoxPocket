@@ -86,26 +86,37 @@ platform :ios do
     regenerate_project
     next_build = next_build_number(api_key)
 
-    # 为 app + widget 拉 App Store distribution profile（付费 team）。
-    # provisioning_name 显式指定名字，与 project.yml 的 PROVISIONING_PROFILE_SPECIFIER 一致
-    # （否则 fastlane 自动生成 "<bundleid> AppStore"，与 project.yml 的人起名字对不上 → archive 找不到 profile）。
-    # 需要时自动在 Developer Portal 以该名字创建。
-    app_profile = get_provisioning_profile(
+    # 为 app + widget 拉取当前运行适用的 App Store distribution profile（付费 team）。
+    # 通过 SharedValues::SIGH_NAME 读取真实 profile 名称，并以 VOXPOCKET_IOS_PROFILE_SPECIFIER /
+    # VOXPOCKET_WIDGET_PROFILE_SPECIFIER 传入 archive + export_options，避免硬编码名字失配。
+    get_provisioning_profile(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
       team_id: TEAM_ID,
       platform: "ios",
-      provisioning_name: "VoxPocket App Store",
+      force: true,
       skip_install: false
     )
-    widget_profile = get_provisioning_profile(
+    app_profile_name = lane_context[SharedValues::SIGH_NAME]
+    if app_profile_name.to_s.strip.empty?
+      UI.user_error!("iOS provisioning profile name for #{APP_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
+    end
+
+    get_provisioning_profile(
       api_key: api_key,
       app_identifier: WIDGET_IDENTIFIER,
       team_id: TEAM_ID,
       platform: "ios",
-      provisioning_name: "VoxPocket Widget App Store",
+      force: true,
       skip_install: false
     )
+    widget_profile_name = lane_context[SharedValues::SIGH_NAME]
+    if widget_profile_name.to_s.strip.empty?
+      UI.user_error!("iOS widget provisioning profile name for #{WIDGET_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
+    end
+
+    escaped_app_profile = Shellwords.escape(app_profile_name)
+    escaped_widget_profile = Shellwords.escape(widget_profile_name)
 
     build_app(
       project: XCODEPROJ,
@@ -114,16 +125,14 @@ platform :ios do
       destination: "generic/platform=iOS",
       export_method: "app-store",
       export_team_id: TEAM_ID,
-      # 只注入 build number + team；签名走 project.yml Release config 的 Manual +
-      # 各 target 的 PROVISIONING_PROFILE_SPECIFIER（profile 已由上面拉取安装）。
-      xcargs: "CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID}",
+      xcargs: "-quiet CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID} VOXPOCKET_IOS_PROFILE_SPECIFIER=#{escaped_app_profile} VOXPOCKET_WIDGET_PROFILE_SPECIFIER=#{escaped_widget_profile}",
       export_options: {
         manageAppVersionAndBuildNumber: false,
         signingStyle: "manual",
         teamID: TEAM_ID,
         provisioningProfiles: {
-          APP_IDENTIFIER => ENV.fetch("sigh_#{APP_IDENTIFIER}_appstore_profile-name", app_profile),
-          WIDGET_IDENTIFIER => ENV.fetch("sigh_#{WIDGET_IDENTIFIER}_appstore_profile-name", widget_profile)
+          APP_IDENTIFIER => app_profile_name,
+          WIDGET_IDENTIFIER => widget_profile_name
         }
       },
       output_directory: ENV.fetch("RUNNER_TEMP", "/tmp"),
