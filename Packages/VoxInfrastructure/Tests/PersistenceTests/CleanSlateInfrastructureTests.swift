@@ -170,6 +170,36 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(snapshots[0].executionState, .running)
         XCTAssertEqual(snapshots[1].externalID, "EXAMPLE-91")
         XCTAssertEqual(snapshots[1].executionState, .failed)
+
+        // File-backed concurrency regression test: concurrent update and delete serialize mutation + disk persistence so a deleted todo is never resurrected on reload
+        let persistenceDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir)
+        let targetTodo = VoiceTodo(title: "File-backed target")
+        let survivorTodo = VoiceTodo(title: "Survivor")
+        try await fileRepo.save(targetTodo)
+        try await fileRepo.save(survivorTodo)
+
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<25 {
+                group.addTask {
+                    _ = try? await fileRepo.update(id: targetTodo.id) { current in
+                        current.withEdits(title: "Concurrent edit \(i)")
+                    }
+                    _ = try? await fileRepo.update(id: survivorTodo.id) { current in
+                        current.withEdits(title: "Survivor edit \(i)")
+                    }
+                }
+            }
+            group.addTask {
+                try? await fileRepo.delete(by: targetTodo.id)
+            }
+        }
+        try await fileRepo.delete(by: targetTodo.id)
+        let reloadedRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir)
+        let reloadedTarget = try await reloadedRepo.fetch(by: targetTodo.id)
+        let reloadedSurvivor = try await reloadedRepo.fetch(by: survivorTodo.id)
+        XCTAssertNil(reloadedTarget)
+        XCTAssertNotNil(reloadedSurvivor)
     }
 
     #if os(macOS)
