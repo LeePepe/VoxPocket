@@ -25,6 +25,8 @@ import UIShared
 import LokiKit
 #if os(macOS)
 import PlatformUI
+#elseif os(iOS)
+import UIKit
 #endif
 
 /// 服务容器
@@ -565,17 +567,28 @@ public final class ServiceContainer: ObservableObject {
         let editor = makeEditorViewModel()
         let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
         let root = RootViewModel(sessionListState: sessionList, editorState: editor, deepLinkRouter: deepLinkRouter)
+        root.onStartRecordingInDefaultMode = { [weak self] in
+            self?.workspaceViewModel.startCaptureInPreferredMode()
+        }
         root.onStartRecordingInMode = { [weak self, weak editor] mode in
             self?.workspaceViewModel.selectedCaptureMode = mode
             if mode == .todo {
                 self?.workspaceViewModel.startCapture(mode: .todo)
             } else {
+                #if os(iOS)
+                self?.workspaceViewModel.startCapture(mode: .text)
+                #else
                 await editor?.startRecording()
+                #endif
             }
         }
         root.onStopRecordingInMode = { [weak self, weak editor] mode in
             if mode == .todo || self?.workspaceViewModel.isRecordingActive == true {
+                #if os(iOS)
+                await self?.workspaceViewModel.completeCapture(deviceSource: .iPhone)
+                #else
                 await self?.workspaceViewModel.completeCapture()
+                #endif
             } else {
                 await editor?.stopRecording()
             }
@@ -590,12 +603,26 @@ public final class ServiceContainer: ObservableObject {
     }
 
     public func reloadWorkspaceViewModel() {
-        workspaceViewModel = makeWorkspaceViewModel()
+        Task { await workspaceViewModel.reload() }
     }
 
     public func makeWorkspaceViewModel() -> VoxWorkspaceViewModel {
-        VoxWorkspaceViewModel(
+        #if os(iOS)
+        let defaultMode: CaptureMode = .todo
+        let copyHandler: (@MainActor @Sendable (String) -> Void)? = { text in
+            UIPasteboard.general.string = text
+        }
+        #else
+        let defaultMode: CaptureMode = .text
+        let copyHandler: (@MainActor @Sendable (String) -> Void)? = { text in
+            MacOSClipboardService.shared.copy(text)
+        }
+        #endif
+        return VoxWorkspaceViewModel(
             useCase: voiceCaptureAndTodoUseCase,
+            preferencesStore: preferencesStore,
+            defaultCaptureMode: defaultMode,
+            onCopyTextToClipboard: copyHandler,
             recordingUseCase: recordingUseCase,
             transcriptionUseCase: transcriptionUseCase,
             editingUseCase: editingUseCase,

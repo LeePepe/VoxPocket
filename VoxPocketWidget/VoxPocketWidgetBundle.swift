@@ -10,6 +10,7 @@ struct VoxPocketWidgetBundle: WidgetBundle {
     var body: some Widget {
         QuickRecordWidget()
         #if os(iOS)
+        VoxCaptureLiveActivity()
         if #available(iOSApplicationExtension 18.0, *) {
             VoxPocketControlWidget()
         }

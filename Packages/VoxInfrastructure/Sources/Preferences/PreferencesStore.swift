@@ -18,6 +18,7 @@ public enum PreferencesKey: String, CaseIterable, Sendable {
     case aiRunnerTemplates = "ai.runnerTemplates"
     case menuBarExtraEnabled = "ui.menuBarExtraEnabled"
     case audioRetentionLimit = "audio.retentionLimit"
+    case iosQuickCaptureDestination = "ios.quickCaptureDestination"
 }
 
 public actor ProductTelemetryPreferences {
@@ -103,6 +104,7 @@ public enum PreferencesNotification {
     public static let llmProviderDidChange = Notification.Name("vox.preferences.llmProviderDidChange")
     public static let llmAnalysisSettingsDidChange = Notification.Name("vox.preferences.llmAnalysisSettingsDidChange")
     public static let stageModelsDidChange = Notification.Name("vox.preferences.stageModelsDidChange")
+    public static let iosQuickCaptureDestinationDidChange = Notification.Name("vox.preferences.iosQuickCaptureDestinationDidChange")
 }
 
 public protocol PreferencesStore: AnyObject, Sendable {

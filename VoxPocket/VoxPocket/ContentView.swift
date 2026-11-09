@@ -20,6 +20,7 @@ import UIKit
 
 struct ContentView: View {
     @StateObject private var rootViewModel: RootViewModel<SessionListViewModel, EditorViewModel>
+    @ObservedObject private var workspaceViewModel = ServiceContainer.shared.workspaceViewModel
     @StateObject private var snackbarService = DefaultSnackbarService()
     @StateObject private var localModelLoadingStatus: LocalModelLoadingStatus
 
@@ -44,28 +45,29 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VoxPocketRootView(
-            viewModel: rootViewModel,
-            onCopyRefined: { text in
-                guard !text.isEmpty else { return }
-#if os(macOS)
-                MacOSClipboardService.shared.copy(text)
-#elseif os(iOS)
-                UIPasteboard.general.string = text
+        Group {
+#if os(iOS)
+            IOSCleanSlateWorkspaceView(
+                viewModel: workspaceViewModel,
+                localModelLoadingStatus: localModelLoadingStatus
+            )
+#else
+            VoxPocketRootView(
+                viewModel: rootViewModel,
+                onCopyRefined: { text in
+                    guard !text.isEmpty else { return }
+                    MacOSClipboardService.shared.copy(text)
+                    snackbarService.showSuccess("已复制精炼文本")
+                },
+                onCopyRaw: { text in
+                    guard !text.isEmpty else { return }
+                    MacOSClipboardService.shared.copy(text)
+                    snackbarService.showSuccess("已复制原始转写")
+                },
+                localModelLoadingStatus: localModelLoadingStatus
+            )
 #endif
-                snackbarService.showSuccess("已复制精炼文本")
-            },
-            onCopyRaw: { text in
-                guard !text.isEmpty else { return }
-#if os(macOS)
-                MacOSClipboardService.shared.copy(text)
-#elseif os(iOS)
-                UIPasteboard.general.string = text
-#endif
-                snackbarService.showSuccess("已复制原始转写")
-            },
-            localModelLoadingStatus: localModelLoadingStatus
-        )
+        }
         .snackbarOverlay(service: snackbarService)
         .task {
             // 延迟初始化 SwiftData，避免在 App init 阶段创建 ModelContainer 阻塞 UI
