@@ -215,6 +215,10 @@ struct VoxPocketTests {
         await fixture.clipboard.gate.release()
         try await waitForDismissBoundary { fixture.saved.count == 1 }
     }
+    #else
+    @Test func example() async throws {
+        #expect(true)
+    }
     #endif
 
 }
