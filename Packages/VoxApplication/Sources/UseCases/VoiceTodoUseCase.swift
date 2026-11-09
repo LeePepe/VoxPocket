@@ -25,8 +25,23 @@ public protocol VoiceCaptureAndTodoUseCase: AnyObject, Sendable {
     func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo
     func runTodoWithAI(todoID: UUID, project: ProjectBinding, template: AIRunnerTemplate) async throws -> VoiceTodo
     func markTodoDone(todoID: UUID) async throws -> VoiceTodo
+    func syncTodoToExternal(todoID: UUID) async throws -> VoiceTodo
+    func refreshExternalTodos() async throws -> [VoiceTodo]
     func deleteCapture(id: UUID) async throws
     func deleteTodo(id: UUID) async throws
     func fetchCaptures() async throws -> [VoiceCapture]
     func fetchTodos() async throws -> [VoiceTodo]
+}
+
+public extension VoiceCaptureAndTodoUseCase {
+    func syncTodoToExternal(todoID: UUID) async throws -> VoiceTodo {
+        guard let existing = try await fetchTodos().first(where: { $0.id == todoID }) else {
+            throw NSError(domain: "VoiceTodoUseCase", code: 404)
+        }
+        return existing
+    }
+
+    func refreshExternalTodos() async throws -> [VoiceTodo] {
+        try await fetchTodos()
+    }
 }

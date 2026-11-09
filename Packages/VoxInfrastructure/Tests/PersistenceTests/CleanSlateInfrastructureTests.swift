@@ -50,6 +50,201 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertTrue(disabledResult.outputSummary.contains("disabled by the sandbox privacy boundary"))
     }
 
+    func testLinearTodoSyncServiceParsingAndBidirectionalStateMapping() async throws {
+        let noop = NoopTodoExternalSyncService()
+        XCTAssertFalse(noop.isEnabled)
+        XCTAssertFalse(noop.isAutoSyncEnabled)
+        let emptySnapshots = try await noop.fetchRemoteSnapshots()
+        XCTAssertTrue(emptySnapshots.isEmpty)
+
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Triage", stateType: "triage", labels: []), .inbox)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Backlog", stateType: "backlog", labels: []), .inbox)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Todo", stateType: "unstarted", labels: []), .inbox)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "In Progress", stateType: "started", labels: []), .running)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "In Review", stateType: "started", labels: []), .running)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "In Progress", stateType: "started", labels: ["Blocked"]), .failed)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Todo", stateType: "unstarted", labels: ["Needs Decision"]), .failed)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Todo", stateType: "unstarted", labels: ["NEED_GO"]), .failed)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Done", stateType: "completed", labels: ["Blocked"]), .done)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Canceled", stateType: "canceled", labels: []), .done)
+
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.inbox), "Todo")
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.running), "In Progress")
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.done), "Done")
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.failed), "Todo")
+
+        let service = LinearTodoSyncService(
+            isEnabled: true,
+            isAutoSyncEnabled: true,
+            teamKey: "EXAMPLE",
+            pushTransport: { todo, teamKey in
+                XCTAssertEqual(teamKey, "EXAMPLE")
+                XCTAssertEqual(todo.rawTranscript, "")
+                XCTAssertNil(todo.localAudioFileName)
+                return """
+                {
+                  "ok": true,
+                  "command": "idea",
+                  "issue": {
+                    "id": "00000000-0000-0000-0000-000000000090",
+                    "identifier": "EXAMPLE-90",
+                    "title": "\(todo.title)",
+                    "state": "Triage",
+                    "stateType": "triage",
+                    "project": "Personal project",
+                    "priority": 0,
+                    "url": "https://linear.app/example/issue/EXAMPLE-90",
+                    "createdAt": "2026-11-09T13:30:00Z",
+                    "updatedAt": "2026-11-09T13:30:00Z",
+                    "labels": []
+                  }
+                }
+                """.data(using: .utf8)!
+            },
+            pullTransport: { teamKey in
+                XCTAssertEqual(teamKey, "EXAMPLE")
+                return """
+                {
+                  "ok": true,
+                  "command": "list-issues",
+                  "issues": [
+                    {
+                      "id": "00000000-0000-0000-0000-000000000090",
+                      "identifier": "EXAMPLE-90",
+                      "title": "Older duplicate snapshot",
+                      "state": "Todo",
+                      "stateType": "unstarted",
+                      "project": "Personal project",
+                      "priority": 2,
+                      "url": "https://linear.app/example/issue/EXAMPLE-90",
+                      "createdAt": "2026-11-09T13:30:00Z",
+                      "updatedAt": "2026-11-09T13:45:00Z",
+                      "labels": []
+                    },
+                    {
+                      "id": "00000000-0000-0000-0000-000000000090",
+                      "identifier": "EXAMPLE-90",
+                      "title": "Remote updated title",
+                      "state": "In Progress",
+                      "stateType": "started",
+                      "project": "Personal project",
+                      "priority": 2,
+                      "url": "https://linear.app/example/issue/EXAMPLE-90",
+                      "createdAt": "2026-11-09T13:30:00Z",
+                      "updatedAt": "2026-11-09T14:00:00Z",
+                      "labels": []
+                    },
+                    {
+                      "id": "00000000-0000-0000-0000-000000000091",
+                      "identifier": "EXAMPLE-91",
+                      "title": "Blocked remote item",
+                      "state": "In Progress",
+                      "stateType": "started",
+                      "project": "Personal project",
+                      "priority": 1,
+                      "url": "https://linear.app/example/issue/EXAMPLE-91",
+                      "createdAt": "2026-11-09T13:30:00Z",
+                      "updatedAt": "2026-11-09T14:05:00Z",
+                      "labels": ["NEED_GO"]
+                    }
+                  ]
+                }
+                """.data(using: .utf8)!
+            }
+        )
+
+        let pushedMeta = try await service.pushTodo(VoiceTodo(title: "Sync me", rawTranscript: "sensitive raw transcript", localAudioFileName: "clip.m4a"))
+        XCTAssertEqual(pushedMeta.provider, "linear")
+        XCTAssertEqual(pushedMeta.externalID, "EXAMPLE-90")
+        XCTAssertEqual(pushedMeta.externalURL, "https://linear.app/example/issue/EXAMPLE-90")
+        XCTAssertEqual(pushedMeta.teamKey, "EXAMPLE")
+        XCTAssertEqual(pushedMeta.projectName, "Personal project")
+        XCTAssertEqual(pushedMeta.syncState, .synced)
+        XCTAssertEqual(pushedMeta.remoteUpdatedAt, "2026-11-09T13:30:00Z")
+        XCTAssertNil(pushedMeta.lastError)
+
+        let snapshots = try await service.fetchRemoteSnapshots()
+        XCTAssertEqual(snapshots.count, 2)
+        XCTAssertEqual(snapshots[0].externalID, "EXAMPLE-90")
+        XCTAssertEqual(snapshots[0].title, "Remote updated title")
+        XCTAssertEqual(snapshots[0].executionState, .running)
+        XCTAssertEqual(snapshots[1].externalID, "EXAMPLE-91")
+        XCTAssertEqual(snapshots[1].executionState, .failed)
+
+        // File-backed and cloud-transport concurrency regression test:
+        // 1) Reload immediately after concurrent updates + delete (no extra delete after the task group) and assert the deleted item is absent and the survivor's persisted value matches its in-memory value.
+        // 2) Delay the older cloud write so it would finish after a subsequent delete if cloud writes were not serialized through completion, and assert the final cloud metadata does not resurrect the deleted item.
+        actor DelayedCloudSyncTransport: CloudSyncTransport {
+            private var captureData: Data?
+            private var todoData: Data?
+            private var writeCount = 0
+
+            func saveCaptureMetadata(_ data: Data) async throws {
+                captureData = data
+            }
+
+            func saveTodoMetadata(_ data: Data) async throws {
+                writeCount += 1
+                if writeCount == 1 {
+                    try? await Task.sleep(for: .milliseconds(40))
+                }
+                todoData = data
+            }
+
+            func captureMetadata() async throws -> Data? { captureData }
+            func todoMetadata() async throws -> Data? { todoData }
+        }
+
+        let persistenceDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let delayedCloud = DelayedCloudSyncTransport()
+        let fileRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir, cloudSync: delayedCloud)
+        let targetTodo = VoiceTodo(title: "File-backed target")
+        let survivorTodo = VoiceTodo(title: "Survivor")
+        try await fileRepo.save(targetTodo)
+        try await fileRepo.save(survivorTodo)
+
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<25 {
+                group.addTask {
+                    _ = try? await fileRepo.update(id: targetTodo.id) { current in
+                        current.withEdits(title: "Concurrent edit \(i)")
+                    }
+                    _ = try? await fileRepo.update(id: survivorTodo.id) { current in
+                        current.withEdits(title: "Survivor edit \(i)")
+                    }
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(for: .milliseconds(10))
+                try? await fileRepo.delete(by: targetTodo.id)
+            }
+        }
+        let inMemoryTarget = try await fileRepo.fetch(by: targetTodo.id)
+        let fetchedInMemorySurvivor = try await fileRepo.fetch(by: survivorTodo.id)
+        let inMemorySurvivor = try XCTUnwrap(fetchedInMemorySurvivor)
+        XCTAssertNil(inMemoryTarget)
+
+        let reloadedRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir)
+        let reloadedTarget = try await reloadedRepo.fetch(by: targetTodo.id)
+        let fetchedReloadedSurvivor = try await reloadedRepo.fetch(by: survivorTodo.id)
+        let reloadedSurvivor = try XCTUnwrap(fetchedReloadedSurvivor)
+        XCTAssertNil(reloadedTarget)
+        XCTAssertEqual(reloadedSurvivor, inMemorySurvivor)
+
+        // Explicit delayed-write race check: start save of ephemeral item (which sleeps 40ms in transport if first, or test with fresh repo)
+        let raceCloud = DelayedCloudSyncTransport()
+        let raceRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir.appendingPathComponent("race", isDirectory: true), cloudSync: raceCloud)
+        let ephemeral = VoiceTodo(title: "Ephemeral")
+        async let slowSave: Void = raceRepo.save(ephemeral)
+        try await Task.sleep(for: .milliseconds(5))
+        async let fastDelete: Void = raceRepo.delete(by: ephemeral.id)
+        _ = try await (slowSave, fastDelete)
+        let fetchedCloudData = try await raceCloud.todoMetadata()
+        let finalCloudData = try XCTUnwrap(fetchedCloudData)
+        let finalCloudTodos = try JSONDecoder().decode([VoiceTodo].self, from: finalCloudData)
+        XCTAssertTrue(finalCloudTodos.isEmpty)
+    }
+
     #if os(macOS)
     @MainActor
     func testMacOSGlobalHotkeyServiceRegistersAndUnregistersCarbonLongPressHotkeys() async throws {

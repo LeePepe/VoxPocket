@@ -19,6 +19,9 @@ public enum PreferencesKey: String, CaseIterable, Sendable {
     case menuBarExtraEnabled = "ui.menuBarExtraEnabled"
     case audioRetentionLimit = "audio.retentionLimit"
     case iosQuickCaptureDestination = "ios.quickCaptureDestination"
+    case linearTodoSyncEnabled = "sync.linear.enabled"
+    case linearTodoAutoSync = "sync.linear.autoSync"
+    case linearTodoTeamKey = "sync.linear.teamKey"
 }
 
 public actor ProductTelemetryPreferences {
