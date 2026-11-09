@@ -1,10 +1,10 @@
 # VoxPocket iOS 2.0 Todo-First Redesign Specification (`spec.md`)
 
 - **Feature ID**: `013-ios-todo-redesign`
-- **Stage**: Phase 1 — Product & Functional Specification (Approved Direct Execution)
+- **Stage**: Phase 1 — Product & Functional Specification
 - **Target Platform**: `mobile` (iOS 26+ / iPhone Action Button + Dynamic Island Live Activity)
 - **Repository**: `VoxPocket`
-- **Status**: Approved & Frozen (Owner direct mandate 2026-11-09)
+- **Status**: Active (2026-11-09)
 
 ---
 
@@ -52,5 +52,5 @@
 2. `python3 scripts/verify_design_cases.py audit-l10n --path VoxPocket/VoxPocket --locales en,zh-Hans` 0 findings 通过；
 3. `scripts/verify` 全部层门禁通过；
 4. iOS 模拟器构建并截取 Light / Dark 模式主界面（Todo 主场）、录音态、Settings（录音去向切换 + Action Button 引导）真实截图，视觉与对齐检查无遮挡/截断；
-5. Owner 授权开启 `.github/workflows/testflight.yml` 的 `ios` TestFlight 手动发布分支并更新对应门禁测试。
+5. `.github/workflows/testflight.yml` 支持选择 `ios` TestFlight 手动发布分支并更新对应门禁测试。
 

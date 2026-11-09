@@ -567,9 +567,11 @@ public final class ServiceContainer: ObservableObject {
         let editor = makeEditorViewModel()
         let sessionList = SessionListViewModel(sessionUseCase: sessionUseCase)
         let root = RootViewModel(sessionListState: sessionList, editorState: editor, deepLinkRouter: deepLinkRouter)
+        #if os(iOS)
         root.onStartRecordingInDefaultMode = { [weak self] in
             self?.workspaceViewModel.startCaptureInPreferredMode()
         }
+        #endif
         root.onStartRecordingInMode = { [weak self, weak editor] mode in
             self?.workspaceViewModel.selectedCaptureMode = mode
             if mode == .todo {

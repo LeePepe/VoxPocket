@@ -15,6 +15,7 @@ struct StartRecordingIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         try await LLMAppConfig.loadRuntimeConfiguration()
+        #if os(iOS)
         let preferredMode: CaptureMode? = await UserDefaultsPreferencesStore.shared.getValue(
             for: .iosQuickCaptureDestination
         )
@@ -23,6 +24,9 @@ struct StartRecordingIntent: AppIntent {
         } else {
             ServiceContainer.shared.deepLinkRouter.pendingAction = .startRecording
         }
+        #else
+        ServiceContainer.shared.deepLinkRouter.pendingAction = .startRecording
+        #endif
         return .result()
     }
 }
