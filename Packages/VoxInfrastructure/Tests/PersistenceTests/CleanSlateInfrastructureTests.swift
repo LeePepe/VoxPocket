@@ -50,6 +50,112 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertTrue(disabledResult.outputSummary.contains("disabled by the sandbox privacy boundary"))
     }
 
+    func testLinearTodoSyncServiceParsingAndBidirectionalStateMapping() async throws {
+        let noop = NoopTodoExternalSyncService()
+        XCTAssertFalse(noop.isEnabled)
+        XCTAssertFalse(noop.isAutoSyncEnabled)
+        let emptySnapshots = try await noop.fetchRemoteSnapshots()
+        XCTAssertTrue(emptySnapshots.isEmpty)
+
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Triage", stateType: "triage", labels: []), .inbox)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Backlog", stateType: "backlog", labels: []), .inbox)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Todo", stateType: "unstarted", labels: []), .inbox)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "In Progress", stateType: "started", labels: []), .running)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "In Review", stateType: "started", labels: []), .running)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "In Progress", stateType: "started", labels: ["Blocked"]), .failed)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Todo", stateType: "unstarted", labels: ["Needs Decision"]), .failed)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Todo", stateType: "unstarted", labels: ["NEED_GO"]), .failed)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Done", stateType: "completed", labels: ["Blocked"]), .done)
+        XCTAssertEqual(LinearTodoSyncService.mapLinearStateToLocal(state: "Canceled", stateType: "canceled", labels: []), .done)
+
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.inbox), "Todo")
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.running), "In Progress")
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.done), "Done")
+        XCTAssertEqual(LinearTodoSyncService.mapLocalStateToLinearState(.failed), "Todo")
+
+        let service = LinearTodoSyncService(
+            isEnabled: true,
+            isAutoSyncEnabled: true,
+            teamKey: "TIA",
+            pushTransport: { todo, teamKey in
+                XCTAssertEqual(teamKey, "TIA")
+                return """
+                {
+                  "ok": true,
+                  "command": "idea",
+                  "issue": {
+                    "id": "00000000-0000-0000-0000-000000000090",
+                    "identifier": "TIA-90",
+                    "title": "\(todo.title)",
+                    "state": "Triage",
+                    "stateType": "triage",
+                    "project": "Personal project",
+                    "priority": 0,
+                    "url": "https://linear.app/example/issue/TIA-90",
+                    "createdAt": "2026-11-09T13:30:00Z",
+                    "updatedAt": "2026-11-09T13:30:00Z",
+                    "labels": []
+                  }
+                }
+                """.data(using: .utf8)!
+            },
+            pullTransport: { teamKey in
+                XCTAssertEqual(teamKey, "TIA")
+                return """
+                {
+                  "ok": true,
+                  "command": "list-issues",
+                  "issues": [
+                    {
+                      "id": "00000000-0000-0000-0000-000000000090",
+                      "identifier": "TIA-90",
+                      "title": "Remote updated title",
+                      "state": "In Progress",
+                      "stateType": "started",
+                      "project": "Personal project",
+                      "priority": 2,
+                      "url": "https://linear.app/example/issue/TIA-90",
+                      "createdAt": "2026-11-09T13:30:00Z",
+                      "updatedAt": "2026-11-09T14:00:00Z",
+                      "labels": []
+                    },
+                    {
+                      "id": "00000000-0000-0000-0000-000000000091",
+                      "identifier": "TIA-91",
+                      "title": "Blocked remote item",
+                      "state": "In Progress",
+                      "stateType": "started",
+                      "project": "Personal project",
+                      "priority": 1,
+                      "url": "https://linear.app/example/issue/TIA-91",
+                      "createdAt": "2026-11-09T13:30:00Z",
+                      "updatedAt": "2026-11-09T14:05:00Z",
+                      "labels": ["NEED_GO"]
+                    }
+                  ]
+                }
+                """.data(using: .utf8)!
+            }
+        )
+
+        let pushedMeta = try await service.pushTodo(VoiceTodo(title: "Sync me"))
+        XCTAssertEqual(pushedMeta.provider, "linear")
+        XCTAssertEqual(pushedMeta.externalID, "TIA-90")
+        XCTAssertEqual(pushedMeta.externalURL, "https://linear.app/example/issue/TIA-90")
+        XCTAssertEqual(pushedMeta.teamKey, "TIA")
+        XCTAssertEqual(pushedMeta.projectName, "Personal project")
+        XCTAssertEqual(pushedMeta.syncState, .synced)
+        XCTAssertEqual(pushedMeta.remoteUpdatedAt, "2026-11-09T13:30:00Z")
+        XCTAssertNil(pushedMeta.lastError)
+
+        let snapshots = try await service.fetchRemoteSnapshots()
+        XCTAssertEqual(snapshots.count, 2)
+        XCTAssertEqual(snapshots[0].externalID, "TIA-90")
+        XCTAssertEqual(snapshots[0].executionState, .running)
+        XCTAssertEqual(snapshots[1].externalID, "TIA-91")
+        XCTAssertEqual(snapshots[1].executionState, .failed)
+    }
+
     #if os(macOS)
     @MainActor
     func testMacOSGlobalHotkeyServiceRegistersAndUnregistersCarbonLongPressHotkeys() async throws {

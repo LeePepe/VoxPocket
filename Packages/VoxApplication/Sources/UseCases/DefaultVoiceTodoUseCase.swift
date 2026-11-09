@@ -39,11 +39,12 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     private let todos: any VoiceTodoRepository
     private let extractor: any VoiceTodoExtractionRunning
     private let runner: any AIRunnerExecutionService
+    private let externalSync: any TodoExternalSyncService
     private let projects: @Sendable () -> [ProjectBinding]
     private let telemetry: any TelemetryService
 
-    public init(captures: any VoiceCaptureRepository, todos: any VoiceTodoRepository, extractor: any VoiceTodoExtractionRunning = DefaultVoiceTodoExtractor(), runner: any AIRunnerExecutionService, projects: @escaping @Sendable () -> [ProjectBinding] = { [] }, telemetry: any TelemetryService = NoopTelemetryService()) {
-        self.captures = captures; self.todos = todos; self.extractor = extractor; self.runner = runner; self.projects = projects; self.telemetry = telemetry
+    public init(captures: any VoiceCaptureRepository, todos: any VoiceTodoRepository, extractor: any VoiceTodoExtractionRunning = DefaultVoiceTodoExtractor(), runner: any AIRunnerExecutionService, externalSync: any TodoExternalSyncService = NoopTodoExternalSyncService(), projects: @escaping @Sendable () -> [ProjectBinding] = { [] }, telemetry: any TelemetryService = NoopTelemetryService()) {
+        self.captures = captures; self.todos = todos; self.extractor = extractor; self.runner = runner; self.externalSync = externalSync; self.projects = projects; self.telemetry = telemetry
     }
 
     public func recordCompletedCapture(mode: CaptureMode, rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> (capture: VoiceCapture, todo: VoiceTodo?) {
@@ -52,9 +53,13 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         let todo: VoiceTodo?
         if mode == .todo {
             let draft = try await extractor.extractTodo(from: rawTranscript, refinedText: refinedText, availableProjects: projects())
-            todo = VoiceTodo(title: draft.title, taskPrompt: draft.taskPrompt, rawTranscript: rawTranscript, projectKey: draft.matchedProjectKey, sourceCaptureID: capture.id, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource)
-            try await todos.save(todo!)
-            try await captures.save(capture.withLinkedTodo(todo!.id))
+            var created = VoiceTodo(title: draft.title, taskPrompt: draft.taskPrompt, rawTranscript: rawTranscript, projectKey: draft.matchedProjectKey, sourceCaptureID: capture.id, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource)
+            try await todos.save(created)
+            if externalSync.isEnabled && externalSync.isAutoSyncEnabled {
+                created = await pushBestEffort(created, fallbackStateOnFailure: .pendingPush)
+            }
+            todo = created
+            try await captures.save(capture.withLinkedTodo(created.id))
         } else { todo = nil }
         telemetry.track(name: "capture.completed", properties: ["duration_ms": String(Int(durationSeconds * 1000)), "mode": mode.rawValue, "source": deviceSource.rawValue])
         return (todo == nil ? capture : capture.withLinkedTodo(todo!.id), todo)
@@ -75,11 +80,23 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     public func convertCaptureToTodo(captureID: UUID) async throws -> VoiceTodo {
         guard let capture = try await captures.fetch(by: captureID) else { throw VoiceTodoUseCaseError.captureNotFound }
         let draft = try await extractor.extractTodo(from: capture.rawTranscript, refinedText: capture.refinedText, availableProjects: projects())
-        let todo = VoiceTodo(title: draft.title, taskPrompt: draft.taskPrompt, rawTranscript: capture.rawTranscript, projectKey: draft.matchedProjectKey, sourceCaptureID: capture.id, localAudioFileName: capture.localAudioFileName, durationSeconds: capture.durationSeconds, deviceSource: capture.deviceSource)
-        try await todos.save(todo); try await captures.save(capture.withLinkedTodo(todo.id)); return todo
+        var todo = VoiceTodo(title: draft.title, taskPrompt: draft.taskPrompt, rawTranscript: capture.rawTranscript, projectKey: draft.matchedProjectKey, sourceCaptureID: capture.id, localAudioFileName: capture.localAudioFileName, durationSeconds: capture.durationSeconds, deviceSource: capture.deviceSource)
+        try await todos.save(todo)
+        if externalSync.isEnabled && externalSync.isAutoSyncEnabled {
+            todo = await pushBestEffort(todo, fallbackStateOnFailure: .pendingPush)
+        }
+        try await captures.save(capture.withLinkedTodo(todo.id))
+        return todo
     }
 
-    public func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo { try await todos.save(todo); return todo }
+    public func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo {
+        try await todos.save(todo)
+        guard todo.externalSync != nil else { return todo }
+        let queued = todo.withExternalSync((todo.externalSync ?? ExternalTodoSyncMetadata()).withState(.pendingPush))
+        try await todos.save(queued)
+        guard externalSync.isEnabled else { return queued }
+        return await pushBestEffort(queued, fallbackStateOnFailure: .pendingPush)
+    }
 
     public func runTodoWithAI(todoID: UUID, project: ProjectBinding, template: AIRunnerTemplate) async throws -> VoiceTodo {
         guard let todo = try await todos.fetch(by: todoID) else { throw VoiceTodoUseCaseError.todoNotFound }
@@ -95,9 +112,90 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         }
     }
 
-    public func markTodoDone(todoID: UUID) async throws -> VoiceTodo { guard let todo = try await todos.fetch(by: todoID) else { throw VoiceTodoUseCaseError.todoNotFound }; let done = todo.withExecutionState(.done, completedAt: Date()); try await todos.save(done); return done }
+    public func markTodoDone(todoID: UUID) async throws -> VoiceTodo {
+        guard let todo = try await todos.fetch(by: todoID) else { throw VoiceTodoUseCaseError.todoNotFound }
+        let done = todo.withExecutionState(.done, completedAt: Date())
+        try await todos.save(done)
+        guard done.externalSync != nil || (externalSync.isEnabled && externalSync.isAutoSyncEnabled) else {
+            return done
+        }
+        let queued = done.withExternalSync((done.externalSync ?? ExternalTodoSyncMetadata()).withState(.pendingPush))
+        try await todos.save(queued)
+        guard externalSync.isEnabled else { return queued }
+        return await pushBestEffort(queued, fallbackStateOnFailure: .pendingPush)
+    }
+
+    public func syncTodoToExternal(todoID: UUID) async throws -> VoiceTodo {
+        guard let todo = try await todos.fetch(by: todoID) else { throw VoiceTodoUseCaseError.todoNotFound }
+        let pending = todo.withExternalSync((todo.externalSync ?? ExternalTodoSyncMetadata()).withState(.pendingPush))
+        try await todos.save(pending)
+        return await pushBestEffort(pending, fallbackStateOnFailure: .failed)
+    }
+
+    public func refreshExternalTodos() async throws -> [VoiceTodo] {
+        guard externalSync.isEnabled else { return try await todos.fetchAll() }
+        var currentTodos = try await todos.fetchAll()
+        for index in currentTodos.indices {
+            let item = currentTodos[index]
+            if item.externalSync?.syncState == .pendingPush {
+                currentTodos[index] = await pushBestEffort(item, fallbackStateOnFailure: .pendingPush)
+            }
+        }
+        guard let snapshots = try? await externalSync.fetchRemoteSnapshots() else {
+            return try await todos.fetchAll()
+        }
+        let snapshotsByID = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.externalID, $0) })
+        for item in currentTodos {
+            guard let metadata = item.externalSync,
+                  metadata.syncState != .pendingPush,
+                  let externalID = metadata.externalID,
+                  let remote = snapshotsByID[externalID] else { continue }
+            let isNewer: Bool
+            if let remoteUpdated = remote.remoteUpdatedAt, let localRemoteUpdated = metadata.remoteUpdatedAt {
+                isNewer = remoteUpdated > localRemoteUpdated
+            } else {
+                isNewer = remote.remoteUpdatedAt != nil && metadata.remoteUpdatedAt == nil
+            }
+            guard isNewer else { continue }
+            let updatedMeta = metadata.withState(
+                .synced,
+                externalID: .some(remote.externalID),
+                externalURL: remote.externalURL != nil ? .some(remote.externalURL) : nil,
+                projectName: remote.projectName != nil ? .some(remote.projectName) : nil,
+                remoteUpdatedAt: .some(remote.remoteUpdatedAt),
+                lastError: .some(nil)
+            )
+            let updatedTodo = item
+                .withEdits(title: remote.title)
+                .withExecutionState(
+                    remote.executionState,
+                    summary: item.lastExecutionSummary,
+                    startedAt: item.lastStartedAt,
+                    completedAt: remote.executionState == .done ? (item.lastCompletedAt ?? Date()) : item.lastCompletedAt
+                )
+                .withExternalSync(updatedMeta)
+            try await todos.save(updatedTodo)
+        }
+        return try await todos.fetchAll()
+    }
+
     public func deleteCapture(id: UUID) async throws { try await captures.delete(by: id) }
     public func deleteTodo(id: UUID) async throws { try await todos.delete(by: id) }
     public func fetchCaptures() async throws -> [VoiceCapture] { try await captures.fetchAll() }
     public func fetchTodos() async throws -> [VoiceTodo] { try await todos.fetchAll() }
+
+    private func pushBestEffort(_ todo: VoiceTodo, fallbackStateOnFailure: ExternalTodoSyncState) async -> VoiceTodo {
+        let baseMeta = todo.externalSync ?? ExternalTodoSyncMetadata(syncState: .pendingPush)
+        do {
+            let syncedMeta = try await externalSync.pushTodo(todo)
+            let syncedTodo = todo.withExternalSync(syncedMeta)
+            try? await todos.save(syncedTodo)
+            return syncedTodo
+        } catch {
+            let failedMeta = baseMeta.withState(fallbackStateOnFailure, lastError: .some(error.localizedDescription))
+            let degradedTodo = todo.withExternalSync(failedMeta)
+            try? await todos.save(degradedTodo)
+            return degradedTodo
+        }
+    }
 }

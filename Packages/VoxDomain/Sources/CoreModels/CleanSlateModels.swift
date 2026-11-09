@@ -69,6 +69,37 @@ public enum TodoExecutionState: String, Codable, Equatable, Hashable, CaseIterab
     case failed
 }
 
+public enum ExternalTodoSyncState: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
+    case localOnly
+    case pendingPush
+    case synced
+    case failed
+}
+
+public struct ExternalTodoSyncMetadata: Codable, Equatable, Hashable, Sendable {
+    public let provider: String
+    public let externalID: String?
+    public let externalURL: String?
+    public let teamKey: String
+    public let projectName: String?
+    public let syncState: ExternalTodoSyncState
+    public let remoteUpdatedAt: String?
+    public let lastError: String?
+
+    public init(provider: String = "linear", externalID: String? = nil, externalURL: String? = nil, teamKey: String = "TIA", projectName: String? = nil, syncState: ExternalTodoSyncState = .localOnly, remoteUpdatedAt: String? = nil, lastError: String? = nil) {
+        self.provider = provider; self.externalID = externalID; self.externalURL = externalURL; self.teamKey = teamKey
+        self.projectName = projectName; self.syncState = syncState; self.remoteUpdatedAt = remoteUpdatedAt; self.lastError = lastError
+    }
+
+    public func withState(_ syncState: ExternalTodoSyncState, externalID: String?? = nil, externalURL: String?? = nil, projectName: String?? = nil, remoteUpdatedAt: String?? = nil, lastError: String?? = nil) -> ExternalTodoSyncMetadata {
+        ExternalTodoSyncMetadata(provider: provider, externalID: externalID ?? self.externalID, externalURL: externalURL ?? self.externalURL, teamKey: teamKey, projectName: projectName ?? self.projectName, syncState: syncState, remoteUpdatedAt: remoteUpdatedAt ?? self.remoteUpdatedAt, lastError: lastError ?? self.lastError)
+    }
+
+    public func sanitizedForCloudSync() -> ExternalTodoSyncMetadata {
+        ExternalTodoSyncMetadata(provider: provider, externalID: externalID, externalURL: nil, teamKey: teamKey, projectName: nil, syncState: syncState, remoteUpdatedAt: remoteUpdatedAt, lastError: nil)
+    }
+}
+
 public enum AIRunnerKind: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
     case herdr
     case claudeCode
@@ -153,21 +184,52 @@ public struct VoiceTodo: Identifiable, Codable, Equatable, Hashable, Sendable {
     public let projectKey: String?; public let assignedRunnerKind: AIRunnerKind?; public let executionState: TodoExecutionState
     public let lastExecutionSummary: String?; public let lastStartedAt: Date?; public let lastCompletedAt: Date?
     public let sourceCaptureID: UUID?; public let localAudioFileName: String?; public let durationSeconds: TimeInterval
-    public let deviceSource: DeviceSource; public let createdAt: Date; public let updatedAt: Date
+    public let deviceSource: DeviceSource; public let externalSync: ExternalTodoSyncMetadata?; public let createdAt: Date; public let updatedAt: Date
 
-    public init(id: UUID = UUID(), title: String, taskPrompt: String = "", rawTranscript: String = "", projectKey: String? = nil, assignedRunnerKind: AIRunnerKind? = nil, executionState: TodoExecutionState = .inbox, lastExecutionSummary: String? = nil, lastStartedAt: Date? = nil, lastCompletedAt: Date? = nil, sourceCaptureID: UUID? = nil, localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac, createdAt: Date = Date(), updatedAt: Date = Date()) {
-        self.id = id; self.title = title; self.taskPrompt = taskPrompt; self.rawTranscript = rawTranscript; self.projectKey = projectKey; self.assignedRunnerKind = assignedRunnerKind; self.executionState = executionState; self.lastExecutionSummary = lastExecutionSummary; self.lastStartedAt = lastStartedAt; self.lastCompletedAt = lastCompletedAt; self.sourceCaptureID = sourceCaptureID; self.localAudioFileName = localAudioFileName; self.durationSeconds = durationSeconds; self.deviceSource = deviceSource; self.createdAt = createdAt; self.updatedAt = updatedAt
+    private enum CodingKeys: String, CodingKey {
+        case id, title, taskPrompt, rawTranscript, projectKey, assignedRunnerKind, executionState
+        case lastExecutionSummary, lastStartedAt, lastCompletedAt, sourceCaptureID, localAudioFileName
+        case durationSeconds, deviceSource, externalSync, createdAt, updatedAt
+    }
+
+    public init(id: UUID = UUID(), title: String, taskPrompt: String = "", rawTranscript: String = "", projectKey: String? = nil, assignedRunnerKind: AIRunnerKind? = nil, executionState: TodoExecutionState = .inbox, lastExecutionSummary: String? = nil, lastStartedAt: Date? = nil, lastCompletedAt: Date? = nil, sourceCaptureID: UUID? = nil, localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac, externalSync: ExternalTodoSyncMetadata? = nil, createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id; self.title = title; self.taskPrompt = taskPrompt; self.rawTranscript = rawTranscript; self.projectKey = projectKey; self.assignedRunnerKind = assignedRunnerKind; self.executionState = executionState; self.lastExecutionSummary = lastExecutionSummary; self.lastStartedAt = lastStartedAt; self.lastCompletedAt = lastCompletedAt; self.sourceCaptureID = sourceCaptureID; self.localAudioFileName = localAudioFileName; self.durationSeconds = durationSeconds; self.deviceSource = deviceSource; self.externalSync = externalSync; self.createdAt = createdAt; self.updatedAt = updatedAt
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        taskPrompt = try container.decode(String.self, forKey: .taskPrompt)
+        rawTranscript = try container.decode(String.self, forKey: .rawTranscript)
+        projectKey = try container.decodeIfPresent(String.self, forKey: .projectKey)
+        assignedRunnerKind = try container.decodeIfPresent(AIRunnerKind.self, forKey: .assignedRunnerKind)
+        executionState = try container.decode(TodoExecutionState.self, forKey: .executionState)
+        lastExecutionSummary = try container.decodeIfPresent(String.self, forKey: .lastExecutionSummary)
+        lastStartedAt = try container.decodeIfPresent(Date.self, forKey: .lastStartedAt)
+        lastCompletedAt = try container.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
+        sourceCaptureID = try container.decodeIfPresent(UUID.self, forKey: .sourceCaptureID)
+        localAudioFileName = try container.decodeIfPresent(String.self, forKey: .localAudioFileName)
+        durationSeconds = try container.decode(TimeInterval.self, forKey: .durationSeconds)
+        deviceSource = try container.decode(DeviceSource.self, forKey: .deviceSource)
+        externalSync = try container.decodeIfPresent(ExternalTodoSyncMetadata.self, forKey: .externalSync)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 
     public func withEdits(title: String? = nil, taskPrompt: String? = nil, projectKey: String?? = nil, assignedRunnerKind: AIRunnerKind?? = nil, updatedAt: Date = Date()) -> VoiceTodo {
-        VoiceTodo(id: id, title: title ?? self.title, taskPrompt: taskPrompt ?? self.taskPrompt, rawTranscript: rawTranscript, projectKey: projectKey ?? self.projectKey, assignedRunnerKind: assignedRunnerKind ?? self.assignedRunnerKind, executionState: executionState, lastExecutionSummary: lastExecutionSummary, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource, createdAt: createdAt, updatedAt: updatedAt)
+        VoiceTodo(id: id, title: title ?? self.title, taskPrompt: taskPrompt ?? self.taskPrompt, rawTranscript: rawTranscript, projectKey: projectKey ?? self.projectKey, assignedRunnerKind: assignedRunnerKind ?? self.assignedRunnerKind, executionState: executionState, lastExecutionSummary: lastExecutionSummary, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource, externalSync: externalSync, createdAt: createdAt, updatedAt: updatedAt)
     }
 
     public func withExecutionState(_ state: TodoExecutionState, summary: String? = nil, runnerKind: AIRunnerKind?? = nil, startedAt: Date? = nil, completedAt: Date? = nil, updatedAt: Date = Date()) -> VoiceTodo {
-        VoiceTodo(id: id, title: title, taskPrompt: taskPrompt, rawTranscript: rawTranscript, projectKey: projectKey, assignedRunnerKind: runnerKind ?? assignedRunnerKind, executionState: state, lastExecutionSummary: summary, lastStartedAt: startedAt, lastCompletedAt: completedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource, createdAt: createdAt, updatedAt: updatedAt)
+        VoiceTodo(id: id, title: title, taskPrompt: taskPrompt, rawTranscript: rawTranscript, projectKey: projectKey, assignedRunnerKind: runnerKind ?? assignedRunnerKind, executionState: state, lastExecutionSummary: summary, lastStartedAt: startedAt, lastCompletedAt: completedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource, externalSync: externalSync, createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    public func withExternalSync(_ externalSync: ExternalTodoSyncMetadata?, updatedAt: Date = Date()) -> VoiceTodo {
+        VoiceTodo(id: id, title: title, taskPrompt: taskPrompt, rawTranscript: rawTranscript, projectKey: projectKey, assignedRunnerKind: assignedRunnerKind, executionState: executionState, lastExecutionSummary: lastExecutionSummary, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource, externalSync: externalSync, createdAt: createdAt, updatedAt: updatedAt)
     }
 
     public func sanitizedForCloudSync() -> VoiceTodo {
-        VoiceTodo(id: id, title: "", taskPrompt: "", rawTranscript: "", projectKey: projectKey, assignedRunnerKind: assignedRunnerKind, executionState: executionState, lastExecutionSummary: nil, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: nil, durationSeconds: durationSeconds, deviceSource: deviceSource, createdAt: createdAt, updatedAt: updatedAt)
+        VoiceTodo(id: id, title: "", taskPrompt: "", rawTranscript: "", projectKey: projectKey, assignedRunnerKind: assignedRunnerKind, executionState: executionState, lastExecutionSummary: nil, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: nil, durationSeconds: durationSeconds, deviceSource: deviceSource, externalSync: externalSync?.sanitizedForCloudSync(), createdAt: createdAt, updatedAt: updatedAt)
     }
 }
