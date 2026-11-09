@@ -61,7 +61,8 @@
 		EE40B4FFE177EE0350CA9411 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 007D223D190CA65066429E21 /* ContentView.swift */; };
 		EF64233609A8744936963A02 /* LLMAppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0836B7EC65A78C7E17EDB5BC /* LLMAppConfig.swift */; };
 		F2715607D12FC7E729118E78 /* BlobTelemetryInstrumentationTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6196FA98288F98EE02E7632 /* BlobTelemetryInstrumentationTestSupport.swift */; };
-		FD6ED8907B1377B3228F3F5F /* UITestingBridge in Frameworks */ = {isa = PBXBuildFile; productRef = BD8AD9C9D354B8A78973E655 /* UITestingBridge */; };
+		F4B83A2CF4092BB4B7B81B10 /* UITestingBridge in Frameworks */ = {isa = PBXBuildFile; productRef = BD8AD9C9D354B8A78973E655 /* UITestingBridge */; };
+		FD6ED8907B1377B3228F3F5F /* WidgetUI in Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; productRef = F00CAE567B4433190C82EE24 /* WidgetUI */; };
 		FED3603ADF4B4B697B1EEA9A /* BlobTelemetryConsentCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0384E185F7169AEF7D021111 /* BlobTelemetryConsentCompositionTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -163,7 +164,7 @@
 		DD1E619B4998E9FCF2D79CDC /* TelemetryLifecycleCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryLifecycleCoordinatorTests.swift; sourceTree = "<group>"; };
 		E60B59D004113111FD80FA9C /* golden_b_ios.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = golden_b_ios.json; sourceTree = "<group>"; };
 		FC7CDC48D28B190776C3505D /* VoxApplication */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VoxApplication; path = ../Packages/VoxApplication; sourceTree = SOURCE_ROOT; };
-		"TEMP_D3B3EC82-CD2F-4EB6-8FD6-13C1CDF4F64C" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_5ED023D0-301C-4854-A201-D9E2945C69CF" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,7 +175,8 @@
 				753150564083C6F80527BB81 /* VoxKitBridge in Frameworks */,
 				A99AF295270AC00A2BFF3835 /* PlatformUI in Frameworks */,
 				9C5C0A1AE4C4FD9952E83FF1 /* UIShared in Frameworks */,
-				FD6ED8907B1377B3228F3F5F /* UITestingBridge in Frameworks */,
+				FD6ED8907B1377B3228F3F5F /* WidgetUI in Frameworks */,
+				F4B83A2CF4092BB4B7B81B10 /* UITestingBridge in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,10 +355,10 @@
 			path = scripts;
 			sourceTree = "<group>";
 		};
-		"TEMP_6AEF94A0-41DE-4099-8442-E40BE893CE91" /* VoxPocket */ = {
+		"TEMP_915F3344-E4D6-4346-90E9-2F9E2D68CE71" /* VoxPocket */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_D3B3EC82-CD2F-4EB6-8FD6-13C1CDF4F64C" /* Config.xcconfig */,
+				"TEMP_5ED023D0-301C-4854-A201-D9E2945C69CF" /* Config.xcconfig */,
 			);
 			path = VoxPocket;
 			sourceTree = "<group>";
@@ -401,6 +403,7 @@
 				9F0570457C21B105544DB9F7 /* VoxKitBridge */,
 				51ABF4EE6A69D0E882B3B36D /* PlatformUI */,
 				4DC7AD1FF6D20051BB6E0EAA /* UIShared */,
+				F00CAE567B4433190C82EE24 /* WidgetUI */,
 				BD8AD9C9D354B8A78973E655 /* UITestingBridge */,
 			);
 			productName = VoxPocket;
@@ -675,7 +678,7 @@
 		};
 		489E40965BE35970213C29E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D3B3EC82-CD2F-4EB6-8FD6-13C1CDF4F64C" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_5ED023D0-301C-4854-A201-D9E2945C69CF" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -917,7 +920,7 @@
 		};
 		C42F15964F9234EBB655F756 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D3B3EC82-CD2F-4EB6-8FD6-13C1CDF4F64C" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_5ED023D0-301C-4854-A201-D9E2945C69CF" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1129,6 +1132,10 @@
 		BD8AD9C9D354B8A78973E655 /* UITestingBridge */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = UITestingBridge;
+		};
+		F00CAE567B4433190C82EE24 /* WidgetUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WidgetUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

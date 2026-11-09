@@ -104,6 +104,11 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
 
     public func startCapture(mode: CaptureMode) {
         selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0; lastCopiedBannerText = nil
+        NotificationCenter.default.post(
+            name: Notification.Name("vox.liveActivity.recordingStarted"),
+            object: nil,
+            userInfo: ["mode": mode.rawValue]
+        )
         startElapsedTimer()
         try? editingUseCase?.replaceAll(with: "")
         transcriptionUseCase?.clearLiveText()
@@ -115,12 +120,21 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 } catch {
                     stopElapsedTimer()
                     captureState = .failed(stage: .recording, reason: error.localizedDescription)
+                    NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
                 }
             }
         }
     }
     public func toggleCaptureModeDuringRecording() { guard case .recording = captureState else { return }; updatePreferredCaptureMode(selectedCaptureMode == .text ? .todo : .text) }
-    public func cancelCapture() { stopElapsedTimer(); recordingUseCase?.cancelRecording(); transcriptionUseCase?.clearLiveText(); captureState = .idle; recordingElapsedSeconds = 0; audioLevel = 0 }
+    public func cancelCapture() {
+        stopElapsedTimer()
+        recordingUseCase?.cancelRecording()
+        transcriptionUseCase?.clearLiveText()
+        captureState = .idle
+        recordingElapsedSeconds = 0
+        audioLevel = 0
+        NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+    }
     public func finishCapture() {
         #if os(iOS)
         let source: DeviceSource = .iPhone
@@ -131,6 +145,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     }
     public func completeCapture(rawTranscript: String = "", refinedText: String = "", localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac) async {
         stopElapsedTimer()
+        defer {
+            NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+        }
         let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
         captureState = .transcribing
         let stoppedDuration = recordingUseCase?.state.duration ?? durationSeconds
@@ -283,6 +300,11 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled, let self, self.isRecordingActive else { break }
                 self.recordingElapsedSeconds += 1
+                NotificationCenter.default.post(
+                    name: Notification.Name("vox.liveActivity.elapsedUpdated"),
+                    object: nil,
+                    userInfo: ["seconds": self.recordingElapsedSeconds, "mode": self.selectedCaptureMode.rawValue]
+                )
             }
         }
     }

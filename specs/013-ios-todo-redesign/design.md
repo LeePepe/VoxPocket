@@ -38,7 +38,9 @@
 3. **Group 3 · 底部 Liquid Glass 悬浮录音坞（`Functional Capture Dock`）**：单一 `.safeAreaInset(edge: .bottom)` 承载确定性回执胶囊与录音控制坞。
 
 ### Axis Z · Apple 双层材质（`Functional Glass` vs. `Solid Content`）
-- **Top Z-Layer（Functional Chrome）**：底部悬浮录音坞与状态回执胶囊使用 `.ultraThinMaterial` / Liquid Glass 胶囊（开启「降低透明度」时自动回退 `.thickMaterial`）。
+- **Top Z-Layer（Functional Chrome — iOS 26 Native Liquid Glass）**：
+  - 底部悬浮录音坞与状态回执胶囊包裹在 `GlassEffectContainer(spacing: 12)` 中，使用原生 `.glassEffect(.regular.interactive(), in: .capsule)` 与 `.glassEffectID` 流体形变；主录音按钮采用 `.buttonStyle(.glassProminent)` + 语义强调色 `.tint`（开启「降低透明度」时自动回退 `.thickMaterial`）。
+  - 桌面 Widget（`QuickRecordWidget`）、控制中心控件（`VoxPocketControlWidget`）与灵动岛（`VoxCaptureLiveActivity`）全部使用 `Button(intent:)` 触发 `AudioRecordingIntent`（`openAppWhenRun = false`），无需打开主 App 即可后台一键开启/停止录音。
 - **Bottom Z-Layer（Solid Content Canvas）**：Todo 列表背景使用 `L0` `systemGroupedBackground`，Todo 卡片使用 `L1` `secondarySystemGroupedBackground`（无厚重 1px 描边，以底代框）。
 
 ---

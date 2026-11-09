@@ -62,10 +62,15 @@ targets:
     dependencies:
       - package: VoxInfrastructure
         product: VoxKitBridge
+        #package: VoxPresentation
+        #product: WidgetUI
       - package: VoxPresentation
         product: PlatformUI
       - package: VoxPresentation
         product: UIShared
+      - package: VoxPresentation
+        product: WidgetUI
+        platformFilter: iOS
       - package: AppleUITesting
         product: UITestingBridge
       # 内嵌 Widget 扩展（仅 iOS 平台）

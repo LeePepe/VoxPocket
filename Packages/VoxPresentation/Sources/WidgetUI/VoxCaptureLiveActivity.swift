@@ -38,10 +38,12 @@ public struct VoxCaptureLiveActivity: Widget {
                         .contentTransition(.numericText())
                 }
                 Spacer()
-                Link(destination: Self.stopRecordingURL) {
+                Button(intent: FinishCaptureIntent()) {
                     Label("完成录音", systemImage: "checkmark.circle.fill")
                         .font(.subheadline.weight(.semibold))
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
                 .accessibilityLabel("完成录音")
             }
             .padding(16)
@@ -63,8 +65,12 @@ public struct VoxCaptureLiveActivity: Widget {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Link("完成录音", destination: Self.stopRecordingURL)
-                            .font(.subheadline.weight(.semibold))
+                        Button(intent: FinishCaptureIntent()) {
+                            Label("完成录音", systemImage: "stop.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
                     }
                 }
             } compactLeading: {
@@ -87,13 +93,36 @@ public struct VoxCaptureLiveActivity: Widget {
     }
 }
 
-public struct FinishCaptureIntent: AppIntent {
-    public static let title: LocalizedStringResource = "完成录音"
-    public static let openAppWhenRun: Bool = true
-    public static let didRequestFinishNotification = Notification.Name("vox.liveActivity.finishCapture")
+@available(iOS 18.0, *)
+public struct ToggleQuickCaptureIntent: AudioRecordingIntent {
+    public static let title: LocalizedStringResource = "快速录音 / 停止"
+    public static let description = IntentDescription("无需打开 App，在后台启动或停止语音录入并联动灵动岛")
+    public static let openAppWhenRun: Bool = false
+    public static let didRequestToggleNotification = Notification.Name("vox.liveActivity.toggleCapture")
+
     public init() {}
+
     public func perform() async throws -> some IntentResult {
-        NotificationCenter.default.post(name: Self.didRequestFinishNotification, object: nil)
+        await MainActor.run {
+            NotificationCenter.default.post(name: Self.didRequestToggleNotification, object: nil)
+        }
+        return .result()
+    }
+}
+
+@available(iOS 18.0, *)
+public struct FinishCaptureIntent: AudioRecordingIntent {
+    public static let title: LocalizedStringResource = "完成录音"
+    public static let description = IntentDescription("停止当前后台语音录入并保存结果")
+    public static let openAppWhenRun: Bool = false
+    public static let didRequestFinishNotification = Notification.Name("vox.liveActivity.finishCapture")
+
+    public init() {}
+
+    public func perform() async throws -> some IntentResult {
+        await MainActor.run {
+            NotificationCenter.default.post(name: Self.didRequestFinishNotification, object: nil)
+        }
         return .result()
     }
 }

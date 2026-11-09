@@ -27,6 +27,10 @@ import LokiKit
 import PlatformUI
 #elseif os(iOS)
 import UIKit
+import WidgetUI
+#if canImport(ActivityKit)
+import ActivityKit
+#endif
 #endif
 
 /// 服务容器
@@ -222,6 +226,7 @@ public final class ServiceContainer: ObservableObject {
                                  azureTextConfigured: availability.textConfigured)
             })
         iosPresetPreferenceBinding = binding
+        setupIOSLiveActivityAndIntentObservers()
         #endif
         sessionUseCase.onCompletedSession = { [weak self] rawText, refinedText in
             await productTelemetryInstrumentation.sessionDidComplete()
@@ -607,6 +612,122 @@ public final class ServiceContainer: ObservableObject {
     public func reloadWorkspaceViewModel() {
         Task { await workspaceViewModel.reload() }
     }
+
+#if os(iOS)
+    /// 供 Action Button (`StartRecordingIntent`)、Widget (`ToggleQuickCaptureIntent`) 与灵动岛后台一键启停录音（不跳进主 App）。
+    public func toggleQuickCaptureFromIntent() async {
+        await initializePersistence()
+        if workspaceViewModel.isRecordingActive {
+            await workspaceViewModel.completeCapture(deviceSource: .iPhone)
+        } else {
+            let preferredMode: CaptureMode = await preferencesStore.getValue(
+                for: .iosQuickCaptureDestination,
+                default: .todo
+            )
+            workspaceViewModel.startCapture(mode: preferredMode)
+        }
+    }
+
+    private func setupIOSLiveActivityAndIntentObservers() {
+        NotificationCenter.default.addObserver(
+            forName: ToggleQuickCaptureIntent.didRequestToggleNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.toggleQuickCaptureFromIntent()
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: FinishCaptureIntent.didRequestFinishNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.workspaceViewModel.isRecordingActive else { return }
+                await self.workspaceViewModel.completeCapture(deviceSource: .iPhone)
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("vox.liveActivity.recordingStarted"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let modeRaw = (note.userInfo?["mode"] as? String) ?? CaptureMode.todo.rawValue
+            Task { @MainActor in
+                self?.startIOSCaptureLiveActivity(modeRaw: modeRaw)
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("vox.liveActivity.elapsedUpdated"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let seconds = (note.userInfo?["seconds"] as? Int) ?? 0
+            let modeRaw = (note.userInfo?["mode"] as? String) ?? CaptureMode.todo.rawValue
+            Task { @MainActor in
+                self?.updateIOSCaptureLiveActivity(seconds: seconds, modeRaw: modeRaw)
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("vox.liveActivity.recordingEnded"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.endIOSCaptureLiveActivities()
+            }
+        }
+    }
+
+    private func startIOSCaptureLiveActivity(modeRaw: String) {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.2, *), ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let modeTitle = modeRaw == CaptureMode.todo.rawValue ? "存入待办" : "复制文字"
+        let attributes = VoxCaptureActivityAttributes(sessionID: UUID().uuidString)
+        let content = ActivityContent(
+            state: VoxCaptureActivityAttributes.ContentState(
+                mode: modeTitle,
+                elapsedSeconds: 0,
+                isRecording: true
+            ),
+            staleDate: nil
+        )
+        _ = try? Activity.request(attributes: attributes, content: content)
+        #endif
+    }
+
+    private func updateIOSCaptureLiveActivity(seconds: Int, modeRaw: String) {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.2, *) else { return }
+        let modeTitle = modeRaw == CaptureMode.todo.rawValue ? "存入待办" : "复制文字"
+        let updated = ActivityContent(
+            state: VoxCaptureActivityAttributes.ContentState(
+                mode: modeTitle,
+                elapsedSeconds: seconds,
+                isRecording: true
+            ),
+            staleDate: nil
+        )
+        Task {
+            for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                await activity.update(updated)
+            }
+        }
+        #endif
+    }
+
+    private func endIOSCaptureLiveActivities() {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.2, *) else { return }
+        Task {
+            for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+        #endif
+    }
+#endif
 
     public func makeWorkspaceViewModel() -> VoxWorkspaceViewModel {
         #if os(iOS)

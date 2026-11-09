@@ -14,6 +14,8 @@ public struct IOSCleanSlateWorkspaceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var modeAnimation
     @Namespace private var filterAnimation
+    @Namespace private var dockGlassNamespace
+    @State private var isHoldRecording = false
 
     public init(
         viewModel: VoxWorkspaceViewModel,
@@ -75,17 +77,6 @@ public struct IOSCleanSlateWorkspaceView: View {
             )
         }
         .sensoryFeedback(.success, trigger: viewModel.lastCopiedBannerText)
-        .onChange(of: viewModel.captureState) { _, newState in
-            syncLiveActivity(with: newState)
-        }
-        .onChange(of: viewModel.recordingElapsedSeconds) { _, seconds in
-            updateLiveActivityElapsed(seconds)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("vox.liveActivity.finishCapture"))) { _ in
-            if viewModel.isRecordingActive {
-                viewModel.finishCapture()
-            }
-        }
         .task {
             let env = ProcessInfo.processInfo.environment
             if env["VOX_DEMO_SEED"] == "1" {
@@ -192,18 +183,22 @@ public struct IOSCleanSlateWorkspaceView: View {
         }
     }
 
-    // MARK: - Group 3: Functional Bottom Capture Dock & Deterministic Receipt
+    // MARK: - Group 3: Functional Bottom Capture Dock & Deterministic Receipt (Native Liquid Glass)
 
     private var bottomCaptureInset: some View {
-        VStack(spacing: AppTheme.Space.sm) {
-            if let receipt = viewModel.lastCopiedBannerText {
-                deterministicReceiptPill(receipt)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+        GlassEffectContainer(spacing: AppTheme.Space.md) {
+            VStack(spacing: AppTheme.Space.sm) {
+                if let receipt = viewModel.lastCopiedBannerText {
+                    deterministicReceiptPill(receipt)
+                        .glassEffectID("receiptBanner", in: dockGlassNamespace)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                if case .failed(_, let reason) = viewModel.captureState {
+                    failureBannerPill(reason)
+                        .glassEffectID("failureBanner", in: dockGlassNamespace)
+                }
+                captureDock
             }
-            if case .failed(_, let reason) = viewModel.captureState {
-                failureBannerPill(reason)
-            }
-            captureDock
         }
         .padding(.horizontal, AppTheme.Space.lg)
         .padding(.top, AppTheme.Space.xs)
@@ -227,10 +222,7 @@ public struct IOSCleanSlateWorkspaceView: View {
             }
             .padding(.horizontal, AppTheme.Space.md)
             .padding(.vertical, AppTheme.Space.sm)
-            .background(
-                reduceTransparency ? AnyShapeStyle(.thickMaterial) : AnyShapeStyle(.regularMaterial),
-                in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-            )
+            .modifier(IOSFunctionalGlassModifier(reduceTransparency: reduceTransparency, cornerRadius: AppTheme.Radius.md))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("vox.ios.receiptBanner")
@@ -247,7 +239,7 @@ public struct IOSCleanSlateWorkspaceView: View {
         }
         .padding(.horizontal, AppTheme.Space.md)
         .padding(.vertical, AppTheme.Space.xs)
-        .background(AppTheme.surfaceCard, in: Capsule())
+        .modifier(IOSFunctionalGlassModifier(reduceTransparency: reduceTransparency, cornerRadius: AppTheme.Radius.md))
     }
 
     private var captureDock: some View {
@@ -256,19 +248,22 @@ public struct IOSCleanSlateWorkspaceView: View {
                 recordingActiveBar
             } else if viewModel.isProcessingCapture {
                 processingActiveBar
+                    .padding(.horizontal, AppTheme.Space.lg)
+                    .padding(.vertical, AppTheme.Space.sm)
+                    .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
+                    .glassEffectID("dockMainPill", in: dockGlassNamespace)
             } else {
                 idleDestinationSwitcher
-                Spacer(minLength: AppTheme.Space.sm)
+                    .padding(AppTheme.Space.xs)
+                    .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
+                    .glassEffectID("dockMainPill", in: dockGlassNamespace)
+
+                Spacer(minLength: AppTheme.Space.xs)
+
                 primaryRecordButton
+                    .glassEffectID("dockActionOrb", in: dockGlassNamespace)
             }
         }
-        .padding(.horizontal, AppTheme.Space.lg)
-        .padding(.vertical, AppTheme.Space.sm)
-        .background(
-            reduceTransparency ? AnyShapeStyle(.thickMaterial) : AnyShapeStyle(.ultraThinMaterial),
-            in: Capsule()
-        )
-        .shadow(color: .black.opacity(0.08), radius: 14, y: 4)
     }
 
     private var idleDestinationSwitcher: some View {
@@ -291,7 +286,7 @@ public struct IOSCleanSlateWorkspaceView: View {
                     .background {
                         if isSelected {
                             Capsule()
-                                .fill((mode == .todo ? Color.orange : Color.accentColor).opacity(0.18))
+                                .fill((mode == .todo ? Color.orange : Color.accentColor).opacity(0.20))
                                 .matchedGeometryEffect(id: "captureDestination", in: modeAnimation)
                         }
                     }
@@ -307,6 +302,10 @@ public struct IOSCleanSlateWorkspaceView: View {
 
     private var primaryRecordButton: some View {
         Button {
+            if isHoldRecording {
+                isHoldRecording = false
+                return
+            }
             if viewModel.isRecordingActive {
                 viewModel.finishCapture()
             } else {
@@ -315,33 +314,50 @@ public struct IOSCleanSlateWorkspaceView: View {
         } label: {
             Image(systemName: viewModel.isRecordingActive ? "stop.fill" : "mic.fill")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 48, height: 48)
-                .background(
-                    viewModel.isRecordingActive
-                        ? Color.red
-                        : (viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor),
-                    in: Circle()
-                )
+                .frame(width: 28, height: 28)
+                .padding(6)
         }
-        .buttonStyle(AppPressableButtonStyle())
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.circle)
+        .tint(
+            viewModel.isRecordingActive
+                ? Color.red
+                : (viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor)
+        )
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.28)
+                .onEnded { _ in
+                    if !viewModel.isRecordingActive {
+                        isHoldRecording = true
+                        viewModel.startCaptureInPreferredMode()
+                    }
+                }
+                .sequenced(before: DragGesture(minimumDistance: 0))
+                .onEnded { _ in
+                    if isHoldRecording && viewModel.isRecordingActive {
+                        isHoldRecording = false
+                        viewModel.finishCapture()
+                    }
+                }
+        )
         .accessibilityLabel(viewModel.isRecordingActive ? "停止录音" : "开始录音")
         .accessibilityIdentifier(viewModel.isRecordingActive ? "vox.stop.button" : "vox.record.button")
     }
 
     private var recordingActiveBar: some View {
-        HStack(spacing: AppTheme.Space.md) {
+        HStack(spacing: AppTheme.Space.sm) {
             Button {
                 viewModel.cancelCapture()
             } label: {
                 Image(systemName: "xmark")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-                    .background(AppTheme.surfaceCard, in: Circle())
+                    .frame(width: 24, height: 24)
+                    .padding(6)
             }
-            .buttonStyle(AppPressableButtonStyle())
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
             .accessibilityLabel("取消")
+            .glassEffectID("dockCancelOrb", in: dockGlassNamespace)
 
             Button {
                 viewModel.toggleCaptureModeDuringRecording()
@@ -356,17 +372,21 @@ public struct IOSCleanSlateWorkspaceView: View {
                         .padding(.horizontal, AppTheme.Space.sm)
                         .padding(.vertical, AppTheme.Space.xs)
                         .background(
-                            (viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor).opacity(0.16),
+                            (viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor).opacity(0.18),
                             in: Capsule()
                         )
                         .foregroundStyle(viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor)
                 }
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.horizontal, AppTheme.Space.md)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("vox.recording.indicator")
+            .glassEffectID("dockMainPill", in: dockGlassNamespace)
 
             primaryRecordButton
+                .glassEffectID("dockActionOrb", in: dockGlassNamespace)
         }
     }
 
@@ -394,34 +414,33 @@ public struct IOSCleanSlateWorkspaceView: View {
     static func formatDuration(_ value: TimeInterval) -> String {
         String(format: "%02d:%02d", Int(value) / 60, Int(value) % 60)
     }
+}
 
-    // MARK: - Live Activity Bridge
+private struct IOSFunctionalGlassCapsuleModifier: ViewModifier {
+    let reduceTransparency: Bool
 
-    private func syncLiveActivity(with state: CaptureSessionState) {
-        switch state {
-        case .recording(let mode):
-            NotificationCenter.default.post(
-                name: Notification.Name("vox.liveActivity.recordingStarted"),
-                object: nil,
-                userInfo: ["mode": mode.rawValue]
-            )
-        case .idle, .completed, .failed:
-            NotificationCenter.default.post(
-                name: Notification.Name("vox.liveActivity.recordingEnded"),
-                object: nil
-            )
-        case .transcribing, .refining:
-            break
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content.background(.thickMaterial, in: Capsule())
+        } else {
+            content.glassEffect(.regular.interactive(), in: .capsule)
         }
     }
+}
 
-    private func updateLiveActivityElapsed(_ seconds: Int) {
-        guard viewModel.isRecordingActive else { return }
-        NotificationCenter.default.post(
-            name: Notification.Name("vox.liveActivity.elapsedUpdated"),
-            object: nil,
-            userInfo: ["seconds": seconds, "mode": viewModel.selectedCaptureMode.rawValue]
-        )
+private struct IOSFunctionalGlassModifier: ViewModifier {
+    let reduceTransparency: Bool
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content.background(
+                .thickMaterial,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        } else {
+            content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        }
     }
 }
 
@@ -590,10 +609,10 @@ private struct IOSWorkspaceSettingsSheet: View {
 
                 Section {
                     VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
-                        Label("绑定 iPhone 操作按钮（Action Button）", systemImage: "button.vertical.left.press")
+                        Label("不进 App · 后台一键启停录音", systemImage: "button.vertical.left.press")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
-                        Text("打开系统「设置 → 操作按钮 → 快捷指令」，选择「VoxPocket · 开始录音」，即可随时按一下实体键极速录入语音。")
+                        Text("① 操作按钮：在系统「设置 → 操作按钮 → 快捷指令」中选择「开始或停止录音」，按一下直接在后台录音并弹出灵动岛，再按一下即可停止并按去向保存。\n② 桌面/锁屏/控制中心小组件：添加「VoxPocket 快速录音」小组件，点按即可在后台启停录音，无需打开主界面。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
