@@ -236,5 +236,47 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         XCTAssertEqual(merged.title, "Concurrent edit during push")
         XCTAssertEqual(merged.externalSync?.externalID, "CUSTOM-102")
         XCTAssertEqual(merged.externalSync?.syncState, .pendingPush)
+
+        // Verify that deleting a todo while an external push is in flight does not resurrect the deleted item
+        let deletedTodo = VoiceTodo(title: "To be deleted during push")
+        try await todos.save(deletedTodo)
+        let deletingSyncService = LinearTodoSyncService(
+            isEnabled: true,
+            isAutoSyncEnabled: false,
+            teamKey: "CUSTOM",
+            pushTransport: { [todos] todo, teamKey in
+                try await todos.delete(by: todo.id)
+                return """
+                {
+                  "ok": true,
+                  "command": "idea",
+                  "issue": {
+                    "id": "00000000-0000-0000-0000-000000000103",
+                    "identifier": "\(teamKey)-103",
+                    "title": "\(todo.title)",
+                    "state": "Triage",
+                    "stateType": "triage",
+                    "project": "Personal project",
+                    "priority": 0,
+                    "url": "https://linear.app/example/issue/\(teamKey)-103",
+                    "createdAt": "2026-11-09T13:00:00Z",
+                    "updatedAt": "2026-11-09T13:30:00Z",
+                    "labels": []
+                  }
+                }
+                """.data(using: .utf8)!
+            },
+            pullTransport: { _ in Data("{\"ok\":true,\"issues\":[]}".utf8) }
+        )
+        let deletingUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(),
+            runner: runner,
+            externalSync: deletingSyncService
+        )
+        _ = try await deletingUseCase.syncTodoToExternal(todoID: deletedTodo.id)
+        let fetchedAfterDelete = try await todos.fetch(by: deletedTodo.id)
+        XCTAssertNil(fetchedAfterDelete)
     }
 }

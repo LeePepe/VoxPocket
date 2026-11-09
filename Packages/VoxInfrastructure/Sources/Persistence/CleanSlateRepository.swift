@@ -15,8 +15,19 @@ public protocol VoiceTodoRepository: AnyObject, Sendable {
     func fetchAll() async throws -> [VoiceTodo]
     func fetch(by id: UUID) async throws -> VoiceTodo?
     func save(_ todo: VoiceTodo) async throws
+    func update(id: UUID, transform: @Sendable (VoiceTodo) -> VoiceTodo?) async throws -> VoiceTodo?
     func delete(by id: UUID) async throws
     func observe() -> AnyPublisher<[VoiceTodo], Never>
+}
+
+public extension VoiceTodoRepository {
+    func update(id: UUID, transform: @Sendable (VoiceTodo) -> VoiceTodo?) async throws -> VoiceTodo? {
+        guard let current = try await fetch(by: id), let updated = transform(current) else {
+            return nil
+        }
+        try await save(updated)
+        return updated
+    }
 }
 
 public protocol CloudSyncTransport: Sendable {
@@ -110,6 +121,18 @@ public final class DefaultVoiceTodoRepository: VoiceTodoRepository, @unchecked S
         let values = state.withLock { state -> [VoiceTodo] in state.values[todo.id] = todo; return state.values.values.sorted { $0.updatedAt > $1.updatedAt } }
         try persist(values); subject.send(values)
         if let cloud { try await cloud.saveTodoMetadata(encoder.encode(values.map { $0.sanitizedForCloudSync() })) }
+    }
+    public func update(id: UUID, transform: @Sendable (VoiceTodo) -> VoiceTodo?) async throws -> VoiceTodo? {
+        let result = state.withLock { state -> (updated: VoiceTodo, all: [VoiceTodo])? in
+            guard let current = state.values[id], let updated = transform(current) else { return nil }
+            state.values[id] = updated
+            return (updated, state.values.values.sorted { $0.updatedAt > $1.updatedAt })
+        }
+        guard let result else { return nil }
+        try persist(result.all)
+        subject.send(result.all)
+        if let cloud { try await cloud.saveTodoMetadata(encoder.encode(result.all.map { $0.sanitizedForCloudSync() })) }
+        return result.updated
     }
     public func delete(by id: UUID) async throws { let values = state.withLock { state -> [VoiceTodo] in state.values.removeValue(forKey: id); return state.values.values.sorted { $0.updatedAt > $1.updatedAt } }; try persist(values); subject.send(values) }
     public func observe() -> AnyPublisher<[VoiceTodo], Never> { subject.eraseToAnyPublisher() }

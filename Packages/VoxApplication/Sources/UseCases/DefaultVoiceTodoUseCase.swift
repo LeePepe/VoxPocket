@@ -92,8 +92,9 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     public func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo {
         try await todos.save(todo)
         guard todo.externalSync != nil else { return todo }
-        let queued = todo.withExternalSync(pendingMetadata(for: todo))
-        try await todos.save(queued)
+        let queued = try await todos.update(id: todo.id) { current in
+            current.withExternalSync(self.pendingMetadata(for: current), updatedAt: current.updatedAt)
+        } ?? todo.withExternalSync(pendingMetadata(for: todo), updatedAt: todo.updatedAt)
         guard externalSync.isEnabled else { return queued }
         return await pushBestEffort(queued, fallbackStateOnFailure: .pendingPush)
     }
@@ -113,22 +114,23 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     }
 
     public func markTodoDone(todoID: UUID) async throws -> VoiceTodo {
-        guard let todo = try await todos.fetch(by: todoID) else { throw VoiceTodoUseCaseError.todoNotFound }
-        let done = todo.withExecutionState(.done, completedAt: Date())
-        try await todos.save(done)
+        guard let done = try await todos.update(id: todoID, transform: { current in
+            current.withExecutionState(.done, completedAt: Date())
+        }) else { throw VoiceTodoUseCaseError.todoNotFound }
         guard done.externalSync != nil || (externalSync.isEnabled && externalSync.isAutoSyncEnabled) else {
             return done
         }
-        let queued = done.withExternalSync(pendingMetadata(for: done))
-        try await todos.save(queued)
+        let queued = try await todos.update(id: todoID) { current in
+            current.withExternalSync(self.pendingMetadata(for: current), updatedAt: current.updatedAt)
+        } ?? done.withExternalSync(pendingMetadata(for: done), updatedAt: done.updatedAt)
         guard externalSync.isEnabled else { return queued }
         return await pushBestEffort(queued, fallbackStateOnFailure: .pendingPush)
     }
 
     public func syncTodoToExternal(todoID: UUID) async throws -> VoiceTodo {
-        guard let todo = try await todos.fetch(by: todoID) else { throw VoiceTodoUseCaseError.todoNotFound }
-        let pending = todo.withExternalSync(pendingMetadata(for: todo))
-        try await todos.save(pending)
+        guard let pending = try await todos.update(id: todoID, transform: { current in
+            current.withExternalSync(self.pendingMetadata(for: current), updatedAt: current.updatedAt)
+        }) else { throw VoiceTodoUseCaseError.todoNotFound }
         return await pushBestEffort(pending, fallbackStateOnFailure: .failed)
     }
 
@@ -151,37 +153,40 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         )
         let currentTodos = try await todos.fetchAll()
         for item in currentTodos {
-            guard let latest = try await todos.fetch(by: item.id),
-                  let metadata = latest.externalSync,
-                  metadata.syncState != .pendingPush,
-                  let externalID = metadata.externalID,
+            guard let externalID = item.externalSync?.externalID,
                   let remote = snapshotsByID[externalID] else { continue }
-            let isNewer: Bool
-            if let remoteUpdated = remote.remoteUpdatedAt, let localRemoteUpdated = metadata.remoteUpdatedAt {
-                isNewer = remoteUpdated > localRemoteUpdated
-            } else {
-                isNewer = remote.remoteUpdatedAt != nil && metadata.remoteUpdatedAt == nil
-            }
-            guard isNewer else { continue }
-            let updatedMeta = metadata.withState(
-                .synced,
-                externalID: .some(remote.externalID),
-                externalURL: remote.externalURL != nil ? .some(remote.externalURL) : nil,
-                teamKey: remote.teamKey,
-                projectName: remote.projectName != nil ? .some(remote.projectName) : nil,
-                remoteUpdatedAt: .some(remote.remoteUpdatedAt),
-                lastError: .some(nil)
-            )
-            let updatedTodo = latest
-                .withEdits(title: remote.title)
-                .withExecutionState(
-                    remote.executionState,
-                    summary: latest.lastExecutionSummary,
-                    startedAt: latest.lastStartedAt,
-                    completedAt: remote.executionState == .done ? (latest.lastCompletedAt ?? Date()) : latest.lastCompletedAt
+            _ = try await todos.update(id: item.id) { current in
+                guard let metadata = current.externalSync,
+                      metadata.syncState != .pendingPush,
+                      metadata.externalID == externalID else {
+                    return nil
+                }
+                let isNewer: Bool
+                if let remoteUpdated = remote.remoteUpdatedAt, let localRemoteUpdated = metadata.remoteUpdatedAt {
+                    isNewer = remoteUpdated > localRemoteUpdated
+                } else {
+                    isNewer = remote.remoteUpdatedAt != nil && metadata.remoteUpdatedAt == nil
+                }
+                guard isNewer else { return nil }
+                let updatedMeta = metadata.withState(
+                    .synced,
+                    externalID: .some(remote.externalID),
+                    externalURL: remote.externalURL != nil ? .some(remote.externalURL) : nil,
+                    teamKey: remote.teamKey,
+                    projectName: remote.projectName != nil ? .some(remote.projectName) : nil,
+                    remoteUpdatedAt: .some(remote.remoteUpdatedAt),
+                    lastError: .some(nil)
                 )
-                .withExternalSync(updatedMeta)
-            try await todos.save(updatedTodo)
+                return current
+                    .withEdits(title: remote.title)
+                    .withExecutionState(
+                        remote.executionState,
+                        summary: current.lastExecutionSummary,
+                        startedAt: current.lastStartedAt,
+                        completedAt: remote.executionState == .done ? (current.lastCompletedAt ?? Date()) : current.lastCompletedAt
+                    )
+                    .withExternalSync(updatedMeta)
+            }
         }
         return try await todos.fetchAll()
     }
@@ -203,25 +208,28 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         let baseMeta = pendingMetadata(for: snapshot)
         do {
             let syncedMeta = try await externalSync.pushTodo(snapshot)
-            guard let current = try? await todos.fetch(by: snapshot.id) else {
-                return snapshot.withExternalSync(syncedMeta)
+            let updated = try? await todos.update(id: snapshot.id) { current in
+                let localChangedDuringPush = current.title != snapshot.title
+                    || current.taskPrompt != snapshot.taskPrompt
+                    || current.executionState != snapshot.executionState
+                    || current.projectKey != snapshot.projectKey
+                    || current.updatedAt != snapshot.updatedAt
+                let finalMeta = localChangedDuringPush ? syncedMeta.withState(.pendingPush) : syncedMeta
+                return current.withExternalSync(finalMeta, updatedAt: current.updatedAt)
             }
-            let localChangedDuringPush = current.title != snapshot.title
-                || current.taskPrompt != snapshot.taskPrompt
-                || current.executionState != snapshot.executionState
-                || current.projectKey != snapshot.projectKey
-            let finalMeta = localChangedDuringPush ? syncedMeta.withState(.pendingPush) : syncedMeta
-            let mergedTodo = current.withExternalSync(finalMeta, updatedAt: current.updatedAt)
-            try? await todos.save(mergedTodo)
-            return mergedTodo
+            return updated ?? snapshot.withExternalSync(syncedMeta)
         } catch {
             let failedMeta = baseMeta.withState(fallbackStateOnFailure, lastError: .some(error.localizedDescription))
-            guard let current = try? await todos.fetch(by: snapshot.id) else {
-                return snapshot.withExternalSync(failedMeta)
+            let updated = try? await todos.update(id: snapshot.id) { current in
+                let localChangedDuringPush = current.title != snapshot.title
+                    || current.taskPrompt != snapshot.taskPrompt
+                    || current.executionState != snapshot.executionState
+                    || current.projectKey != snapshot.projectKey
+                    || current.updatedAt != snapshot.updatedAt
+                let targetState = localChangedDuringPush ? ExternalTodoSyncState.pendingPush : fallbackStateOnFailure
+                return current.withExternalSync(failedMeta.withState(targetState), updatedAt: current.updatedAt)
             }
-            let degradedTodo = current.withExternalSync(failedMeta, updatedAt: current.updatedAt)
-            try? await todos.save(degradedTodo)
-            return degradedTodo
+            return updated ?? snapshot.withExternalSync(failedMeta)
         }
     }
 }
