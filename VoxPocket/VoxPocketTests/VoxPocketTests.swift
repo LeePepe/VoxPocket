@@ -5,17 +5,99 @@
 //  Created by 李天培 on 1/26/26.
 //
 
+import Foundation
 import Testing
+import CoreModels
+import Preferences
+import UIShared
+import UseCases
+@testable import VoxPocket
 #if os(macOS)
 import AppKit
 import Carbon
-import CoreModels
 import PlatformAdapters
-import UseCases
-@testable import VoxPocket
 #endif
 
 struct VoxPocketTests {
+
+    @MainActor
+    @Test func toggleQuickCaptureFromIntentStartsWithPreferredDestinationAndCancelsCleanly() async throws {
+        let suite = "VoxPocketTests.QuickCapture.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsPreferencesStore(defaults: defaults)
+        await store.setValue(CaptureMode.text, for: .iosQuickCaptureDestination)
+
+        let intentNotificationCenter = NotificationCenter()
+        let container = ServiceContainer(
+            productTelemetryPreferences: ProductTelemetryPreferences(store: store),
+            processEnvironment: [:],
+            processArguments: [],
+            preferencesStore: store,
+            llmNotificationCenter: intentNotificationCenter,
+            productTelemetryNotificationCenter: NotificationCenter(),
+            productTelemetryHostOverride: .test
+        )
+        container.workspaceViewModel.isDemoRecordingEnabled = true
+
+        #expect(container.workspaceViewModel.isRecordingActive == false)
+
+        var startedModes: [String] = []
+        var endedCount = 0
+        let startedToken = NotificationCenter.default.addObserver(
+            forName: Notification.Name("vox.liveActivity.recordingStarted"),
+            object: nil,
+            queue: nil
+        ) { note in
+            if let mode = note.userInfo?["mode"] as? String {
+                startedModes.append(mode)
+            }
+        }
+        let endedToken = NotificationCenter.default.addObserver(
+            forName: Notification.Name("vox.liveActivity.recordingEnded"),
+            object: nil,
+            queue: nil
+        ) { _ in
+            endedCount += 1
+        }
+        defer {
+            NotificationCenter.default.removeObserver(startedToken)
+            NotificationCenter.default.removeObserver(endedToken)
+        }
+
+        await container.toggleQuickCaptureFromIntent()
+        #expect(container.workspaceViewModel.isRecordingActive == true)
+        #expect(container.workspaceViewModel.selectedCaptureMode == .text)
+        #expect(startedModes.contains(CaptureMode.text.rawValue))
+
+        try container.editingUseCase.replaceAll(with: "Background quick capture note")
+        await container.toggleQuickCaptureFromIntent()
+        #expect(container.workspaceViewModel.isRecordingActive == false)
+        #expect(endedCount >= 1)
+
+        #if os(iOS)
+        #expect(StartRecordingIntent.openAppWhenRun == false)
+
+        intentNotificationCenter.post(
+            name: Notification.Name("vox.liveActivity.toggleCapture"),
+            object: nil
+        )
+        for _ in 0..<200 where !container.workspaceViewModel.isRecordingActive {
+            await Task.yield()
+        }
+        #expect(container.workspaceViewModel.isRecordingActive == true)
+
+        try container.editingUseCase.replaceAll(with: "Finish capture from Dynamic Island")
+        intentNotificationCenter.post(
+            name: Notification.Name("vox.liveActivity.finishCapture"),
+            object: nil
+        )
+        for _ in 0..<200 where container.workspaceViewModel.isRecordingActive {
+            await Task.yield()
+        }
+        #expect(container.workspaceViewModel.isRecordingActive == false)
+        #endif
+    }
 
     #if os(macOS)
     @MainActor
@@ -132,10 +214,6 @@ struct VoxPocketTests {
         fixture.refinement.finish()
         await fixture.clipboard.gate.release()
         try await waitForDismissBoundary { fixture.saved.count == 1 }
-    }
-    #else
-    @Test func example() async throws {
-        #expect(true)
     }
     #endif
 

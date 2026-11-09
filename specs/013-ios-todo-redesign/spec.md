@@ -56,5 +56,8 @@
 2. `python3 scripts/verify_design_cases.py audit-l10n --path VoxPocket/VoxPocket --locales en,zh-Hans` 0 findings 通过；
 3. `scripts/verify` 全部层门禁通过；
 4. iOS 模拟器构建并截取 Light / Dark 模式主界面（Todo 主场）、录音态、Settings（录音去向切换 + Action Button 引导）真实截图，视觉与对齐检查无遮挡/截断；
-5. `.github/workflows/testflight.yml` 支持选择 `ios` TestFlight 手动发布分支并更新对应门禁测试。
+5. `.github/workflows/testflight.yml` 支持选择 `ios` TestFlight 手动发布分支并更新对应门禁测试；
+6. PR #158 Codex Review 修复要求：
+   - `Packages/VoxPresentation/Sources/UIShared/Views/IOSCleanSlateWorkspaceView.swift`：`captureDock` 中的 `primaryRecordButton` 必须在 `idle` 与 `recording` 态保持同一个结构节点（不再把 `recordingActiveBar` 拆成替换分支销毁按钮），确保 `LongPressGesture` + `DragGesture` 松手回调可靠触发停止录音；
+   - `VoxPocket/VoxPocketTests/VoxPocketTests.swift`（或新增 App 层测试）：增加 `VoxPocketApp` 层针对后台快速录音切换与通知行为的单元测试，满足 App 层改动必有 App 层测试的门禁要求。
 

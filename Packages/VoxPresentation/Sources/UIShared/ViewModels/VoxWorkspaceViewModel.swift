@@ -112,7 +112,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         startElapsedTimer()
         try? editingUseCase?.replaceAll(with: "")
         transcriptionUseCase?.clearLiveText()
-        guard ProcessInfo.processInfo.environment["VOX_DEMO_RECORDING"] != "1" else { return }
+        guard !isDemoRecordingEnabled else { return }
         if let recordingUseCase {
             Task {
                 do {
@@ -125,11 +125,14 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             }
         }
     }
+    public var isDemoRecordingEnabled: Bool = (ProcessInfo.processInfo.environment["VOX_DEMO_RECORDING"] == "1")
     public func toggleCaptureModeDuringRecording() { guard case .recording = captureState else { return }; updatePreferredCaptureMode(selectedCaptureMode == .text ? .todo : .text) }
     public func cancelCapture() {
         stopElapsedTimer()
-        recordingUseCase?.cancelRecording()
-        transcriptionUseCase?.clearLiveText()
+        if !isDemoRecordingEnabled {
+            recordingUseCase?.cancelRecording()
+            transcriptionUseCase?.clearLiveText()
+        }
         captureState = .idle
         recordingElapsedSeconds = 0
         audioLevel = 0
@@ -151,7 +154,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
         captureState = .transcribing
         let stoppedDuration = recordingUseCase?.state.duration ?? durationSeconds
-        if let recordingUseCase {
+        if !isDemoRecordingEnabled, let recordingUseCase {
             do {
                 try await recordingUseCase.stopRecording()
             } catch {
@@ -159,7 +162,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 return
             }
         }
-        if let transcriptionUseCase {
+        if !isDemoRecordingEnabled, let transcriptionUseCase {
             do {
                 try await transcriptionUseCase.commitCurrentTranscription()
             } catch {

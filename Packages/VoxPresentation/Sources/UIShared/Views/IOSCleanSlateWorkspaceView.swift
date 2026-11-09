@@ -259,7 +259,9 @@ public struct IOSCleanSlateWorkspaceView: View {
                     .glassEffectID("dockMainPill", in: dockGlassNamespace)
 
                 Spacer(minLength: AppTheme.Space.xs)
+            }
 
+            if !viewModel.isProcessingCapture {
                 primaryRecordButton
                     .glassEffectID("dockActionOrb", in: dockGlassNamespace)
             }
@@ -384,9 +386,6 @@ public struct IOSCleanSlateWorkspaceView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("vox.recording.indicator")
             .glassEffectID("dockMainPill", in: dockGlassNamespace)
-
-            primaryRecordButton
-                .glassEffectID("dockActionOrb", in: dockGlassNamespace)
         }
     }
 

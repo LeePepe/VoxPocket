@@ -226,7 +226,7 @@ public final class ServiceContainer: ObservableObject {
                                  azureTextConfigured: availability.textConfigured)
             })
         iosPresetPreferenceBinding = binding
-        setupIOSLiveActivityAndIntentObservers()
+        setupIOSLiveActivityAndIntentObservers(notificationCenter: notificationCenter)
         #endif
         sessionUseCase.onCompletedSession = { [weak self] rawText, refinedText in
             await productTelemetryInstrumentation.sessionDidComplete()
@@ -613,12 +613,16 @@ public final class ServiceContainer: ObservableObject {
         Task { await workspaceViewModel.reload() }
     }
 
-#if os(iOS)
     /// 供 Action Button (`StartRecordingIntent`)、Widget (`ToggleQuickCaptureIntent`) 与灵动岛后台一键启停录音（不跳进主 App）。
     public func toggleQuickCaptureFromIntent() async {
         await initializePersistence()
+        #if os(iOS)
+        let source: DeviceSource = .iPhone
+        #else
+        let source: DeviceSource = .mac
+        #endif
         if workspaceViewModel.isRecordingActive {
-            await workspaceViewModel.completeCapture(deviceSource: .iPhone)
+            await workspaceViewModel.completeCapture(deviceSource: source)
         } else {
             let preferredMode: CaptureMode = await preferencesStore.getValue(
                 for: .iosQuickCaptureDestination,
@@ -628,8 +632,9 @@ public final class ServiceContainer: ObservableObject {
         }
     }
 
-    private func setupIOSLiveActivityAndIntentObservers() {
-        NotificationCenter.default.addObserver(
+#if os(iOS)
+    private func setupIOSLiveActivityAndIntentObservers(notificationCenter: NotificationCenter) {
+        notificationCenter.addObserver(
             forName: ToggleQuickCaptureIntent.didRequestToggleNotification,
             object: nil,
             queue: .main
@@ -638,7 +643,7 @@ public final class ServiceContainer: ObservableObject {
                 await self?.toggleQuickCaptureFromIntent()
             }
         }
-        NotificationCenter.default.addObserver(
+        notificationCenter.addObserver(
             forName: FinishCaptureIntent.didRequestFinishNotification,
             object: nil,
             queue: .main
@@ -648,7 +653,7 @@ public final class ServiceContainer: ObservableObject {
                 await self.workspaceViewModel.completeCapture(deviceSource: .iPhone)
             }
         }
-        NotificationCenter.default.addObserver(
+        notificationCenter.addObserver(
             forName: Notification.Name("vox.liveActivity.recordingStarted"),
             object: nil,
             queue: .main
@@ -658,7 +663,7 @@ public final class ServiceContainer: ObservableObject {
                 self?.startIOSCaptureLiveActivity(modeRaw: modeRaw)
             }
         }
-        NotificationCenter.default.addObserver(
+        notificationCenter.addObserver(
             forName: Notification.Name("vox.liveActivity.elapsedUpdated"),
             object: nil,
             queue: .main
@@ -669,7 +674,7 @@ public final class ServiceContainer: ObservableObject {
                 self?.updateIOSCaptureLiveActivity(seconds: seconds, modeRaw: modeRaw)
             }
         }
-        NotificationCenter.default.addObserver(
+        notificationCenter.addObserver(
             forName: Notification.Name("vox.liveActivity.recordingEnded"),
             object: nil,
             queue: .main
