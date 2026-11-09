@@ -19,7 +19,6 @@ let package = Package(
         ),
         .library(
             name: "WidgetUI",
-            type: .dynamic,
             targets: ["WidgetUI"]
         ),
     ],

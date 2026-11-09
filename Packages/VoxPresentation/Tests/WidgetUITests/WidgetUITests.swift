@@ -14,5 +14,28 @@ final class WidgetUITests: XCTestCase {
         XCTAssertFalse(ToggleQuickCaptureIntent.openAppWhenRun)
         XCTAssertFalse(FinishCaptureIntent.openAppWhenRun)
     }
+
+    @MainActor
+    func test_background_audio_recording_intents_invoke_configured_perform_handlers() async throws {
+        defer {
+            ToggleQuickCaptureIntent.performHandler = nil
+            FinishCaptureIntent.performHandler = nil
+        }
+
+        var toggleInvoked = false
+        var finishInvoked = false
+        ToggleQuickCaptureIntent.performHandler = { @MainActor in
+            toggleInvoked = true
+        }
+        FinishCaptureIntent.performHandler = { @MainActor in
+            finishInvoked = true
+        }
+
+        _ = try await ToggleQuickCaptureIntent().perform()
+        _ = try await FinishCaptureIntent().perform()
+
+        XCTAssertTrue(toggleInvoked)
+        XCTAssertTrue(finishInvoked)
+    }
     #endif
 }

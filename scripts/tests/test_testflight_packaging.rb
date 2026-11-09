@@ -366,6 +366,14 @@ class TestFlightPackagingTests < Minitest::Test
     assert_equal ["VoxPocket"], spec.fetch("schemes").fetch("VoxPocket").fetch("build").fetch("targets").keys
   end
 
+  def test_widget_ui_product_is_statically_linked_to_prevent_ios_dyld_launch_crash
+    manifest = File.read(File.join(ROOT, "Packages/VoxPresentation/Package.swift"))
+    widget_product = manifest[/\.library\(\s*name:\s*"WidgetUI".*?\)/m]
+    refute_nil widget_product
+    refute_includes widget_product, ".dynamic",
+                    "WidgetUI must not be a dynamic library unless embedded into VoxPocket.app/Frameworks"
+  end
+
   def test_mac_lane_fetches_forced_installed_profile_without_fixed_name
     captured_options = nil
     Sigh::Manager.define_singleton_method(:start) do

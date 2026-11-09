@@ -6,11 +6,15 @@
 //
 
 import SwiftUI
+import CoreModels
 import Preferences
 import UseCases
 #if os(macOS)
 import PlatformAdapters
 import Carbon
+#endif
+#if os(iOS)
+import WidgetUI
 #endif
 import UIShared
 #if DEBUG
@@ -34,6 +38,17 @@ struct VoxPocketApp: App {
     init() {
         #if DEBUG
         UITestingBridge.start()
+        #endif
+        #if os(iOS)
+        ToggleQuickCaptureIntent.performHandler = {
+            guard await AppStartup.shared.prepare() else { return }
+            await ServiceContainer.shared.toggleQuickCaptureFromIntent()
+        }
+        FinishCaptureIntent.performHandler = {
+            guard await AppStartup.shared.prepare() else { return }
+            guard ServiceContainer.shared.workspaceViewModel.isRecordingActive else { return }
+            await ServiceContainer.shared.workspaceViewModel.completeCapture(deviceSource: .iPhone)
+        }
         #endif
     }
 
