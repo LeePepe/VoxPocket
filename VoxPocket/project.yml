@@ -127,7 +127,7 @@ targets:
           ENABLE_INCOMING_NETWORK_CONNECTIONS: false
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Apple Distribution
-          "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": VoxPocket App Store
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": $(VOXPOCKET_IOS_PROFILE_SPECIFIER)
           "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": $(VOXPOCKET_MAC_PROFILE_SPECIFIER)
 
   # ── Widget 扩展：仅 iOS ──
@@ -174,7 +174,7 @@ targets:
         Release:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Apple Distribution
-          PROVISIONING_PROFILE_SPECIFIER: VoxPocket Widget App Store
+          PROVISIONING_PROFILE_SPECIFIER: $(VOXPOCKET_WIDGET_PROFILE_SPECIFIER)
 
   # ── 单元测试 ──
   VoxPocketTests:

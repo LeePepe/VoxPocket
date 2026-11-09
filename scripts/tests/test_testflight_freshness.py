@@ -193,11 +193,11 @@ class TestFlightFreshnessTests(unittest.TestCase):
             "macOS Release specifier must be $(VOXPOCKET_MAC_PROFILE_SPECIFIER)",
         )
 
-        # iOS specifier preserved
+        # iOS specifier consumes VOXPOCKET_IOS_PROFILE_SPECIFIER
         self.assertRegex(
             self.project_text,
-            r'["\']?PROVISIONING_PROFILE_SPECIFIER\[sdk=iphoneos\*\]["\']?:\s*VoxPocket App Store',
-            "iOS Release specifier must remain 'VoxPocket App Store'",
+            r'["\']?PROVISIONING_PROFILE_SPECIFIER\[sdk=iphoneos\*\]["\']?:\s*(?:\$\(VOXPOCKET_IOS_PROFILE_SPECIFIER\)|"\$\(VOXPOCKET_IOS_PROFILE_SPECIFIER\)")',
+            "iOS Release specifier must be $(VOXPOCKET_IOS_PROFILE_SPECIFIER)",
         )
 
         # Release signing style is Manual with Apple Distribution
