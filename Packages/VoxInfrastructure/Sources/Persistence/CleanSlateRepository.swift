@@ -71,11 +71,25 @@ public final class UbiquitousKeyValueCloudSyncTransport: CloudSyncTransport, Sen
     public func todoMetadata() async throws -> Data? { try? Data(contentsOf: todoURL) }
 }
 
+private actor AsyncMutationSerializer {
+    private var tail: Task<Void, Never>?
+
+    func enqueue<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        let previous = tail
+        let task = Task<T, any Error> {
+            _ = await previous?.value
+            return try await operation()
+        }
+        tail = Task {
+            _ = try? await task.value
+        }
+        return try await task.value
+    }
+}
+
 private struct CaptureStoreState: Sendable { var values: [UUID: VoiceCapture] = [:] }
 private struct TodoStoreState: Sendable {
     var values: [UUID: VoiceTodo] = [:]
-    var revision: UInt64 = 0
-    var lastCloudRevision: UInt64 = 0
 }
 
 // Sendable: Combine CurrentValueSubject is bridged while mutable dictionary state is guarded by Mutex<CaptureStoreState>.
@@ -109,9 +123,10 @@ public final class DefaultVoiceCaptureRepository: VoiceCaptureRepository, @unche
     private func load() { guard let fileURL, let data = try? Data(contentsOf: fileURL), let values = try? decoder.decode([VoiceCapture].self, from: data) else { return }; let sortedValues = sorted(Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) }).values); state.withLock { $0.values = Dictionary(uniqueKeysWithValues: sortedValues.map { ($0.id, $0) }) }; subject.send(sortedValues) }
 }
 
-// Sendable: Combine CurrentValueSubject is bridged while mutable dictionary state, persistence, and publication are guarded by Mutex<TodoStoreState>.
+// Sendable: Combine CurrentValueSubject is bridged while mutable dictionary state, persistence, publication, and cloud writes are serialized by Mutex<TodoStoreState> and AsyncMutationSerializer.
 public final class DefaultVoiceTodoRepository: VoiceTodoRepository, @unchecked Sendable {
     private let state = Mutex(TodoStoreState())
+    private let cloudSerializer = AsyncMutationSerializer()
     private let subject = CurrentValueSubject<[VoiceTodo], Never>([])
     private let fileURL: URL?
     private let cloud: CloudSyncTransport?
@@ -122,52 +137,49 @@ public final class DefaultVoiceTodoRepository: VoiceTodoRepository, @unchecked S
     public func fetchAll() async throws -> [VoiceTodo] { state.withLock { $0.values.values.sorted { $0.updatedAt > $1.updatedAt } } }
     public func fetch(by id: UUID) async throws -> VoiceTodo? { state.withLock { $0.values[id] } }
     public func save(_ todo: VoiceTodo) async throws {
-        let (revision, sanitizedData) = try state.withLock { state -> (UInt64, Data) in
+        let sanitizedData = try state.withLock { state -> Data in
             state.values[todo.id] = todo
-            state.revision &+= 1
             let values = state.values.values.sorted { $0.updatedAt > $1.updatedAt }
             try persist(values)
             subject.send(values)
-            return (state.revision, try encoder.encode(values.map { $0.sanitizedForCloudSync() }))
+            return try encoder.encode(values.map { $0.sanitizedForCloudSync() })
         }
-        try await syncCloudIfLatest(revision: revision, data: sanitizedData)
+        try await flushLatestCloudMetadata(fallbackData: sanitizedData)
     }
     public func update(id: UUID, transform: @Sendable (VoiceTodo) -> VoiceTodo?) async throws -> VoiceTodo? {
-        let result = try state.withLock { state -> (updated: VoiceTodo, revision: UInt64, sanitizedData: Data)? in
+        let result = try state.withLock { state -> (updated: VoiceTodo, sanitizedData: Data)? in
             guard let current = state.values[id], let updated = transform(current) else { return nil }
             state.values[id] = updated
-            state.revision &+= 1
             let all = state.values.values.sorted { $0.updatedAt > $1.updatedAt }
             try persist(all)
             subject.send(all)
             let data = try encoder.encode(all.map { $0.sanitizedForCloudSync() })
-            return (updated, state.revision, data)
+            return (updated, data)
         }
         guard let result else { return nil }
-        try await syncCloudIfLatest(revision: result.revision, data: result.sanitizedData)
+        try await flushLatestCloudMetadata(fallbackData: result.sanitizedData)
         return result.updated
     }
     public func delete(by id: UUID) async throws {
-        let (revision, sanitizedData) = try state.withLock { state -> (UInt64, Data) in
+        let sanitizedData = try state.withLock { state -> Data in
             state.values.removeValue(forKey: id)
-            state.revision &+= 1
             let values = state.values.values.sorted { $0.updatedAt > $1.updatedAt }
             try persist(values)
             subject.send(values)
-            return (state.revision, try encoder.encode(values.map { $0.sanitizedForCloudSync() }))
+            return try encoder.encode(values.map { $0.sanitizedForCloudSync() })
         }
-        try await syncCloudIfLatest(revision: revision, data: sanitizedData)
+        try await flushLatestCloudMetadata(fallbackData: sanitizedData)
     }
     public func observe() -> AnyPublisher<[VoiceTodo], Never> { subject.eraseToAnyPublisher() }
-    private func syncCloudIfLatest(revision: UInt64, data: Data) async throws {
+    private func flushLatestCloudMetadata(fallbackData: Data) async throws {
         guard let cloud else { return }
-        let shouldWrite = state.withLock { state -> Bool in
-            guard revision >= state.lastCloudRevision else { return false }
-            state.lastCloudRevision = revision
-            return true
+        try await cloudSerializer.enqueue { [self] in
+            let currentData = state.withLock { state -> Data? in
+                let all = state.values.values.sorted { $0.updatedAt > $1.updatedAt }
+                return try? encoder.encode(all.map { $0.sanitizedForCloudSync() })
+            } ?? fallbackData
+            try await cloud.saveTodoMetadata(currentData)
         }
-        guard shouldWrite else { return }
-        try await cloud.saveTodoMetadata(data)
     }
     private func persist(_ values: [VoiceTodo]) throws { guard let fileURL else { return }; try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true); try encoder.encode(values).write(to: fileURL, options: .atomic) }
     private func load() { guard let fileURL, let data = try? Data(contentsOf: fileURL), let values = try? decoder.decode([VoiceTodo].self, from: data) else { return }; let sortedValues = values.sorted { $0.updatedAt > $1.updatedAt }; state.withLock { $0.values = Dictionary(uniqueKeysWithValues: sortedValues.map { ($0.id, $0) }) }; subject.send(sortedValues) }

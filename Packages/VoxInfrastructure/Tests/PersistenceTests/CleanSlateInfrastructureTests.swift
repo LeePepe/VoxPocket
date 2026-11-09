@@ -171,9 +171,33 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(snapshots[1].externalID, "EXAMPLE-91")
         XCTAssertEqual(snapshots[1].executionState, .failed)
 
-        // File-backed concurrency regression test: concurrent update and delete serialize mutation + disk persistence so a deleted todo is never resurrected on reload
+        // File-backed and cloud-transport concurrency regression test:
+        // 1) Reload immediately after concurrent updates + delete (no extra delete after the task group) and assert the deleted item is absent and the survivor's persisted value matches its in-memory value.
+        // 2) Delay the older cloud write so it would finish after a subsequent delete if cloud writes were not serialized through completion, and assert the final cloud metadata does not resurrect the deleted item.
+        actor DelayedCloudSyncTransport: CloudSyncTransport {
+            private var captureData: Data?
+            private var todoData: Data?
+            private var writeCount = 0
+
+            func saveCaptureMetadata(_ data: Data) async throws {
+                captureData = data
+            }
+
+            func saveTodoMetadata(_ data: Data) async throws {
+                writeCount += 1
+                if writeCount == 1 {
+                    try? await Task.sleep(for: .milliseconds(40))
+                }
+                todoData = data
+            }
+
+            func captureMetadata() async throws -> Data? { captureData }
+            func todoMetadata() async throws -> Data? { todoData }
+        }
+
         let persistenceDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let fileRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir)
+        let delayedCloud = DelayedCloudSyncTransport()
+        let fileRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir, cloudSync: delayedCloud)
         let targetTodo = VoiceTodo(title: "File-backed target")
         let survivorTodo = VoiceTodo(title: "Survivor")
         try await fileRepo.save(targetTodo)
@@ -191,15 +215,34 @@ final class CleanSlateInfrastructureTests: XCTestCase {
                 }
             }
             group.addTask {
+                try? await Task.sleep(for: .milliseconds(10))
                 try? await fileRepo.delete(by: targetTodo.id)
             }
         }
-        try await fileRepo.delete(by: targetTodo.id)
+        let inMemoryTarget = try await fileRepo.fetch(by: targetTodo.id)
+        let fetchedInMemorySurvivor = try await fileRepo.fetch(by: survivorTodo.id)
+        let inMemorySurvivor = try XCTUnwrap(fetchedInMemorySurvivor)
+        XCTAssertNil(inMemoryTarget)
+
         let reloadedRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir)
         let reloadedTarget = try await reloadedRepo.fetch(by: targetTodo.id)
-        let reloadedSurvivor = try await reloadedRepo.fetch(by: survivorTodo.id)
+        let fetchedReloadedSurvivor = try await reloadedRepo.fetch(by: survivorTodo.id)
+        let reloadedSurvivor = try XCTUnwrap(fetchedReloadedSurvivor)
         XCTAssertNil(reloadedTarget)
-        XCTAssertNotNil(reloadedSurvivor)
+        XCTAssertEqual(reloadedSurvivor, inMemorySurvivor)
+
+        // Explicit delayed-write race check: start save of ephemeral item (which sleeps 40ms in transport if first, or test with fresh repo)
+        let raceCloud = DelayedCloudSyncTransport()
+        let raceRepo = DefaultVoiceTodoRepository(directoryURL: persistenceDir.appendingPathComponent("race", isDirectory: true), cloudSync: raceCloud)
+        let ephemeral = VoiceTodo(title: "Ephemeral")
+        async let slowSave: Void = raceRepo.save(ephemeral)
+        try await Task.sleep(for: .milliseconds(5))
+        async let fastDelete: Void = raceRepo.delete(by: ephemeral.id)
+        _ = try await (slowSave, fastDelete)
+        let fetchedCloudData = try await raceCloud.todoMetadata()
+        let finalCloudData = try XCTUnwrap(fetchedCloudData)
+        let finalCloudTodos = try JSONDecoder().decode([VoiceTodo].self, from: finalCloudData)
+        XCTAssertTrue(finalCloudTodos.isEmpty)
     }
 
     #if os(macOS)
