@@ -48,9 +48,9 @@ final class CleanSlateModelsTests: XCTestCase {
 
         let syncMeta = ExternalTodoSyncMetadata(
             provider: "linear",
-            externalID: "TIA-90",
-            externalURL: "https://linear.app/example/issue/TIA-90",
-            teamKey: "TIA",
+            externalID: "EXAMPLE-90",
+            externalURL: "https://linear.app/example/issue/EXAMPLE-90",
+            teamKey: "EXAMPLE",
             projectName: "Personal project",
             syncState: .synced,
             remoteUpdatedAt: "2026-11-09T13:30:00Z",
@@ -64,8 +64,8 @@ final class CleanSlateModelsTests: XCTestCase {
         let sanitized = linked.sanitizedForCloudSync()
         XCTAssertEqual(sanitized.title, "")
         XCTAssertEqual(sanitized.externalSync?.provider, "linear")
-        XCTAssertEqual(sanitized.externalSync?.externalID, "TIA-90")
-        XCTAssertEqual(sanitized.externalSync?.teamKey, "TIA")
+        XCTAssertEqual(sanitized.externalSync?.externalID, "EXAMPLE-90")
+        XCTAssertEqual(sanitized.externalSync?.teamKey, "EXAMPLE")
         XCTAssertEqual(sanitized.externalSync?.syncState, .synced)
         XCTAssertEqual(sanitized.externalSync?.remoteUpdatedAt, "2026-11-09T13:30:00Z")
         XCTAssertNil(sanitized.externalSync?.externalURL)

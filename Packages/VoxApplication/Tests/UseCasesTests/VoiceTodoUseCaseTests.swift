@@ -79,8 +79,9 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         let syncService = LinearTodoSyncService(
             isEnabled: true,
             isAutoSyncEnabled: false,
-            teamKey: "TIA",
+            teamKey: "CUSTOM",
             pushTransport: { todo, teamKey in
+                XCTAssertEqual(teamKey, "CUSTOM")
                 if await recorder.recordPush(title: todo.title, state: todo.executionState) {
                     throw TodoExternalSyncError.remoteCommandFailed("offline")
                 }
@@ -130,10 +131,11 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         let localTodo = try XCTUnwrap(created.todo)
         XCTAssertNil(localTodo.externalSync)
 
-        // Manual promote to Linear
+        // Manual promote to Linear uses the configured teamKey ("CUSTOM")
         let promoted = try await useCase.syncTodoToExternal(todoID: localTodo.id)
         XCTAssertEqual(promoted.externalSync?.provider, "linear")
-        XCTAssertEqual(promoted.externalSync?.externalID, "TIA-101")
+        XCTAssertEqual(promoted.externalSync?.externalID, "CUSTOM-101")
+        XCTAssertEqual(promoted.externalSync?.teamKey, "CUSTOM")
         XCTAssertEqual(promoted.externalSync?.syncState, .synced)
         XCTAssertEqual(promoted.externalSync?.remoteUpdatedAt, "2026-11-09T13:30:00Z")
 
@@ -144,7 +146,7 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         XCTAssertEqual(offlineDone.externalSync?.syncState, .pendingPush)
         XCTAssertNotNil(offlineDone.externalSync?.lastError)
 
-        // Come back online with a remote snapshot: refreshExternalTodos pushes .pendingPush first before pulling
+        // Come back online with duplicate remote snapshots: refreshExternalTodos deduplicates and pushes .pendingPush first
         await recorder.setShouldFailPush(false)
         await recorder.setRemotePayload("""
         {
@@ -153,13 +155,26 @@ final class VoiceTodoUseCaseTests: XCTestCase {
           "issues": [
             {
               "id": "00000000-0000-0000-0000-000000000101",
-              "identifier": "TIA-101",
+              "identifier": "CUSTOM-101",
+              "title": "Stale duplicate title",
+              "state": "Todo",
+              "stateType": "unstarted",
+              "project": "Personal project",
+              "priority": 2,
+              "url": "https://linear.app/example/issue/CUSTOM-101",
+              "createdAt": "2026-11-09T13:00:00Z",
+              "updatedAt": "2026-11-09T13:40:00Z",
+              "labels": []
+            },
+            {
+              "id": "00000000-0000-0000-0000-000000000101",
+              "identifier": "CUSTOM-101",
               "title": "Remote finalized title",
               "state": "In Progress",
               "stateType": "started",
               "project": "Personal project",
               "priority": 2,
-              "url": "https://linear.app/example/issue/TIA-101",
+              "url": "https://linear.app/example/issue/CUSTOM-101",
               "createdAt": "2026-11-09T13:00:00Z",
               "updatedAt": "2026-11-09T14:00:00Z",
               "labels": []
@@ -176,5 +191,50 @@ final class VoiceTodoUseCaseTests: XCTestCase {
 
         let pushes = await recorder.getPushedStates()
         XCTAssertGreaterThanOrEqual(pushes.count, 3)
+
+        // Verify that a concurrent local edit or deletion during an in-flight push is preserved and not overwritten/recreated
+        let concurrentTodo = VoiceTodo(title: "Initial title")
+        try await todos.save(concurrentTodo)
+
+        let slowSyncService = LinearTodoSyncService(
+            isEnabled: true,
+            isAutoSyncEnabled: false,
+            teamKey: "CUSTOM",
+            pushTransport: { [todos] todo, teamKey in
+                let edited = todo.withEdits(title: "Concurrent edit during push")
+                try await todos.save(edited)
+                return """
+                {
+                  "ok": true,
+                  "command": "idea",
+                  "issue": {
+                    "id": "00000000-0000-0000-0000-000000000102",
+                    "identifier": "\(teamKey)-102",
+                    "title": "\(todo.title)",
+                    "state": "Triage",
+                    "stateType": "triage",
+                    "project": "Personal project",
+                    "priority": 0,
+                    "url": "https://linear.app/example/issue/\(teamKey)-102",
+                    "createdAt": "2026-11-09T13:00:00Z",
+                    "updatedAt": "2026-11-09T13:30:00Z",
+                    "labels": []
+                  }
+                }
+                """.data(using: .utf8)!
+            },
+            pullTransport: { _ in Data("{\"ok\":true,\"issues\":[]}".utf8) }
+        )
+        let concurrentUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(),
+            runner: runner,
+            externalSync: slowSyncService
+        )
+        let merged = try await concurrentUseCase.syncTodoToExternal(todoID: concurrentTodo.id)
+        XCTAssertEqual(merged.title, "Concurrent edit during push")
+        XCTAssertEqual(merged.externalSync?.externalID, "CUSTOM-102")
+        XCTAssertEqual(merged.externalSync?.syncState, .pendingPush)
     }
 }

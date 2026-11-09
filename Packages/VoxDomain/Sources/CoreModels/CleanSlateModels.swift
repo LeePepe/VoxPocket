@@ -86,13 +86,13 @@ public struct ExternalTodoSyncMetadata: Codable, Equatable, Hashable, Sendable {
     public let remoteUpdatedAt: String?
     public let lastError: String?
 
-    public init(provider: String = "linear", externalID: String? = nil, externalURL: String? = nil, teamKey: String = "TIA", projectName: String? = nil, syncState: ExternalTodoSyncState = .localOnly, remoteUpdatedAt: String? = nil, lastError: String? = nil) {
+    public init(provider: String = "linear", externalID: String? = nil, externalURL: String? = nil, teamKey: String = "EXAMPLE", projectName: String? = nil, syncState: ExternalTodoSyncState = .localOnly, remoteUpdatedAt: String? = nil, lastError: String? = nil) {
         self.provider = provider; self.externalID = externalID; self.externalURL = externalURL; self.teamKey = teamKey
         self.projectName = projectName; self.syncState = syncState; self.remoteUpdatedAt = remoteUpdatedAt; self.lastError = lastError
     }
 
-    public func withState(_ syncState: ExternalTodoSyncState, externalID: String?? = nil, externalURL: String?? = nil, projectName: String?? = nil, remoteUpdatedAt: String?? = nil, lastError: String?? = nil) -> ExternalTodoSyncMetadata {
-        ExternalTodoSyncMetadata(provider: provider, externalID: externalID ?? self.externalID, externalURL: externalURL ?? self.externalURL, teamKey: teamKey, projectName: projectName ?? self.projectName, syncState: syncState, remoteUpdatedAt: remoteUpdatedAt ?? self.remoteUpdatedAt, lastError: lastError ?? self.lastError)
+    public func withState(_ syncState: ExternalTodoSyncState, externalID: String?? = nil, externalURL: String?? = nil, teamKey: String? = nil, projectName: String?? = nil, remoteUpdatedAt: String?? = nil, lastError: String?? = nil) -> ExternalTodoSyncMetadata {
+        ExternalTodoSyncMetadata(provider: provider, externalID: externalID ?? self.externalID, externalURL: externalURL ?? self.externalURL, teamKey: teamKey ?? self.teamKey, projectName: projectName ?? self.projectName, syncState: syncState, remoteUpdatedAt: remoteUpdatedAt ?? self.remoteUpdatedAt, lastError: lastError ?? self.lastError)
     }
 
     public func sanitizedForCloudSync() -> ExternalTodoSyncMetadata {

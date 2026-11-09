@@ -76,22 +76,24 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         let service = LinearTodoSyncService(
             isEnabled: true,
             isAutoSyncEnabled: true,
-            teamKey: "TIA",
+            teamKey: "EXAMPLE",
             pushTransport: { todo, teamKey in
-                XCTAssertEqual(teamKey, "TIA")
+                XCTAssertEqual(teamKey, "EXAMPLE")
+                XCTAssertEqual(todo.rawTranscript, "")
+                XCTAssertNil(todo.localAudioFileName)
                 return """
                 {
                   "ok": true,
                   "command": "idea",
                   "issue": {
                     "id": "00000000-0000-0000-0000-000000000090",
-                    "identifier": "TIA-90",
+                    "identifier": "EXAMPLE-90",
                     "title": "\(todo.title)",
                     "state": "Triage",
                     "stateType": "triage",
                     "project": "Personal project",
                     "priority": 0,
-                    "url": "https://linear.app/example/issue/TIA-90",
+                    "url": "https://linear.app/example/issue/EXAMPLE-90",
                     "createdAt": "2026-11-09T13:30:00Z",
                     "updatedAt": "2026-11-09T13:30:00Z",
                     "labels": []
@@ -100,7 +102,7 @@ final class CleanSlateInfrastructureTests: XCTestCase {
                 """.data(using: .utf8)!
             },
             pullTransport: { teamKey in
-                XCTAssertEqual(teamKey, "TIA")
+                XCTAssertEqual(teamKey, "EXAMPLE")
                 return """
                 {
                   "ok": true,
@@ -108,26 +110,39 @@ final class CleanSlateInfrastructureTests: XCTestCase {
                   "issues": [
                     {
                       "id": "00000000-0000-0000-0000-000000000090",
-                      "identifier": "TIA-90",
+                      "identifier": "EXAMPLE-90",
+                      "title": "Older duplicate snapshot",
+                      "state": "Todo",
+                      "stateType": "unstarted",
+                      "project": "Personal project",
+                      "priority": 2,
+                      "url": "https://linear.app/example/issue/EXAMPLE-90",
+                      "createdAt": "2026-11-09T13:30:00Z",
+                      "updatedAt": "2026-11-09T13:45:00Z",
+                      "labels": []
+                    },
+                    {
+                      "id": "00000000-0000-0000-0000-000000000090",
+                      "identifier": "EXAMPLE-90",
                       "title": "Remote updated title",
                       "state": "In Progress",
                       "stateType": "started",
                       "project": "Personal project",
                       "priority": 2,
-                      "url": "https://linear.app/example/issue/TIA-90",
+                      "url": "https://linear.app/example/issue/EXAMPLE-90",
                       "createdAt": "2026-11-09T13:30:00Z",
                       "updatedAt": "2026-11-09T14:00:00Z",
                       "labels": []
                     },
                     {
                       "id": "00000000-0000-0000-0000-000000000091",
-                      "identifier": "TIA-91",
+                      "identifier": "EXAMPLE-91",
                       "title": "Blocked remote item",
                       "state": "In Progress",
                       "stateType": "started",
                       "project": "Personal project",
                       "priority": 1,
-                      "url": "https://linear.app/example/issue/TIA-91",
+                      "url": "https://linear.app/example/issue/EXAMPLE-91",
                       "createdAt": "2026-11-09T13:30:00Z",
                       "updatedAt": "2026-11-09T14:05:00Z",
                       "labels": ["NEED_GO"]
@@ -138,11 +153,11 @@ final class CleanSlateInfrastructureTests: XCTestCase {
             }
         )
 
-        let pushedMeta = try await service.pushTodo(VoiceTodo(title: "Sync me"))
+        let pushedMeta = try await service.pushTodo(VoiceTodo(title: "Sync me", rawTranscript: "sensitive raw transcript", localAudioFileName: "clip.m4a"))
         XCTAssertEqual(pushedMeta.provider, "linear")
-        XCTAssertEqual(pushedMeta.externalID, "TIA-90")
-        XCTAssertEqual(pushedMeta.externalURL, "https://linear.app/example/issue/TIA-90")
-        XCTAssertEqual(pushedMeta.teamKey, "TIA")
+        XCTAssertEqual(pushedMeta.externalID, "EXAMPLE-90")
+        XCTAssertEqual(pushedMeta.externalURL, "https://linear.app/example/issue/EXAMPLE-90")
+        XCTAssertEqual(pushedMeta.teamKey, "EXAMPLE")
         XCTAssertEqual(pushedMeta.projectName, "Personal project")
         XCTAssertEqual(pushedMeta.syncState, .synced)
         XCTAssertEqual(pushedMeta.remoteUpdatedAt, "2026-11-09T13:30:00Z")
@@ -150,9 +165,10 @@ final class CleanSlateInfrastructureTests: XCTestCase {
 
         let snapshots = try await service.fetchRemoteSnapshots()
         XCTAssertEqual(snapshots.count, 2)
-        XCTAssertEqual(snapshots[0].externalID, "TIA-90")
+        XCTAssertEqual(snapshots[0].externalID, "EXAMPLE-90")
+        XCTAssertEqual(snapshots[0].title, "Remote updated title")
         XCTAssertEqual(snapshots[0].executionState, .running)
-        XCTAssertEqual(snapshots[1].externalID, "TIA-91")
+        XCTAssertEqual(snapshots[1].externalID, "EXAMPLE-91")
         XCTAssertEqual(snapshots[1].executionState, .failed)
     }
 

@@ -10,7 +10,7 @@ public struct ExternalTodoRemoteSnapshot: Codable, Equatable, Hashable, Sendable
     public let projectName: String?
     public let remoteUpdatedAt: String?
 
-    public init(externalID: String, title: String, executionState: TodoExecutionState, externalURL: String? = nil, teamKey: String = "TIA", projectName: String? = nil, remoteUpdatedAt: String? = nil) {
+    public init(externalID: String, title: String, executionState: TodoExecutionState, externalURL: String? = nil, teamKey: String = "EXAMPLE", projectName: String? = nil, remoteUpdatedAt: String? = nil) {
         self.externalID = externalID; self.title = title; self.executionState = executionState; self.externalURL = externalURL; self.teamKey = teamKey; self.projectName = projectName; self.remoteUpdatedAt = remoteUpdatedAt
     }
 }
@@ -34,6 +34,7 @@ public enum TodoExternalSyncError: Error, LocalizedError, Equatable, Sendable {
 public protocol TodoExternalSyncService: AnyObject, Sendable {
     var isEnabled: Bool { get }
     var isAutoSyncEnabled: Bool { get }
+    var configuredTeamKey: String { get }
     func pushTodo(_ todo: VoiceTodo) async throws -> ExternalTodoSyncMetadata
     func fetchRemoteSnapshots() async throws -> [ExternalTodoRemoteSnapshot]
 }
@@ -41,6 +42,7 @@ public protocol TodoExternalSyncService: AnyObject, Sendable {
 public final class NoopTodoExternalSyncService: TodoExternalSyncService, Sendable {
     public let isEnabled: Bool = false
     public let isAutoSyncEnabled: Bool = false
+    public let configuredTeamKey: String = "EXAMPLE"
 
     public init() {}
 
@@ -60,13 +62,15 @@ public final class LinearTodoSyncService: TodoExternalSyncService, Sendable {
     public let isEnabled: Bool
     public let isAutoSyncEnabled: Bool
     public let teamKey: String
+    public var configuredTeamKey: String { teamKey }
     private let pushTransport: PushTransport?
     private let pullTransport: PullTransport?
 
-    public init(isEnabled: Bool = false, isAutoSyncEnabled: Bool = false, teamKey: String = "TIA", pushTransport: PushTransport? = nil, pullTransport: PullTransport? = nil) {
+    public init(isEnabled: Bool = false, isAutoSyncEnabled: Bool = false, teamKey: String = "EXAMPLE", pushTransport: PushTransport? = nil, pullTransport: PullTransport? = nil) {
         self.isEnabled = isEnabled
         self.isAutoSyncEnabled = isAutoSyncEnabled
-        self.teamKey = teamKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "TIA" : teamKey
+        let trimmed = teamKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.teamKey = trimmed.isEmpty ? "EXAMPLE" : trimmed
         self.pushTransport = pushTransport
         self.pullTransport = pullTransport
     }
@@ -74,8 +78,32 @@ public final class LinearTodoSyncService: TodoExternalSyncService, Sendable {
     public func pushTodo(_ todo: VoiceTodo) async throws -> ExternalTodoSyncMetadata {
         guard isEnabled else { throw TodoExternalSyncError.syncDisabled }
         guard let pushTransport else { throw TodoExternalSyncError.transportUnavailable }
-        let targetTeam = todo.externalSync?.teamKey ?? teamKey
-        let data = try await pushTransport(todo, targetTeam)
+        let targetTeam: String
+        if let existing = todo.externalSync, existing.externalID != nil, !existing.teamKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            targetTeam = existing.teamKey
+        } else {
+            targetTeam = teamKey
+        }
+        let sanitizedTodo = VoiceTodo(
+            id: todo.id,
+            title: todo.title,
+            taskPrompt: todo.taskPrompt,
+            rawTranscript: "",
+            projectKey: todo.projectKey,
+            assignedRunnerKind: todo.assignedRunnerKind,
+            executionState: todo.executionState,
+            lastExecutionSummary: nil,
+            lastStartedAt: todo.lastStartedAt,
+            lastCompletedAt: todo.lastCompletedAt,
+            sourceCaptureID: todo.sourceCaptureID,
+            localAudioFileName: nil,
+            durationSeconds: todo.durationSeconds,
+            deviceSource: todo.deviceSource,
+            externalSync: todo.externalSync,
+            createdAt: todo.createdAt,
+            updatedAt: todo.updatedAt
+        )
+        let data = try await pushTransport(sanitizedTodo, targetTeam)
         return try Self.parsePushResponse(data: data, fallbackTeamKey: targetTeam, existingMetadata: todo.externalSync)
     }
 
@@ -112,7 +140,7 @@ public final class LinearTodoSyncService: TodoExternalSyncService, Sendable {
         }
     }
 
-    public static func parsePushResponse(data: Data, fallbackTeamKey: String = "TIA", existingMetadata: ExternalTodoSyncMetadata? = nil) throws -> ExternalTodoSyncMetadata {
+    public static func parsePushResponse(data: Data, fallbackTeamKey: String = "EXAMPLE", existingMetadata: ExternalTodoSyncMetadata? = nil) throws -> ExternalTodoSyncMetadata {
         let envelope: LinearCommandEnvelope
         do {
             envelope = try JSONDecoder().decode(LinearCommandEnvelope.self, from: data)
@@ -142,7 +170,7 @@ public final class LinearTodoSyncService: TodoExternalSyncService, Sendable {
         )
     }
 
-    public static func parsePullResponse(data: Data, teamKey: String = "TIA") throws -> [ExternalTodoRemoteSnapshot] {
+    public static func parsePullResponse(data: Data, teamKey: String = "EXAMPLE") throws -> [ExternalTodoRemoteSnapshot] {
         let envelope: LinearListIssuesEnvelope
         do {
             envelope = try JSONDecoder().decode(LinearListIssuesEnvelope.self, from: data)
@@ -153,12 +181,14 @@ public final class LinearTodoSyncService: TodoExternalSyncService, Sendable {
             throw TodoExternalSyncError.remoteCommandFailed(envelope.error ?? "list-issues returned ok=false")
         }
         let issues = envelope.issues ?? []
-        return issues.compactMap { issue -> ExternalTodoRemoteSnapshot? in
+        var deduplicated: [String: ExternalTodoRemoteSnapshot] = [:]
+        var orderedIDs: [String] = []
+        for issue in issues {
             let identifier = issue.identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !identifier.isEmpty else { return nil }
+            guard !identifier.isEmpty else { continue }
             let state = Self.mapLinearStateToLocal(state: issue.state, stateType: issue.stateType, labels: issue.labels ?? [])
             let resolvedTeam = Self.extractTeamKey(from: identifier) ?? teamKey
-            return ExternalTodoRemoteSnapshot(
+            let candidate = ExternalTodoRemoteSnapshot(
                 externalID: identifier,
                 title: issue.title,
                 executionState: state,
@@ -167,7 +197,16 @@ public final class LinearTodoSyncService: TodoExternalSyncService, Sendable {
                 projectName: issue.project,
                 remoteUpdatedAt: issue.updatedAt
             )
+            if let existing = deduplicated[identifier] {
+                if (candidate.remoteUpdatedAt ?? "") >= (existing.remoteUpdatedAt ?? "") {
+                    deduplicated[identifier] = candidate
+                }
+            } else {
+                orderedIDs.append(identifier)
+                deduplicated[identifier] = candidate
+            }
         }
+        return orderedIDs.compactMap { deduplicated[$0] }
     }
 
     private static func extractTeamKey(from identifier: String) -> String? {
