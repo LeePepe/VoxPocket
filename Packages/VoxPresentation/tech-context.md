@@ -24,7 +24,7 @@ targets: [UIShared, PlatformUI, WidgetUI]
 - **UIShared**:跨平台 ViewModel / Components / DesignSystem / ViewStates / Snackbar / Views。
   `EditorViewModel`(2.5s 静音自动停)、`ViewState` 协议、`@Published` 驱动。
 - **PlatformUI**:平台特定视图(iOS/macOS),依赖 UIShared。
-- **WidgetUI**(dynamic library):独立无依赖。
+- **WidgetUI**:独立无依赖。
 
 ## 依赖
 - **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/平台适配/偏好) + `VoxApplication`(UseCases)。

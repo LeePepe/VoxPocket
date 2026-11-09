@@ -99,11 +99,15 @@ public struct ToggleQuickCaptureIntent: AudioRecordingIntent {
     public static let description = IntentDescription("无需打开 App，在后台启动或停止语音录入并联动灵动岛")
     public static let openAppWhenRun: Bool = false
     public static let didRequestToggleNotification = Notification.Name("vox.liveActivity.toggleCapture")
+    @MainActor public static var performHandler: (() async -> Void)?
 
     public init() {}
 
+    @MainActor
     public func perform() async throws -> some IntentResult {
-        await MainActor.run {
+        if let handler = Self.performHandler {
+            await handler()
+        } else {
             NotificationCenter.default.post(name: Self.didRequestToggleNotification, object: nil)
         }
         return .result()
@@ -116,11 +120,15 @@ public struct FinishCaptureIntent: AudioRecordingIntent {
     public static let description = IntentDescription("停止当前后台语音录入并保存结果")
     public static let openAppWhenRun: Bool = false
     public static let didRequestFinishNotification = Notification.Name("vox.liveActivity.finishCapture")
+    @MainActor public static var performHandler: (() async -> Void)?
 
     public init() {}
 
+    @MainActor
     public func perform() async throws -> some IntentResult {
-        await MainActor.run {
+        if let handler = Self.performHandler {
+            await handler()
+        } else {
             NotificationCenter.default.post(name: Self.didRequestFinishNotification, object: nil)
         }
         return .result()
