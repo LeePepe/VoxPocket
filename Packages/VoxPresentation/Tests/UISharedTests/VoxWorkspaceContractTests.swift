@@ -1,5 +1,6 @@
 import XCTest
 import CoreModels
+import Preferences
 import UseCases
 @testable import UIShared
 
@@ -102,5 +103,61 @@ final class VoxWorkspaceContractTests: XCTestCase {
         vm.clearSearchPreservingFilters()
         XCTAssertEqual(vm.searchQuery, "")
         XCTAssertEqual(vm.selectedProjectFilter, "VP")
+    }
+
+    @MainActor
+    func testIOSCaptureDestinationPreferenceAndDeterministicReceipt() async throws {
+        let store = InMemoryTestPreferencesStore()
+        let useCase = FakeCaptureAndTodoUseCase()
+        let editing = DefaultEditingUseCase()
+        var copiedStrings: [String] = []
+
+        let vm = VoxWorkspaceViewModel(
+            useCase: useCase,
+            preferencesStore: store,
+            defaultCaptureMode: .todo,
+            onCopyTextToClipboard: { copiedStrings.append($0) },
+            editingUseCase: editing
+        )
+        XCTAssertEqual(vm.selectedCaptureMode, .todo)
+
+        vm.startCaptureInPreferredMode()
+        XCTAssertEqual(vm.captureState, .recording(mode: .todo))
+        try editing.replaceAll(with: "Buy coffee beans")
+        await vm.completeCapture(deviceSource: .iPhone)
+        XCTAssertEqual(vm.lastCopiedBannerText, "已存入待办 · Buy coffee beans")
+        XCTAssertEqual(vm.todos.count, 1)
+        XCTAssertTrue(copiedStrings.isEmpty)
+
+        vm.updatePreferredCaptureMode(.text)
+        try? await Task.sleep(for: .milliseconds(30))
+        let persistedMode: CaptureMode? = await store.getValue(for: .iosQuickCaptureDestination)
+        XCTAssertEqual(persistedMode, .text)
+
+        vm.startCaptureInPreferredMode()
+        XCTAssertEqual(vm.captureState, .recording(mode: .text))
+        try editing.replaceAll(with: "Send weekly update")
+        await vm.completeCapture(refinedText: "Send weekly update.", deviceSource: .iPhone)
+        XCTAssertEqual(vm.lastCopiedBannerText, "已复制到剪贴板 · 可直接粘贴")
+        XCTAssertEqual(copiedStrings, ["Send weekly update."])
+    }
+
+    private actor InMemoryTestPreferencesStore: PreferencesStore {
+        private var storage: [PreferencesKey: Data] = [:]
+        func getValue<T: Codable & Sendable>(for key: PreferencesKey) async -> T? {
+            guard let data = storage[key] else { return nil }
+            return try? JSONDecoder().decode(T.self, from: data)
+        }
+        func getValue<T: Codable & Sendable>(for key: PreferencesKey, default defaultValue: T) async -> T {
+            if let existing: T = await getValue(for: key) { return existing }
+            await setValue(defaultValue, for: key)
+            return defaultValue
+        }
+        func setValue<T: Codable & Sendable>(_ value: T, for key: PreferencesKey) async {
+            storage[key] = try? JSONEncoder().encode(value)
+        }
+        func removeValue(for key: PreferencesKey) async {
+            storage.removeValue(forKey: key)
+        }
     }
 }

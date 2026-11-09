@@ -26,6 +26,7 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
     @Published public var showRawSheet: Bool = false
     @Published public var navigationPath: [Route] = []
     @Published public private(set) var lastRequestedCaptureMode: CaptureMode = .text
+    public var onStartRecordingInDefaultMode: (@MainActor () async -> Void)?
     public var onStartRecordingInMode: (@MainActor (CaptureMode) async -> Void)?
     public var onStopRecordingInMode: (@MainActor (CaptureMode) async -> Void)?
 
@@ -138,8 +139,15 @@ public final class RootViewModel<SL: SessionListViewState, E: EditorViewState>: 
         deepLinkRouter?.pendingAction = nil
         switch action {
         case .startRecording:
-            lastRequestedCaptureMode = .text
-            if let onStartRecordingInMode { await onStartRecordingInMode(.text) } else { await editorState.startRecording() }
+            if let onStartRecordingInDefaultMode {
+                await onStartRecordingInDefaultMode()
+            } else if let onStartRecordingInMode {
+                lastRequestedCaptureMode = .text
+                await onStartRecordingInMode(.text)
+            } else {
+                lastRequestedCaptureMode = .text
+                await editorState.startRecording()
+            }
         case .startRecordingInMode(let mode):
             lastRequestedCaptureMode = mode
             if let onStartRecordingInMode { await onStartRecordingInMode(mode) } else { await editorState.startRecording() }

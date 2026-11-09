@@ -106,11 +106,10 @@ emits but does not require. `iOS simulator` and `kimi-review` run on every PR an
   project-specific non-public values in Git (code, tests, fixtures, docs). Use synthetic
   `example-*` values; real values stay in gitignored local files with a committed template.
 - Delivery: `.github/workflows/local-install.yml` installs `main` to `/Applications/VoxPocket.app`
-  on the local runner upon merge; `.github/workflows/testflight.yml` checks `main` every 12 hours
-  (01:17/13:17 Asia/Shanghai) for new macOS commits (`workflow_dispatch` fallback). Agents do not
-  manually upload or sign in to App Store Connect; the Owner verifies TestFlight uploads.
-- Platforms: macOS is released via TestFlight. iOS is enabled for development with CI
-  build/test; iOS TestFlight releases require separate Owner authorization.
+  on merge; `.github/workflows/testflight.yml` runs every 12h (01:17/13:17 Asia/Shanghai) for
+  `macos` and supports manual `workflow_dispatch` for `macos` or `ios` (Owner decision 2026-11-09).
+  Agents do not manually upload or sign in to App Store Connect; the Owner verifies TestFlight.
+- Platforms: macOS and iOS build/test in CI and release via TestFlight (`testflight.yml`).
 - `VoxPocket/project.yml` (XcodeGen) is the source of truth for the Xcode project.
 - Changes to `.github/**`, hooks, `scripts/verify`, rulesets, tech-context or AGENTS/
   constitution are important PRs.

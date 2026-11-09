@@ -302,26 +302,25 @@ class TestFlightPackagingTests < Minitest::Test
     end
   end
 
-  def test_workflow_pauses_ios_and_defaults_to_macos
+  def test_workflow_supports_macos_and_ios_and_defaults_to_macos
     workflow = YAML.load_file(File.join(ROOT, ".github/workflows/testflight.yml"))
     events = workflow.fetch("on") { workflow.fetch(true) }
     selection = events.fetch("workflow_dispatch").fetch("inputs").fetch("platform")
     assert_equal "macos", selection.fetch("default")
-    assert_equal ["macos"], selection.fetch("options")
+    assert_equal %w[macos ios], selection.fetch("options")
     steps = workflow.fetch("jobs").fetch("release").fetch("steps")
     conditions = steps.to_h { |step| [step["name"], step["if"]] }
-    assert_equal "${{ false }}",
+    assert_equal "steps.gate.outputs.release == 'true' && steps.gate.outputs.platform == 'ios'",
                  conditions.fetch("fastlane iOS beta")
-    assert_equal "steps.gate.outputs.release == 'true'",
+    assert_equal "steps.gate.outputs.release == 'true' && steps.gate.outputs.platform == 'macos'",
                  conditions.fetch("fastlane macOS beta")
     assert_equal "steps.gate.outputs.release == 'true'",
                  conditions.fetch("Move last-released tag")
     gate = steps.find { |step| step["id"] == "gate" }
     assert_equal "${{ inputs.platform || 'macos' }}", gate.fetch("env").fetch("RELEASE_PLATFORM")
-    assert_includes gate.fetch("run"), '"$RELEASE_PLATFORM" != "macos"'
-    assert_includes gate.fetch("run"), "refs/tags/testflight/macos-last-released"
+    assert_includes gate.fetch("run"), 'TAG_NAME="testflight/${RELEASE_PLATFORM}-last-released"'
     tag_step = steps.find { |step| step["name"] == "Move last-released tag" }
-    assert_includes tag_step.fetch("run"), "refs/tags/testflight/macos-last-released"
+    assert_includes tag_step.fetch("run"), "testflight/macos-last-released"
     refute_includes tag_step.fetch("run"), "refs/tags/testflight/last-released"
   end
 
@@ -334,7 +333,7 @@ class TestFlightPackagingTests < Minitest::Test
     assert_equal "YES", REXML::XPath.first(scheme, "//BuildAction").attributes["buildImplicitDependencies"]
   end
 
-  def test_release_gate_rejects_paused_platforms_and_accepts_macos
+  def test_release_gate_rejects_invalid_platforms_and_accepts_macos_and_ios
     workflow = YAML.load_file(File.join(ROOT, ".github/workflows/testflight.yml"))
     gate = workflow.fetch("jobs").fetch("release").fetch("steps").find { |step| step["id"] == "gate" }
     script = gate.fetch("run").gsub("${{ github.event.inputs.force }}", "false")
@@ -345,12 +344,13 @@ class TestFlightPackagingTests < Minitest::Test
         { "RELEASE_PLATFORM" => platform, "GITHUB_OUTPUT" => output_path },
         "bash", "-c", script, chdir: ROOT
       )
-      if platform == "macos"
+      if %w[macos ios].include?(platform)
         assert status.success?, output
         assert_includes File.read(output_path), "latest="
+        assert_includes File.read(output_path), "platform=#{platform}"
       else
         refute status.success?
-        assert_includes output, "iOS TestFlight releases need separate Owner authorization; only macos is allowed."
+        assert_includes output, "only macos or ios is allowed."
         assert_empty File.read(output_path)
       end
     end

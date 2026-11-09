@@ -19,10 +19,11 @@ on:
         type: boolean
         default: false
       platform:
-        description: '当前仅发布 macOS；iOS TestFlight 需 Owner 另行授权'
+        description: '选择发布平台（macos 或 ios）'
         type: choice
         options:
           - macos
+          - ios
         default: macos
 
 concurrency:
@@ -63,14 +64,17 @@ jobs:
           FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
         run: |
           set -euo pipefail
-          if [ "$RELEASE_PLATFORM" != "macos" ]; then
-            echo "::error::iOS TestFlight releases need separate Owner authorization; only macos is allowed."
+          if [ "$RELEASE_PLATFORM" != "macos" ] && [ "$RELEASE_PLATFORM" != "ios" ]; then
+            echo "::error::Invalid platform '$RELEASE_PLATFORM'; only macos or ios is allowed."
             exit 1
           fi
+          TAG_NAME="testflight/${RELEASE_PLATFORM}-last-released"
           LATEST="$(git rev-parse HEAD)"
-          RELEASED="$(git rev-parse -q --verify refs/tags/testflight/macos-last-released || echo none)"
+          RELEASED="$(git rev-parse -q --verify "refs/tags/${TAG_NAME}" || echo none)"
           echo "latest=$LATEST"   >> "$GITHUB_OUTPUT"
-          echo "HEAD=$LATEST  last-released=$RELEASED  force=${FORCE:-false}"
+          echo "platform=$RELEASE_PLATFORM" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "HEAD=$LATEST  platform=$RELEASE_PLATFORM  last-released=$RELEASED  force=${FORCE:-false}"
           if [ "${FORCE:-false}" = "true" ] || [ "$LATEST" != "$RELEASED" ]; then
             echo "release=true" >> "$GITHUB_OUTPUT"
             echo "→ 有新提交（或 force）：将 build + 上传"
@@ -134,8 +138,7 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KC" >/dev/null 2>&1 || true
 
       - name: fastlane iOS beta
-        # 保留 iOS 发布实现；Owner 另行授权前手动/定时触发均不执行 iOS lane。
-        if: ${{ false }}
+        if: steps.gate.outputs.release == 'true' && steps.gate.outputs.platform == 'ios'
         working-directory: repo
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -184,7 +187,7 @@ jobs:
           PY
 
       - name: fastlane macOS beta
-        if: steps.gate.outputs.release == 'true'
+        if: steps.gate.outputs.release == 'true' && steps.gate.outputs.platform == 'macos'
         working-directory: repo
         env:
           TELEMETRY_XCCONFIG_PATH: ${{ runner.temp }}/voxpocket-telemetry-${{ github.run_id }}-${{ github.run_attempt }}.xcconfig
@@ -214,7 +217,8 @@ jobs:
         run: |
           set -euo pipefail
           SHA="${{ steps.gate.outputs.latest }}"
-          git tag -f testflight/macos-last-released "$SHA"
+          TAG_NAME="${{ steps.gate.outputs.tag_name || 'testflight/macos-last-released' }}"
+          git tag -f "$TAG_NAME" "$SHA"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "refs/tags/testflight/macos-last-released"
-          echo "✅ testflight/macos-last-released → $SHA"
+            "refs/tags/${TAG_NAME}"
+          echo "✅ ${TAG_NAME} → $SHA"

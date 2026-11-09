@@ -111,15 +111,16 @@ class TestFlightScheduleTests(unittest.TestCase):
         marker = self.step("Move last-released tag")
         self.assertIn("if: steps.gate.outputs.release == 'true'", marker)
         self.assertIn('SHA="${{ steps.gate.outputs.latest }}"', marker)
-        self.assertIn('git tag -f testflight/macos-last-released "$SHA"', marker)
+        self.assertIn('git tag -f "$TAG_NAME" "$SHA"', marker)
         self.assertLess(self.release.index("run: fastlane mac beta"), self.release.index("- name: Move last-released tag"))
 
-    def test_only_macos_is_selectable_and_ios_lane_stays_disabled(self):
+    def test_macos_and_ios_are_selectable_with_macos_default(self):
         platform = self.triggers.split("      platform:\n", 1)[1]
         self.assertIn("        type: choice", platform)
-        self.assertEqual(re.findall(r"^          - (.+)$", platform, re.M), ["macos"])
+        self.assertEqual(re.findall(r"^          - (.+)$", platform, re.M), ["macos", "ios"])
         self.assertIn("        default: macos", platform)
-        self.assertIn("        if: ${{ false }}", self.step("fastlane iOS beta"))
+        self.assertIn("steps.gate.outputs.platform == 'ios'", self.step("fastlane iOS beta"))
+        self.assertIn("steps.gate.outputs.platform == 'macos'", self.step("fastlane macOS beta"))
         self.assertIn("run: fastlane mac beta", self.step("fastlane macOS beta"))
 
     def run_gate(self, event, marker, force=False, platform="macos", omit_force=False):
@@ -143,8 +144,9 @@ class TestFlightScheduleTests(unittest.TestCase):
 
             git("init", "-q", "-b", "main")
             git("commit", "--allow-empty", "-m", "example baseline")
+            target_platform = environment.get("RELEASE_PLATFORM") or "macos"
             if marker != "missing":
-                git("tag", "testflight/macos-last-released")
+                git("tag", f"testflight/{target_platform}-last-released")
             if marker == "older":
                 git("commit", "--allow-empty", "-m", "example candidate")
             candidate = git("rev-parse", "HEAD")
@@ -160,7 +162,7 @@ class TestFlightScheduleTests(unittest.TestCase):
             with self.subTest(event=event):
                 result, outputs, candidate = self.run_gate(event, "same")
                 self.assertEqual(0, result.returncode, result.stderr)
-                self.assertEqual({"latest": candidate, "release": "false"}, outputs)
+                self.assertEqual({"latest": candidate, "platform": "macos", "tag_name": "testflight/macos-last-released", "release": "false"}, outputs)
 
     def test_actual_gate_releases_changed_or_first_candidate(self):
         for event in ("schedule", "workflow_dispatch"):
@@ -168,14 +170,14 @@ class TestFlightScheduleTests(unittest.TestCase):
                 with self.subTest(event=event, marker=marker):
                     result, outputs, candidate = self.run_gate(event, marker)
                     self.assertEqual(0, result.returncode, result.stderr)
-                    self.assertEqual({"latest": candidate, "release": "true"}, outputs)
+                    self.assertEqual({"latest": candidate, "platform": "macos", "tag_name": "testflight/macos-last-released", "release": "true"}, outputs)
 
     def test_actual_gate_honors_force_only_for_manual_dispatch(self):
         for event, expected in (("schedule", "false"), ("workflow_dispatch", "true")):
             with self.subTest(event=event):
                 result, outputs, candidate = self.run_gate(event, "same", force=True)
                 self.assertEqual(0, result.returncode, result.stderr)
-                self.assertEqual({"latest": candidate, "release": expected}, outputs)
+                self.assertEqual({"latest": candidate, "platform": "macos", "tag_name": "testflight/macos-last-released", "release": expected}, outputs)
 
     def test_actual_gate_defaults_missing_force_to_false(self):
         for event in ("schedule", "workflow_dispatch"):
@@ -183,15 +185,18 @@ class TestFlightScheduleTests(unittest.TestCase):
                 with self.subTest(event=event, marker=marker):
                     result, outputs, candidate = self.run_gate(event, marker, force=True, omit_force=True)
                     self.assertEqual(0, result.returncode, result.stderr)
-                    self.assertEqual({"latest": candidate, "release": expected}, outputs)
+                    self.assertEqual({"latest": candidate, "platform": "macos", "tag_name": "testflight/macos-last-released", "release": expected}, outputs)
 
-    def test_actual_gate_defaults_schedule_to_macos_and_rejects_ios(self):
+    def test_actual_gate_defaults_schedule_to_macos_and_accepts_ios_dispatch(self):
         result, outputs, candidate = self.run_gate("schedule", "older", platform=None)
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual({"latest": candidate, "release": "true"}, outputs)
-        result, outputs, _ = self.run_gate("workflow_dispatch", "older", force=True, platform="ios")
+        self.assertEqual({"latest": candidate, "platform": "macos", "tag_name": "testflight/macos-last-released", "release": "true"}, outputs)
+        result, outputs, candidate = self.run_gate("workflow_dispatch", "older", force=True, platform="ios")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual({"latest": candidate, "platform": "ios", "tag_name": "testflight/ios-last-released", "release": "true"}, outputs)
+        result, outputs, _ = self.run_gate("workflow_dispatch", "older", force=True, platform="invalid")
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("only macos is allowed", result.stdout)
+        self.assertIn("only macos or ios is allowed", result.stdout)
         self.assertEqual({}, outputs)
 
 

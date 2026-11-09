@@ -272,7 +272,7 @@ class TestFlightFreshnessTests(unittest.TestCase):
         self.assertIn("workflow_dispatch:", self.workflow_text)
         self.assertIn("ref: main", self.workflow_text)
         self.assertIn("steps.gate.outputs.release == 'true'", self.workflow_text)
-        self.assertIn("refs/tags/testflight/macos-last-released", self.workflow_text)
+        self.assertIn("testflight/macos-last-released", self.workflow_text)
 
 
 if __name__ == "__main__":
