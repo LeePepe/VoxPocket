@@ -1,9 +1,9 @@
-"""图标生成与资源接入的无网络回归测试。"""
+"""Pocket Wave 原生图标生成与资源接入的无网络回归测试。"""
 
 import copy
 import json
-import math
 from pathlib import Path
+import re
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -16,72 +16,79 @@ class AppIconTests(unittest.TestCase):
         self.source = icon.load_source()
         self.shape = self.source["geometry"]
 
-    def test_approved_geometry_is_preserved_and_stroke_is_bolder(self):
-        self.assertEqual(self.shape["rx"], 56)
-        self.assertEqual(self.shape["ry"], 99.12)
-        self.assertEqual(self.shape["angles"], [-60, 0, 60])
-        self.assertEqual(self.shape["stroke"], 7)
+    def test_approved_pocket_wave_geometry_and_palettes_are_preserved(self):
+        self.assertEqual(self.shape["canvas"], 256)
+        self.assertEqual(self.shape["pouch"]["d"], icon.APPROVED_POUCH_PATH)
+        self.assertEqual(self.shape["card"]["d"], icon.APPROVED_CARD_PATH)
+        self.assertEqual(self.shape["sonic"]["bars"], icon.APPROVED_SONIC_BARS)
+        self.assertEqual(self.shape["sonic"]["arc"], icon.APPROVED_SONIC_ARC)
+        self.assertEqual(self.shape["sonic"]["radius"], 6)
+        self.assertEqual(self.shape["pouch"]["mono_opacity"], 0.62)
+        self.assertEqual(self.shape["card"]["mono_opacity"], 0.34)
+        self.assertEqual(self.shape["sonic"]["mono_opacity"], 1.0)
 
-    def test_offset_uses_normal_distance_not_scaled_ellipse(self):
-        distance = self.shape["stroke"] / 2
-        for t in (0, 0.3, 0.9, math.pi / 2, math.pi, 5.4):
-            point, _ = icon.offset_sample(self.shape, t, distance)
-            centerline = (128 + 56 * math.cos(t), 128 + 99.12 * math.sin(t))
-            self.assertAlmostEqual(math.dist(point, centerline), distance, places=9)
-            tangent = (-56 * math.sin(t), 99.12 * math.cos(t))
-            self.assertAlmostEqual(sum((point[i] - centerline[i]) * tangent[i]
-                                       for i in (0, 1)), 0, places=8)
+    def test_capture_card_is_clipped_along_pocket_v_lip_without_bleeding_below(self):
+        card_d = self.shape["card"]["d"]
+        pouch_d = self.shape["pouch"]["d"]
+        # Capture card bottom lip matches the exact V-lip curve of the pouch
+        self.assertIn("L 190 112 L 142 126 C 133 129, 123 129, 114 126 L 66 112", card_d)
+        self.assertIn("L 114 126 C 123 129, 133 129, 142 126 L 190 112", pouch_d)
+        # All y-coordinates in the capture card path stay above or on the V-lip (y <= 129)
+        tokens = re.findall(r"-?\d+(?:\.\d+)?", card_d)
+        # Extract (x, y) pairs from M, L, C commands and endpoint of A commands
+        self.assertNotIn("220", tokens)
+        self.assertNotIn("168", tokens)
 
-    def test_curve_derivative_matches_numeric_derivative(self):
-        epsilon = 1e-6
-        for t in (0, 0.4, 1.8, 3.1, 5.7):
-            for distance in (-3.5, 3.5):
-                _, tangent = icon.offset_sample(self.shape, t, distance)
-                before, _ = icon.offset_sample(self.shape, t - epsilon, distance)
-                after, _ = icon.offset_sample(self.shape, t + epsilon, distance)
-                for i in (0, 1):
-                    self.assertAlmostEqual(tangent[i], (after[i] - before[i]) /
-                                           (2 * epsilon), places=6)
+    def test_rrect_d_expands_rounded_capsules_into_closed_arc_paths(self):
+        d = icon.rrect_d(82, 70, 12, 26, 6)
+        self.assertTrue(d.startswith("M 88 70 L 88 70 A 6 6 0 0 1 94 76"))
+        self.assertTrue(d.endswith("Z"))
+        self.assertEqual(d.count("A 6 6 0 0 1"), 4)
 
-    def test_contour_closes_with_matching_tangent(self):
-        for distance in (-3.5, 3.5):
-            first, df = icon.offset_sample(self.shape, 0, distance)
-            last, dl = icon.offset_sample(self.shape, 2 * math.pi, distance)
-            for i in (0, 1):
-                self.assertAlmostEqual(first[i], last[i], places=9)
-                self.assertAlmostEqual(df[i], dl[i], places=9)
-
-    def test_layers_are_expanded_hollow_svg_with_original_palettes(self):
+    def test_layers_are_clean_svg_with_expected_gradients_and_mono_opacity_tiers(self):
         ns = {"s": "http://www.w3.org/2000/svg"}
-        for appearance, colors in self.source["palettes"].items():
-            svg = icon.ring_svg(self.shape, colors, -60)
-            root = ET.fromstring(svg)
-            self.assertEqual(root.attrib["viewBox"], "0 0 256 256")
-            self.assertEqual(root.attrib["width"], "1024")
-            self.assertEqual([s.attrib["stop-color"] for s in root.findall(".//s:stop", ns)], colors)
-            path = root.find("s:path", ns)
-            self.assertEqual(path.attrib["fill-rule"], "evenodd")
-            self.assertEqual(path.attrib["d"].count("M"), 2)
-            self.assertEqual(path.attrib["d"].count("Z"), 2)
-            self.assertEqual(path.attrib["d"].count("C"), 128)
-            self.assertNotIn("L", path.attrib["d"])
-            for tag in ("image", "filter", "script", "foreignObject", "rect"):
-                self.assertEqual(root.findall(f".//s:{tag}", ns), [], appearance)
+        expected_opacity = {"pouch": "0.62", "card": "0.34", "sonic": None}
+        for layer_key, _, _ in icon.LAYER_SPECS:
+            for appearance in icon.APPEARANCES:
+                colors = self.source["palettes"][layer_key][appearance]
+                svg = icon.layer_svg(self.source, layer_key, appearance)
+                root = ET.fromstring(svg)
+                self.assertEqual(root.attrib["viewBox"], "0 0 256 256")
+                self.assertEqual(root.attrib["width"], "1024")
+                self.assertEqual(root.attrib["height"], "1024")
+                self.assertEqual([s.attrib["stop-color"] for s in root.findall(".//s:stop", ns)], colors)
+                path = root.find("s:path", ns)
+                self.assertIsNotNone(path)
+                if appearance == "mono" and expected_opacity[layer_key] is not None:
+                    self.assertEqual(path.attrib.get("fill-opacity"), expected_opacity[layer_key])
+                else:
+                    self.assertNotIn("fill-opacity", path.attrib)
+                for tag in ("image", "filter", "script", "foreignObject", "rect"):
+                    self.assertEqual(root.findall(f".//s:{tag}", ns), [], f"{layer_key}/{appearance}")
 
     def test_generated_layers_are_current_and_deterministic(self):
         expected = icon.expected_assets(self.source)
         self.assertEqual(len(expected), 9)
         self.assertEqual(expected, icon.expected_assets(self.source))
+        actual_files = {p.name for p in icon.ASSETS.glob("*.svg")}
+        self.assertEqual(actual_files, set(expected))
         for name, text in expected.items():
             self.assertEqual((icon.ASSETS / name).read_text(), text, name)
 
     def test_invalid_source_is_rejected(self):
-        cases = [("stroke", 200), ("rx", -1), ("ry", float("nan")),
-                 ("rx", 200), ("center", 120), ("angles", [0]), ("samples", 8)]
-        for key, value in cases:
-            with self.subTest(key=key, value=value), tempfile.TemporaryDirectory() as directory:
+        mutations = [
+            lambda s: s["geometry"].__setitem__("canvas", 128),
+            lambda s: s["geometry"]["pouch"].__setitem__("d", "M 0 0 Z"),
+            lambda s: s["geometry"]["card"].__setitem__("d", "M 0 0 Z"),
+            lambda s: s["geometry"]["pouch"].__setitem__("mono_opacity", 0.5),
+            lambda s: s["geometry"]["sonic"].__setitem__("radius", 10),
+            lambda s: s["geometry"]["sonic"].__setitem__("bars", [[82, 70, 12, 300]]),
+            lambda s: s["geometry"]["sonic"]["gradient"].__setitem__("x1", "bad"),
+        ]
+        for index, mutate in enumerate(mutations):
+            with self.subTest(case=index), tempfile.TemporaryDirectory() as directory:
                 source = copy.deepcopy(self.source)
-                source["geometry"][key] = value
+                mutate(source)
                 path = Path(directory) / "source.json"
                 path.write_text(json.dumps(source))
                 with self.assertRaises(ValueError):
@@ -90,23 +97,38 @@ class AppIconTests(unittest.TestCase):
     def test_palette_cannot_inject_svg(self):
         with tempfile.TemporaryDirectory() as directory:
             source = copy.deepcopy(self.source)
-            source["palettes"]["light"][0] = '<script>bad</script>'
+            source["palettes"]["pouch"]["light"][0] = "<script>bad</script>"
             path = Path(directory) / "source.json"
             path.write_text(json.dumps(source))
             with self.assertRaises(ValueError):
                 icon.load_source(path)
 
-    def test_composer_manifest_references_all_appearance_layers(self):
+    def test_composer_manifest_references_all_appearance_layers_and_fill_specializations(self):
         manifest = json.loads((icon.ASSETS.parent / "icon.json").read_text())
         self.assertNotIn("features", manifest)  # 不依赖 Composer 2 / macOS 27 效果。
-        self.assertEqual(manifest["fill"], "automatic")
+        fill_specs = manifest["fill-specializations"]
+        self.assertEqual(
+            fill_specs,
+            [
+                {
+                    "value": {
+                        "linear-gradient": [
+                            "srgb:0.975,0.988,1.000,1.000",
+                            "srgb:0.895,0.940,0.995,1.000",
+                        ]
+                    }
+                },
+                {"appearance": "dark", "value": "automatic"},
+            ],
+        )
         self.assertEqual(len(manifest["groups"]), 1)
         group = manifest["groups"][0]
+        self.assertEqual(group["name"], "Pocket Wave")
         self.assertTrue(group["specular"])
         self.assertFalse(group["translucency"]["enabled"])
         self.assertEqual(group["shadow"]["kind"], "neutral")
         self.assertLessEqual(group["shadow"]["opacity"], 0.3)
-        self.assertEqual(len(group["layers"]), 3)
+        self.assertEqual([layer["name"] for layer in group["layers"]], ["Sonic Bars", "Pocket Pouch", "Capture Card"])
         names = set()
         for layer in group["layers"]:
             self.assertTrue(layer["glass"])
@@ -131,3 +153,4 @@ class AppIconTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
