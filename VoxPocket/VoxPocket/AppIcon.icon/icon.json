@@ -1,42 +1,88 @@
 {
-  "fill": "automatic",
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.975,0.988,1.000,1.000",
+          "srgb:0.895,0.940,0.995,1.000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": "automatic"
+    }
+  ],
   "groups": [
     {
-      "name": "Spectral Orbit",
+      "name": "Pocket Wave",
       "layers": [
         {
-          "name": "Orbit 01",
+          "name": "Sonic Bars",
           "glass": true,
           "image-name-specializations": [
-            {"value": "orbit-01-light.svg"},
-            {"appearance": "dark", "value": "orbit-01-dark.svg"},
-            {"appearance": "tinted", "value": "orbit-01-mono.svg"}
+            {
+              "value": "a-l3-light.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "a-l3-dark.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "a-l3-mono.svg"
+            }
           ]
         },
         {
-          "name": "Orbit 02",
+          "name": "Pocket Pouch",
           "glass": true,
           "image-name-specializations": [
-            {"value": "orbit-02-light.svg"},
-            {"appearance": "dark", "value": "orbit-02-dark.svg"},
-            {"appearance": "tinted", "value": "orbit-02-mono.svg"}
+            {
+              "value": "a-l1-light.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "a-l1-dark.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "a-l1-mono.svg"
+            }
           ]
         },
         {
-          "name": "Orbit 03",
+          "name": "Capture Card",
           "glass": true,
           "image-name-specializations": [
-            {"value": "orbit-03-light.svg"},
-            {"appearance": "dark", "value": "orbit-03-dark.svg"},
-            {"appearance": "tinted", "value": "orbit-03-mono.svg"}
+            {
+              "value": "a-l2-light.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "a-l2-dark.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "a-l2-mono.svg"
+            }
           ]
         }
       ],
       "lighting": "individual",
       "specular": true,
-      "shadow": {"kind": "neutral", "opacity": 0.22},
-      "translucency": {"enabled": false, "value": 0.5}
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.26
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.4
+      }
     }
   ],
-  "supported-platforms": {"squares": "shared", "circles": []}
+  "supported-platforms": {
+    "squares": "shared",
+    "circles": []
+  }
 }

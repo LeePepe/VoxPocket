@@ -1,18 +1,18 @@
-# VoxPocket 原生图标
+# VoxPocket 原生图标（Pocket Wave · 口袋声波）
 
 ## 设计
 
-保留批准的三条窄椭圆：中心 `(128,128)`、`rx=56`、`ry=99.12`、角度 `−60°/0°/+60°`。
-标准描边由 5 加粗至 **7/256（+40%）**。`source.json` 是几何与颜色的唯一源；没有另做 32px 母版来暗示 Composer 能自动切换线宽。
+采用批准的「方案 1 · Pocket Wave（口袋声波）」三层 Liquid Glass 架构：画布 `256×256`（`width="1024" height="1024"`），共三个前景图层（从顶到底依次为 `Sonic Bars`、`Pocket Pouch`、`Capture Card`），每层包含 `light`、`dark`、`mono` 三个外观变体（共 9 个 SVG 文件，`a-l{1,2,3}-{light,dark,mono}.svg`）。`design/app-icon/source.json` 是几何与色板的唯一事实源。
 
-前景 SVG 将描边展开为带孔填充曲线：沿椭圆法线偏移，再用匹配切线的三次曲线拟合，避免多边形边缘在浮雕高光下出现切面。
-三环保留各自的前景层，先放在同一效果组；light/dark/mono 分别供默认、深色和着色外观使用。
+- **Pocket Pouch（`a-l1-*`）**：高饱和蓝宝石渐变口袋前襟，带顶部 V 字开口；`mono` 模式使用 `fill-opacity="0.62"` 形成中景玻璃层次。
+- **Capture Card（`a-l2-*`）**：暖珊瑚橙语音速记卡片，所有外观下均沿口袋 V 字上沿精确裁切（`y ≤ 129`），避免延伸到蓝色口袋背面造成 Liquid Glass 折射串色；`mono` 模式使用 `fill-opacity="0.34"` 与前景声波柱拉开对比。
+- **Sonic Bars（`a-l3-*`）**：5 根圆角声波柱与口袋底部微笑缝线胶囊，圆角统一展开为精确圆弧路径；`mono` 模式保持 `1.0` 不透明度作为最亮视觉锚点。
 
 原生材质配置保存在 `VoxPocket/VoxPocket/AppIcon.icon/icon.json`：
 
-- 系统自动背景（`fill: automatic`）；圆角由系统负责。
+- `fill-specializations`：默认（Light）模式使用纯净冰白微蓝线性渐变（`srgb:0.975,0.988,1.000,1.000` → `srgb:0.895,0.940,0.995,1.000`），Dark 模式保持 `automatic`；圆角由系统负责。
 - 每层开启 Glass；组高光开启，使用 individual lighting。
-- 中性阴影 opacity 0.22；关闭额外 translucency，不预烘焙光晕或反光。
+- 中性阴影 opacity 0.26；关闭额外 translucency，不预烘焙光晕或反光。
 - 不声明 Composer 2 features，不依赖 macOS 27 折射或高光位置参数。
 
 ## 生成与验证
@@ -51,7 +51,7 @@ xcrun actool VoxPocket/VoxPocket/Assets.xcassets VoxPocket/VoxPocket/AppIcon.ico
 ```
 
 macOS 输出新的 `Assets.car`、`AppIcon.icns`，partial Info.plist 中 `CFBundleIconFile` / `CFBundleIconName` 均为 `AppIcon`。
-已检查该 `.icns` 的图片，确认是新三椭圆而非旧图标。完整 App build 仍归 CI；本次没有安装替换、启动 App 或 TestFlight 发布。
+已检查该 `.icns` 的图片，确认是新 Pocket Wave 三层图标而非旧图标。完整 App build 仍归 CI；本次没有安装替换、启动 App 或 TestFlight 发布。
 
 ## 原生验证环境与限制
 

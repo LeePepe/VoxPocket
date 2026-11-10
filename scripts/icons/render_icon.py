@@ -58,7 +58,7 @@ def write_gallery(output):
     document = '''<!doctype html><html lang="zh-Hans"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>VoxPocket 原生图标</title>
 <style>body{margin:0;background:#101218;color:#edf0f8;font-family:-apple-system,sans-serif}main{max-width:1140px;margin:auto;padding:36px}h1{font-size:30px;font-weight:550;margin:0 0 12px}p{font-size:14px;color:#b9c0cd;line-height:1.6}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:24px}article{border:1px solid #343944;background:#1b1e26;border-radius:18px;padding:20px}h2{font-size:15px;font-weight:500;margin:0 0 18px}.surface{padding:10px;display:flex;justify-content:center;background:#2d3442;border-radius:14px}.Default,.ClearLight,.TintedLight{background:#dce5f1}.sizes{height:92px;display:flex;align-items:flex-end;justify-content:center;gap:28px;margin-top:20px}.sizes>div{display:flex;flex-direction:column;align-items:center;gap:8px}small{font-size:11px;color:#b9c0cd}img{display:block}footer{margin-top:22px;font-size:12px;color:#b9c0cd;line-height:1.8}@media(max-width:760px){.grid{grid-template-columns:1fr}main{padding:24px}}</style>
-<main><h1>VoxPocket · 原生浮雕三椭圆</h1><p>加粗描边 + 分层材质 · Apple Icon Composer 原生导出，不是网页模拟玻璃。</p><section class="grid">'''
+<main><h1>VoxPocket · Pocket Wave（口袋声波）</h1><p>三层 Liquid Glass（声波柱 + 蓝宝石口袋 + V 裁切速记卡） · Apple Icon Composer 原生导出，不是网页模拟玻璃。</p><section class="grid">'''
     document += "".join(cards)
     document += ('</section><footer>大图使用原生 1024px 导出，16/32/64px 为各尺寸独立原生渲染。'
                  '底板仅用于显示透明像素，不代表真实桌面壁纸下的实时合成。'
