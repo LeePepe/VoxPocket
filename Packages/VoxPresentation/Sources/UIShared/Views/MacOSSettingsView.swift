@@ -1,4 +1,6 @@
 #if os(macOS)
+import AppKit
+import Carbon
 import SwiftUI
 import Preferences
 
@@ -164,6 +166,14 @@ public struct ProductTelemetrySettingsView: View {
 @MainActor
 struct MacOSShortcutSettingsPane: View {
     @ObservedObject var viewModel: ShortcutsViewModel
+    @State private var recordingTarget: RecordingTarget?
+    @State private var eventMonitor: Any?
+    @State private var sawFnPress = false
+
+    enum RecordingTarget: Equatable {
+        case quickRecord
+        case showPanel
+    }
 
     var quickRecordBinding: Binding<FunctionKey> {
         Binding(get: { viewModel.quickRecordKey },
@@ -182,7 +192,12 @@ struct MacOSShortcutSettingsPane: View {
                     ForEach(FunctionKey.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .accessibilityIdentifier("vox.settings.quickRecordKey")
-                Text("按住开始说话，松开后处理并粘贴到当前应用。")
+                shortcutRecorderRow(
+                    currentLabel: viewModel.quickRecordDisplayName,
+                    target: .quickRecord,
+                    buttonIdentifier: "vox.settings.recordQuickRecordHotkey"
+                )
+                Text("按住开始说话，松开后处理并粘贴到当前应用。支持 Fn、F1–F20、Num 或自定义组合键（如 ⌥Space、⌃F19）。")
                     .font(.callout).foregroundStyle(.secondary)
             } header: { Text("录音") }
             Section {
@@ -190,7 +205,12 @@ struct MacOSShortcutSettingsPane: View {
                     ForEach(FunctionKey.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .accessibilityIdentifier("vox.settings.showPanelKey")
-                Text("保留旧版浮动录音面板的快捷入口。")
+                shortcutRecorderRow(
+                    currentLabel: viewModel.showPanelDisplayName,
+                    target: .showPanel,
+                    buttonIdentifier: "vox.settings.recordShowPanelHotkey"
+                )
+                Text("保留旧版浮动录音面板的快捷入口，支持单键或修饰键组合。")
                     .font(.callout).foregroundStyle(.secondary)
             } header: { Text("兼容入口") }
             if viewModel.hasConflict {
@@ -202,7 +222,140 @@ struct MacOSShortcutSettingsPane: View {
                 .accessibilityIdentifier("vox.settings.resetHotkeys")
         }
         .formStyle(.grouped)
+        .onDisappear { stopRecording() }
     }
+
+    private func shortcutRecorderRow(
+        currentLabel: String,
+        target: RecordingTarget,
+        buttonIdentifier: String
+    ) -> some View {
+        let isRecording = recordingTarget == target
+        return HStack(spacing: 10) {
+            Text("当前绑定")
+                .foregroundStyle(.secondary)
+            Text(isRecording ? "请按下按键或组合键（Esc 取消）…" : currentLabel)
+                .font(.system(.callout, design: .monospaced).weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    (isRecording ? Color.accentColor : Color.secondary).opacity(0.14),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+            Spacer()
+            Button(isRecording ? "取消录制" : "录制按键 / 组合键") {
+                if isRecording {
+                    stopRecording()
+                } else {
+                    startRecording(for: target)
+                }
+            }
+            .accessibilityIdentifier(buttonIdentifier)
+        }
+    }
+
+    func startRecording(for target: RecordingTarget) {
+        stopRecording()
+        recordingTarget = target
+        sawFnPress = false
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+            if handleRecordedEvent(event) {
+                return nil
+            }
+            return event
+        }
+    }
+
+    func stopRecording() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+        recordingTarget = nil
+        sawFnPress = false
+    }
+
+    enum RecordedEventDisposition: Equatable {
+        case ignore
+        case consumePending(sawFnPress: Bool)
+        case cancel
+        case commit(keyCode: UInt16, modifiers: UInt)
+    }
+
+    static func classifyRecordedEvent(
+        type: NSEvent.EventType,
+        keyCode: UInt16,
+        modifierFlags: NSEvent.ModifierFlags,
+        sawFnPress: Bool
+    ) -> RecordedEventDisposition {
+        if type == .flagsChanged {
+            guard keyCode == UInt16(kVK_Function) else { return .ignore }
+            if modifierFlags.contains(.function) {
+                return .consumePending(sawFnPress: true)
+            }
+            return sawFnPress
+                ? .commit(keyCode: UInt16(kVK_Function), modifiers: 0)
+                : .consumePending(sawFnPress: false)
+        }
+
+        guard type == .keyDown else { return .ignore }
+        let modifiers = ShortcutsViewModel.carbonModifiers(from: modifierFlags)
+        if keyCode == UInt16(kVK_Escape) && modifiers == 0 {
+            return .cancel
+        }
+        if modifierOnlyKeyCodes.contains(keyCode) {
+            return .consumePending(sawFnPress: sawFnPress)
+        }
+        return .commit(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    @discardableResult
+    func handleRecordedEvent(_ event: NSEvent) -> Bool {
+        guard let target = recordingTarget else { return false }
+        switch Self.classifyRecordedEvent(
+            type: event.type,
+            keyCode: event.keyCode,
+            modifierFlags: event.modifierFlags,
+            sawFnPress: sawFnPress
+        ) {
+        case .ignore:
+            return false
+        case .consumePending(let nextSawFn):
+            sawFnPress = nextSawFn
+            return true
+        case .cancel:
+            stopRecording()
+            return true
+        case .commit(let keyCode, let modifiers):
+            applyRecordedHotkey(target: target, keyCode: keyCode, modifiers: modifiers)
+            return true
+        }
+    }
+
+    private func applyRecordedHotkey(target: RecordingTarget, keyCode: UInt16, modifiers: UInt) {
+        stopRecording()
+        Task {
+            switch target {
+            case .quickRecord:
+                await viewModel.updateQuickRecordHotkey(keyCode: keyCode, modifiers: modifiers)
+            case .showPanel:
+                await viewModel.updateShowPanelHotkey(keyCode: keyCode, modifiers: modifiers)
+            }
+        }
+    }
+
+    private static let modifierOnlyKeyCodes: Set<UInt16> = [
+        UInt16(kVK_Command),
+        UInt16(kVK_RightCommand),
+        UInt16(kVK_Shift),
+        UInt16(kVK_RightShift),
+        UInt16(kVK_Option),
+        UInt16(kVK_RightOption),
+        UInt16(kVK_Control),
+        UInt16(kVK_RightControl),
+        UInt16(kVK_CapsLock),
+        UInt16(kVK_Function)
+    ]
 }
 
 @MainActor

@@ -79,6 +79,71 @@ final class MacOSSettingsViewTests: XCTestCase {
         XCTAssertFalse(shortcuts.hasConflict)
     }
 
+    func testShortcutRecorderRowSupportsF19PresetAndKeyCombination() async throws {
+        let shortcuts = ShortcutsViewModel(preferences: store)
+        await shortcuts.load()
+        let keyPane = MacOSShortcutSettingsPane(viewModel: shortcuts)
+
+        keyPane.quickRecordBinding.wrappedValue = .f19
+        try await waitUntil { shortcuts.quickRecordKey == .f19 }
+        XCTAssertEqual(shortcuts.quickRecordDisplayName, "F19")
+
+        await shortcuts.updateShowPanelHotkey(
+            keyCode: UInt16(49),
+            modifiers: ShortcutsViewModel.carbonModifiers(from: [.option, .shift])
+        )
+        XCTAssertEqual(shortcuts.showPanelDisplayName, "⌥⇧Space")
+
+        XCTAssertEqual(
+            MacOSShortcutSettingsPane.classifyRecordedEvent(
+                type: .keyDown,
+                keyCode: 80,
+                modifierFlags: [],
+                sawFnPress: false
+            ),
+            .commit(keyCode: 80, modifiers: 0)
+        )
+        XCTAssertEqual(
+            MacOSShortcutSettingsPane.classifyRecordedEvent(
+                type: .keyDown,
+                keyCode: 49,
+                modifierFlags: [.control, .option],
+                sawFnPress: false
+            ),
+            .commit(
+                keyCode: 49,
+                modifiers: ShortcutsViewModel.carbonModifiers(from: [.control, .option])
+            )
+        )
+        XCTAssertEqual(
+            MacOSShortcutSettingsPane.classifyRecordedEvent(
+                type: .keyDown,
+                keyCode: 53,
+                modifierFlags: [],
+                sawFnPress: false
+            ),
+            .cancel
+        )
+        XCTAssertEqual(
+            MacOSShortcutSettingsPane.classifyRecordedEvent(
+                type: .flagsChanged,
+                keyCode: 63,
+                modifierFlags: [.function],
+                sawFnPress: false
+            ),
+            .consumePending(sawFnPress: true)
+        )
+        XCTAssertEqual(
+            MacOSShortcutSettingsPane.classifyRecordedEvent(
+                type: .flagsChanged,
+                keyCode: 63,
+                modifierFlags: [],
+                sawFnPress: true
+            ),
+            .commit(keyCode: 63, modifiers: 0)
+        )
+    }
+
     func testShortcutsLoadingDoesNotShowTemporaryDefaults() async throws {
         try await assertLoadingDefaultsAreHidden(section: .shortcuts)
     }
