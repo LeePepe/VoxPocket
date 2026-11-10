@@ -21,6 +21,35 @@ import PlatformAdapters
 struct VoxPocketTests {
 
     @MainActor
+    @Test func shortcutIntentSkipsCaptureWhenStartupPreparationFails() async {
+        enum ShortcutStartupError: Error { case invalidConfiguration }
+        var actionCalls = 0
+        let startup = AppStartup {
+            throw ShortcutStartupError.invalidConfiguration
+        }
+
+        let executed = await StartRecordingIntent.execute(startup: startup) {
+            actionCalls += 1
+        }
+
+        #expect(executed == false)
+        #expect(actionCalls == 0)
+    }
+
+    @MainActor
+    @Test func shortcutIntentRunsCaptureAfterStartupPreparationSucceeds() async {
+        var actionCalls = 0
+        let startup = AppStartup {}
+
+        let executed = await StartRecordingIntent.execute(startup: startup) {
+            actionCalls += 1
+        }
+
+        #expect(executed)
+        #expect(actionCalls == 1)
+    }
+
+    @MainActor
     @Test func toggleQuickCaptureFromIntentStartsWithPreferredDestinationAndCancelsCleanly() async throws {
         let suite = "VoxPocketTests.QuickCapture.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))

@@ -2,9 +2,6 @@ import AppIntents
 import CoreModels
 import Preferences
 import UseCases
-#if os(iOS)
-import WidgetUI
-#endif
 
 /// 快速录音 / 停止 Intent（AudioRecordingIntent）
 ///
@@ -21,8 +18,9 @@ struct StartRecordingIntent: AudioRecordingIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        try await LLMAppConfig.loadRuntimeConfiguration()
-        await ServiceContainer.shared.toggleQuickCaptureFromIntent()
+        _ = await Self.execute(startup: AppStartup.shared) {
+            await ServiceContainer.shared.toggleQuickCaptureFromIntent()
+        }
         return .result()
     }
 }
@@ -34,12 +32,25 @@ struct StartRecordingIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        try await LLMAppConfig.loadRuntimeConfiguration()
-        ServiceContainer.shared.deepLinkRouter.pendingAction = .startRecording
+        _ = await Self.execute(startup: AppStartup.shared) {
+            ServiceContainer.shared.deepLinkRouter.pendingAction = .startRecording
+        }
         return .result()
     }
 }
 #endif
+
+extension StartRecordingIntent {
+    @MainActor
+    static func execute(
+        startup: AppStartup,
+        action: @escaping @MainActor () async -> Void
+    ) async -> Bool {
+        guard await startup.prepare() else { return false }
+        await action()
+        return true
+    }
+}
 
 /// App Shortcuts 注册
 ///
