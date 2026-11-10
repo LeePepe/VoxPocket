@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import Foundation
 import SwiftUI
 import Carbon
@@ -9,6 +10,8 @@ import Preferences
 public final class ShortcutsViewModel: ObservableObject {
     @Published public var showPanelKey: FunctionKey = .f7
     @Published public var quickRecordKey: FunctionKey = .fn
+    @Published public private(set) var showPanelHotkey: HotkeyDefinition = ShortcutsViewModel.defaultShowPanelHotkey
+    @Published public private(set) var quickRecordHotkey: HotkeyDefinition = ShortcutsViewModel.defaultQuickRecordHotkey
     @Published public private(set) var hasConflict: Bool = false
 
     private let preferences: UserDefaultsPreferencesStore
@@ -18,42 +21,58 @@ public final class ShortcutsViewModel: ObservableObject {
     }
 
     public func load() async {
-        let showPanelHotkey = await preferences.getValue(
+        let loadedShowPanelHotkey = await preferences.getValue(
             for: .showPanelHotkey,
             default: Self.defaultShowPanelHotkey
         )
-        let quickRecordHotkey = await preferences.getValue(
+        let loadedQuickRecordHotkey = await preferences.getValue(
             for: .quickRecordHotkey,
             default: Self.defaultQuickRecordHotkey
         )
 
-        showPanelKey = FunctionKey(keyCode: showPanelHotkey.keyCode) ?? .f7
-        quickRecordKey = FunctionKey(keyCode: quickRecordHotkey.keyCode) ?? .fn
+        showPanelHotkey = loadedShowPanelHotkey
+        quickRecordHotkey = loadedQuickRecordHotkey
+        showPanelKey = FunctionKey(keyCode: loadedShowPanelHotkey.keyCode) ?? .f7
+        quickRecordKey = FunctionKey(keyCode: loadedQuickRecordHotkey.keyCode) ?? .fn
         updateConflictState()
     }
 
     public func updateShowPanelKey(_ key: FunctionKey) async {
-        showPanelKey = key
-        updateConflictState()
+        await updateShowPanelHotkey(keyCode: key.keyCode, modifiers: 0)
+    }
 
+    public func updateQuickRecordKey(_ key: FunctionKey) async {
+        await updateQuickRecordHotkey(keyCode: key.keyCode, modifiers: 0)
+    }
+
+    public func updateShowPanelHotkey(keyCode: UInt16, modifiers: UInt) async {
+        let normalizedModifiers = keyCode == UInt16(kVK_Function) ? 0 : modifiers
         let definition = HotkeyDefinition(
-            keyCode: key.keyCode,
-            modifiers: 0,
+            keyCode: keyCode,
+            modifiers: normalizedModifiers,
             identifier: HotkeyIdentifier.showPopover
         )
+        showPanelHotkey = definition
+        if let preset = FunctionKey(keyCode: keyCode) {
+            showPanelKey = preset
+        }
+        updateConflictState()
         await preferences.setValue(definition, for: .showPanelHotkey)
         NotificationCenter.default.post(name: PreferencesNotification.hotkeysDidChange, object: nil)
     }
 
-    public func updateQuickRecordKey(_ key: FunctionKey) async {
-        quickRecordKey = key
-        updateConflictState()
-
+    public func updateQuickRecordHotkey(keyCode: UInt16, modifiers: UInt) async {
+        let normalizedModifiers = keyCode == UInt16(kVK_Function) ? 0 : modifiers
         let definition = HotkeyDefinition(
-            keyCode: key.keyCode,
-            modifiers: 0,
+            keyCode: keyCode,
+            modifiers: normalizedModifiers,
             identifier: HotkeyIdentifier.toggleRecording
         )
+        quickRecordHotkey = definition
+        if let preset = FunctionKey(keyCode: keyCode) {
+            quickRecordKey = preset
+        }
+        updateConflictState()
         await preferences.setValue(definition, for: .quickRecordHotkey)
         NotificationCenter.default.post(name: PreferencesNotification.hotkeysDidChange, object: nil)
     }
@@ -61,6 +80,8 @@ public final class ShortcutsViewModel: ObservableObject {
     public func resetToDefaults() async {
         await preferences.setValue(Self.defaultShowPanelHotkey, for: .showPanelHotkey)
         await preferences.setValue(Self.defaultQuickRecordHotkey, for: .quickRecordHotkey)
+        showPanelHotkey = Self.defaultShowPanelHotkey
+        quickRecordHotkey = Self.defaultQuickRecordHotkey
         showPanelKey = .f7
         quickRecordKey = .fn
         updateConflictState()
@@ -68,15 +89,31 @@ public final class ShortcutsViewModel: ObservableObject {
     }
 
     public var showPanelDisplayName: String {
-        showPanelKey.label
+        if showPanelHotkey.modifiers == 0, let preset = FunctionKey(keyCode: showPanelHotkey.keyCode) {
+            return preset.label
+        }
+        return showPanelHotkey.displayString
     }
 
     public var quickRecordDisplayName: String {
-        quickRecordKey.label
+        if quickRecordHotkey.modifiers == 0, let preset = FunctionKey(keyCode: quickRecordHotkey.keyCode) {
+            return preset.label
+        }
+        return quickRecordHotkey.displayString
+    }
+
+    public static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt {
+        var modifiers: UInt = 0
+        if flags.contains(.control) { modifiers |= UInt(controlKey) }
+        if flags.contains(.option) { modifiers |= UInt(optionKey) }
+        if flags.contains(.shift) { modifiers |= UInt(shiftKey) }
+        if flags.contains(.command) { modifiers |= UInt(cmdKey) }
+        return modifiers
     }
 
     private func updateConflictState() {
-        hasConflict = showPanelKey == quickRecordKey
+        hasConflict = showPanelHotkey.keyCode == quickRecordHotkey.keyCode
+            && showPanelHotkey.modifiers == quickRecordHotkey.modifiers
     }
 
     private static let defaultShowPanelHotkey = HotkeyDefinition(
@@ -94,6 +131,7 @@ public final class ShortcutsViewModel: ObservableObject {
 
 public enum FunctionKey: String, CaseIterable, Hashable {
     case fn, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
+    case f13, f14, f15, f16, f17, f18, f19, f20, num
 
     public var label: String {
         rawValue.uppercased()
@@ -114,6 +152,15 @@ public enum FunctionKey: String, CaseIterable, Hashable {
         case .f10: return UInt16(kVK_F10)
         case .f11: return UInt16(kVK_F11)
         case .f12: return UInt16(kVK_F12)
+        case .f13: return UInt16(kVK_F13)
+        case .f14: return UInt16(kVK_F14)
+        case .f15: return UInt16(kVK_F15)
+        case .f16: return UInt16(kVK_F16)
+        case .f17: return UInt16(kVK_F17)
+        case .f18: return UInt16(kVK_F18)
+        case .f19: return UInt16(kVK_F19)
+        case .f20: return UInt16(kVK_F20)
+        case .num: return UInt16(kVK_ANSI_KeypadClear)
         }
     }
 
@@ -132,6 +179,15 @@ public enum FunctionKey: String, CaseIterable, Hashable {
         case UInt16(kVK_F10): self = .f10
         case UInt16(kVK_F11): self = .f11
         case UInt16(kVK_F12): self = .f12
+        case UInt16(kVK_F13): self = .f13
+        case UInt16(kVK_F14): self = .f14
+        case UInt16(kVK_F15): self = .f15
+        case UInt16(kVK_F16): self = .f16
+        case UInt16(kVK_F17): self = .f17
+        case UInt16(kVK_F18): self = .f18
+        case UInt16(kVK_F19): self = .f19
+        case UInt16(kVK_F20): self = .f20
+        case UInt16(kVK_ANSI_KeypadClear): self = .num
         default: return nil
         }
     }

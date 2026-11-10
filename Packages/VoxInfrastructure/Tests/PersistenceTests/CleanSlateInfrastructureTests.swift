@@ -330,4 +330,27 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         try await clipboard.simulatePaste()
     }
     #endif
+
+    func testHotkeyDefinitionDisplayStringSupportsF13ThroughF20NumAndCarbonModifiers() {
+        let f19Single = HotkeyDefinition(keyCode: 80, modifiers: 0, identifier: HotkeyIdentifier.toggleRecording)
+        XCTAssertEqual(f19Single.displayString, "F19")
+
+        let numKey = HotkeyDefinition(keyCode: 71, modifiers: 0, identifier: HotkeyIdentifier.toggleRecording)
+        XCTAssertEqual(numKey.displayString, "Num")
+
+        let optionSpace = HotkeyDefinition(keyCode: 49, modifiers: 2048, identifier: HotkeyIdentifier.directToText)
+        XCTAssertEqual(optionSpace.displayString, "⌥Space")
+
+        let optionShiftSpace = HotkeyDefinition(keyCode: 49, modifiers: 2560, identifier: HotkeyIdentifier.voiceToTodo)
+        XCTAssertEqual(optionShiftSpace.displayString, "⌥⇧Space")
+
+        let cmdShiftR = HotkeyDefinition(keyCode: 15, modifiers: 256 | 512, identifier: HotkeyIdentifier.showPopover)
+        XCTAssertEqual(cmdShiftR.displayString, "⇧⌘R")
+
+        let ctrlOptionCmdF13 = HotkeyDefinition(keyCode: 105, modifiers: 4096 | 2048 | 256, identifier: HotkeyIdentifier.toggleRecording)
+        XCTAssertEqual(ctrlOptionCmdF13.displayString, "⌃⌥⌘F13")
+
+        let legacyMask = HotkeyDefinition(keyCode: 98, modifiers: (1 << 0) | (1 << 3), identifier: HotkeyIdentifier.showPopover)
+        XCTAssertEqual(legacyMask.displayString, "⌃⌘F7")
+    }
 }

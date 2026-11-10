@@ -16,38 +16,89 @@ public struct HotkeyDefinition: Codable, Equatable, Sendable, Hashable {
         self.identifier = identifier
     }
 
-    /// 显示字符串（如 "⌘⇧R"）
+    /// 显示字符串（如 "⌘⇧R"、"⌥Space"、"F19"）
     public var displayString: String {
         var parts: [String] = []
 
-        // 修饰键
-        if modifiers & (1 << 0) != 0 { parts.append("⌃") }  // Control
-        if modifiers & (1 << 1) != 0 { parts.append("⌥") }  // Option
-        if modifiers & (1 << 2) != 0 { parts.append("⇧") }  // Shift
-        if modifiers & (1 << 3) != 0 { parts.append("⌘") }  // Command
+        // 兼容 Carbon 修饰键掩码（controlKey=4096, optionKey=2048, shiftKey=512, cmdKey=256）与旧测试位掩码（1 << 0..3）
+        let hasControl = (modifiers & 4096 != 0) || (modifiers & (1 << 0) != 0)
+        let hasOption = (modifiers & 2048 != 0) || (modifiers & (1 << 1) != 0)
+        let hasShift = (modifiers & 512 != 0) || (modifiers & (1 << 2) != 0)
+        let hasCommand = (modifiers & 256 != 0) || (modifiers & (1 << 3) != 0)
 
-        let keyLabel: String
-        switch keyCode {
-        case 49: keyLabel = "Space"
-        case 122: keyLabel = "F1"
-        case 120: keyLabel = "F2"
-        case 99: keyLabel = "F3"
-        case 118: keyLabel = "F4"
-        case 96: keyLabel = "F5"
-        case 97: keyLabel = "F6"
-        case 98: keyLabel = "F7"
-        case 100: keyLabel = "F8"
-        case 101: keyLabel = "F9"
-        case 109: keyLabel = "F10"
-        case 103: keyLabel = "F11"
-        case 111: keyLabel = "F12"
-        case 63: keyLabel = "Fn"
-        default: keyLabel = "Key(\(keyCode))"
-        }
-        parts.append(keyLabel)
+        if hasControl { parts.append("⌃") }
+        if hasOption { parts.append("⌥") }
+        if hasShift { parts.append("⇧") }
+        if hasCommand { parts.append("⌘") }
 
+        parts.append(Self.keyLabel(for: keyCode))
         return parts.joined()
     }
+
+    /// 将 macOS Carbon 键码映射为可读标签
+    public static func keyLabel(for keyCode: UInt16) -> String {
+        if let fKey = functionAndSpecialKeyLabels[keyCode] {
+            return fKey
+        }
+        if let alnum = alphanumericAndPunctuationLabels[keyCode] {
+            return alnum
+        }
+        return "Key(\(keyCode))"
+    }
+
+    private static let functionAndSpecialKeyLabels: [UInt16: String] = [
+        63: "Fn",
+        49: "Space",
+        36: "Return",
+        48: "Tab",
+        51: "Delete",
+        117: "ForwardDelete",
+        53: "Esc",
+        71: "Num",
+        76: "Enter",
+        123: "←",
+        124: "→",
+        125: "↓",
+        126: "↑",
+        115: "Home",
+        119: "End",
+        116: "PageUp",
+        121: "PageDown",
+        122: "F1",
+        120: "F2",
+        99: "F3",
+        118: "F4",
+        96: "F5",
+        97: "F6",
+        98: "F7",
+        100: "F8",
+        101: "F9",
+        109: "F10",
+        103: "F11",
+        111: "F12",
+        105: "F13",
+        107: "F14",
+        113: "F15",
+        106: "F16",
+        64: "F17",
+        79: "F18",
+        80: "F19",
+        90: "F20"
+    ]
+
+    private static let alphanumericAndPunctuationLabels: [UInt16: String] = [
+        0: "A", 11: "B", 8: "C", 2: "D", 14: "E", 3: "F", 5: "G", 4: "H",
+        34: "I", 38: "J", 40: "K", 37: "L", 46: "M", 45: "N", 31: "O", 35: "P",
+        12: "Q", 15: "R", 1: "S", 17: "T", 32: "U", 9: "V", 13: "W", 7: "X",
+        16: "Y", 6: "Z",
+        29: "0", 18: "1", 19: "2", 20: "3", 21: "4", 23: "5", 22: "6", 26: "7",
+        28: "8", 25: "9",
+        82: "Num0", 83: "Num1", 84: "Num2", 85: "Num3", 86: "Num4",
+        87: "Num5", 88: "Num6", 89: "Num7", 91: "Num8", 92: "Num9",
+        65: "Num.", 67: "Num*", 69: "Num+", 75: "Num/", 78: "Num-", 81: "Num=",
+        24: "=", 27: "-", 30: "]", 33: "[", 39: "'", 41: ";", 42: "\\",
+        43: ",", 44: "/", 47: ".", 50: "`"
+    ]
 }
 
 /// 预定义的快捷键标识符
