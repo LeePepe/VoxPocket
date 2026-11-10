@@ -29,8 +29,11 @@ final class MacOSSettingsViewTests: XCTestCase {
         await store.setValue(LLMProviderSelection.appleIntelligence.rawValue, for: .llmProvider)
         await store.setValue(true, for: .llmSkipContentAnalysis)
         let oldShortcuts = ShortcutsViewModel(preferences: store)
-        await oldShortcuts.updateShowPanelKey(.f8)
-        await oldShortcuts.updateQuickRecordKey(.f9)
+        await oldShortcuts.updateDirectToTextHotkey(keyCode: 80, modifiers: 0)
+        await oldShortcuts.updateVoiceToTodoHotkey(
+            keyCode: 80,
+            modifiers: ShortcutsViewModel.carbonModifiers(from: [.option])
+        )
         let provider = LLMProviderSettingsViewModel(preferences: store)
         let shortcuts = ShortcutsViewModel(preferences: store)
         _ = MacOSSettingsView(providerSettings: provider, shortcuts: shortcuts).body
@@ -38,23 +41,25 @@ final class MacOSSettingsViewTests: XCTestCase {
         await shortcuts.load()
         XCTAssertEqual(provider.selectedProvider, .appleIntelligence)
         XCTAssertTrue(provider.skipContentAnalysis)
-        XCTAssertEqual(shortcuts.showPanelKey, .f8)
-        XCTAssertEqual(shortcuts.quickRecordKey, .f9)
+        XCTAssertEqual(shortcuts.directToTextDisplayName, "F19")
+        XCTAssertEqual(shortcuts.voiceToTodoDisplayName, "⌥F19")
     }
 
     func testNewControlBindingsPersistUsingExistingKeysAndNotifications() async throws {
         let provider = LLMProviderSettingsViewModel(preferences: store)
         let shortcuts = ShortcutsViewModel(preferences: store)
         let textPane = MacOSTextSettingsPane(viewModel: provider, localModelLoadingStatus: nil)
-        let keyPane = MacOSShortcutSettingsPane(viewModel: shortcuts)
         let providerChanged = expectation(forNotification: PreferencesNotification.llmProviderDidChange, object: nil)
         let analysisChanged = expectation(forNotification: PreferencesNotification.llmAnalysisSettingsDidChange, object: nil)
         let keysChanged = expectation(forNotification: PreferencesNotification.hotkeysDidChange, object: nil)
         keysChanged.expectedFulfillmentCount = 2
         textPane.providerBinding.wrappedValue = .appleIntelligence
         textPane.skipAnalysisBinding.wrappedValue = true
-        keyPane.quickRecordBinding.wrappedValue = .f10
-        keyPane.panelBinding.wrappedValue = .f11
+        await shortcuts.updateDirectToTextHotkey(keyCode: 80, modifiers: 0)
+        await shortcuts.updateVoiceToTodoHotkey(
+            keyCode: 15,
+            modifiers: ShortcutsViewModel.carbonModifiers(from: [.command, .shift])
+        )
         await fulfillment(of: [providerChanged, analysisChanged, keysChanged], timeout: 2)
         let reloadedProvider = LLMProviderSettingsViewModel(preferences: store)
         let reloadedShortcuts = ShortcutsViewModel(preferences: store)
@@ -62,37 +67,38 @@ final class MacOSSettingsViewTests: XCTestCase {
         await reloadedShortcuts.load()
         XCTAssertEqual(reloadedProvider.selectedProvider, .appleIntelligence)
         XCTAssertTrue(reloadedProvider.skipContentAnalysis)
-        XCTAssertEqual(reloadedShortcuts.quickRecordKey, .f10)
-        XCTAssertEqual(reloadedShortcuts.showPanelKey, .f11)
+        XCTAssertEqual(reloadedShortcuts.directToTextDisplayName, "F19")
+        XCTAssertEqual(reloadedShortcuts.voiceToTodoDisplayName, "⇧⌘R")
         await reloadedShortcuts.resetToDefaults()
         await shortcuts.load()
-        XCTAssertEqual(shortcuts.quickRecordKey, .fn)
-        XCTAssertEqual(shortcuts.showPanelKey, .f7)
+        XCTAssertEqual(shortcuts.directToTextDisplayName, "⌥Space")
+        XCTAssertEqual(shortcuts.voiceToTodoDisplayName, "⌥⇧Space")
     }
 
     func testShortcutsKeepConflictFeedback() async {
         let shortcuts = ShortcutsViewModel(preferences: store)
         await shortcuts.load()
-        await shortcuts.updateQuickRecordKey(.f7)
+        await shortcuts.updateDirectToTextHotkey(
+            keyCode: shortcuts.voiceToTodoHotkey.keyCode,
+            modifiers: shortcuts.voiceToTodoHotkey.modifiers
+        )
         XCTAssertTrue(shortcuts.hasConflict)
-        await shortcuts.updateQuickRecordKey(.fn)
+        await shortcuts.updateDirectToTextHotkey(keyCode: 80, modifiers: 0)
         XCTAssertFalse(shortcuts.hasConflict)
     }
 
     func testShortcutRecorderRowSupportsF19PresetAndKeyCombination() async throws {
         let shortcuts = ShortcutsViewModel(preferences: store)
         await shortcuts.load()
-        let keyPane = MacOSShortcutSettingsPane(viewModel: shortcuts)
 
-        keyPane.quickRecordBinding.wrappedValue = .f19
-        try await waitUntil { shortcuts.quickRecordKey == .f19 }
-        XCTAssertEqual(shortcuts.quickRecordDisplayName, "F19")
+        await shortcuts.updateDirectToTextHotkey(keyCode: 80, modifiers: 0)
+        XCTAssertEqual(shortcuts.directToTextDisplayName, "F19")
 
-        await shortcuts.updateShowPanelHotkey(
+        await shortcuts.updateVoiceToTodoHotkey(
             keyCode: UInt16(49),
             modifiers: ShortcutsViewModel.carbonModifiers(from: [.option, .shift])
         )
-        XCTAssertEqual(shortcuts.showPanelDisplayName, "⌥⇧Space")
+        XCTAssertEqual(shortcuts.voiceToTodoDisplayName, "⌥⇧Space")
 
         XCTAssertEqual(
             MacOSShortcutSettingsPane.classifyRecordedEvent(
@@ -180,7 +186,7 @@ final class MacOSSettingsViewTests: XCTestCase {
         let bitmap = try capture(panel)
         let words = try await recognize(bitmap).joined()
         XCTAssertTrue(words.contains("正在加载设置"), "Synthetic loading OCR: \(words)")
-        let temporaryDefaults = section == .shortcuts ? ["F7", "Fn"] : ["Azure"]
+        let temporaryDefaults = section == .shortcuts ? ["Space", "录音到剪贴板"] : ["Azure"]
         for value in temporaryDefaults {
             XCTAssertFalse(words.contains(value))
         }
@@ -198,8 +204,12 @@ final class MacOSSettingsViewTests: XCTestCase {
             for section in [MacOSSettingsView.Section.shortcuts, .text] {
                 let bitmap = try await render(section: section, scheme: scheme)
                 let words = try await recognize(bitmap).joined(separator: " ")
-                XCTAssertTrue(words.contains(section == .shortcuts ? "快捷录音" : "识别模型"), "Synthetic settings OCR: \(words)")
-                if section == .text {
+                XCTAssertTrue(words.contains(section == .shortcuts ? "录音到剪贴板" : "识别模型"), "Synthetic settings OCR: \(words)")
+                if section == .shortcuts {
+                    XCTAssertTrue(words.contains("录音到 Todo") || words.contains("Todo"), "Synthetic shortcuts OCR: \(words)")
+                    XCTAssertFalse(words.contains("兼容入口"))
+                    XCTAssertFalse(words.contains("显示录音面板"))
+                } else {
                     XCTAssertTrue(words.contains("意图模型"))
                     XCTAssertTrue(words.contains("语气模型"))
                     XCTAssertTrue(words.contains("精炼模型"))
@@ -425,7 +435,7 @@ final class MacOSSettingsViewTests: XCTestCase {
         panel.contentView = host
         panel.makeKeyAndOrderFront(nil)
         defer { panel.orderOut(nil) }
-        let expectedText = section == .shortcuts ? "快捷录音" : "识别模型"
+        let expectedText = section == .shortcuts ? "录音到剪贴板" : "识别模型"
         let deadline = ContinuousClock.now.advanced(by: .seconds(2))
         while true {
             await Task.yield()

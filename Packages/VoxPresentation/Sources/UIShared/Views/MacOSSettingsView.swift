@@ -171,48 +171,32 @@ struct MacOSShortcutSettingsPane: View {
     @State private var sawFnPress = false
 
     enum RecordingTarget: Equatable {
-        case quickRecord
-        case showPanel
-    }
-
-    var quickRecordBinding: Binding<FunctionKey> {
-        Binding(get: { viewModel.quickRecordKey },
-                set: { key in Task { await viewModel.updateQuickRecordKey(key) } })
-    }
-
-    var panelBinding: Binding<FunctionKey> {
-        Binding(get: { viewModel.showPanelKey },
-                set: { key in Task { await viewModel.updateShowPanelKey(key) } })
+        case directToText
+        case voiceToTodo
     }
 
     var body: some View {
         Form {
             Section {
-                Picker("快捷录音", selection: quickRecordBinding) {
-                    ForEach(FunctionKey.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                .accessibilityIdentifier("vox.settings.quickRecordKey")
                 shortcutRecorderRow(
-                    currentLabel: viewModel.quickRecordDisplayName,
-                    target: .quickRecord,
-                    buttonIdentifier: "vox.settings.recordQuickRecordHotkey"
+                    title: "录音到剪贴板",
+                    currentLabel: viewModel.directToTextDisplayName,
+                    target: .directToText,
+                    buttonIdentifier: "vox.settings.recordDirectToTextHotkey"
                 )
-                Text("按住开始说话，松开后处理并粘贴到当前应用。支持 Fn、F1–F20、Num 或自定义组合键（如 ⌥Space、⌃F19）。")
+                Text("按住开始说话，松开后精炼文本并复制/粘贴到当前应用。")
                     .font(.callout).foregroundStyle(.secondary)
-            } header: { Text("录音") }
+            } header: { Text("录音到剪贴板") }
             Section {
-                Picker("显示录音面板", selection: panelBinding) {
-                    ForEach(FunctionKey.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                .accessibilityIdentifier("vox.settings.showPanelKey")
                 shortcutRecorderRow(
-                    currentLabel: viewModel.showPanelDisplayName,
-                    target: .showPanel,
-                    buttonIdentifier: "vox.settings.recordShowPanelHotkey"
+                    title: "录音到 Todo",
+                    currentLabel: viewModel.voiceToTodoDisplayName,
+                    target: .voiceToTodo,
+                    buttonIdentifier: "vox.settings.recordVoiceToTodoHotkey"
                 )
-                Text("保留旧版浮动录音面板的快捷入口，支持单键或修饰键组合。")
+                Text("按住开始说话，松开后提取并创建待办事项。")
                     .font(.callout).foregroundStyle(.secondary)
-            } header: { Text("兼容入口") }
+            } header: { Text("录音到 Todo") }
             if viewModel.hasConflict {
                 Label("两个操作使用了同一按键，请选择不同的快捷键。", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
@@ -226,14 +210,15 @@ struct MacOSShortcutSettingsPane: View {
     }
 
     private func shortcutRecorderRow(
+        title: String,
         currentLabel: String,
         target: RecordingTarget,
         buttonIdentifier: String
     ) -> some View {
         let isRecording = recordingTarget == target
         return HStack(spacing: 10) {
-            Text("当前绑定")
-                .foregroundStyle(.secondary)
+            Text(title)
+                .foregroundStyle(.primary)
             Text(isRecording ? "请按下按键或组合键（Esc 取消）…" : currentLabel)
                 .font(.system(.callout, design: .monospaced).weight(.semibold))
                 .padding(.horizontal, 8)
@@ -243,7 +228,7 @@ struct MacOSShortcutSettingsPane: View {
                     in: RoundedRectangle(cornerRadius: 6)
                 )
             Spacer()
-            Button(isRecording ? "取消录制" : "录制按键 / 组合键") {
+            Button(isRecording ? "取消录制" : "录制快捷键") {
                 if isRecording {
                     stopRecording()
                 } else {
@@ -336,10 +321,10 @@ struct MacOSShortcutSettingsPane: View {
         stopRecording()
         Task {
             switch target {
-            case .quickRecord:
-                await viewModel.updateQuickRecordHotkey(keyCode: keyCode, modifiers: modifiers)
-            case .showPanel:
-                await viewModel.updateShowPanelHotkey(keyCode: keyCode, modifiers: modifiers)
+            case .directToText:
+                await viewModel.updateDirectToTextHotkey(keyCode: keyCode, modifiers: modifiers)
+            case .voiceToTodo:
+                await viewModel.updateVoiceToTodoHotkey(keyCode: keyCode, modifiers: modifiers)
             }
         }
     }
