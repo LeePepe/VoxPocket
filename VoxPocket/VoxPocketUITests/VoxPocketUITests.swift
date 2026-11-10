@@ -77,7 +77,7 @@ final class VoxPocketUITests: XCTestCase {
         let settings = app.menuItems["设置…"]
         XCTAssertTrue(settings.waitForExistence(timeout: 3))
         settings.click()
-        XCTAssertTrue(app.popUpButtons["vox.settings.quickRecordKey"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["vox.settings.recordDirectToTextHotkey"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons[VoxID.recordButton].exists)
         let textPage = app.buttons["语音与文本"].exists ? app.buttons["语音与文本"] : app.radioButtons["语音与文本"]
         XCTAssertTrue(textPage.waitForExistence(timeout: 3))

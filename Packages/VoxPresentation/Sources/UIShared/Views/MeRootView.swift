@@ -270,14 +270,8 @@ struct ShortcutsCard: View {
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(Color.primary)
 
-            ShortcutPickerRow(
-                title: "显示面板",
-                selection: showPanelBinding
-            )
-            ShortcutPickerRow(
-                title: "Quick Recording (press/release)",
-                selection: quickRecordBinding
-            )
+            SettingRow(title: "录音到剪贴板", value: viewModel.directToTextDisplayName)
+            SettingRow(title: "录音到 Todo", value: viewModel.voiceToTodoDisplayName)
 
             if viewModel.hasConflict {
                 Text("Conflict: both actions use the same key")
@@ -296,48 +290,7 @@ struct ShortcutsCard: View {
             Task { await viewModel.load() }
         }
     }
-
-    private var showPanelBinding: Binding<FunctionKey> {
-        Binding(
-            get: { viewModel.showPanelKey },
-            set: { newValue in
-                Task { await viewModel.updateShowPanelKey(newValue) }
-            }
-        )
-    }
-
-    private var quickRecordBinding: Binding<FunctionKey> {
-        Binding(
-            get: { viewModel.quickRecordKey },
-            set: { newValue in
-                Task { await viewModel.updateQuickRecordKey(newValue) }
-            }
-        )
-    }
 }
-
-struct ShortcutPickerRow: View {
-    let title: String
-    @Binding var selection: FunctionKey
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.subheadline, design: .rounded).weight(.medium))
-                .foregroundColor(Color.primary)
-            Spacer()
-            Picker("", selection: $selection) {
-                ForEach(FunctionKey.allCases, id: \.self) { key in
-                    Text(key.label).tag(key)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .tint(Color.accentColor)
-        }
-    }
-}
-
 #endif
 
 struct AboutCard: View {
