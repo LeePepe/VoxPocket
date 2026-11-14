@@ -32,6 +32,16 @@ Every state supports light and dark appearance, Reduce Motion and Reduce Transpa
 
 Primary record button preserves view identity between idle and recording and identifiers `vox.record.button` / `vox.stop.button`; preserve `vox.transcript.final` and `vox.session.list`. Fold identifiers are `vox.fold.menu.button`, `vox.fold.todoList.button`, `vox.fold.settings.button`. Short tap and accessibility/keyboard activation remain start/stop toggles. Release while asynchronous start is pending is serialized and honored. No duplicate gesture/Button event may restart capture.
 
+## Product implementation seams
+
+`RecorderSurface.swift` owns the shared sentence column and full-width dock for Home, iOS Workspace, and the actual macOS Workspace entry. The dock has a semantic surface beneath its individual native glass controls (not a second parent glass effect); Fold destinations expand in a separate adaptive row inside that surface. Sentence scrolling uses the available stage height rather than a fixed portrait height.
+
+`RecorderButton.swift` uses a primitive Button style to own physical press dispatch, leaving the Button action for accessibility and keyboard activation. `RecorderGestureController` serializes start and release/cancel through the same asynchronous interface exercised by the tests. Workspace completion also awaits the injected recording start, including callers outside the button. The editor refreshes published recording state from the use case after a successful awaited start, not an assumed active value.
+
+History, Todo filters/search/details/note actions and editing tools live in on-demand management/settings surfaces. The macOS WindowManager entry retains its original three-column management interface in the Fold history sheet. FullPanel embeds the real Root container so Fold actions have a navigation host.
+
+For synthetic screenshot tests only, `VOX_DEMO_APPEARANCE=light|dark` is honored when the UI-test host or a demo-state flag is active; ordinary launches follow system appearance. `VOX_DEMO_RECORDING=1` uses synthetic text without the microphone, and `VOX_DEMO_AUTOSTART=0` lets native UI tests exercise physical start/stop themselves. Evidence must record this setup and verify actual pixels, not just filenames.
+
 ## Redlines & CI gate
 
 All existing repository checks and independent exact-head review remain required. Do not weaken tests, skip verification or change CI/gate/policy files to satisfy this contract. Preserve unrelated regression tests and all privacy/concurrency/layering constraints. Source documentation and evidence do not substitute for actual SwiftUI rendering.

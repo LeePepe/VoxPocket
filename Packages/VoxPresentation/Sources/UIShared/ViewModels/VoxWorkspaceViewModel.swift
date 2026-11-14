@@ -15,6 +15,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     private let editingUseCase: (any EditingUseCase)?
     private let refinementUseCase: (any RefinementUseCase)?
     private var reloadTask: Task<Void, Never>?
+    private var captureStartTask: Task<Bool, Never>?
+    private var captureGeneration = UUID()
+    private var isCompletingCapture = false
     private var timerTask: Task<Void, Never>?
     private var subscriptions = Set<AnyCancellable>()
 
@@ -115,32 +118,53 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         startCapture(mode: selectedCaptureMode)
     }
 
+    public func startCaptureAndWait() async {
+        startCaptureInPreferredMode()
+        _ = await captureStartTask?.value
+    }
+
     public func startCapture(mode: CaptureMode) {
-        selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0; lastCopiedBannerText = nil; liveTranscription = ""; streamingRefinedText = ""
-        NotificationCenter.default.post(
-            name: Notification.Name("vox.liveActivity.recordingStarted"),
-            object: nil,
-            userInfo: ["mode": mode.rawValue]
-        )
+        guard !isRecordingActive, !isProcessingCapture, !isCompletingCapture, captureStartTask == nil else { return }
+        let generation = UUID()
+        captureGeneration = generation
+        selectedCaptureMode = mode
+        captureState = .recording(mode: mode)
+        recordingElapsedSeconds = 0
+        lastCopiedBannerText = nil
+        liveTranscription = ""
+        streamingRefinedText = ""
+        NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingStarted"), object: nil, userInfo: ["mode": mode.rawValue])
         startElapsedTimer()
         try? editingUseCase?.replaceAll(with: "")
         transcriptionUseCase?.clearLiveText()
-        guard !isDemoRecordingEnabled else { return }
-        if let recordingUseCase {
-            Task {
-                do {
-                    try await recordingUseCase.startRecording()
-                } catch {
-                    stopElapsedTimer()
-                    captureState = .failed(stage: .recording, reason: error.localizedDescription)
-                    NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+        if isDemoRecordingEnabled {
+            liveTranscription = "把刚才散步想到的播客开场白记一下，先从一个深夜收到听众来信的故事切入"
+            audioLevel = 0.72
+            return
+        }
+        guard let recordingUseCase else { return }
+        captureStartTask = Task {
+            defer { captureStartTask = nil }
+            do {
+                try await recordingUseCase.startRecording()
+                guard captureGeneration == generation else {
+                    recordingUseCase.cancelRecording()
+                    return false
                 }
+                return true
+            } catch {
+                guard captureGeneration == generation else { return false }
+                stopElapsedTimer()
+                captureState = .failed(stage: .recording, reason: error.localizedDescription)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+                return false
             }
         }
     }
     public var isDemoRecordingEnabled: Bool = (ProcessInfo.processInfo.environment["VOX_DEMO_RECORDING"] == "1")
     public func toggleCaptureModeDuringRecording() { guard case .recording = captureState else { return }; updatePreferredCaptureMode(selectedCaptureMode == .text ? .todo : .text) }
     public func cancelCapture() {
+        captureGeneration = UUID()
         stopElapsedTimer()
         if !isDemoRecordingEnabled {
             recordingUseCase?.cancelRecording()
@@ -162,10 +186,16 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         Task { await completeCapture(deviceSource: source) }
     }
     public func completeCapture(rawTranscript: String = "", refinedText: String = "", localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac) async {
-        stopElapsedTimer()
+        guard isRecordingActive, !isCompletingCapture else { return }
+        isCompletingCapture = true
+        let generation = captureGeneration
         defer {
+            isCompletingCapture = false
             NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
         }
+        let started = await captureStartTask?.value ?? true
+        guard started, captureGeneration == generation, isRecordingActive else { return }
+        stopElapsedTimer()
         let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
         captureState = .transcribing
         let stoppedDuration = recordingUseCase?.state.duration ?? durationSeconds
@@ -187,13 +217,17 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
         do {
             let recorded = try await captureRecorder?(mode)
-            let fallbackRaw = (editingUseCase?.currentText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let fallbackRaw = (isDemoRecordingEnabled ? liveTranscription : editingUseCase?.currentText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let raw = (recorded?.rawTranscript ?? (!rawTranscript.isEmpty ? rawTranscript : fallbackRaw)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !raw.isEmpty else {
                 captureState = .failed(stage: .asr, reason: "No transcription content produced")
                 return
             }
             var refined = recorded?.refinedText ?? refinedText
+            if isDemoRecordingEnabled && refined.isEmpty {
+                refined = "播客开场灵感：从一封深夜收到的听众来信切入，顺势引出本期关于「慢下来思考」的核心主题。"
+            }
+            guard captureGeneration == generation else { return }
             captureState = .refining(mode: mode)
             if refined.isEmpty, let refinementUseCase, refinementUseCase.isConfigured {
                 try await refinementUseCase.refine(customPrompt: nil)
@@ -201,6 +235,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                     refined = current
                 }
             }
+            guard captureGeneration == generation else { return }
             let audio = recorded?.localAudioFileName ?? localAudioFileName
             let duration = recorded?.durationSeconds ?? stoppedDuration
             let outcome = try await useCase.recordCompletedCapture(mode: mode, rawTranscript: raw, refinedText: refined, localAudioFileName: audio, durationSeconds: duration, deviceSource: deviceSource)
@@ -244,7 +279,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
     }
 
-    public func prepareDemoRefinedState() {
+    public func prepareDemoRefinedState() async {
+        await reloadTask?.value
         latestCompletedText = "播客开场灵感：从一封深夜收到的听众来信切入，顺势引出本期关于「慢下来思考」的核心主题。"
         lastCopiedBannerText = "润色完成 · 点按文字即可复制"
     }
@@ -281,6 +317,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
     }
     public func seedDemoDataIfEmptyForPreview() async {
+        await reloadTask?.value
         await reload()
         guard todos.isEmpty && captures.isEmpty else {
             lastCopiedBannerText = "已存入待办 · 可随时按操作按钮继续录入"
@@ -317,7 +354,15 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         lastCopiedBannerText = "已存入待办 · 可随时按操作按钮继续录入"
     }
 
-    public func reload() async { do { captures = try await useCase.fetchCaptures(); todos = try await useCase.fetchTodos() } catch { } }
+    public func reload() async {
+        do {
+            captures = try await useCase.fetchCaptures()
+            todos = try await useCase.fetchTodos()
+            if let latest = captures.filter({ $0.state == .completed }).max(by: { $0.createdAt < $1.createdAt }) {
+                latestCompletedText = (latest.refinedText.isEmpty ? latest.rawTranscript : latest.refinedText).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } catch { }
+    }
     private func loadPreferredCaptureDestination(defaultMode: CaptureMode) async {
         if let stored: CaptureMode = await preferencesStore.getValue(for: .iosQuickCaptureDestination) {
             selectedCaptureMode = stored
@@ -328,16 +373,22 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     private func bindRecordingTelemetry() {
         recordingUseCase?.audioLevelPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] level in self?.audioLevel = level }
+            .sink { [weak self] level in
+                guard let self, !isDemoRecordingEnabled else { return }
+                audioLevel = level
+            }
             .store(in: &subscriptions)
         transcriptionUseCase?.liveTextPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] text in self?.liveTranscription = text }
+            .sink { [weak self] text in
+                guard let self, !isDemoRecordingEnabled else { return }
+                liveTranscription = text
+            }
             .store(in: &subscriptions)
         editingUseCase?.currentTextPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
-                guard let self else { return }
+                guard let self, !isDemoRecordingEnabled else { return }
                 if isProcessingCapture { streamingRefinedText = text }
             }
             .store(in: &subscriptions)

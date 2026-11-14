@@ -211,6 +211,8 @@ public final class EditorViewModel: ObservableObject, EditorViewState {
 
         do {
             try await recordingUseCase.startRecording()
+            isRecording = recordingUseCase.state.isActive
+            recordingDuration = recordingUseCase.state.duration ?? 0
             if let coordinator = streamingCoordinator {
                 await coordinator.startStreaming()
                 isVoiceZoneEditing = true

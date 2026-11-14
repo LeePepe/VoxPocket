@@ -23,9 +23,13 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     @Published public var isVoiceZoneEditing: Bool = false
 
     private var mockTask: Task<Void, Never>?
+    private var generation = UUID()
+    private let refinementStep: @MainActor () async throws -> Void
 
-    public init(text: String = "周五产品评审结论：首屏彻底去掉顶部状态胶囊，只保留中央一句话与底部液态玻璃底座。") {
+    public init(text: String = "周五产品评审结论：首屏彻底去掉顶部状态胶囊，只保留中央一句话与底部液态玻璃底座。",
+                refinementStep: @escaping @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(300)) }) {
         self.text = text
+        self.refinementStep = refinementStep
     }
 
     public func startRecording() async {
@@ -38,8 +42,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     }
 
     public func stopRecording() async {
-        mockTask?.cancel()
-        mockTask = nil
+        guard isRecording else { return }
         isRecording = false
         rawTranscription = liveTranscription
         text = rawTranscription
@@ -55,18 +58,25 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     }
 
     public func refine() async {
+        cancelMockFlow()
+        let current = generation
         isRefining = true
         streamingRefinedText = ""
-        let chunks = ["播客开场灵感：", "从一封深夜收到的听众来信切入，", "顺势引出本期关于「慢下来思考」", "的核心主题。"]
-        for chunk in chunks {
-            do { try await Task.sleep(for: .milliseconds(300)) }
-            catch { isRefining = false; return }
-            guard !Task.isCancelled else { isRefining = false; return }
-            streamingRefinedText += chunk
+        let task = Task {
+            let chunks = ["播客开场灵感：", "从一封深夜收到的听众来信切入，", "顺势引出本期关于「慢下来思考」", "的核心主题。"]
+            for chunk in chunks {
+                do { try await refinementStep() }
+                catch { break }
+                guard !Task.isCancelled, generation == current else { return }
+                streamingRefinedText += chunk
+            }
+            guard !Task.isCancelled, generation == current else { return }
+            text = streamingRefinedText
+            isRefining = false
+            mockTask = nil
         }
-        guard !Task.isCancelled else { isRefining = false; return }
-        text = streamingRefinedText
-        isRefining = false
+        mockTask = task
+        await task.value
     }
 
     public func cancelRefinement() {
@@ -86,6 +96,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     }
 
     public func updateText(_ newText: String, range: NSRange) {
+        cancelMockFlow()
         text = newText
         canUndo = true
     }
@@ -95,6 +106,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     }
 
     public func clearText() {
+        cancelMockFlow()
         text = ""
         rawTranscription = ""
         streamingRefinedText = ""
@@ -106,7 +118,9 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     }
 
     private func cancelMockFlow() {
+        generation = UUID()
         mockTask?.cancel()
         mockTask = nil
+        isRefining = false
     }
 }

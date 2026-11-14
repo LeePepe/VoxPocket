@@ -14,6 +14,40 @@ import XCTest
 @MainActor
 final class EditorViewModelSilentRecordingTests: XCTestCase {
 
+    func testAwaitedPausedStartRefreshesRealStateBeforeImmediateStop() async {
+        let gate = RecorderTestGate()
+        let recording = ControlledRecordingUseCase(gate: gate)
+        let editor = EditorViewModel(recording: recording, transcription: FakeTranscriptionUseCase(),
+                                     editing: FakeEditingUseCase(), history: FakeHistoryUseCase(),
+                                     refinement: FakeConfiguredRefinementUseCase())
+        let start = Task { await editor.startRecording() }
+        await gate.waitForEntries()
+        XCTAssertFalse(editor.isRecording)
+        await gate.releaseNext()
+        await start.value
+        XCTAssertTrue(editor.isRecording)
+        XCTAssertEqual(editor.recordingDuration, 1)
+        await editor.stopRecording()
+        XCTAssertEqual(recording.events, ["start-requested", "started", "stopped"])
+        XCTAssertFalse(editor.isRecording)
+    }
+
+    func testFailedAwaitedStartDoesNotFabricateRecording() async {
+        let gate = RecorderTestGate()
+        let recording = ControlledRecordingUseCase(gate: gate, failsStart: true)
+        let editor = EditorViewModel(recording: recording, transcription: FakeTranscriptionUseCase(),
+                                     editing: FakeEditingUseCase(), history: FakeHistoryUseCase(),
+                                     refinement: FakeConfiguredRefinementUseCase())
+        let start = Task { await editor.startRecording() }
+        await gate.waitForEntries()
+        await gate.releaseNext()
+        await start.value
+        XCTAssertFalse(editor.isRecording)
+        XCTAssertNotNil(editor.errorMessage)
+        await editor.stopRecording()
+        XCTAssertEqual(recording.events, ["start-requested"])
+    }
+
     // MARK: - New session mode
 
     func testSilentRecordingNewSessionShowsWarningAndSkipsRefinement() async {
