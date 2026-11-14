@@ -7,92 +7,113 @@ import Preferences
 public struct IOSCleanSlateWorkspaceView: View {
     @ObservedObject private var viewModel: VoxWorkspaceViewModel
     private let localModelLoadingStatus: LocalModelLoadingStatus?
-    @State private var selectedTodo: VoiceTodo?
     @State private var isShowingNotesSheet = false
     @State private var isShowingSettingsSheet = false
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var modeAnimation
-    @Namespace private var filterAnimation
-    @Namespace private var dockGlassNamespace
-    @State private var isHoldRecording = false
 
-    public init(
-        viewModel: VoxWorkspaceViewModel,
-        localModelLoadingStatus: LocalModelLoadingStatus? = nil
-    ) {
+    public init(viewModel: VoxWorkspaceViewModel, localModelLoadingStatus: LocalModelLoadingStatus? = nil) {
         self.viewModel = viewModel
         self.localModelLoadingStatus = localModelLoadingStatus
     }
 
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Space.xxl) {
-                    statusFilterStrip
-                    todoPrimaryStage
-                }
-                .padding(.horizontal, AppTheme.Space.lg)
-                .padding(.top, AppTheme.Space.sm)
-                .padding(.bottom, AppTheme.Space.section)
+            RecorderSentenceStage(sentence: stageSentence) {
+                guard !viewModel.isRecordingActive, !viewModel.isProcessingCapture else { return }
+                viewModel.copyLatestCompletedText()
             }
-            .background(AppTheme.surfacePrimary.ignoresSafeArea())
-            .navigationTitle("待办")
-            .searchable(
-                text: $viewModel.searchQuery,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "搜索待办"
-            )
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        isShowingNotesSheet = true
-                    } label: {
-                        Label("语音速记", systemImage: "waveform")
-                    }
-                    .accessibilityIdentifier("vox.ios.notesSheetButton")
-
-                    Button {
-                        isShowingSettingsSheet = true
-                    } label: {
-                        Label("设置", systemImage: "gearshape")
-                    }
-                    .accessibilityIdentifier("vox.ios.settingsButton")
-                }
+            .background { RecorderBackdrop(status: viewModel.recorderStatus, audioLevel: viewModel.audioLevel) }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                RecorderDock(isRecording: viewModel.isRecordingActive, isProcessing: viewModel.isProcessingCapture,
+                             audioLevel: viewModel.audioLevel, feedback: feedback, error: captureError,
+                             start: { await viewModel.startCaptureAndWait() },
+                             stop: { await viewModel.completeCapture(deviceSource: .iPhone) },
+                             cancel: { viewModel.cancelCapture() }, retry: retry,
+                             openTodos: { isShowingNotesSheet = true }, openSettings: { isShowingSettingsSheet = true })
             }
-            .safeAreaInset(edge: .bottom) {
-                bottomCaptureInset
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(item: $selectedTodo) { todo in
-            IOSCleanSlateTodoDetail(todo: todo, viewModel: viewModel)
-        }
-        .sheet(isPresented: $isShowingNotesSheet) {
-            IOSVoiceNotesHistorySheet(viewModel: viewModel)
-        }
+        .sheet(isPresented: $isShowingNotesSheet) { IOSWorkspaceManagementSheet(viewModel: viewModel) }
         .sheet(isPresented: $isShowingSettingsSheet) {
-            IOSWorkspaceSettingsSheet(
-                viewModel: viewModel,
-                localModelLoadingStatus: localModelLoadingStatus
-            )
+            IOSWorkspaceSettingsSheet(viewModel: viewModel, localModelLoadingStatus: localModelLoadingStatus)
         }
+        .preferredColorScheme(demoAppearance)
         .sensoryFeedback(.success, trigger: viewModel.lastCopiedBannerText)
         .task {
             let env = ProcessInfo.processInfo.environment
-            if env["VOX_DEMO_SEED"] == "1" {
-                await viewModel.seedDemoDataIfEmptyForPreview()
-            }
-            if env["VOX_DEMO_RECORDING"] == "1" {
-                viewModel.startCaptureInPreferredMode()
-                viewModel.audioLevel = 0.72
-            }
-            if env["VOX_OPEN_SETTINGS"] == "1" {
-                isShowingSettingsSheet = true
+            if env["VOX_DEMO_SEED"] == "1" { await viewModel.seedDemoDataIfEmptyForPreview() }
+            if env["VOX_DEMO_REFINED"] == "1" { await viewModel.prepareDemoRefinedState() }
+            if env["VOX_DEMO_RECORDING"] == "1" && env["VOX_DEMO_AUTOSTART"] != "0" {
+                await viewModel.startCaptureAndWait()
             }
         }
     }
 
-    // MARK: - Group 1: Compact Overview & Filter Strip
+    private var demoAppearance: ColorScheme? {
+        let env = ProcessInfo.processInfo.environment
+        guard env["VOXPOCKET_UI_TEST_HOST"] == "1" || env["VOX_DEMO_SEED"] == "1" || env["VOX_DEMO_RECORDING"] == "1" || env["VOX_DEMO_REFINED"] == "1" else { return nil }
+        switch env["VOX_DEMO_APPEARANCE"] {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+
+    private var stageSentence: String {
+        if viewModel.isRecordingActive { return viewModel.liveTranscription.isEmpty ? "正在聆听你的灵感，松手立即润色…" : viewModel.liveTranscription }
+        if viewModel.isProcessingCapture { return viewModel.streamingRefinedText.isEmpty ? "正在提炼语句结构与核心要点…" : viewModel.streamingRefinedText }
+        return viewModel.latestCompletedText.isEmpty ? "按住底部玻璃说话，松手即刻生成润色笔记。" : viewModel.latestCompletedText
+    }
+
+    private var feedback: String {
+        if viewModel.isRecordingActive { return "正在聆听 · \(Self.formatDuration(TimeInterval(viewModel.recordingElapsedSeconds))) · 松手立即润色" }
+        if viewModel.isProcessingCapture { return "正在提炼语句结构与核心要点…" }
+        return viewModel.lastCopiedBannerText ?? "按住说话 · 点按也可启停"
+    }
+
+    private var captureError: String? {
+        if case .failed(_, let reason) = viewModel.captureState { return reason }
+        return nil
+    }
+
+    private func retry() {
+        if let failed = viewModel.captures.first(where: { if case .failed = $0.state { return true }; return false }) {
+            viewModel.retryCapture(failed.id)
+        } else { viewModel.startCaptureInPreferredMode() }
+    }
+
+    static func formatDuration(_ value: TimeInterval) -> String {
+        String(format: "%02d:%02d", Int(value) / 60, Int(value) % 60)
+    }
+}
+
+private struct IOSWorkspaceManagementSheet: View {
+    @ObservedObject var viewModel: VoxWorkspaceViewModel
+    @State private var selectedTodo: VoiceTodo?
+    @Namespace private var filterAnimation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    statusFilterStrip
+                    todoPrimaryStage
+                    Text("语音速记").font(.title2.bold())
+                    ForEach(viewModel.filteredCaptures) { capture in
+                        IOSCleanSlateCaptureCard(capture: capture, viewModel: viewModel)
+                    }
+                }
+                .padding(22)
+            }
+            .background(AppTheme.surfacePrimary)
+            .searchable(text: $viewModel.searchQuery, prompt: "搜索待办与语音速记")
+            .navigationTitle("待办与语音速记")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .sheet(item: $selectedTodo) { todo in IOSCleanSlateTodoDetail(todo: todo, viewModel: viewModel) }
+        }
+    }
 
     private var statusFilterStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -115,7 +136,7 @@ public struct IOSCleanSlateWorkspaceView: View {
                         }
                         .padding(.horizontal, AppTheme.Space.md)
                         .padding(.vertical, AppTheme.Space.sm)
-                        .frame(minHeight: 36)
+                        .frame(minHeight: 44)
                         .background {
                             if isSelected {
                                 Capsule()
@@ -183,223 +204,6 @@ public struct IOSCleanSlateWorkspaceView: View {
         }
     }
 
-    // MARK: - Group 3: Functional Bottom Capture Dock & Deterministic Receipt (Native Liquid Glass)
-
-    private var bottomCaptureInset: some View {
-        GlassEffectContainer(spacing: AppTheme.Space.md) {
-            VStack(spacing: AppTheme.Space.sm) {
-                if let receipt = viewModel.lastCopiedBannerText {
-                    deterministicReceiptPill(receipt)
-                        .glassEffectID("receiptBanner", in: dockGlassNamespace)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-                if case .failed(_, let reason) = viewModel.captureState {
-                    failureBannerPill(reason)
-                        .glassEffectID("failureBanner", in: dockGlassNamespace)
-                }
-                captureDock
-            }
-        }
-        .padding(.horizontal, AppTheme.Space.lg)
-        .padding(.top, AppTheme.Space.xs)
-        .padding(.bottom, AppTheme.Space.sm)
-        .animation(reduceMotion ? nil : AppTheme.snappySpring, value: viewModel.lastCopiedBannerText)
-        .animation(reduceMotion ? nil : AppTheme.gestureSpring, value: viewModel.captureState)
-    }
-
-    private func deterministicReceiptPill(_ text: String) -> some View {
-        Button {
-            viewModel.dismissReceiptBanner()
-        } label: {
-            HStack(spacing: AppTheme.Space.sm) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                Text(text)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, AppTheme.Space.md)
-            .padding(.vertical, AppTheme.Space.sm)
-            .modifier(IOSFunctionalGlassModifier(reduceTransparency: reduceTransparency, cornerRadius: AppTheme.Radius.md))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("vox.ios.receiptBanner")
-    }
-
-    private func failureBannerPill(_ reason: String) -> some View {
-        HStack(spacing: AppTheme.Space.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            Text(reason)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, AppTheme.Space.md)
-        .padding(.vertical, AppTheme.Space.xs)
-        .modifier(IOSFunctionalGlassModifier(reduceTransparency: reduceTransparency, cornerRadius: AppTheme.Radius.md))
-    }
-
-    private var captureDock: some View {
-        HStack(spacing: AppTheme.Space.md) {
-            if viewModel.isRecordingActive {
-                recordingActiveBar
-            } else if viewModel.isProcessingCapture {
-                processingActiveBar
-                    .padding(.horizontal, AppTheme.Space.lg)
-                    .padding(.vertical, AppTheme.Space.sm)
-                    .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
-                    .glassEffectID("dockMainPill", in: dockGlassNamespace)
-            } else {
-                idleDestinationSwitcher
-                    .padding(AppTheme.Space.xs)
-                    .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
-                    .glassEffectID("dockMainPill", in: dockGlassNamespace)
-
-                Spacer(minLength: AppTheme.Space.xs)
-            }
-
-            if !viewModel.isProcessingCapture {
-                primaryRecordButton
-                    .glassEffectID("dockActionOrb", in: dockGlassNamespace)
-            }
-        }
-    }
-
-    private var idleDestinationSwitcher: some View {
-        HStack(spacing: AppTheme.Space.xs) {
-            ForEach([CaptureMode.todo, CaptureMode.text], id: \.self) { mode in
-                let isSelected = viewModel.selectedCaptureMode == mode
-                Button {
-                    withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
-                        viewModel.updatePreferredCaptureMode(mode)
-                    }
-                } label: {
-                    HStack(spacing: AppTheme.Space.xs) {
-                        Image(systemName: mode == .todo ? "checklist" : "doc.on.clipboard")
-                            .font(.caption.weight(.semibold))
-                        Text(mode == .todo ? "存入待办" : "复制文字")
-                            .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                    }
-                    .padding(.horizontal, AppTheme.Space.md)
-                    .frame(minHeight: 44)
-                    .background {
-                        if isSelected {
-                            Capsule()
-                                .fill((mode == .todo ? Color.orange : Color.accentColor).opacity(0.20))
-                                .matchedGeometryEffect(id: "captureDestination", in: modeAnimation)
-                        }
-                    }
-                    .foregroundStyle(isSelected ? (mode == .todo ? Color.orange : Color.accentColor) : .secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(mode == .todo ? "Todo 模式" : "文字模式")
-                .accessibilityIdentifier("vox.ios.mode.\(mode.rawValue)")
-            }
-        }
-        .sensoryFeedback(.selection, trigger: viewModel.selectedCaptureMode)
-    }
-
-    private var primaryRecordButton: some View {
-        Button {
-            if isHoldRecording {
-                isHoldRecording = false
-                return
-            }
-            if viewModel.isRecordingActive {
-                viewModel.finishCapture()
-            } else {
-                viewModel.startCaptureInPreferredMode()
-            }
-        } label: {
-            Image(systemName: viewModel.isRecordingActive ? "stop.fill" : "mic.fill")
-                .font(.title3.weight(.semibold))
-                .frame(width: 28, height: 28)
-                .padding(6)
-        }
-        .buttonStyle(.glassProminent)
-        .buttonBorderShape(.circle)
-        .tint(
-            viewModel.isRecordingActive
-                ? Color.red
-                : (viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor)
-        )
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.28)
-                .onEnded { _ in
-                    if !viewModel.isRecordingActive {
-                        isHoldRecording = true
-                        viewModel.startCaptureInPreferredMode()
-                    }
-                }
-                .sequenced(before: DragGesture(minimumDistance: 0))
-                .onEnded { _ in
-                    if isHoldRecording && viewModel.isRecordingActive {
-                        isHoldRecording = false
-                        viewModel.finishCapture()
-                    }
-                }
-        )
-        .accessibilityLabel(viewModel.isRecordingActive ? "停止录音" : "开始录音")
-        .accessibilityIdentifier(viewModel.isRecordingActive ? "vox.stop.button" : "vox.record.button")
-    }
-
-    private var recordingActiveBar: some View {
-        HStack(spacing: AppTheme.Space.sm) {
-            Button {
-                viewModel.cancelCapture()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(width: 24, height: 24)
-                    .padding(6)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel("取消")
-            .glassEffectID("dockCancelOrb", in: dockGlassNamespace)
-
-            Button {
-                viewModel.toggleCaptureModeDuringRecording()
-            } label: {
-                HStack(spacing: AppTheme.Space.sm) {
-                    IOSLiveWaveformBars(level: viewModel.audioLevel)
-                    Text(Self.formatDuration(TimeInterval(viewModel.recordingElapsedSeconds)))
-                        .font(.subheadline.weight(.semibold).monospacedDigit())
-                        .contentTransition(.numericText())
-                    Text(viewModel.selectedCaptureMode == .todo ? "存入待办" : "复制文字")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, AppTheme.Space.sm)
-                        .padding(.vertical, AppTheme.Space.xs)
-                        .background(
-                            (viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor).opacity(0.18),
-                            in: Capsule()
-                        )
-                        .foregroundStyle(viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor)
-                }
-                .padding(.horizontal, AppTheme.Space.md)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("vox.recording.indicator")
-            .glassEffectID("dockMainPill", in: dockGlassNamespace)
-        }
-    }
-
-    private var processingActiveBar: some View {
-        HStack(spacing: AppTheme.Space.sm) {
-            ProgressView()
-            Text(viewModel.selectedCaptureMode == .todo ? "正在提炼待办…" : "正在润色并复制文字…")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .frame(minHeight: 48)
-    }
-
     private func countForFilter(_ filter: TodoStatusFilter) -> Int {
         switch filter {
         case .all: viewModel.totalTodoCount
@@ -410,60 +214,6 @@ public struct IOSCleanSlateWorkspaceView: View {
         }
     }
 
-    static func formatDuration(_ value: TimeInterval) -> String {
-        String(format: "%02d:%02d", Int(value) / 60, Int(value) % 60)
-    }
-}
-
-private struct IOSFunctionalGlassCapsuleModifier: ViewModifier {
-    let reduceTransparency: Bool
-
-    func body(content: Content) -> some View {
-        if reduceTransparency {
-            content.background(.thickMaterial, in: Capsule())
-        } else {
-            content.glassEffect(.regular.interactive(), in: .capsule)
-        }
-    }
-}
-
-private struct IOSFunctionalGlassModifier: ViewModifier {
-    let reduceTransparency: Bool
-    let cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        if reduceTransparency {
-            content.background(
-                .thickMaterial,
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-        } else {
-            content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-        }
-    }
-}
-
-// MARK: - Live Waveform Bars
-
-private struct IOSLiveWaveformBars: View {
-    let level: Float
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<4, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Color.red)
-                    .frame(width: 3, height: barHeight(for: index))
-            }
-        }
-        .frame(height: 20)
-    }
-
-    private func barHeight(for index: Int) -> CGFloat {
-        let clamped = CGFloat(max(0.15, min(1.0, level)))
-        let weights: [CGFloat] = [0.55, 1.0, 0.75, 0.45]
-        return max(6, 20 * clamped * weights[index % weights.count])
-    }
 }
 
 // MARK: - Borderless Luminance Todo Card
@@ -629,44 +379,6 @@ private struct IOSWorkspaceSettingsSheet: View {
                 }
             }
             .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-}
-
-// MARK: - Secondary Voice Notes Sheet (Folded P2 Lens)
-
-private struct IOSVoiceNotesHistorySheet: View {
-    @ObservedObject var viewModel: VoxWorkspaceViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: AppTheme.Space.md) {
-                    if viewModel.filteredCaptures.isEmpty {
-                        ContentUnavailableView(
-                            "暂无速记",
-                            systemImage: "waveform",
-                            description: Text("开始一次录音即可看到本地语音笔记。")
-                        )
-                        .padding(.top, AppTheme.Space.section)
-                    }
-                    ForEach(viewModel.filteredCaptures) { capture in
-                        IOSCleanSlateCaptureCard(capture: capture, viewModel: viewModel)
-                    }
-                }
-                .padding(AppTheme.Space.lg)
-            }
-            .background(AppTheme.surfacePrimary.ignoresSafeArea())
-            .navigationTitle("语音速记")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

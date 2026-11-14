@@ -6,6 +6,9 @@
 //
 
 import XCTest
+#if os(iOS)
+import UIKit
+#endif
 
 // MARK: - Accessibility ID constants (mirrors VoxAccessibilityID from VoxFunctionalTest)
 private enum VoxID {
@@ -108,6 +111,134 @@ final class VoxPocketUITests: XCTestCase {
         let recordingStarted = stopButton.waitForExistence(timeout: 8)
         XCTAssertTrue(recordingStarted, "Stop button did not appear after tapping record — recording may not have started")
     }
+
+    #if os(iOS)
+    @MainActor
+    func testRecorderStateMatrixScreenshots() throws {
+        let evidence = ProcessInfo.processInfo.environment["VOXPOCKET_EVIDENCE_DIR"] ?? NSTemporaryDirectory()
+        for appearance in ["light", "dark"] {
+            let app = makeVoxPocketUIApplication()
+            app.launchEnvironment["VOX_DEMO_SEED"] = "1"
+            app.launchEnvironment["VOX_DEMO_APPEARANCE"] = appearance
+            app.launch()
+            XCTAssertTrue(app.buttons[VoxID.recordButton].waitForExistence(timeout: 15))
+            assertSentence(app, contains: "好的工具应当像空气一样安静")
+            saveScreenshot(app, name: "idle-\(appearance)", directory: evidence)
+            let fold = app.buttons["vox.fold.menu.button"]
+            XCTAssertGreaterThanOrEqual(fold.frame.height, 44)
+            fold.tap()
+            let todo = app.buttons["vox.fold.todoList.button"]
+            let settings = app.buttons["vox.fold.settings.button"]
+            XCTAssertTrue(todo.waitForExistence(timeout: 3))
+            XCTAssertTrue(settings.isHittable)
+            XCTAssertGreaterThanOrEqual(todo.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(settings.frame.height, 44)
+            saveScreenshot(app, name: "fold-\(appearance)", directory: evidence)
+            todo.tap()
+            XCTAssertTrue(app.buttons["vox.ios.filter.all"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["vox.ios.filter.done"].exists)
+            XCTAssertTrue(app.staticTexts["整理下周设计评审要展示的液态玻璃交互走查清单"].exists)
+            saveScreenshot(app, name: "todo-\(appearance)", directory: evidence)
+            let todoDetail = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "整理下周设计评审")).firstMatch
+            XCTAssertTrue(todoDetail.exists)
+            todoDetail.tap()
+            XCTAssertTrue(app.textFields["标题"].waitForExistence(timeout: 5))
+            app.buttons["取消"].tap()
+            app.buttons["vox.ios.filter.done"].tap()
+            XCTAssertTrue(app.staticTexts["把早间散步录下的播客大纲润色后发给搭档确认"].exists)
+            app.buttons["完成"].tap()
+            app.buttons["vox.fold.settings.button"].tap()
+            XCTAssertTrue(app.buttons["vox.ios.settings.destination.todo"].waitForExistence(timeout: 5))
+            app.terminate()
+
+            let recordingApp = makeVoxPocketUIApplication()
+            recordingApp.launchEnvironment["VOX_DEMO_RECORDING"] = "1"
+            recordingApp.launchEnvironment["VOX_DEMO_APPEARANCE"] = appearance
+            recordingApp.launch()
+            XCTAssertTrue(recordingApp.buttons[VoxID.stopButton].waitForExistence(timeout: 15))
+            assertSentence(recordingApp, contains: "把刚才散步想到的播客开场白记一下")
+            saveScreenshot(recordingApp, name: "recording-\(appearance)", directory: evidence)
+            recordingApp.terminate()
+            let refinedApp = makeVoxPocketUIApplication()
+            refinedApp.launchEnvironment["VOX_DEMO_REFINED"] = "1"
+            refinedApp.launchEnvironment["VOX_DEMO_APPEARANCE"] = appearance
+            refinedApp.launch()
+            XCTAssertTrue(refinedApp.buttons[VoxID.recordButton].waitForExistence(timeout: 15))
+            assertSentence(refinedApp, contains: "播客开场灵感：")
+            saveScreenshot(refinedApp, name: "refined-\(appearance)", directory: evidence)
+            refinedApp.terminate()
+        }
+    }
+
+    @MainActor
+    func testTwoPhysicalTapsStopAndHeldReleaseFinishesWithoutRealMicrophone() throws {
+        let app = makeVoxPocketUIApplication()
+        app.launchEnvironment["VOX_DEMO_RECORDING"] = "1"
+        app.launchEnvironment["VOX_DEMO_AUTOSTART"] = "0"
+        app.launch()
+        let record = app.buttons[VoxID.recordButton]
+        XCTAssertTrue(record.waitForExistence(timeout: 15))
+        record.tap()
+        let stop = app.buttons[VoxID.stopButton]
+        XCTAssertTrue(stop.waitForExistence(timeout: 5))
+        stop.tap()
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        assertSentence(app, contains: "播客开场灵感：")
+        record.press(forDuration: 0.4)
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        assertSentence(app, contains: "播客开场灵感：")
+        app.buttons["vox.fold.menu.button"].tap()
+        app.buttons["vox.fold.settings.button"].tap()
+        XCTAssertTrue(app.buttons["vox.ios.settings.destination.todo"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testNarrowLargeTextAndSystemAccessibilityRendering() throws {
+        let app = makeVoxPocketUIApplication()
+        app.launchEnvironment["VOX_DEMO_SEED"] = "1"
+        app.launchEnvironment["VOX_DEMO_APPEARANCE"] = "light"
+        app.launch()
+        XCTAssertTrue(app.buttons[VoxID.recordButton].waitForExistence(timeout: 15))
+        let fold = app.buttons["vox.fold.menu.button"]
+        fold.tap()
+        let todo = app.buttons["vox.fold.todoList.button"]
+        let settings = app.buttons["vox.fold.settings.button"]
+        XCTAssertTrue(todo.waitForExistence(timeout: 5))
+        for control in [fold, todo, settings, app.buttons[VoxID.recordButton]] {
+            XCTAssertTrue(control.isHittable)
+            XCTAssertGreaterThanOrEqual(control.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(control.frame.width, 44)
+            XCTAssertTrue(app.frame.contains(control.frame))
+        }
+        saveScreenshot(app, name: "narrow-accessibility", directory: NSTemporaryDirectory())
+        #if os(iOS)
+        let settingsEvidence = XCTAttachment(string: "reduceMotion=\(UIAccessibility.isReduceMotionEnabled); reduceTransparency=\(UIAccessibility.isReduceTransparencyEnabled); contentSize=\(UIApplication.shared.preferredContentSizeCategory.rawValue)")
+        settingsEvidence.name = "system-accessibility-settings"
+        settingsEvidence.lifetime = .keepAlways
+        add(settingsEvidence)
+        #endif
+    }
+
+    @MainActor
+    private func assertSentence(_ app: XCUIApplication, contains text: String) {
+        let sentence = app.staticTexts[VoxID.finalTranscriptText]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", text), object: sentence)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+    }
+
+    @MainActor
+    private func saveScreenshot(_ app: XCUIApplication, name: String, directory: String) {
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("\(name).png")
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? screenshot.pngRepresentation.write(to: url)
+    }
+
+    #endif
 
     // MARK: - Session List Test
 

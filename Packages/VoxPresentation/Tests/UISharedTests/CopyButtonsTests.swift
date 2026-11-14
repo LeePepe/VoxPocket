@@ -26,4 +26,22 @@ final class CopyButtonsTests: XCTestCase {
         _ = RefinedTextPane(text: "hello")
         XCTAssertTrue(true)
     }
+
+    func testGestureControllerUsesProductReleaseOrdering() async {
+        var now = 0.0
+        let editor = MockEditorViewModel(refinementStep: {})
+        let controller = RecorderGestureController(now: { now })
+        controller.pressBegan(.init(isRecording: false, isProcessing: false,
+            start: { await editor.startRecording() }, stop: { await editor.stopRecording() },
+            cancel: { await editor.stopRecording() }))
+        await controller.waitForSettled()
+        XCTAssertTrue(editor.isRecording)
+        now = 0.3
+        controller.pressEnded()
+        controller.pressEnded()
+        await controller.waitForSettled()
+        XCTAssertFalse(editor.isRecording)
+        XCTAssertTrue(editor.rawTranscription.hasPrefix("把刚才散步想到的播客开场白"))
+        XCTAssertTrue(editor.text.hasPrefix("播客开场灵感："))
+    }
 }

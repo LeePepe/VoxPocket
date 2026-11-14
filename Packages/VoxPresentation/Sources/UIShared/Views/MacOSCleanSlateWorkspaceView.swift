@@ -5,8 +5,57 @@ import CoreModels
 @MainActor
 public struct MacOSCleanSlateWorkspaceView: View {
     @ObservedObject private var viewModel: VoxWorkspaceViewModel
+    @State private var showManagement = false
+    @State private var showSettings = false
     public init(viewModel: VoxWorkspaceViewModel) { self.viewModel = viewModel }
+
     public var body: some View {
+        RecorderSentenceStage(sentence: sentence) {
+            guard !viewModel.isRecordingActive, !viewModel.isProcessingCapture else { return }
+            viewModel.copyLatestCompletedText()
+        }
+        .background { RecorderBackdrop(status: viewModel.recorderStatus, audioLevel: viewModel.audioLevel) }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            RecorderDock(isRecording: viewModel.isRecordingActive, isProcessing: viewModel.isProcessingCapture,
+                         audioLevel: viewModel.audioLevel, feedback: feedback, error: captureError,
+                         start: { await viewModel.startCaptureAndWait() }, stop: { await viewModel.completeCapture() },
+                         cancel: { viewModel.cancelCapture() }, retry: { viewModel.startCaptureInPreferredMode() },
+                         openTodos: { showManagement = true }, openSettings: { showSettings = true })
+        }
+        .toolbar(.hidden, for: .windowToolbar)
+        .sheet(isPresented: $showManagement) { MacOSWorkspaceManagementView(viewModel: viewModel) }
+        .sheet(isPresented: $showSettings) {
+            VStack {
+                HStack { Spacer(); Button("完成") { showSettings = false } }.padding()
+                MeRootView(status: viewModel.recorderStatus)
+            }
+            .frame(minWidth: 560, minHeight: 480)
+        }
+        .voxTheme()
+    }
+
+    private var sentence: String {
+        if viewModel.isRecordingActive { return viewModel.liveTranscription.isEmpty ? "正在聆听你的灵感，松手立即润色…" : viewModel.liveTranscription }
+        if viewModel.isProcessingCapture { return viewModel.streamingRefinedText.isEmpty ? "正在提炼语句结构与核心要点…" : viewModel.streamingRefinedText }
+        return viewModel.latestCompletedText.isEmpty ? "按住底部玻璃说话，松手即刻生成润色笔记。" : viewModel.latestCompletedText
+    }
+
+    private var feedback: String {
+        if viewModel.isRecordingActive { return "正在聆听 · 松手立即润色" }
+        if viewModel.isProcessingCapture { return "正在提炼语句结构与核心要点…" }
+        return viewModel.lastCopiedBannerText ?? "按住说话 · 点按也可启停"
+    }
+
+    private var captureError: String? {
+        if case .failed(_, let reason) = viewModel.captureState { return reason }
+        return nil
+    }
+}
+
+private struct MacOSWorkspaceManagementView: View {
+    @ObservedObject var viewModel: VoxWorkspaceViewModel
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
         NavigationSplitView {
             List(selection: $viewModel.selectedSidebarSection) {
                 Section("待办任务") { sidebar("收件箱 / 待处理", .todoInbox, "tray", viewModel.inboxCount); sidebar("AI 执行中", .todoRunning, "sparkles", viewModel.runningCount); sidebar("已完成", .todoDone, "checkmark.circle", viewModel.doneCount); sidebar("全部待办", .todoAll, "checklist", viewModel.totalTodoCount) }
@@ -34,7 +83,8 @@ public struct MacOSCleanSlateWorkspaceView: View {
                 if let capture = viewModel.captures.first(where: { $0.id == viewModel.selectedCaptureID }) { MacOSCleanSlateCaptureInspector(capture: capture, viewModel: viewModel) } else { ContentUnavailableView("选择一个速记", systemImage: "waveform") }
             } else if let todo = viewModel.todos.first(where: { $0.id == viewModel.selectedTodoID }) { MacOSCleanSlateInspector(todo: todo, viewModel: viewModel) } else { ContentUnavailableView("选择一个待办", systemImage: "sidebar.right") }
         }
-        .frame(minWidth: 960, minHeight: 620)
+        .frame(minWidth: 760, minHeight: 480)
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
     }
     private func sidebar(_ title: String, _ section: WorkspaceSidebarSection, _ icon: String, _ count: Int) -> some View { Label { HStack { Text(title); Spacer(); Text("\(count)").monospacedDigit().contentTransition(.numericText()) } } icon: { Image(systemName: icon) }.tag(section) }
 }

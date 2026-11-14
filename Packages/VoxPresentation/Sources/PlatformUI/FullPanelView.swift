@@ -15,9 +15,8 @@ public struct FullPanelView<VM: RootViewState>: View {
     }
 
     public var body: some View {
-        HomeRecorderView(
-            viewModel: viewModel.editorState,
-            recorderStatus: viewModel.recorderStatus,
+        VoxPocketRootView(
+            viewModel: viewModel,
             onCopyRefined: { text in
                 guard !text.isEmpty else { return }
                 MacOSClipboardService.shared.copy(text)

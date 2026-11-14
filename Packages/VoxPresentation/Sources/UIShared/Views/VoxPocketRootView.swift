@@ -47,7 +47,10 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
             }
         }
         .voxTheme()
-        .ignoresSafeArea()
+        .sheet(isPresented: $viewModel.showRawSheet) {
+            let raw = viewModel.editorState.isRecording ? viewModel.editorState.liveTranscription : viewModel.editorState.rawTranscription
+            RawTranscriptView(rawText: raw, status: viewModel.recorderStatus, canCopyRaw: !raw.isEmpty, onCopyRaw: { onCopyRaw(raw) })
+        }
         .onAppear {
             syncSidebarSelection()
             Task { await llmSettings.load() }
@@ -93,49 +96,21 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     viewModel: viewModel.editorState,
                     recorderStatus: viewModel.recorderStatus,
                     onCopyRefined: onCopyRefined,
-                    onCopyRaw: onCopyRaw
+                    onCopyRaw: onCopyRaw,
+                    onOpenTodoList: { viewModel.toggleDrawer() },
+                    onOpenSettings: { viewModel.navigateToMe() }
                 )
-                .navigationTitle("VoxPocket")
 #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .navigationBar)
+#else
+                .toolbar(.hidden, for: .windowToolbar)
 #endif
-                .toolbar {
-                    ToolbarItem(placement: .navigation) {
-                        Button(action: { viewModel.toggleDrawer() }) {
-                            Image(systemName: "line.3.horizontal")
-                        }
-                    }
-                    ToolbarItemGroup(placement: .automatic) {
-                        Button(action: { viewModel.editorState.undo() }) {
-                            Image(systemName: "arrow.uturn.left")
-                        }
-                        .disabled(!viewModel.editorState.canUndo)
-                        .accessibilityIdentifier("vox.editor.undo")
 
-                        Button(action: { viewModel.editorState.redo() }) {
-                            Image(systemName: "arrow.uturn.right")
-                        }
-                        .disabled(!viewModel.editorState.canRedo)
-                        .accessibilityIdentifier("vox.editor.redo")
-
-                        Button(action: { viewModel.showRawSheet = true }) {
-                            Label("Raw", systemImage: "waveform.and.mic")
-                        }
-
-                        Button {
-                            Task { await llmSettings.updateSkipContentAnalysis(!llmSettings.skipContentAnalysis) }
-                        } label: {
-                            Image(systemName: llmSettings.skipContentAnalysis ? "wand.and.sparkles.inverse" : "wand.and.sparkles")
-                        }
-                        .help(llmSettings.skipContentAnalysis ? "跳过意图分析（已开启）" : "意图分析中（点击跳过）")
-                        .accessibilityIdentifier("vox.editor.refine.toggle")
-                    }
-                }
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .me:
-                    MeRootView(status: viewModel.recorderStatus, onDeleteAllHistory: { viewModel.deleteAllSessions() }, localModelLoadingStatus: localModelLoadingStatus)
+                    settingsSurface
                 }
             }
         }
@@ -144,19 +119,7 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
 #else
         .toolbarBackground(.hidden, for: .windowToolbar)
 #endif
-        .sheet(isPresented: $viewModel.showRawSheet) {
-            let rawText = viewModel.editorState.isRecording
-                ? viewModel.editorState.liveTranscription
-                : viewModel.editorState.rawTranscription
-            RawTranscriptView(
-                rawText: rawText,
-                status: viewModel.recorderStatus,
-                canCopyRaw: !rawText.isEmpty,
-                onCopyRaw: {
-                    onCopyRaw(rawText)
-                }
-            )
-        }
+
     }
 
     // MARK: - iPad / Mac Layout
@@ -236,56 +199,17 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     viewModel: viewModel.editorState,
                     recorderStatus: viewModel.recorderStatus,
                     onCopyRefined: onCopyRefined,
-                    onCopyRaw: onCopyRaw
+                    onCopyRaw: onCopyRaw,
+                    onOpenTodoList: { splitViewVisibility = .all; sidebarSelection = .session(viewModel.sessionListState.selectedSessionId ?? UUID()) },
+                    onOpenSettings: { splitViewVisibility = .all; sidebarSelection = .me }
                 )
-                .navigationTitle("VoxPocket")
 #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .navigationBar)
+#else
+                .toolbar(.hidden, for: .windowToolbar)
 #endif
-                .toolbar {
-                    ToolbarItemGroup(placement: .automatic) {
-                        Button(action: { viewModel.editorState.undo() }) {
-                            Image(systemName: "arrow.uturn.left")
-                        }
-                        .disabled(!viewModel.editorState.canUndo)
-                        .accessibilityIdentifier("vox.editor.undo")
-
-                        Button(action: { viewModel.editorState.redo() }) {
-                            Image(systemName: "arrow.uturn.right")
-                        }
-                        .disabled(!viewModel.editorState.canRedo)
-                        .accessibilityIdentifier("vox.editor.redo")
-
-#if os(iOS)
-                        Button(action: { viewModel.showRawSheet = true }) {
-                            Label("Raw", systemImage: "waveform.and.mic")
-                        }
-#endif
-
-                        Button {
-                            Task { await llmSettings.updateSkipContentAnalysis(!llmSettings.skipContentAnalysis) }
-                        } label: {
-                            Image(systemName: llmSettings.skipContentAnalysis ? "wand.and.sparkles.inverse" : "wand.and.sparkles")
-                        }
-                        .help(llmSettings.skipContentAnalysis ? "跳过意图分析（已开启）" : "意图分析中（点击跳过）")
-                        .accessibilityIdentifier("vox.editor.refine.toggle")
-                    }
-                }
-                .sheet(isPresented: $viewModel.showRawSheet) {
-                    let rawText = viewModel.editorState.isRecording
-                        ? viewModel.editorState.liveTranscription
-                        : viewModel.editorState.rawTranscription
-                    RawTranscriptView(
-                        rawText: rawText,
-                        status: viewModel.recorderStatus,
-                        canCopyRaw: !rawText.isEmpty,
-                        onCopyRaw: {
-                            onCopyRaw(rawText)
-                        }
-                    )
-                }
             case .me:
-                MeRootView(status: viewModel.recorderStatus, localModelLoadingStatus: localModelLoadingStatus)
+                settingsSurface
             }
         }
 #if os(iOS)
@@ -293,6 +217,16 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
 #else
         .toolbarBackground(.hidden, for: .windowToolbar)
 #endif
+    }
+
+    private var settingsSurface: some View {
+        VStack(spacing: 0) {
+            EditorSecondaryControls(viewModel: viewModel.editorState, llmSettings: llmSettings) {
+                viewModel.showRawSheet = true
+            }
+            MeRootView(status: viewModel.recorderStatus, onDeleteAllHistory: { viewModel.deleteAllSessions() }, localModelLoadingStatus: localModelLoadingStatus)
+        }
+        .navigationTitle("设置")
     }
 
     private func syncSidebarSelection() {
@@ -314,4 +248,31 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
             editorState: MockEditorViewModel()
         )
     )
+}
+
+private struct EditorSecondaryControls<VM: EditorViewState>: View {
+    @ObservedObject var viewModel: VM
+    @ObservedObject var llmSettings: LLMProviderSettingsViewModel
+    let showRaw: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack { actions }
+            VStack { actions }
+        }
+        .padding(16)
+    }
+
+    @ViewBuilder private var actions: some View {
+        Button("撤销", systemImage: "arrow.uturn.left") { viewModel.undo() }
+            .disabled(!viewModel.canUndo).frame(minHeight: 44).accessibilityIdentifier("vox.editor.undo")
+        Button("重做", systemImage: "arrow.uturn.right") { viewModel.redo() }
+            .disabled(!viewModel.canRedo).frame(minHeight: 44).accessibilityIdentifier("vox.editor.redo")
+        Button("原始转写", systemImage: "waveform.and.mic", action: showRaw)
+            .frame(minHeight: 44).accessibilityIdentifier("vox.editor.raw")
+        Button(llmSettings.skipContentAnalysis ? "开启意图分析" : "跳过意图分析", systemImage: "wand.and.sparkles") {
+            Task { await llmSettings.updateSkipContentAnalysis(!llmSettings.skipContentAnalysis) }
+        }
+        .frame(minHeight: 44).accessibilityIdentifier("vox.editor.refine.toggle")
+    }
 }

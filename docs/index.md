@@ -30,3 +30,5 @@ Last-Reviewed: 2026-11-06
 - Plans: `docs/plans/`, `docs/superpowers/plans/`
 - Current specs: `specs/`; historical specs: `docs/superpowers/specs/`
 - Harness: `docs/harness/`
+
+- Design contract: `docs/design-contract.md`

@@ -40,21 +40,21 @@ public final class MockSessionListViewModel: ObservableObject, SessionListViewSt
     public static let sampleSessions: [Session] = [
         Session(
             id: UUID(),
-            title: "客户反馈集中在首屏加载速度与登录重试",
+            title: "播客开场灵感：从一封深夜听众来信切入慢思考主题",
             createdAt: Date().addingTimeInterval(-3600),
             updatedAt: Date().addingTimeInterval(-3600),
             state: .idle
         ),
         Session(
             id: UUID(),
-            title: "本周目标是把语音纠错流程打通，重点在撤销与重做",
+            title: "周四晨会纪要：确定新版本采用按住说话、松手即出润色稿的极简交互",
             createdAt: Date().addingTimeInterval(-8600),
             updatedAt: Date().addingTimeInterval(-8600),
             state: .refining
         ),
         Session(
             id: UUID(),
-            title: "旅行清单：护照、充电器、行程确认邮件",
+            title: "周末京都行备忘：提前预订鸭川旁晚餐，带上胶片机与备用电池",
             createdAt: Date().addingTimeInterval(-17200),
             updatedAt: Date().addingTimeInterval(-17200),
             state: .idle
