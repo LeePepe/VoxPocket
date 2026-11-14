@@ -17,6 +17,8 @@ public struct IOSCleanSlateWorkspaceView: View {
     @Namespace private var dockGlassNamespace
     @State private var isHoldRecording = false
     @State private var isFoldExpanded = false
+    @State private var gestureController = RecorderGestureController()
+    @State private var gestureWasUsed = false
 
     public init(
         viewModel: VoxWorkspaceViewModel,
@@ -29,13 +31,18 @@ public struct IOSCleanSlateWorkspaceView: View {
     public var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                AppTheme.surfacePrimary.ignoresSafeArea()
+                BackgroundAtmosphere(status: viewModel.recorderStatus, audioLevel: Double(viewModel.audioLevel)).ignoresSafeArea()
                 ScrollView {
                     Text(stageSentence)
                         .font(.system(size: 25, weight: .semibold, design: .rounded))
                         .tracking(-0.4).lineSpacing(7).multilineTextAlignment(.center)
                         .frame(maxWidth: 360).frame(maxWidth: .infinity, minHeight: 560)
                         .padding(.horizontal, 22)
+                        .frame(maxWidth: 330)
+                        .onTapGesture {
+                            guard !viewModel.isRecordingActive, !viewModel.isProcessingCapture, !viewModel.latestCompletedText.isEmpty else { return }
+                            viewModel.copyLatestCompletedText()
+                        }
                         .accessibilityIdentifier("vox.transcript.final")
                 }
                 .scrollIndicators(.hidden)
@@ -48,22 +55,28 @@ public struct IOSCleanSlateWorkspaceView: View {
         .sheet(item: $selectedTodo) { todo in
             IOSCleanSlateTodoDetail(todo: todo, viewModel: viewModel)
         }
-        .sheet(isPresented: $isShowingNotesSheet) { IOSVoiceNotesHistorySheet(viewModel: viewModel) }
+        .sheet(isPresented: $isShowingNotesSheet) {
+            IOSWorkspaceManagementSheet(viewModel: viewModel, selectedTodo: $selectedTodo)
+        }
         .sheet(isPresented: $isShowingSettingsSheet) {
             IOSWorkspaceSettingsSheet(viewModel: viewModel, localModelLoadingStatus: localModelLoadingStatus)
         }
         .sensoryFeedback(.success, trigger: viewModel.lastCopiedBannerText)
         .task {
-            if ProcessInfo.processInfo.environment["VOX_DEMO_SEED"] == "1" { await viewModel.seedDemoDataIfEmptyForPreview() }
+            let env = ProcessInfo.processInfo.environment
+            if env["VOX_DEMO_SEED"] == "1" { await viewModel.seedDemoDataIfEmptyForPreview() }
+            if env["VOX_DEMO_REFINED"] == "1" { viewModel.prepareDemoRefinedState() }
+            if env["VOX_DEMO_RECORDING"] == "1" {
+                viewModel.startCaptureInPreferredMode()
+                viewModel.audioLevel = 0.72
+            }
         }
     }
 
     private var stageSentence: String {
-        if viewModel.isRecordingActive { return "正在聆听你的灵感，松手立即润色…" }
-        if viewModel.isProcessingCapture { return "正在提炼语句结构与核心要点…" }
-        return viewModel.filteredCaptures.first?.refinedText.isEmpty == false
-            ? (viewModel.filteredCaptures.first?.refinedText ?? "")
-            : "按住底部玻璃说话，松手即刻生成润色笔记。"
+        if viewModel.isRecordingActive { return viewModel.liveTranscription.isEmpty ? "正在聆听你的灵感，松手立即润色…" : viewModel.liveTranscription }
+        if viewModel.isProcessingCapture { return viewModel.streamingRefinedText.isEmpty ? "正在提炼语句结构与核心要点…" : viewModel.streamingRefinedText }
+        return viewModel.latestCompletedText.isEmpty ? "按住底部玻璃说话，松手即刻生成润色笔记。" : viewModel.latestCompletedText
     }
 
     // MARK: - Group 1: Compact Overview & Filter Strip
@@ -228,11 +241,6 @@ public struct IOSCleanSlateWorkspaceView: View {
                     .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
                     .glassEffectID("dockMainPill", in: dockGlassNamespace)
             } else {
-                idleDestinationSwitcher
-                    .padding(AppTheme.Space.xs)
-                    .modifier(IOSFunctionalGlassCapsuleModifier(reduceTransparency: reduceTransparency))
-                    .glassEffectID("dockMainPill", in: dockGlassNamespace)
-
                 Spacer(minLength: AppTheme.Space.xs)
             }
 
@@ -296,46 +304,27 @@ public struct IOSCleanSlateWorkspaceView: View {
 
     private var primaryRecordButton: some View {
         Button {
-            if isHoldRecording {
-                isHoldRecording = false
-                return
-            }
-            if viewModel.isRecordingActive {
-                viewModel.finishCapture()
-            } else {
-                viewModel.startCaptureInPreferredMode()
-            }
+            if gestureWasUsed { gestureWasUsed = false }
+            else if gestureController.activate(isRecording: viewModel.isRecordingActive) == .start { viewModel.startCaptureInPreferredMode() }
+            else { viewModel.finishCapture() }
         } label: {
             Image(systemName: viewModel.isRecordingActive ? "stop.fill" : "mic.fill")
-                .font(.title3.weight(.semibold))
-                .frame(width: 28, height: 28)
-                .padding(6)
+                .font(.title3.weight(.semibold)).frame(width: 52, height: 52)
         }
-        .buttonStyle(.glassProminent)
-        .buttonBorderShape(.circle)
-        .tint(
-            viewModel.isRecordingActive
-                ? Color.red
-                : (viewModel.selectedCaptureMode == .todo ? Color.orange : Color.accentColor)
-        )
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.28)
-                .onEnded { _ in
-                    if !viewModel.isRecordingActive {
-                        isHoldRecording = true
-                        viewModel.startCaptureInPreferredMode()
-                    }
-                }
-                .sequenced(before: DragGesture(minimumDistance: 0))
-                .onEnded { _ in
-                    if isHoldRecording && viewModel.isRecordingActive {
-                        isHoldRecording = false
-                        viewModel.finishCapture()
-                    }
-                }
-        )
+        .buttonStyle(.borderless)
+        .modifier(IOSFunctionalGlassPrimaryModifier(reduceTransparency: reduceTransparency))
         .accessibilityLabel(viewModel.isRecordingActive ? "停止录音" : "开始录音")
         .accessibilityIdentifier(viewModel.isRecordingActive ? "vox.stop.button" : "vox.record.button")
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    gestureWasUsed = true
+                    if gestureController.begin(isRecording: viewModel.isRecordingActive) == .start { viewModel.startCaptureInPreferredMode() }
+                }
+                .onEnded { _ in
+                    if gestureController.end() == .stop { viewModel.finishCapture() }
+                }
+        )
     }
 
     private var recordingActiveBar: some View {
@@ -345,8 +334,8 @@ public struct IOSCleanSlateWorkspaceView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.subheadline.weight(.semibold))
-                    .frame(width: 24, height: 24)
                     .padding(6)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.circle)
@@ -786,4 +775,57 @@ private struct IOSCleanSlateTodoDetail: View {
         .presentationDragIndicator(.visible)
     }
 }
+#endif
+
+#if os(iOS)
+
+private struct IOSFunctionalGlassPrimaryModifier: ViewModifier {
+    let reduceTransparency: Bool
+    func body(content: Content) -> some View {
+        if reduceTransparency { content.background(.thickMaterial, in: Circle()) }
+        else if #available(iOS 26.0, *) { content.glassEffect(.regular.interactive(), in: Circle()) }
+        else { content.background(.ultraThinMaterial, in: Circle()) }
+    }
+}
+
+private struct IOSWorkspaceManagementSheet: View {
+    @ObservedObject var viewModel: VoxWorkspaceViewModel
+    @Binding var selectedTodo: VoiceTodo?
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("待办") {
+                    Picker("筛选", selection: $viewModel.selectedTodoFilter) {
+                        ForEach(TodoStatusFilter.primaryFilters, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    ForEach(viewModel.filteredTodos) { todo in
+                        Button { selectedTodo = todo } label: {
+                            Label(todo.title, systemImage: todo.executionState == .done ? "checkmark.circle.fill" : "circle")
+                        }
+                        .accessibilityIdentifier("vox.session.list.item")
+                        .swipeActions {
+                            Button { viewModel.toggleTodoDone(todo.id) } label: { Label("完成", systemImage: "checkmark") }
+                        }
+                    }
+                }
+                Section("语音速记") {
+                    ForEach(viewModel.filteredCaptures) { capture in
+                        Button { viewModel.copyCaptureText(capture) } label: {
+                            VStack(alignment: .leading) {
+                                Text(capture.refinedText.isEmpty ? capture.rawTranscript : capture.refinedText)
+                                Text(IOSCleanSlateWorkspaceView.formatDuration(capture.durationSeconds)).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $viewModel.searchQuery, prompt: "搜索待办与语音速记")
+            .navigationTitle("待办与语音速记")
+            .accessibilityIdentifier("vox.session.list")
+        }
+        .sheet(item: $selectedTodo) { todo in IOSCleanSlateTodoDetail(todo: todo, viewModel: viewModel) }
+    }
+}
+
 #endif

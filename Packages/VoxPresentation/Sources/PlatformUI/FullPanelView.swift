@@ -27,7 +27,9 @@ public struct FullPanelView<VM: RootViewState>: View {
                 guard !text.isEmpty else { return }
                 MacOSClipboardService.shared.copy(text)
                 snackbarService.showSuccess("已复制原始转写")
-            }
+            },
+            onOpenTodoList: { viewModel.toggleDrawer() },
+            onOpenSettings: { viewModel.navigateToMe() }
         )
             .frame(minWidth: 560, minHeight: 360)
             .snackbarOverlay(service: snackbarService)

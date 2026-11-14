@@ -97,9 +97,8 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     onOpenTodoList: { viewModel.toggleDrawer() },
                     onOpenSettings: { viewModel.navigateToMe() }
                 )
-                .navigationTitle("VoxPocket")
 #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .navigationBar)
 #endif
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
@@ -239,12 +238,11 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     recorderStatus: viewModel.recorderStatus,
                     onCopyRefined: onCopyRefined,
                     onCopyRaw: onCopyRaw,
-                    onOpenTodoList: { viewModel.toggleDrawer() },
-                    onOpenSettings: { viewModel.navigateToMe() }
+                    onOpenTodoList: { splitViewVisibility = .all; sidebarSelection = .session(viewModel.sessionListState.selectedSessionId ?? UUID()) },
+                    onOpenSettings: { splitViewVisibility = .all; sidebarSelection = .me }
                 )
-                .navigationTitle("VoxPocket")
 #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .navigationBar)
 #endif
                 .toolbar {
                     ToolbarItemGroup(placement: .automatic) {

@@ -65,7 +65,12 @@ final class VoxWorkspaceContractTests: XCTestCase {
         func convertCaptureToTodo(captureID: UUID) async throws -> VoiceTodo { storedTodos[0] }
         func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo { todo }
         func runTodoWithAI(todoID: UUID, project: ProjectBinding, template: AIRunnerTemplate) async throws -> VoiceTodo { storedTodos[0] }
-        func markTodoDone(todoID: UUID) async throws -> VoiceTodo { storedTodos[0] }
+        func markTodoDone(todoID: UUID) async throws -> VoiceTodo {
+            guard let index = storedTodos.firstIndex(where: { $0.id == todoID }) else { throw NSError(domain: "test", code: 1) }
+            let updated = storedTodos[index].withExecutionState(.done, completedAt: Date())
+            storedTodos[index] = updated
+            return updated
+        }
         func deleteCapture(id: UUID) async throws {}
         func deleteTodo(id: UUID) async throws {}
         func fetchCaptures() async throws -> [VoiceCapture] { storedCaptures }
@@ -90,6 +95,7 @@ final class VoxWorkspaceContractTests: XCTestCase {
         XCTAssertEqual(vm.captureState, .idle)
         XCTAssertEqual(vm.todos.count, 1)
         XCTAssertEqual(vm.inboxCount, 1)
+        XCTAssertEqual(vm.latestCompletedText, "Fix VoxPocket shortcut")
 
         vm.searchQuery = "Shortcut"
         vm.selectedSidebarSection = .todoDone
@@ -103,6 +109,18 @@ final class VoxWorkspaceContractTests: XCTestCase {
         vm.clearSearchPreservingFilters()
         XCTAssertEqual(vm.searchQuery, "")
         XCTAssertEqual(vm.selectedProjectFilter, "VP")
+    }
+
+    @MainActor
+    func testPreviewSeedIsNaturalAndIdempotent() async throws {
+        let useCase = FakeCaptureAndTodoUseCase()
+        let vm = VoxWorkspaceViewModel(useCase: useCase)
+        await vm.seedDemoDataIfEmptyForPreview()
+        await vm.seedDemoDataIfEmptyForPreview()
+        XCTAssertEqual(vm.todos.count, 2)
+        XCTAssertEqual(vm.captures.count, 3)
+        XCTAssertEqual(vm.todos.filter { $0.executionState == .done }.count, 1)
+        XCTAssertTrue(vm.captures.contains { $0.refinedText.contains("好的工具应当像空气一样安静") })
     }
 
     @MainActor

@@ -32,30 +32,9 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
         cancelMockFlow()
         rawTranscription = ""
         streamingRefinedText = ""
-
-        mockTask = Task { @MainActor in
-            isRecording = true
-            liveTranscription = "把刚才散步想到的播客开场白记一下，先从一个深夜收到听众来信的故事切入"
-            // 松手由 stopRecording 驱动润色，不在后台伪造自动停止。
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-            }
-            guard !Task.isCancelled else { return }
-
-            isRecording = false
-            rawTranscription = liveTranscription
-            text = rawTranscription
-
-            isRefining = true
-            let chunks = ["播客开场灵感：", "从一封深夜收到的听众来信切入，", "顺势引出本期关于「慢下来思考」", "的核心主题。"]
-            for chunk in chunks {
-                try? await Task.sleep(nanoseconds: 200_000_000)
-                guard !Task.isCancelled else { return }
-                streamingRefinedText += chunk
-            }
-            text = streamingRefinedText
-            isRefining = false
-        }
+        isRefining = false
+        isRecording = true
+        liveTranscription = "把刚才散步想到的播客开场白记一下，先从一个深夜收到听众来信的故事切入"
     }
 
     public func stopRecording() async {
@@ -80,9 +59,12 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
         streamingRefinedText = ""
         let chunks = ["播客开场灵感：", "从一封深夜收到的听众来信切入，", "顺势引出本期关于「慢下来思考」", "的核心主题。"]
         for chunk in chunks {
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            do { try await Task.sleep(for: .milliseconds(300)) }
+            catch { isRefining = false; return }
+            guard !Task.isCancelled else { isRefining = false; return }
             streamingRefinedText += chunk
         }
+        guard !Task.isCancelled else { isRefining = false; return }
         text = streamingRefinedText
         isRefining = false
     }

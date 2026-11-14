@@ -109,6 +109,54 @@ final class VoxPocketUITests: XCTestCase {
         XCTAssertTrue(recordingStarted, "Stop button did not appear after tapping record — recording may not have started")
     }
 
+    @MainActor
+    func testRecorderStateMatrixScreenshots() throws {
+        let evidence = ProcessInfo.processInfo.environment["VOXPOCKET_EVIDENCE_DIR"] ?? NSTemporaryDirectory()
+        let states = ["idle", "fold", "recording", "refined", "todo"]
+        for appearance in ["light", "dark"] {
+            let app = makeVoxPocketUIApplication()
+            app.launchEnvironment["VOX_DEMO_SEED"] = "1"
+            app.launchArguments += ["-AppleInterfaceStyle", appearance == "dark" ? "Dark" : "Light"]
+            app.launch()
+            let record = app.buttons[VoxID.recordButton]
+            XCTAssertTrue(record.waitForExistence(timeout: 15))
+            saveScreenshot(app, name: "idle-\(appearance)", directory: evidence)
+            let fold = app.buttons["vox.fold.menu.button"]
+            fold.tap()
+            saveScreenshot(app, name: "fold-\(appearance)", directory: evidence)
+            let todo = app.buttons["vox.fold.todoList.button"]
+            if todo.waitForExistence(timeout: 3) { todo.tap() }
+            saveScreenshot(app, name: "todo-\(appearance)", directory: evidence)
+            app.terminate()
+
+            let recordingApp = makeVoxPocketUIApplication()
+            recordingApp.launchEnvironment["VOX_DEMO_RECORDING"] = "1"
+            recordingApp.launchArguments += ["-AppleInterfaceStyle", appearance == "dark" ? "Dark" : "Light"]
+            recordingApp.launch()
+            XCTAssertTrue(recordingApp.buttons[VoxID.stopButton].waitForExistence(timeout: 15))
+            saveScreenshot(recordingApp, name: "recording-\(appearance)", directory: evidence)
+            recordingApp.terminate()
+            let refinedApp = makeVoxPocketUIApplication()
+            refinedApp.launchEnvironment["VOX_DEMO_REFINED"] = "1"
+            refinedApp.launchArguments += ["-AppleInterfaceStyle", appearance == "dark" ? "Dark" : "Light"]
+            refinedApp.launch()
+            XCTAssertTrue(refinedApp.buttons[VoxID.recordButton].waitForExistence(timeout: 15))
+            saveScreenshot(refinedApp, name: "refined-\(appearance)", directory: evidence)
+            refinedApp.terminate()
+        }
+    }
+
+    private func saveScreenshot(_ app: XCUIApplication, name: String, directory: String) {
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("\(name).png")
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? screenshot.pngRepresentation.write(to: url)
+    }
+
     // MARK: - Session List Test
 
     /// Verifies the session list container is accessible in the sidebar.

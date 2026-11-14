@@ -13,6 +13,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var foldExpanded = false
     @State private var gestureController = RecorderGestureController()
+    @State private var gestureWasUsed = false
     @Namespace private var glassNamespace
 
     public init(viewModel: VM, recorderStatus: RecorderStatus, onCopyRefined: @escaping (String) -> Void,
@@ -46,6 +47,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
             dock
         }
         .voxTheme()
+        .onDisappear { if gestureController.sceneEnded() == .stop { Task { await viewModel.stopRecording() } } }
         .onChange(of: viewModel.autoCopiedText) { _, value in
             if let value, !value.isEmpty { onCopyRefined(value); viewModel.autoCopiedText = nil }
         }
@@ -88,7 +90,9 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
     }
 
     private var recordButton: some View {
-        Button { toggleFromActivation() } label: {
+        Button {
+            if gestureWasUsed { gestureWasUsed = false } else { toggleFromActivation() }
+        } label: {
             Image(systemName: viewModel.isRecording ? "stop.fill" : "mic.fill")
                 .frame(width: 52, height: 52)
         }
@@ -96,7 +100,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
         .modifier(GlassPrimaryModifier(reduceTransparency: reduceTransparency))
         .accessibilityIdentifier(viewModel.isRecording ? "vox.stop.button" : "vox.record.button")
         .accessibilityLabel(viewModel.isRecording ? "停止录音" : "开始录音")
-        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in beginPress() }.onEnded { _ in endPress() })
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in gestureWasUsed = true; beginPress() }.onEnded { _ in endPress() })
     }
 
     private func toggleFromActivation() {
@@ -104,7 +108,7 @@ public struct HomeRecorderView<VM: EditorViewState>: View {
         Task { await viewModel.toggleRecording() }
     }
     private func beginPress() {
-        guard !viewModel.isRefining else { return }
+        guard !viewModel.isRefining else { gestureController.cancel(); return }
         if gestureController.begin(isRecording: viewModel.isRecording) == .start {
             Task { await viewModel.startRecording() }
         }

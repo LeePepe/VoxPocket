@@ -26,4 +26,13 @@ final class CopyButtonsTests: XCTestCase {
         _ = RefinedTextPane(text: "hello")
         XCTAssertTrue(true)
     }
+
+    func testGestureControllerUsesProductReleaseOrdering() {
+        var now = 0.0
+        let controller = RecorderGestureController(now: { now })
+        XCTAssertEqual(controller.begin(isRecording: false), .start)
+        now = 0.3
+        XCTAssertEqual(controller.end(), .stop)
+        XCTAssertEqual(controller.end(), .none)
+    }
 }

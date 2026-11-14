@@ -26,6 +26,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     @Published public var selectedCaptureMode: CaptureMode = .text
     @Published public private(set) var recordingElapsedSeconds = 0
     @Published public var audioLevel: Float = 0
+    @Published public private(set) var liveTranscription = ""
+    @Published public private(set) var streamingRefinedText = ""
+    @Published public private(set) var latestCompletedText = ""
     @Published public private(set) var lastCopiedBannerText: String?
     @Published public var playingCaptureID: UUID?
     @Published public var searchQuery = ""
@@ -79,6 +82,16 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public func clearSearchPreservingFilters() { searchQuery = "" }
     public func dismissReceiptBanner() { lastCopiedBannerText = nil }
     public var isRecordingActive: Bool { if case .recording = captureState { return true }; return false }
+    public var recorderStatus: RecorderStatus {
+        switch captureState {
+        case .recording: .listening
+        case .transcribing: .transcribing
+        case .refining: .refining
+        case .failed: .error
+        case .completed: .done
+        case .idle: .idle
+        }
+    }
     public var isProcessingCapture: Bool {
         switch captureState {
         case .transcribing, .refining: return true
@@ -103,7 +116,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     }
 
     public func startCapture(mode: CaptureMode) {
-        selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0; lastCopiedBannerText = nil
+        selectedCaptureMode = mode; captureState = .recording(mode: mode); recordingElapsedSeconds = 0; lastCopiedBannerText = nil; liveTranscription = ""; streamingRefinedText = ""
         NotificationCenter.default.post(
             name: Notification.Name("vox.liveActivity.recordingStarted"),
             object: nil,
@@ -133,6 +146,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             recordingUseCase?.cancelRecording()
             transcriptionUseCase?.clearLiveText()
         }
+        liveTranscription = ""
+        streamingRefinedText = ""
         captureState = .idle
         recordingElapsedSeconds = 0
         audioLevel = 0
@@ -201,6 +216,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             } else {
                 lastCopiedBannerText = "已存入待办"
             }
+            latestCompletedText = finalCopyText
             captureState = .completed
             captureState = .idle
         } catch { captureState = .failed(stage: .ai, reason: error.localizedDescription) }
@@ -226,6 +242,17 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             try await useCase.deleteTodo(id: todoID)
             await reload()
         }
+    }
+
+    public func prepareDemoRefinedState() {
+        latestCompletedText = "播客开场灵感：从一封深夜收到的听众来信切入，顺势引出本期关于「慢下来思考」的核心主题。"
+        lastCopiedBannerText = "润色完成 · 点按文字即可复制"
+    }
+
+    public func copyLatestCompletedText() {
+        guard !latestCompletedText.isEmpty else { return }
+        onCopyTextToClipboard?(latestCompletedText)
+        lastCopiedBannerText = "已复制到剪贴板 · 可直接粘贴"
     }
 
     public func copyCaptureText(_ capture: VoiceCapture) {
@@ -302,6 +329,17 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         recordingUseCase?.audioLevelPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] level in self?.audioLevel = level }
+            .store(in: &subscriptions)
+        transcriptionUseCase?.liveTextPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] text in self?.liveTranscription = text }
+            .store(in: &subscriptions)
+        editingUseCase?.currentTextPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] text in
+                guard let self else { return }
+                if isProcessingCapture { streamingRefinedText = text }
+            }
             .store(in: &subscriptions)
     }
     private func startElapsedTimer() {
