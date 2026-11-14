@@ -31,7 +31,14 @@ public final class RecorderGestureController: ObservableObject {
     }
 
     public func pressBegan(_ capture: Capture) {
-        guard !hasPress, !ignoredPress, !isBusy, !capture.isProcessing else { return }
+        guard !hasPress, !ignoredPress, !capture.isProcessing else { return }
+        if isStarting && ownsCapture {
+            self.capture = capture
+            pressStartedAt = now()
+            pressStartedRecording = true
+            return
+        }
+        guard !isBusy else { return }
         self.capture = capture
         pressStartedAt = now()
         pressStartedRecording = capture.isRecording
@@ -46,7 +53,13 @@ public final class RecorderGestureController: ObservableObject {
     }
 
     public func activate(_ capture: Capture) {
-        guard !hasPress, !isBusy, !capture.isProcessing else { return }
+        guard !hasPress, !capture.isProcessing else { return }
+        if isStarting && ownsCapture {
+            self.capture = capture
+            release(.stop)
+            return
+        }
+        guard !isBusy else { return }
         self.capture = capture
         pressStartedRecording = capture.isRecording
         if capture.isRecording { release(.stop) }

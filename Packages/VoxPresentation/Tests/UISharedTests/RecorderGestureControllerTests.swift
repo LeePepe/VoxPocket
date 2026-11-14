@@ -45,6 +45,45 @@ final class RecorderGestureControllerTests: XCTestCase {
         XCTAssertFalse(probe.recording)
     }
 
+    func testSecondShortTapDuringPausedStartStopsOwnedCapture() async {
+        var time = 100.0
+        let gate = RecorderTestGate()
+        let controller = RecorderGestureController(now: { time })
+        let probe = CaptureProbe(gate: gate)
+        controller.pressBegan(probe.capture)
+        await gate.waitForEntries()
+        time += 0.1
+        controller.pressEnded()
+
+        controller.pressBegan(probe.capture)
+        await gate.releaseNext()
+        await Task.yield()
+        XCTAssertEqual(probe.events, ["start-requested", "start"])
+
+        time += 0.1
+        controller.pressEnded()
+        await controller.waitForSettled()
+        XCTAssertEqual(probe.events, ["start-requested", "start", "stop"])
+        XCTAssertFalse(probe.recording)
+    }
+
+    func testAccessibleStopDuringPausedStartStopsOwnedCapture() async {
+        var time = 100.0
+        let gate = RecorderTestGate()
+        let controller = RecorderGestureController(now: { time })
+        let probe = CaptureProbe(gate: gate)
+        controller.pressBegan(probe.capture)
+        await gate.waitForEntries()
+        time += 0.1
+        controller.pressEnded()
+
+        controller.activate(probe.capture)
+        await gate.releaseNext()
+        await controller.waitForSettled()
+        XCTAssertEqual(probe.events, ["start-requested", "start", "stop"])
+        XCTAssertFalse(probe.recording)
+    }
+
     func testCancellationDuringPausedStartAndGestureResetCannotStrandCapture() async {
         let gate = RecorderTestGate()
         let controller = RecorderGestureController()
@@ -53,6 +92,7 @@ final class RecorderGestureControllerTests: XCTestCase {
         await gate.waitForEntries()
         controller.gestureReset()
         controller.cancel()
+        controller.activate(probe.capture)
         controller.pressEnded()
         await gate.releaseNext()
         await controller.waitForSettled()
