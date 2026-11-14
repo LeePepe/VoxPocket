@@ -261,16 +261,16 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
         _ = try? await useCase.recordCompletedCapture(
             mode: .todo,
-            rawTranscript: "优化 iPhone 操作按钮一键语音录入与灵动岛实时声波反馈",
-            refinedText: "优化 iPhone 操作按钮一键语音录入与灵动岛实时声波反馈",
+            rawTranscript: "整理下周设计评审要展示的液态玻璃交互走查清单",
+            refinedText: "整理下周设计评审要展示的液态玻璃交互走查清单",
             localAudioFileName: nil,
             durationSeconds: 6,
             deviceSource: .iPhone
         )
         let second = try? await useCase.recordCompletedCapture(
             mode: .todo,
-            rawTranscript: "在设置中切换录音完成后是直接存入待办还是自动复制到剪贴板",
-            refinedText: "在设置中切换录音完成后是直接存入待办还是自动复制到剪贴板",
+            rawTranscript: "把早间散步录下的播客大纲润色后发给搭档确认",
+            refinedText: "把早间散步录下的播客大纲润色后发给搭档确认",
             localAudioFileName: nil,
             durationSeconds: 8,
             deviceSource: .iPhone
@@ -278,6 +278,14 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         if let doneID = second?.todo?.id {
             _ = try? await useCase.markTodoDone(todoID: doneID)
         }
+        _ = try? await useCase.recordCompletedCapture(
+            mode: .text,
+            rawTranscript: "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。",
+            refinedText: "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。",
+            localAudioFileName: nil,
+            durationSeconds: 5,
+            deviceSource: .iPhone
+        )
         await reload()
         lastCopiedBannerText = "已存入待办 · 可随时按操作按钮继续录入"
     }

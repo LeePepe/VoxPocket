@@ -24,7 +24,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
 
     private var mockTask: Task<Void, Never>?
 
-    public init(text: String = "立刻记录：客户反馈集中在首屏加载速度与登录重试。") {
+    public init(text: String = "周五产品评审结论：首屏彻底去掉顶部状态胶囊，只保留中央一句话与底部液态玻璃底座。") {
         self.text = text
     }
 
@@ -35,18 +35,19 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
 
         mockTask = Task { @MainActor in
             isRecording = true
-            liveTranscription = "正在识别语音…"
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            liveTranscription = "把刚才散步想到的播客开场白记一下，先从一个深夜收到听众来信的故事切入"
+            // 松手由 stopRecording 驱动润色，不在后台伪造自动停止。
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+            }
             guard !Task.isCancelled else { return }
 
-            // 模拟录音结束
             isRecording = false
-            rawTranscription = "客户反馈集中在首屏加载速度与登录重试"
+            rawTranscription = liveTranscription
             text = rawTranscription
 
-            // 模拟 refine 流式输出
             isRefining = true
-            let chunks = ["客户", "反馈主要", "集中在两个方面：", "首屏加载速度", "较慢，", "以及登录", "重试体验", "不佳。"]
+            let chunks = ["播客开场灵感：", "从一封深夜收到的听众来信切入，", "顺势引出本期关于「慢下来思考」", "的核心主题。"]
             for chunk in chunks {
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard !Task.isCancelled else { return }
@@ -58,9 +59,12 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     }
 
     public func stopRecording() async {
-        cancelMockFlow()
+        mockTask?.cancel()
+        mockTask = nil
         isRecording = false
-        isRefining = false
+        rawTranscription = liveTranscription
+        text = rawTranscription
+        await refine()
     }
 
     public func toggleRecording() async {
@@ -74,7 +78,7 @@ public final class MockEditorViewModel: ObservableObject, EditorViewState {
     public func refine() async {
         isRefining = true
         streamingRefinedText = ""
-        let chunks = ["这是", "优化后", "的文本", "示例。"]
+        let chunks = ["播客开场灵感：", "从一封深夜收到的听众来信切入，", "顺势引出本期关于「慢下来思考」", "的核心主题。"]
         for chunk in chunks {
             try? await Task.sleep(nanoseconds: 300_000_000)
             streamingRefinedText += chunk

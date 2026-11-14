@@ -93,7 +93,9 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     viewModel: viewModel.editorState,
                     recorderStatus: viewModel.recorderStatus,
                     onCopyRefined: onCopyRefined,
-                    onCopyRaw: onCopyRaw
+                    onCopyRaw: onCopyRaw,
+                    onOpenTodoList: { viewModel.toggleDrawer() },
+                    onOpenSettings: { viewModel.navigateToMe() }
                 )
                 .navigationTitle("VoxPocket")
 #if os(iOS)
@@ -236,7 +238,9 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
                     viewModel: viewModel.editorState,
                     recorderStatus: viewModel.recorderStatus,
                     onCopyRefined: onCopyRefined,
-                    onCopyRaw: onCopyRaw
+                    onCopyRaw: onCopyRaw,
+                    onOpenTodoList: { viewModel.toggleDrawer() },
+                    onOpenSettings: { viewModel.navigateToMe() }
                 )
                 .navigationTitle("VoxPocket")
 #if os(iOS)

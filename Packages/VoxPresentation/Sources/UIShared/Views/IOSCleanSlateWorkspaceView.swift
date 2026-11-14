@@ -16,6 +16,7 @@ public struct IOSCleanSlateWorkspaceView: View {
     @Namespace private var filterAnimation
     @Namespace private var dockGlassNamespace
     @State private var isHoldRecording = false
+    @State private var isFoldExpanded = false
 
     public init(
         viewModel: VoxWorkspaceViewModel,
@@ -27,69 +28,42 @@ public struct IOSCleanSlateWorkspaceView: View {
 
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Space.xxl) {
-                    statusFilterStrip
-                    todoPrimaryStage
+            ZStack(alignment: .bottom) {
+                AppTheme.surfacePrimary.ignoresSafeArea()
+                ScrollView {
+                    Text(stageSentence)
+                        .font(.system(size: 25, weight: .semibold, design: .rounded))
+                        .tracking(-0.4).lineSpacing(7).multilineTextAlignment(.center)
+                        .frame(maxWidth: 360).frame(maxWidth: .infinity, minHeight: 560)
+                        .padding(.horizontal, 22)
+                        .accessibilityIdentifier("vox.transcript.final")
                 }
-                .padding(.horizontal, AppTheme.Space.lg)
-                .padding(.top, AppTheme.Space.sm)
-                .padding(.bottom, AppTheme.Space.section)
-            }
-            .background(AppTheme.surfacePrimary.ignoresSafeArea())
-            .navigationTitle("待办")
-            .searchable(
-                text: $viewModel.searchQuery,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "搜索待办"
-            )
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        isShowingNotesSheet = true
-                    } label: {
-                        Label("语音速记", systemImage: "waveform")
-                    }
-                    .accessibilityIdentifier("vox.ios.notesSheetButton")
-
-                    Button {
-                        isShowingSettingsSheet = true
-                    } label: {
-                        Label("设置", systemImage: "gearshape")
-                    }
-                    .accessibilityIdentifier("vox.ios.settingsButton")
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
+                .scrollIndicators(.hidden)
+                .padding(.bottom, 148)
                 bottomCaptureInset
             }
+            .navigationTitle("")
+            .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(item: $selectedTodo) { todo in
             IOSCleanSlateTodoDetail(todo: todo, viewModel: viewModel)
         }
-        .sheet(isPresented: $isShowingNotesSheet) {
-            IOSVoiceNotesHistorySheet(viewModel: viewModel)
-        }
+        .sheet(isPresented: $isShowingNotesSheet) { IOSVoiceNotesHistorySheet(viewModel: viewModel) }
         .sheet(isPresented: $isShowingSettingsSheet) {
-            IOSWorkspaceSettingsSheet(
-                viewModel: viewModel,
-                localModelLoadingStatus: localModelLoadingStatus
-            )
+            IOSWorkspaceSettingsSheet(viewModel: viewModel, localModelLoadingStatus: localModelLoadingStatus)
         }
         .sensoryFeedback(.success, trigger: viewModel.lastCopiedBannerText)
         .task {
-            let env = ProcessInfo.processInfo.environment
-            if env["VOX_DEMO_SEED"] == "1" {
-                await viewModel.seedDemoDataIfEmptyForPreview()
-            }
-            if env["VOX_DEMO_RECORDING"] == "1" {
-                viewModel.startCaptureInPreferredMode()
-                viewModel.audioLevel = 0.72
-            }
-            if env["VOX_OPEN_SETTINGS"] == "1" {
-                isShowingSettingsSheet = true
-            }
+            if ProcessInfo.processInfo.environment["VOX_DEMO_SEED"] == "1" { await viewModel.seedDemoDataIfEmptyForPreview() }
         }
+    }
+
+    private var stageSentence: String {
+        if viewModel.isRecordingActive { return "正在聆听你的灵感，松手立即润色…" }
+        if viewModel.isProcessingCapture { return "正在提炼语句结构与核心要点…" }
+        return viewModel.filteredCaptures.first?.refinedText.isEmpty == false
+            ? (viewModel.filteredCaptures.first?.refinedText ?? "")
+            : "按住底部玻璃说话，松手即刻生成润色笔记。"
     }
 
     // MARK: - Group 1: Compact Overview & Filter Strip
@@ -244,6 +218,7 @@ public struct IOSCleanSlateWorkspaceView: View {
 
     private var captureDock: some View {
         HStack(spacing: AppTheme.Space.md) {
+            foldControls
             if viewModel.isRecordingActive {
                 recordingActiveBar
             } else if viewModel.isProcessingCapture {
@@ -266,6 +241,23 @@ public struct IOSCleanSlateWorkspaceView: View {
                     .glassEffectID("dockActionOrb", in: dockGlassNamespace)
             }
         }
+    }
+
+    private var foldControls: some View {
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(reduceMotion ? nil : AppTheme.gestureSpring) { isFoldExpanded.toggle() }
+            } label: { Image(systemName: isFoldExpanded ? "xmark" : "square.stack.3d.up").frame(width: 44, height: 44) }
+                .buttonStyle(.glass)
+                .accessibilityIdentifier("vox.fold.menu.button")
+            if isFoldExpanded {
+                Button("待办", systemImage: "checklist") { isShowingNotesSheet = true }
+                    .accessibilityIdentifier("vox.fold.todoList.button")
+                Button("设置", systemImage: "gearshape") { isShowingSettingsSheet = true }
+                    .accessibilityIdentifier("vox.fold.settings.button")
+            }
+        }
+        .buttonStyle(.borderless)
     }
 
     private var idleDestinationSwitcher: some View {
@@ -450,7 +442,7 @@ private struct IOSLiveWaveformBars: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            ForEach(0..<4, id: \.self) { index in
+            ForEach(0..<7, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(Color.red)
                     .frame(width: 3, height: barHeight(for: index))
@@ -461,7 +453,7 @@ private struct IOSLiveWaveformBars: View {
 
     private func barHeight(for index: Int) -> CGFloat {
         let clamped = CGFloat(max(0.15, min(1.0, level)))
-        let weights: [CGFloat] = [0.55, 1.0, 0.75, 0.45]
+        let weights: [CGFloat] = [0.45, 0.7, 1.0, 0.6, 0.85, 0.55, 0.75]
         return max(6, 20 * clamped * weights[index % weights.count])
     }
 }
