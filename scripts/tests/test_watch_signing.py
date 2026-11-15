@@ -23,7 +23,11 @@ def latest_testflight_build_number(**); 3; end
 def sh(*); end
 def lane_context; @context ||= {}; end
 def get_provisioning_profile(**options)
-  lane_context[SharedValues::SIGH_NAME] = options[:app_identifier] + ".example-profile"
+  if ENV["SIMULATE_MISSING_WATCH_PROFILE"] == options[:app_identifier]
+    lane_context[SharedValues::SIGH_NAME] = ""
+  else
+    lane_context[SharedValues::SIGH_NAME] = options[:app_identifier] + ".example-profile"
+  end
 end
 def build_app(**options); puts JSON.generate(options); end
 def upload_to_testflight(**); end
@@ -32,10 +36,11 @@ load ARGV.fetch(0)
 
 
 class WatchSigningTests(unittest.TestCase):
-    def run_lane(self, watch, complication):
+    def run_lane(self, watch, complication, missing_identifier=""):
         env = {"PATH": os.environ["PATH"], "ASC_KEY_ID": "example-key", "ASC_ISSUER_ID": "example-issuer",
                "ASC_KEY_P8_BASE64": "example-fixture", "VOXPOCKET_WATCH_PROFILE_SPECIFIER": watch,
-               "VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER": complication}
+               "VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER": complication,
+               "SIMULATE_MISSING_WATCH_PROFILE": missing_identifier}
         return subprocess.run(["ruby", "-e", RUBY_HOST, str(ROOT / "fastlane/Fastfile")],
                               env=env, text=True, capture_output=True, timeout=15)
 
@@ -52,9 +57,9 @@ class WatchSigningTests(unittest.TestCase):
         self.assertEqual(build["export_options"]["signingStyle"], "manual")
 
     def test_missing_owner_watch_profile_fails_before_archive(self):
-        for watch, complication in [("", "example-profile"), ("example-profile", "")]:
-            with self.subTest(watch=watch, complication=complication):
-                result = self.run_lane(watch, complication)
+        for missing_id in ["com.leepepe.voxpocket.watchkitapp", "com.leepepe.voxpocket.watchkitapp.complication"]:
+            with self.subTest(missing_id=missing_id):
+                result = self.run_lane("", "", missing_id)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(result.stdout, "")
                 self.assertIn("Owner-provisioned Watch", result.stderr)
