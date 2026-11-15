@@ -167,6 +167,7 @@ targets:
         PRODUCT_NAME: VoxPocketWatch
         MARKETING_VERSION: "1.0"
         GENERATE_INFOPLIST_FILE: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.leepepe.voxpocket
         INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp: true
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "VoxPocket 需要使用麦克风进行语音录入"

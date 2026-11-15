@@ -86,13 +86,17 @@ public actor WatchAudioCaptureService: WatchAudioCapturing {
         guard let id = activeID else { return false }
         do {
             let value = try backend.currentPower()
-            continuations[id]?.yield(WatchAudioLevel(captureID: id, normalizedLevel: value, elapsed: elapsed))
-            if elapsed >= maximumDuration {
-                completed = WatchAudioCapture(captureID: id, fileURL: storageURL.appendingPathComponent("\(id.uuidString).m4a"), duration: elapsed)
-                try backend.stop(); reset(); return false
+            let currentElapsed = elapsed
+            continuations[id]?.yield(WatchAudioLevel(captureID: id, normalizedLevel: value, elapsed: currentElapsed))
+            if currentElapsed >= maximumDuration {
+                let candidate = WatchAudioCapture(captureID: id, fileURL: storageURL.appendingPathComponent("\(id.uuidString).m4a"), duration: currentElapsed)
+                try backend.stop()
+                try WatchAudioFileValidation.validate(candidate.fileURL)
+                completed = candidate
+                reset(); return false
             }
             return true
-        } catch { try? backend.stop(); reset(error: WatchCaptureError.captureFailed); return false }
+        } catch { completed = nil; try? backend.stop(); reset(error: WatchCaptureError.captureFailed); return false }
     }
     public func levels(for captureID: UUID) async -> AsyncThrowingStream<WatchAudioLevel, Error> {
         let (stream, continuation) = AsyncThrowingStream.makeStream(of: WatchAudioLevel.self)
