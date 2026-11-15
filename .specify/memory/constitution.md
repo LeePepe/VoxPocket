@@ -56,7 +56,11 @@ Recorded audio, live/final transcripts, and refined user text are sensitive user
   `NSLog`, and `os_log` (R3(b)); dynamic Privacy Canary verification covers all entry points
   and presets (R3(c)).
 - Never persist user content outside the app's own sandbox
-  (`~/Library/Application Support/VoxPocket/`).
+  (`~/Library/Application Support/VoxPocket/`). On Apple Watch and paired iPhone,
+  `WatchConnectivity` (`WCSession.transferFile` / `transferUserInfo`) between the paired
+  `VoxPocketWatch` and `VoxPocket` companion sandboxes is an authorized intra-app companion
+  channel provided the received file is immediately claimed into the iPhone app's
+  `Application Support/VoxPocket/WatchInbox` sandbox and never logged or sent to telemetry.
 
 ### V. Secrets & External-Vendor Hygiene (NON-NEGOTIABLE)
 - No hardcoded secrets, API keys, or tokens in source. Only the App shell (`VoxPocketApp`)
@@ -147,4 +151,6 @@ adoption, credentials, CI-gate changes, delivery changes, or shared-telemetry ed
 
 **Amendment (2026-11-05)**: Establish the VoxKit standalone SDK boundary and its R1–R5 governance redlines; stage its leaf context support before code promotion. This is a non-breaking governance amendment; migration moves the SDK from the staged package to an exact remote dependency in phase 4.
 
-**Version**: 1.4.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-11-05
+**Amendment (2026-11-15)**: Clarify Principle IV for Apple Watch companion integration (`VoxPocketKit` / `VoxPocketWatch`): encrypted paired-device `WCSession` transfers from the Watch app sandbox into the paired iPhone app's `Application Support/VoxPocket/WatchInbox` sandbox are part of the app's companion sandbox boundary; audio, transcripts, and Todo titles remain strictly prohibited from logs and telemetry.
+
+**Version**: 1.5.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-11-15

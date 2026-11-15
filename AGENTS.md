@@ -1,6 +1,6 @@
 # AGENTS.md — VoxPocket
 
-Last-Reviewed: 2026-11-06
+Last-Reviewed: 2026-11-15
 
 VoxPocket is a SwiftUI voice recording and transcription app for macOS and iOS
 (default speech locale `zh-Hans`, text refinement with Apple Intelligence or a
@@ -96,7 +96,7 @@ emits but does not require. `iOS simulator` and `kimi-review` run on every PR an
 
 - Privacy (constitution IV): recorded audio, transcripts and refined text never go into
   logs or telemetry payloads (metrics only: durations, counts, source labels, session IDs),
-  and never leave the app sandbox (`~/Library/Application Support/VoxPocket/`).
+  and never leave the app/paired-Watch companion sandbox (`Application Support/VoxPocket/`).
 - Secrets (constitution V): no keys or tokens in source. Keys come from environment
   variables. Azure model credentials may come from the runtime-only sandbox file
   `config.private.json` (owner-only 0600, excluded from backups, Git and app bundles,

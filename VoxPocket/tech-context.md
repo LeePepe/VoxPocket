@@ -1,7 +1,7 @@
 ---
 layer: VoxPocketApp
 role: Xcode App 壳 —— 入口、ServiceContainer 组装、平台场景、Widget 扩展与交付配置
-owns: [VoxPocket/**, VoxPocketWidget/**]
+owns: [VoxPocket/**, VoxPocketWidget/**, VoxPocketWatch/**]
 depends_on: [VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation]
 gate:
   app-python: python3 scripts/ci/run_repository_tests.py app-python --timeout 600
