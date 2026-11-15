@@ -10,6 +10,8 @@ graph LR
     Presentation[VoxPresentation]
     Shell[VoxPocketApp]
     Domain[VoxDomain]
+    WatchKit[VoxPocketKit]
+    WatchApp[VoxPocketWatch]
     Loki[LokiKit]
     Bridge --> VoxKit
     App --> VoxKit
@@ -19,6 +21,9 @@ graph LR
     App --> Bridge
     Presentation --> App
     Shell --> Presentation
+    Shell --> WatchKit
+    WatchApp --> WatchKit
+    WatchKit --> Domain
     VoxKit -. forbidden .-> Domain
     VoxKit -. forbidden .-> Loki
 ```

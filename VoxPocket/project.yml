@@ -34,6 +34,8 @@ packages:
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
   VoxPresentation:
     path: ../Packages/VoxPresentation
+  VoxPocketKit:
+    path: ../Packages/VoxPocketKit
   # 外部 UI 测试桥接包
   AppleUITesting:
     path: ../../AppleUITesting
@@ -70,6 +72,10 @@ targets:
         product: UIShared
       - package: VoxPresentation
         product: WidgetUI
+        platformFilter: iOS
+      - package: VoxPocketKit
+        product: VoxPocketKit
+      - target: VoxPocketWatch
         platformFilter: iOS
       - package: AppleUITesting
         product: UITestingBridge
@@ -135,6 +141,79 @@ targets:
           "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": $(VOXPOCKET_IOS_PROFILE_SPECIFIER)
           "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": $(VOXPOCKET_MAC_PROFILE_SPECIFIER)
 
+  # ── 独立 Apple Watch 录音器：仅 watchOS，随 iOS 主 App 嵌入 ──
+  VoxPocketWatch:
+    type: application
+    platform: watchOS
+    info:
+      path: ../VoxPocketWatch/Info.plist
+      properties:
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [voxpocket-watch]
+    sources:
+      - path: ../VoxPocketWatch
+        excludes:
+          - Complication
+    dependencies:
+      - package: VoxPocketKit
+        product: VoxPocketKit
+      - package: VoxDomain
+        product: CoreModels
+      - target: VoxPocketWatchComplication
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.watchkitapp
+        PRODUCT_NAME: VoxPocketWatch
+        MARKETING_VERSION: "1.0"
+        GENERATE_INFOPLIST_FILE: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.leepepe.voxpocket
+        INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp: true
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "VoxPocket 需要使用麦克风进行语音录入"
+        WATCHOS_DEPLOYMENT_TARGET: "26.0"
+        SWIFT_VERSION: "5.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        CODE_SIGN_STYLE: Automatic
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=watchos*]": $(VOXPOCKET_WATCH_PROFILE_SPECIFIER)
+
+  VoxPocketWatchComplication:
+    type: app-extension
+    platform: watchOS
+    info:
+      path: ../VoxPocketWatch/Complication/Info.plist
+      properties:
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    sources:
+      - path: ../VoxPocketWatch/Complication
+      - path: ../VoxPocketWatch/StartWatchRecordingIntent.swift
+      - path: ../VoxPocketWatch/WatchRecordingRuntime.swift
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.watchkitapp.complication
+        PRODUCT_NAME: VoxPocketWatchComplication
+        MARKETING_VERSION: "1.0"
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        SKIP_INSTALL: true
+        WATCHOS_DEPLOYMENT_TARGET: "26.0"
+        SWIFT_VERSION: "5.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=watchos*]": $(VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER)
+
   # ── Widget 扩展：仅 iOS ──
   VoxPocketWidgetExtension:
     type: app-extension
@@ -187,6 +266,8 @@ targets:
     supportedDestinations: [iOS, macOS, visionOS]
     sources:
       - path: VoxPocketTests
+      - path: ../VoxPocketWatch/WatchRecorderViewModel.swift
+      - path: ../VoxPocketWatch/WatchRecordingRuntime.swift
       - path: ../scripts/tests/golden/golden_b_ios.json
         buildPhase: resources
       - path: ../scripts/tests/golden/golden_b_macos.json
@@ -268,6 +349,19 @@ schemes:
       targets:
         VoxPocketWidgetExtension: all
         VoxPocket: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  VoxPocketWatch:
+    build:
+      targets:
+        VoxPocketWatch: all
     run:
       config: Debug
     profile:

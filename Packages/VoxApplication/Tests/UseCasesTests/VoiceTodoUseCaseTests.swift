@@ -279,4 +279,48 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         let fetchedAfterDelete = try await todos.fetch(by: deletedTodo.id)
         XCTAssertNil(fetchedAfterDelete)
     }
+
+    func testReconcileWatchTodoCaptureRecoversOrphanAndUnlinkedCapturesIdempotently() async throws {
+        let captures = DefaultVoiceCaptureRepository()
+        let todos = DefaultVoiceTodoRepository()
+        let sandboxDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let useCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(),
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir)
+        )
+        let basename = "\(UUID().uuidString).m4a"
+        let orphan = VoiceCapture(
+            mode: .todo,
+            rawTranscript: "整理产品评审会议纪要",
+            refinedText: "整理产品评审会议纪要。",
+            localAudioFileName: basename,
+            durationSeconds: 3,
+            deviceSource: .appleWatch,
+            state: .completed
+        )
+        try await captures.save(orphan)
+
+        let converted = try await useCase.reconcileWatchTodoCapture(
+            rawTranscript: orphan.rawTranscript,
+            refinedText: orphan.refinedText,
+            localAudioFileName: basename,
+            durationSeconds: 3
+        )
+        let duplicate = try await useCase.reconcileWatchTodoCapture(
+            rawTranscript: orphan.rawTranscript,
+            refinedText: orphan.refinedText,
+            localAudioFileName: basename,
+            durationSeconds: 3
+        )
+        XCTAssertEqual(converted.id, duplicate.id)
+        let savedCaptures = try await captures.fetchAll()
+        let savedTodos = try await todos.fetchAll()
+        XCTAssertEqual(savedCaptures.count, 1)
+        XCTAssertEqual(savedTodos.count, 1)
+        XCTAssertEqual(savedCaptures.first?.linkedTodoID, converted.id)
+        XCTAssertEqual(savedTodos.first?.sourceCaptureID, orphan.id)
+        XCTAssertEqual(savedTodos.first?.deviceSource, .appleWatch)
+    }
 }

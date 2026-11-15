@@ -24,6 +24,7 @@ public enum DeviceSource: String, Codable, Equatable, Hashable, Sendable {
     case iPhone
     case mac
     case iPad
+    case appleWatch
 }
 
 public struct VoiceCapture: Identifiable, Codable, Equatable, Hashable, Sendable {

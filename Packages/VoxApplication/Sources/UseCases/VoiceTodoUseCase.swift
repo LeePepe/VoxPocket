@@ -19,6 +19,7 @@ public struct ExtractedTodoDraft: Equatable, Sendable {
 
 public protocol VoiceCaptureAndTodoUseCase: AnyObject, Sendable {
     func recordCompletedCapture(mode: CaptureMode, rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> (capture: VoiceCapture, todo: VoiceTodo?)
+    func reconcileWatchTodoCapture(rawTranscript: String, refinedText: String, localAudioFileName: String, durationSeconds: TimeInterval) async throws -> VoiceTodo
     func recordFailedCapture(mode: CaptureMode, stage: FailureStage, reason: String, rawTranscript: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> VoiceCapture
     func retryCapture(id: UUID, targetMode: CaptureMode?) async throws -> (capture: VoiceCapture, todo: VoiceTodo?)
     func convertCaptureToTodo(captureID: UUID) async throws -> VoiceTodo
@@ -34,6 +35,21 @@ public protocol VoiceCaptureAndTodoUseCase: AnyObject, Sendable {
 }
 
 public extension VoiceCaptureAndTodoUseCase {
+    func reconcileWatchTodoCapture(rawTranscript: String, refinedText: String, localAudioFileName: String, durationSeconds: TimeInterval) async throws -> VoiceTodo {
+        let outcome = try await recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: rawTranscript,
+            refinedText: refinedText,
+            localAudioFileName: localAudioFileName,
+            durationSeconds: durationSeconds,
+            deviceSource: .appleWatch
+        )
+        guard let todo = outcome.todo else {
+            throw NSError(domain: "VoiceTodoUseCase", code: 500)
+        }
+        return todo
+    }
+
     func syncTodoToExternal(todoID: UUID) async throws -> VoiceTodo {
         guard let existing = try await fetchTodos().first(where: { $0.id == todoID }) else {
             throw NSError(domain: "VoiceTodoUseCase", code: 404)
