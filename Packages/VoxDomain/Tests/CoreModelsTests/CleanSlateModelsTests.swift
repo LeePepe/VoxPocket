@@ -28,6 +28,19 @@ final class CleanSlateModelsTests: XCTestCase {
         XCTAssertEqual(ProjectBinding.matchProjectKey(in: "Please update VoxPocket voice", bindings: [ProjectBinding(projectKey: "VP", displayName: "VoxPocket", localDirectoryPath: "/tmp")]), "VP")
     }
 
+    func testAppleWatchDeviceSourceRoundTripsAndLegacyValuesRemainStable() throws {
+        let todo = VoiceTodo(title: "Watch capture", deviceSource: .appleWatch)
+        let encoded = try JSONEncoder().encode(todo)
+        let decoded = try JSONDecoder().decode(VoiceTodo.self, from: encoded)
+        XCTAssertEqual(decoded.deviceSource, .appleWatch)
+        XCTAssertTrue(String(data: encoded, encoding: .utf8)?.contains("appleWatch") == true)
+
+        for (raw, expected) in [("iPhone", DeviceSource.iPhone), ("mac", .mac), ("iPad", .iPad)] {
+            let decodedSource = try JSONDecoder().decode(DeviceSource.self, from: Data("\"\(raw)\"".utf8))
+            XCTAssertEqual(decodedSource, expected)
+        }
+    }
+
     func testExternalTodoSyncMetadataBackwardCompatibleDecodingAndSanitization() throws {
         let legacyJSON = """
         {

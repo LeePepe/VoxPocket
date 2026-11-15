@@ -18,6 +18,9 @@ import VoxWorkflow
 import VoxWorkflowWhisperKit
 import UseCases
 import CoreModels
+#if os(iOS)
+import VoxPocketKit
+#endif
 import Persistence
 import PlatformAdapters
 import Preferences
@@ -44,6 +47,9 @@ public final class ServiceContainer: ObservableObject {
     private let sdk: SDKHostConfiguration
     private let persistenceStartup = AppPersistenceStartup()
     private var iosPresetPreferenceBinding: IOSPresetPreferenceBinding?
+#if os(iOS)
+    private var watchCaptureAssembly: WatchCaptureAppAssembly?
+#endif
 
     // MARK: - 单例
 
@@ -204,6 +210,16 @@ public final class ServiceContainer: ObservableObject {
         quickRecordingUseCase = DefaultRecordingUseCase(coordinator: quickTranscriber, telemetry: telemetryService); quickTranscriptionUseCase = DefaultTranscriptionUseCase(coordinator: quickTranscriber, editing: quickEditingUseCase, telemetry: telemetryService); quickRefinementUseCase = DefaultRefinementUseCase(runner: quickRefinementRunner, editing: quickEditingUseCase, telemetry: telemetryService)
         quickStreamingInputCoordinator = DefaultStreamingInputCoordinator(editing: quickEditingUseCase, transcription: quickTranscriptionUseCase, refinement: quickRefinementUseCase)
 #endif
+        #if os(iOS)
+        if let storageDirectory {
+            let primaryRefinement = refinementRunner
+            watchCaptureAssembly = WatchCaptureAppAssembly(useCase: captureTodoUseCase, captureRepository: voiceCaptureRepository,
+                storageDirectory: storageDirectory, makeRefinement: {
+                    RefineWorkflowRunner(preset: primaryRefinement.activePreset, configuration: workflowConfiguration,
+                        azureTextConfigured: availability.textConfigured)
+                }, refresh: { [weak self] in self?.reloadWorkspaceViewModel() })
+        }
+        #endif
         finishInitialization(environment: environment, notificationCenter: llmNotificationCenter)
     }
 
@@ -227,6 +243,10 @@ public final class ServiceContainer: ObservableObject {
             })
         iosPresetPreferenceBinding = binding
         setupIOSLiveActivityAndIntentObservers(notificationCenter: notificationCenter)
+        watchCaptureAssembly?.start { [weak self] in
+            guard await AppStartup.shared.prepare(), let self else { return false }
+            return await self.initializePersistence()
+        }
         #endif
         sessionUseCase.onCompletedSession = { [weak self] rawText, refinedText in
             await productTelemetryInstrumentation.sessionDidComplete()
@@ -522,7 +542,8 @@ public final class ServiceContainer: ObservableObject {
     /// 延迟初始化 SwiftData 持久化层
     ///
     /// 后台启动与保存入口共享同一初始化；数据库打开不占用主线程。
-    public func initializePersistence() async {
+    @discardableResult
+    public func initializePersistence() async -> Bool {
         let ready = await persistenceStartup.prepare { [self] in
             let repository = try await Self.makeSessionRepository()
             let swiftDataUseCase = DefaultSessionUseCase(repository: repository, telemetry: telemetryService)
@@ -532,6 +553,7 @@ public final class ServiceContainer: ObservableObject {
         if !ready {
             logger.error("Session persistence could not be initialized")
         }
+        return ready
     }
 
     nonisolated private static func makeSessionRepository() async throws -> SwiftDataSessionRepository {

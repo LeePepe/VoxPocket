@@ -29,8 +29,9 @@ public enum VoiceTodoUseCaseError: Error, LocalizedError, Sendable {
     case captureNotFound
     case todoNotFound
     case projectNotFound
+    case inconsistentWatchCapture
     public var errorDescription: String? {
-        switch self { case .captureNotFound: "Capture not found"; case .todoNotFound: "Todo not found"; case .projectNotFound: "Project not found" }
+        switch self { case .captureNotFound: "Capture not found"; case .todoNotFound: "Todo not found"; case .projectNotFound: "Project not found"; case .inconsistentWatchCapture: "Inconsistent Watch capture state" }
     }
 }
 
@@ -63,6 +64,52 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         } else { todo = nil }
         telemetry.track(name: "capture.completed", properties: ["duration_ms": String(Int(durationSeconds * 1000)), "mode": mode.rawValue, "source": deviceSource.rawValue])
         return (todo == nil ? capture : capture.withLinkedTodo(todo!.id), todo)
+    }
+
+    public func reconcileWatchTodoCapture(rawTranscript: String, refinedText: String, localAudioFileName: String, durationSeconds: TimeInterval) async throws -> VoiceTodo {
+        let matchedCaptures = try await captures.fetchAll().filter { $0.localAudioFileName == localAudioFileName }
+        let matchedTodos = try await todos.fetchAll().filter { $0.localAudioFileName == localAudioFileName }
+        guard matchedCaptures.count <= 1, matchedTodos.count <= 1,
+              matchedCaptures.allSatisfy({ $0.deviceSource == .appleWatch && $0.mode == .todo && $0.durationSeconds == durationSeconds }),
+              matchedTodos.allSatisfy({ $0.deviceSource == .appleWatch && $0.durationSeconds == durationSeconds }) else {
+            throw VoiceTodoUseCaseError.inconsistentWatchCapture
+        }
+        if let todo = matchedTodos.first {
+            guard let sourceID = todo.sourceCaptureID else { throw VoiceTodoUseCaseError.inconsistentWatchCapture }
+            if let source = try await captures.fetch(by: sourceID) {
+                guard source.localAudioFileName == localAudioFileName, source.deviceSource == .appleWatch,
+                      source.mode == .todo, source.durationSeconds == durationSeconds else {
+                    throw VoiceTodoUseCaseError.inconsistentWatchCapture
+                }
+            }
+            if let capture = matchedCaptures.first {
+                guard todo.sourceCaptureID == capture.id,
+                      capture.linkedTodoID == nil || capture.linkedTodoID == todo.id else {
+                    throw VoiceTodoUseCaseError.inconsistentWatchCapture
+                }
+                if capture.linkedTodoID == nil, let fresh = try await captures.fetch(by: capture.id) {
+                    guard fresh.linkedTodoID == nil || fresh.linkedTodoID == todo.id else {
+                        throw VoiceTodoUseCaseError.inconsistentWatchCapture
+                    }
+                    try await captures.save(fresh.withLinkedTodo(todo.id))
+                }
+            }
+            return todo
+        }
+        if let capture = matchedCaptures.first {
+            guard capture.linkedTodoID == nil else { throw VoiceTodoUseCaseError.inconsistentWatchCapture }
+            return try await convertCaptureToTodo(captureID: capture.id)
+        }
+        let result = try await recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: rawTranscript,
+            refinedText: refinedText,
+            localAudioFileName: localAudioFileName,
+            durationSeconds: durationSeconds,
+            deviceSource: .appleWatch
+        )
+        guard let todo = result.todo else { throw VoiceTodoUseCaseError.inconsistentWatchCapture }
+        return todo
     }
 
     public func recordFailedCapture(mode: CaptureMode, stage: FailureStage, reason: String, rawTranscript: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> VoiceCapture {

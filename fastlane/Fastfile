@@ -22,6 +22,8 @@ default_platform(:ios)
 
 APP_IDENTIFIER = "com.leepepe.voxpocket".freeze
 WIDGET_IDENTIFIER = "com.leepepe.voxpocket.widget".freeze
+WATCH_IDENTIFIER = "com.leepepe.voxpocket.watchkitapp".freeze
+WATCH_COMPLICATION_IDENTIFIER = "com.leepepe.voxpocket.watchkitapp.complication".freeze
 SCHEME = "VoxPocket".freeze
 XCODEPROJ = "VoxPocket/VoxPocket.xcodeproj".freeze
 TEAM_ID = "4Z8GG667QD".freeze
@@ -115,6 +117,14 @@ platform :ios do
       UI.user_error!("iOS widget provisioning profile name for #{WIDGET_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
     end
 
+    # 新 Watch profiles 由 Owner 预先创建/安装；此 lane 不创建它们。
+    watch_profile_name = ENV.fetch("VOXPOCKET_WATCH_PROFILE_SPECIFIER", "").strip
+    complication_profile_name = ENV.fetch("VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER", "").strip
+    if watch_profile_name.empty? || complication_profile_name.empty?
+      UI.user_error!("Owner-provisioned Watch app and complication profile mappings are required; refusing archive")
+    end
+    escaped_watch_profile = Shellwords.escape(watch_profile_name)
+    escaped_complication_profile = Shellwords.escape(complication_profile_name)
     escaped_app_profile = Shellwords.escape(app_profile_name)
     escaped_widget_profile = Shellwords.escape(widget_profile_name)
 
@@ -125,14 +135,16 @@ platform :ios do
       destination: "generic/platform=iOS",
       export_method: "app-store",
       export_team_id: TEAM_ID,
-      xcargs: "-quiet CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID} VOXPOCKET_IOS_PROFILE_SPECIFIER=#{escaped_app_profile} VOXPOCKET_WIDGET_PROFILE_SPECIFIER=#{escaped_widget_profile}",
+      xcargs: "-quiet CURRENT_PROJECT_VERSION=#{next_build} DEVELOPMENT_TEAM=#{TEAM_ID} VOXPOCKET_IOS_PROFILE_SPECIFIER=#{escaped_app_profile} VOXPOCKET_WIDGET_PROFILE_SPECIFIER=#{escaped_widget_profile} VOXPOCKET_WATCH_PROFILE_SPECIFIER=#{escaped_watch_profile} VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER=#{escaped_complication_profile}",
       export_options: {
         manageAppVersionAndBuildNumber: false,
         signingStyle: "manual",
         teamID: TEAM_ID,
         provisioningProfiles: {
           APP_IDENTIFIER => app_profile_name,
-          WIDGET_IDENTIFIER => widget_profile_name
+          WIDGET_IDENTIFIER => widget_profile_name,
+          WATCH_IDENTIFIER => watch_profile_name,
+          WATCH_COMPLICATION_IDENTIFIER => complication_profile_name
         }
       },
       output_directory: ENV.fetch("RUNNER_TEMP", "/tmp"),

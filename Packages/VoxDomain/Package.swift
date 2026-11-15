@@ -6,7 +6,9 @@ let package = Package(
     name: "VoxDomain",
     platforms: [
         .iOS(.v26),
-        .macOS(.v26)
+        .macOS(.v26),
+        .watchOS(.v26),
+        .visionOS(.v26)
     ],
     products: [
         .library(
