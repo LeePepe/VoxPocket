@@ -139,15 +139,20 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertEqual(XCTWaiter.wait(for: [filterAllHittable], timeout: 5), .completed)
             XCTAssertTrue(app.buttons["vox.ios.filter.done"].exists)
             XCTAssertFalse(app.staticTexts["点击任务置顶聚焦 · 标题与属性展示处直接点按修改"].exists)
-            XCTAssertTrue(app.staticTexts["整理下周设计评审要展示的液态玻璃交互走查清单"].waitForExistence(timeout: 5))
+            let todoPredicate = NSPredicate(format: "label CONTAINS %@", "整理下周设计评审")
+            let todoButton = app.buttons.matching(todoPredicate).firstMatch
+            let todoStatic = app.staticTexts.matching(todoPredicate).firstMatch
+            XCTAssertTrue(todoButton.waitForExistence(timeout: 5) || todoStatic.waitForExistence(timeout: 2))
             saveScreenshot(app, name: "todo-\(appearance)", directory: evidence)
 
-            let todoRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "整理下周设计评审")).firstMatch
+            let todoRow = todoButton.exists ? todoButton : todoStatic
             XCTAssertTrue(todoRow.exists)
             let todoRowHittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: todoRow)
             XCTAssertEqual(XCTWaiter.wait(for: [todoRowHittable], timeout: 5), .completed)
             todoRow.tap()
 
+            let collapseBtn = app.buttons["vox.todo.collapse.button"]
+            XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
             XCTAssertFalse(app.staticTexts["此刻，专注这一件。"].exists)
             XCTAssertFalse(app.staticTexts["其余待办"].exists)
             XCTAssertFalse(app.staticTexts["执行步骤树"].exists)
@@ -157,37 +162,35 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertFalse(app.buttons["vox.todo.action.copy"].exists)
             XCTAssertFalse(app.otherElements["vox.todo.append.banner"].exists)
 
-            let collapseBtn = app.buttons["vox.todo.collapse.button"]
-            XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
             XCTAssertTrue(app.textFields["vox.todo.title.editor"].exists || app.textViews["vox.todo.title.editor"].exists)
-            let statusPill = app.buttons["vox.todo.status.pill"]
-            let priorityPill = app.buttons["vox.todo.priority.pill"]
-            let linearBtn = app.buttons["vox.todo.action.linear"]
+            let statusPill = app.buttons["vox.todo.status.pill"].firstMatch
+            let priorityPill = app.buttons["vox.todo.priority.pill"].firstMatch
+            let linearBtn = app.buttons["vox.todo.action.linear"].firstMatch
             XCTAssertTrue(statusPill.exists)
             XCTAssertTrue(priorityPill.exists)
             XCTAssertTrue(linearBtn.exists)
-            let tagsTrigger = app.buttons["vox.todo.tags.trigger"]
+            let tagsTrigger = app.buttons["vox.todo.tags.trigger"].firstMatch
             XCTAssertTrue(tagsTrigger.exists)
             XCTAssertTrue(tagsTrigger.isHittable)
             XCTAssertTrue(app.frame.contains(tagsTrigger.frame))
-            // Verify Row 2B (Dedicated Tag Row) sits vertically below Row 2A (Status / Priority / Linear)
+            // Verify Row 3 (Dedicated Tag Row) sits vertically below Row 2 (Status / Priority / Timestamp / Linear)
             XCTAssertGreaterThan(tagsTrigger.frame.minY, statusPill.frame.maxY - 2)
             XCTAssertGreaterThan(tagsTrigger.frame.minY, priorityPill.frame.maxY - 2)
             saveScreenshot(app, name: "todo-expanded-\(appearance)", directory: evidence)
 
-            // Open historical tag picker & add-tag popover attached to + tag trigger
+            // Open inline tag tray attached to + tag trigger inside the card
             tagsTrigger.tap()
             XCTAssertTrue(app.textFields["vox.todo.tag.input"].waitForExistence(timeout: 5))
             saveScreenshot(app, name: "todo-tag-picker-\(appearance)", directory: evidence)
-            if app.popovers.firstMatch.exists {
-                app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.1)).tap()
-            }
 
             // Collapse before filtering to done
             XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
             collapseBtn.tap()
             app.buttons["vox.ios.filter.done"].tap()
-            XCTAssertTrue(app.staticTexts["把早间散步录下的播客大纲润色后发给搭档确认"].waitForExistence(timeout: 5))
+            let donePredicate = NSPredicate(format: "label CONTAINS %@", "把早间散步录下的播客大纲")
+            let doneButton = app.buttons.matching(donePredicate).firstMatch
+            let doneStatic = app.staticTexts.matching(donePredicate).firstMatch
+            XCTAssertTrue(doneButton.waitForExistence(timeout: 5) || doneStatic.waitForExistence(timeout: 2))
 
             let settings = app.buttons["vox.ios.settingsButton"]
             XCTAssertTrue(settings.waitForExistence(timeout: 5))

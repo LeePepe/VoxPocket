@@ -18,6 +18,7 @@ import VoxWorkflow
 import VoxWorkflowWhisperKit
 import UseCases
 import CoreModels
+import VoxNotificationKit
 #if os(iOS)
 import VoxPocketKit
 #endif
@@ -78,6 +79,8 @@ public final class ServiceContainer: ObservableObject {
     public let voiceCaptureRepository: DefaultVoiceCaptureRepository
     public let voiceTodoRepository: DefaultVoiceTodoRepository
     public let aiRunnerService: DefaultAIRunnerExecutionService
+    public let timeAnchorLearner: AdaptiveTimeAnchorLearner
+    public let notificationScheduler: VoxNotificationScheduler
     public let voiceCaptureAndTodoUseCase: DefaultVoiceCaptureAndTodoUseCase
     public private(set) lazy var workspaceViewModel: VoxWorkspaceViewModel = makeWorkspaceViewModel()
 
@@ -183,14 +186,31 @@ public final class ServiceContainer: ObservableObject {
         voiceCaptureRepository = DefaultVoiceCaptureRepository(directoryURL: storageDirectory, cloudSync: UbiquitousKeyValueCloudSyncTransport())
         voiceTodoRepository = DefaultVoiceTodoRepository(directoryURL: storageDirectory, cloudSync: UbiquitousKeyValueCloudSyncTransport())
         aiRunnerService = DefaultAIRunnerExecutionService()
+        let habitFileURL = storageDirectory?.appendingPathComponent("time-anchor-habits.json", isDirectory: false)
+        let habitLearner = AdaptiveTimeAnchorLearner(store: FileHabitTimeAnchorStore(fileURL: habitFileURL))
+        let isUITestHost = environment[Self.uiTestHostEnvironmentKey] == "1"
+            || processArguments.contains("--vox-ui-test-host")
+            || environment["VOX_DEMO_SEED"] == "1"
+        let localNotificationScheduler = VoxNotificationScheduler(
+            timeAnchorLearner: habitLearner,
+            center: isUITestHost ? InMemoryVoxNotificationCenter() : nil
+        )
+        timeAnchorLearner = habitLearner
+        notificationScheduler = localNotificationScheduler
         let captureTodoUseCase = DefaultVoiceCaptureAndTodoUseCase(
             captures: voiceCaptureRepository,
             todos: voiceTodoRepository,
-            extractor: DefaultVoiceTodoExtractor(),
+            extractor: DefaultVoiceTodoExtractor(timeAnchorLearner: habitLearner),
             runner: aiRunnerService,
+            notificationScheduler: localNotificationScheduler,
             telemetry: telemetryService
         )
         voiceCaptureAndTodoUseCase = captureTodoUseCase
+        if !isUITestHost {
+            Task {
+                await localNotificationScheduler.registerCategories()
+            }
+        }
         let productTelemetryInstrumentation = self.productTelemetryInstrumentation!
         sessionUseCase = ProxySessionUseCase(
             backing: InMemorySessionUseCase()

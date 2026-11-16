@@ -2,26 +2,252 @@ import Foundation
 import CoreModels
 import Persistence
 import PlatformAdapters
+import VoxNotificationKit
 import VoxKitBridge
 import VoxRefine
 import LokiKit
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+/// 基于 iPhone / Mac 端侧 Apple Intelligence (`FoundationModels.LanguageModelSession`) 的纯 AI 语音待办语义拆解器
+public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
+    public typealias ModelCompletionHandler = @Sendable (_ instructions: String, _ prompt: String) async throws -> String
+
+    private let customCompletion: ModelCompletionHandler?
+
+    public init(customCompletion: ModelCompletionHandler? = nil) {
+        self.customCompletion = customCompletion
+    }
+
+    public func decompose(
+        transcript: String,
+        referenceDate: Date = Date(),
+        anchorMinutesBySlot: [String: Int] = [:],
+        knownProjectNames: [String] = []
+    ) async throws -> AITodoDecompositionResult {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return AITodoDecompositionResult(cleanTitle: "Untitled task")
+        }
+
+        let isoFormatter = ISO8601DateFormatter()
+        let refISO = isoFormatter.string(from: referenceDate)
+        let anchorsDesc = anchorMinutesBySlot
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\(String(format: "%02d:%02d", $0.value / 60, $0.value % 60))" }
+            .joined(separator: ", ")
+
+        // 遵循 VoxKit AppleIntelligenceProvider.swift:150 经验：使用紧凑单次 JSON 指令而非多字段复杂 @Generable，避免端侧受限解码 120s+ 超时
+        let instructions = """
+        You are an on-device Voice Todo semantic decomposer. Given the user's spoken transcript, output ONLY a single compact JSON object with these keys:
+        {"cleanTitle":"string (strip reminder/imperative prefixes like 提醒我/帮我记一下 and time phrases)","timeSlot":"morning|forenoon|noon|afternoon|evening|night|null","dayOffset":0,"explicitHour":null,"explicitMinute":null,"relativeMinutes":null,"priority":"P0|P1|P2","tags":["#Tag"],"subtasks":["step 1"]}
+        Current time: \(refISO). User habit anchors: \(anchorsDesc). Known projects: \(knownProjectNames.joined(separator: ", ")).
+        User transcript: \(trimmed)
+        """
+
+        let rawJSON: String
+        if let customCompletion {
+            rawJSON = try await customCompletion(instructions, "Return JSON only.")
+        } else {
+            rawJSON = try await Self.invokeFoundationModels(instructions: instructions)
+        }
+
+        if let parsed = Self.parseJSONResponse(rawJSON, fallbackTranscript: trimmed) {
+            return parsed
+        }
+        return Self.fallbackSentenceSplit(from: trimmed)
+    }
+
+    private static func invokeFoundationModels(instructions: String) async throws -> String {
+        // 在 UI 自动化测试或离线 Demo 播种中跳过端侧大模型 XPC 调用，避免 iOS Simulator FoundationModels daemon 超时阻塞主流程
+        let env = ProcessInfo.processInfo.environment
+        let args = ProcessInfo.processInfo.arguments
+        if env["VOXPOCKET_UI_TEST_HOST"] == "1" || env["VOX_DEMO_SEED"] == "1" || env["XCTestConfigurationFilePath"] != nil || args.contains("--vox-ui-test-host") {
+            throw NSError(domain: "DefaultOnDeviceAITodoDecomposer", code: 3, userInfo: [NSLocalizedDescriptionKey: "Skipped in UI test / demo mode"])
+        }
+        #if canImport(FoundationModels)
+        guard case .available = SystemLanguageModel.default.availability else {
+            throw NSError(domain: "DefaultOnDeviceAITodoDecomposer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence unavailable"])
+        }
+        let session = LanguageModelSession(instructions: instructions)
+        let response = try await session.respond(to: "Output compact JSON only.")
+        return response.content
+        #else
+        throw NSError(domain: "DefaultOnDeviceAITodoDecomposer", code: 2, userInfo: [NSLocalizedDescriptionKey: "FoundationModels unavailable"])
+        #endif
+    }
+
+    internal static func parseJSONResponse(_ raw: String, fallbackTranscript: String) -> AITodoDecompositionResult? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let startIdx = trimmed.firstIndex(of: "{"),
+              let endIdx = trimmed.lastIndex(of: "}") else {
+            return nil
+        }
+        let jsonSlice = String(trimmed[startIdx...endIdx])
+        guard let data = jsonSlice.data(using: .utf8),
+              let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return nil
+        }
+
+        let rawTitle = (dict["cleanTitle"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let cleanTitle = rawTitle.isEmpty ? compactTitle(fallbackTranscript) : compactTitle(rawTitle)
+
+        let rawSlot = (dict["timeSlot"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let timeSlot: String? = (rawSlot != nil && rawSlot != "null" && !rawSlot!.isEmpty && HabitTimeSlot(rawValue: rawSlot!) != nil)
+            ? rawSlot
+            : nil
+
+        let dayOffset = max(0, (dict["dayOffset"] as? Int) ?? 0)
+        let explicitHour = dict["explicitHour"] as? Int
+        let explicitMinute = dict["explicitMinute"] as? Int
+        let relativeMinutes = dict["relativeMinutes"] as? Int
+
+        let rawPriority = ((dict["priority"] as? String) ?? "P1").uppercased()
+        let priority = TodoPriority(rawValue: rawPriority) ?? .p1
+
+        let rawTags = (dict["tags"] as? [String]) ?? []
+        let tags = VoiceTodo.normalizeTags(rawTags)
+
+        let rawSubtasks = (dict["subtasks"] as? [String]) ?? []
+        let subtasks = rawSubtasks
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        return AITodoDecompositionResult(
+            cleanTitle: cleanTitle.isEmpty ? "Untitled task" : cleanTitle,
+            timeSlot: timeSlot,
+            dayOffset: dayOffset,
+            explicitHour: explicitHour,
+            explicitMinute: explicitMinute,
+            relativeMinutes: relativeMinutes,
+            priority: priority,
+            tags: tags,
+            subtasks: subtasks
+        )
+    }
+
+    internal static func fallbackSentenceSplit(from source: String) -> AITodoDecompositionResult {
+        let sentence = source.split(whereSeparator: { ".!?。！？\n".contains($0) }).first.map(String.init) ?? source
+        let title = compactTitle(sentence)
+        return AITodoDecompositionResult(
+            cleanTitle: title.isEmpty ? "Untitled task" : title
+        )
+    }
+
+    internal static func compactTitle(_ value: String) -> String {
+        let normalized = value.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > 60 else { return normalized }
+        return String(normalized.prefix(57)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+    }
+}
 
 public struct DefaultVoiceTodoExtractor: VoiceTodoExtractionRunning {
-    public init() {}
+    private let aiDecomposer: any AITodoDecomposing
+    private let timeAnchorLearner: any AdaptiveTimeAnchorLearning
+    private let nowProvider: @Sendable () -> Date
+    private let calendar: Calendar
+
+    public init(
+        aiDecomposer: any AITodoDecomposing = DefaultOnDeviceAITodoDecomposer(),
+        timeAnchorLearner: any AdaptiveTimeAnchorLearning = AdaptiveTimeAnchorLearner(),
+        calendar: Calendar = .current,
+        nowProvider: @escaping @Sendable () -> Date = { Date() }
+    ) {
+        self.aiDecomposer = aiDecomposer
+        self.timeAnchorLearner = timeAnchorLearner
+        self.calendar = calendar
+        self.nowProvider = nowProvider
+    }
 
     public func extractTodo(from rawTranscript: String, refinedText: String, availableProjects: [ProjectBinding]) async throws -> ExtractedTodoDraft {
         let source = refinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? rawTranscript : refinedText
-        let sentence = source.split(whereSeparator: { ".!?。！？\n".contains($0) }).first.map(String.init) ?? source
-        let title = Self.compactTitle(sentence)
         let promptSource = source.isEmpty ? rawTranscript : source
-        let prompt = "## Goal\n\(promptSource.trimmingCharacters(in: .whitespacesAndNewlines))\n\n## Context\nCreated from a voice capture."
-        return ExtractedTodoDraft(title: title.isEmpty ? "Untitled task" : title, taskPrompt: prompt, matchedProjectKey: ProjectBinding.matchProjectKey(in: source, bindings: availableProjects))
+        let now = nowProvider()
+
+        let anchorSummary = timeAnchorLearner.currentAnchorSummary(for: [], now: now)
+        var anchorMap: [String: Int] = [:]
+        for (slot, minutes) in anchorSummary {
+            anchorMap[slot.rawValue] = minutes
+        }
+
+        let decomposition: AITodoDecompositionResult
+        if let aiResult = try? await aiDecomposer.decompose(
+            transcript: promptSource,
+            referenceDate: now,
+            anchorMinutesBySlot: anchorMap,
+            knownProjectNames: availableProjects.map(\.displayName)
+        ) {
+            decomposition = aiResult
+        } else {
+            decomposition = DefaultOnDeviceAITodoDecomposer.fallbackSentenceSplit(from: source)
+        }
+
+        let (scheduledAt, resolvedSlot) = resolveSchedule(from: decomposition, now: now)
+
+        var promptLines = [
+            "## Goal",
+            promptSource.trimmingCharacters(in: .whitespacesAndNewlines),
+            "",
+            "## Context",
+            "Created from a voice capture."
+        ]
+        if !decomposition.subtasks.isEmpty {
+            promptLines.append("")
+            for step in decomposition.subtasks {
+                promptLines.append("- [ ] \(step)")
+            }
+        }
+
+        return ExtractedTodoDraft(
+            title: decomposition.cleanTitle.isEmpty ? "Untitled task" : decomposition.cleanTitle,
+            taskPrompt: promptLines.joined(separator: "\n"),
+            matchedProjectKey: ProjectBinding.matchProjectKey(in: source, bindings: availableProjects),
+            priority: decomposition.priority,
+            tags: decomposition.tags,
+            subtasks: decomposition.subtasks,
+            scheduledAt: scheduledAt,
+            timeSlot: resolvedSlot
+        )
     }
 
-    private static func compactTitle(_ value: String) -> String {
-        let normalized = value.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalized.count > 60 else { return normalized }
-        return String(normalized.prefix(57)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+    private func resolveSchedule(from result: AITodoDecompositionResult, now: Date) -> (Date?, String?) {
+        if let relativeMinutes = result.relativeMinutes, relativeMinutes > 0 {
+            let clampedMinutes = min(relativeMinutes, 525_600) // 上限 365 天，防止大模型输出极端整数触发乘法溢出
+            let fireDate = now.addingTimeInterval(TimeInterval(clampedMinutes) * 60.0)
+            let comps = calendar.dateComponents([.hour, .minute], from: fireDate)
+            let mins = (comps.hour ?? 9) * 60 + (comps.minute ?? 0)
+            let slot = HabitTimeSlot.inferSlot(fromMinutesFromMidnight: mins)
+            return (fireDate, slot.rawValue)
+        }
+
+        if let hour = result.explicitHour, (0..<24).contains(hour) {
+            let minute = max(0, min(59, result.explicitMinute ?? 0))
+            let clampedDayOffset = max(0, min(result.dayOffset, 365))
+            let startOfToday = calendar.startOfDay(for: now)
+            let baseDay = calendar.date(byAdding: .day, value: clampedDayOffset, to: startOfToday) ?? startOfToday
+            var target = calendar.date(byAdding: .minute, value: hour * 60 + minute, to: baseDay) ?? now.addingTimeInterval(3600)
+            if clampedDayOffset == 0 && target <= now.addingTimeInterval(60) {
+                target = calendar.date(byAdding: .day, value: 1, to: target) ?? target.addingTimeInterval(86_400)
+            }
+            let inferredSlot = result.timeSlot.flatMap(HabitTimeSlot.init(rawValue:))
+                ?? HabitTimeSlot.inferSlot(fromMinutesFromMidnight: hour * 60 + minute)
+            return (target, inferredSlot.rawValue)
+        }
+
+        if let slotRaw = result.timeSlot, let habitSlot = HabitTimeSlot(rawValue: slotRaw) {
+            let clampedDayOffset = max(0, min(result.dayOffset, 365))
+            let resolved = timeAnchorLearner.resolveAnchor(
+                for: habitSlot,
+                dayOffset: clampedDayOffset,
+                tags: result.tags,
+                now: now
+            )
+            return (resolved.targetDate, habitSlot.rawValue)
+        }
+
+        return (nil, nil)
     }
 }
 
@@ -41,11 +267,62 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     private let extractor: any VoiceTodoExtractionRunning
     private let runner: any AIRunnerExecutionService
     private let externalSync: any TodoExternalSyncService
+    private let notificationScheduler: any VoxNotificationScheduling
     private let projects: @Sendable () -> [ProjectBinding]
     private let telemetry: any TelemetryService
+    private let actionEventsTask: Task<Void, Never>?
 
-    public init(captures: any VoiceCaptureRepository, todos: any VoiceTodoRepository, extractor: any VoiceTodoExtractionRunning = DefaultVoiceTodoExtractor(), runner: any AIRunnerExecutionService, externalSync: any TodoExternalSyncService = NoopTodoExternalSyncService(), projects: @escaping @Sendable () -> [ProjectBinding] = { [] }, telemetry: any TelemetryService = NoopTelemetryService()) {
-        self.captures = captures; self.todos = todos; self.extractor = extractor; self.runner = runner; self.externalSync = externalSync; self.projects = projects; self.telemetry = telemetry
+    public init(
+        captures: any VoiceCaptureRepository,
+        todos: any VoiceTodoRepository,
+        extractor: (any VoiceTodoExtractionRunning)? = nil,
+        runner: any AIRunnerExecutionService,
+        externalSync: any TodoExternalSyncService = NoopTodoExternalSyncService(),
+        notificationScheduler: any VoxNotificationScheduling = VoxNotificationScheduler(),
+        projects: @escaping @Sendable () -> [ProjectBinding] = { [] },
+        telemetry: any TelemetryService = NoopTelemetryService()
+    ) {
+        self.captures = captures
+        self.todos = todos
+        self.extractor = extractor ?? DefaultVoiceTodoExtractor(timeAnchorLearner: notificationScheduler.timeAnchorLearner)
+        self.runner = runner
+        self.externalSync = externalSync
+        self.notificationScheduler = notificationScheduler
+        self.projects = projects
+        self.telemetry = telemetry
+
+        let todosRepo = todos
+        let eventsStream = notificationScheduler.actionEvents
+        self.actionEventsTask = Task {
+            for await event in eventsStream {
+                switch event.action {
+                case .markDone:
+                    _ = try? await todosRepo.update(id: event.itemID) { current in
+                        current
+                            .withExecutionState(.done, completedAt: event.triggeredAt)
+                            .withReminder(scheduledAt: nil, timeSlot: current.timeSlot, updatedAt: event.triggeredAt)
+                    }
+                case .snooze15m, .snooze1h, .deferToNextAnchor:
+                    if let newDate = event.rescheduledFireDate {
+                        _ = try? await todosRepo.update(id: event.itemID) { current in
+                            current.withReminder(
+                                scheduledAt: newDate,
+                                timeSlot: event.slot?.rawValue ?? current.timeSlot,
+                                updatedAt: event.triggeredAt
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    deinit {
+        actionEventsTask?.cancel()
+    }
+
+    public var localNotificationScheduler: any VoxNotificationScheduling {
+        notificationScheduler
     }
 
     public func recordCompletedCapture(mode: CaptureMode, rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> (capture: VoiceCapture, todo: VoiceTodo?) {
@@ -54,8 +331,23 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         let todo: VoiceTodo?
         if mode == .todo {
             let draft = try await extractor.extractTodo(from: rawTranscript, refinedText: refinedText, availableProjects: projects())
-            var created = VoiceTodo(title: draft.title, taskPrompt: draft.taskPrompt, rawTranscript: rawTranscript, projectKey: draft.matchedProjectKey, sourceCaptureID: capture.id, localAudioFileName: localAudioFileName, durationSeconds: durationSeconds, deviceSource: deviceSource)
+            var created = VoiceTodo(
+                title: draft.title,
+                taskPrompt: draft.taskPrompt,
+                rawTranscript: rawTranscript,
+                projectKey: draft.matchedProjectKey,
+                priority: draft.priority,
+                tags: draft.tags,
+                subtasks: draft.subtasks.map { VoiceTodoSubtask(title: $0) },
+                scheduledAt: draft.scheduledAt,
+                timeSlot: draft.timeSlot,
+                sourceCaptureID: capture.id,
+                localAudioFileName: localAudioFileName,
+                durationSeconds: durationSeconds,
+                deviceSource: deviceSource
+            )
             try await todos.save(created)
+            await syncNotificationSchedule(for: created)
             if externalSync.isEnabled && externalSync.isAutoSyncEnabled {
                 created = await pushBestEffort(created, fallbackStateOnFailure: .pendingPush)
             }
@@ -127,8 +419,23 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     public func convertCaptureToTodo(captureID: UUID) async throws -> VoiceTodo {
         guard let capture = try await captures.fetch(by: captureID) else { throw VoiceTodoUseCaseError.captureNotFound }
         let draft = try await extractor.extractTodo(from: capture.rawTranscript, refinedText: capture.refinedText, availableProjects: projects())
-        var todo = VoiceTodo(title: draft.title, taskPrompt: draft.taskPrompt, rawTranscript: capture.rawTranscript, projectKey: draft.matchedProjectKey, sourceCaptureID: capture.id, localAudioFileName: capture.localAudioFileName, durationSeconds: capture.durationSeconds, deviceSource: capture.deviceSource)
+        var todo = VoiceTodo(
+            title: draft.title,
+            taskPrompt: draft.taskPrompt,
+            rawTranscript: capture.rawTranscript,
+            projectKey: draft.matchedProjectKey,
+            priority: draft.priority,
+            tags: draft.tags,
+            subtasks: draft.subtasks.map { VoiceTodoSubtask(title: $0) },
+            scheduledAt: draft.scheduledAt,
+            timeSlot: draft.timeSlot,
+            sourceCaptureID: capture.id,
+            localAudioFileName: capture.localAudioFileName,
+            durationSeconds: capture.durationSeconds,
+            deviceSource: capture.deviceSource
+        )
         try await todos.save(todo)
+        await syncNotificationSchedule(for: todo)
         if externalSync.isEnabled && externalSync.isAutoSyncEnabled {
             todo = await pushBestEffort(todo, fallbackStateOnFailure: .pendingPush)
         }
@@ -138,12 +445,39 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
 
     public func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo {
         try await todos.save(todo)
+        await syncNotificationSchedule(for: todo)
         guard todo.externalSync != nil else { return todo }
         let queued = try await todos.update(id: todo.id) { current in
             current.withExternalSync(self.pendingMetadata(for: current), updatedAt: current.updatedAt)
         } ?? todo.withExternalSync(pendingMetadata(for: todo), updatedAt: todo.updatedAt)
         guard externalSync.isEnabled else { return queued }
         return await pushBestEffort(queued, fallbackStateOnFailure: .pendingPush)
+    }
+
+    public func rescheduleTodoReminder(todoID: UUID, newDate: Date, timeSlot: String? = nil) async throws -> VoiceTodo {
+        guard let current = try await todos.fetch(by: todoID) else {
+            throw VoiceTodoUseCaseError.todoNotFound
+        }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+        let mins = (comps.hour ?? 9) * 60 + (comps.minute ?? 0)
+        let resolvedSlot = timeSlot.flatMap(HabitTimeSlot.init(rawValue:))
+            ?? current.timeSlot.flatMap(HabitTimeSlot.init(rawValue:))
+            ?? HabitTimeSlot.inferSlot(fromMinutesFromMidnight: mins)
+        let updated = current.withReminder(scheduledAt: newDate, timeSlot: resolvedSlot.rawValue)
+        try await todos.save(updated)
+
+        let priorityLevel: VoxNotificationInterruptionPriority = (updated.priority == .p0) ? .high : ((updated.priority == .p2) ? .low : .normal)
+        _ = try? await notificationScheduler.rescheduleManualOverride(
+            itemID: updated.id,
+            title: updated.title,
+            subtitle: updated.tags.isEmpty ? nil : updated.tags.joined(separator: " "),
+            body: nil,
+            newFireDate: newDate,
+            slot: resolvedSlot,
+            tags: updated.tags,
+            priority: priorityLevel
+        )
+        return updated
     }
 
     public func runTodoWithAI(todoID: UUID, project: ProjectBinding, template: AIRunnerTemplate) async throws -> VoiceTodo {
@@ -164,6 +498,14 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         guard let done = try await todos.update(id: todoID, transform: { current in
             current.withExecutionState(.done, completedAt: Date())
         }) else { throw VoiceTodoUseCaseError.todoNotFound }
+        await notificationScheduler.cancel(itemID: todoID)
+        if let slotRaw = done.timeSlot, let habitSlot = HabitTimeSlot(rawValue: slotRaw) {
+            _ = notificationScheduler.timeAnchorLearner.recordSignal(
+                .completedNearNotification(completedAt: done.lastCompletedAt ?? Date()),
+                for: habitSlot,
+                tags: done.tags
+            )
+        }
         guard done.externalSync != nil || (externalSync.isEnabled && externalSync.isAutoSyncEnabled) else {
             return done
         }
@@ -239,9 +581,32 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     }
 
     public func deleteCapture(id: UUID) async throws { try await captures.delete(by: id) }
-    public func deleteTodo(id: UUID) async throws { try await todos.delete(by: id) }
+    public func deleteTodo(id: UUID) async throws {
+        await notificationScheduler.cancel(itemID: id)
+        try await todos.delete(by: id)
+    }
     public func fetchCaptures() async throws -> [VoiceCapture] { try await captures.fetchAll() }
     public func fetchTodos() async throws -> [VoiceTodo] { try await todos.fetchAll() }
+
+    private func syncNotificationSchedule(for todo: VoiceTodo) async {
+        guard todo.executionState != .done, let fireDate = todo.scheduledAt else {
+            await notificationScheduler.cancel(itemID: todo.id)
+            return
+        }
+        let slot = todo.timeSlot.flatMap(HabitTimeSlot.init(rawValue:))
+        let priorityLevel: VoxNotificationInterruptionPriority = (todo.priority == .p0) ? .high : ((todo.priority == .p2) ? .low : .normal)
+        let item = VoxScheduledNotificationItem(
+            itemID: todo.id,
+            title: todo.title,
+            subtitle: todo.tags.isEmpty ? nil : todo.tags.joined(separator: " "),
+            body: nil,
+            fireDate: fireDate,
+            slot: slot,
+            tags: todo.tags,
+            priority: priorityLevel
+        )
+        _ = try? await notificationScheduler.schedule(item)
+    }
 
     private func pendingMetadata(for todo: VoiceTodo) -> ExternalTodoSyncMetadata {
         if let existing = todo.externalSync {

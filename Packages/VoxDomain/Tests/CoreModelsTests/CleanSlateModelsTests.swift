@@ -81,6 +81,14 @@ final class CleanSlateModelsTests: XCTestCase {
         let retitledEncoded = try JSONEncoder().encode(retitled)
         let retitledDecoded = try JSONDecoder().decode(VoiceTodo.self, from: retitledEncoded)
         XCTAssertEqual(retitledDecoded, retitled)
+
+        let reminderDate = Date(timeIntervalSince1970: 1_763_300_000)
+        let scheduled = retitled.withReminder(scheduledAt: reminderDate, timeSlot: "morning")
+        XCTAssertEqual(scheduled.scheduledAt, reminderDate)
+        XCTAssertEqual(scheduled.timeSlot, "morning")
+        let scheduledDecoded = try JSONDecoder().decode(VoiceTodo.self, from: JSONEncoder().encode(scheduled))
+        XCTAssertEqual(scheduledDecoded.scheduledAt, reminderDate)
+        XCTAssertEqual(scheduledDecoded.timeSlot, "morning")
     }
 
     func testRunnerEscapingAndArguments() {

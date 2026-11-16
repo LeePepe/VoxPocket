@@ -2,9 +2,145 @@ import XCTest
 import CoreModels
 import Persistence
 import PlatformAdapters
+import VoxNotificationKit
 @testable import UseCases
 
 final class VoiceTodoUseCaseTests: XCTestCase {
+    func testOnDeviceAITodoDecompositionAndHabitAnchorNotificationLifecycle() async throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        let fixedNow = cal.date(from: DateComponents(timeZone: cal.timeZone, year: 2026, month: 11, day: 16, hour: 21, minute: 30))!
+
+        let tempHabitURL = FileManager.default.temporaryDirectory.appendingPathComponent("todo-habit-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tempHabitURL) }
+        let learner = AdaptiveTimeAnchorLearner(
+            store: FileHabitTimeAnchorStore(fileURL: tempHabitURL),
+            calendar: cal
+        )
+        let center = InMemoryVoxNotificationCenter()
+        let scheduler = VoxNotificationScheduler(timeAnchorLearner: learner, center: center, calendar: cal)
+
+        let aiDecomposer = DefaultOnDeviceAITodoDecomposer { instructions, _ in
+            XCTAssertTrue(instructions.contains("提醒我早上取顺丰快递"))
+            return """
+            {
+              "cleanTitle": "取顺丰快递",
+              "timeSlot": "morning",
+              "dayOffset": 0,
+              "explicitHour": null,
+              "explicitMinute": null,
+              "relativeMinutes": null,
+              "priority": "P0",
+              "tags": ["快递", "#顺丰"],
+              "subtasks": ["带上取件码", "顺路寄退货"]
+            }
+            """
+        }
+
+        let extractor = DefaultVoiceTodoExtractor(
+            aiDecomposer: aiDecomposer,
+            timeAnchorLearner: learner,
+            calendar: cal,
+            nowProvider: { fixedNow }
+        )
+
+        let captures = DefaultVoiceCaptureRepository()
+        let todos = DefaultVoiceTodoRepository()
+        let sandboxDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let useCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: extractor,
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            notificationScheduler: scheduler
+        )
+
+        let outcome = try await useCase.recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: "提醒我早上取顺丰快递，带上取件码并顺路寄退货",
+            refinedText: "提醒我早上取顺丰快递，带上取件码并顺路寄退货。",
+            localAudioFileName: nil,
+            durationSeconds: 4,
+            deviceSource: .iPhone
+        )
+        let created = try XCTUnwrap(outcome.todo)
+        XCTAssertEqual(created.title, "取顺丰快递")
+        XCTAssertEqual(created.priority, .p0)
+        XCTAssertEqual(created.tags, ["#快递", "#顺丰"])
+        XCTAssertEqual(created.subtasks.map(\.title), ["带上取件码", "顺路寄退货"])
+        XCTAssertEqual(created.timeSlot, "morning")
+        // Since fixedNow is 21:30 on Nov 16, morning (09:00) rolls over to Nov 17 at 09:00
+        let scheduledAt = try XCTUnwrap(created.scheduledAt)
+        XCTAssertEqual(cal.component(.day, from: scheduledAt), 17)
+        XCTAssertEqual(cal.component(.hour, from: scheduledAt), 9)
+        XCTAssertEqual(cal.component(.minute, from: scheduledAt), 0)
+        XCTAssertEqual(scheduler.pendingItems().count, 1)
+
+        // Manual reschedule to 08:30 updates VoiceTodo, reschedules notification, and feeds AdaptiveTimeAnchorLearner
+        let manual830 = cal.date(from: DateComponents(timeZone: cal.timeZone, year: 2026, month: 11, day: 17, hour: 8, minute: 30))!
+        let rescheduled = try await useCase.rescheduleTodoReminder(todoID: created.id, newDate: manual830, timeSlot: "morning")
+        XCTAssertEqual(rescheduled.scheduledAt, manual830)
+        XCTAssertEqual(scheduler.pendingItems().first?.fireDate, manual830)
+        let learnedNext = learner.resolveAnchor(for: .morning, dayOffset: 1, tags: ["#快递"], now: fixedNow)
+        XCTAssertLessThan(learnedNext.minutesFromMidnight, 540)
+
+        // Marking done cancels pending notification
+        _ = try await useCase.markTodoDone(todoID: created.id)
+        XCTAssertTrue(scheduler.pendingItems().isEmpty)
+
+        // Verify extreme relativeMinutes (Int.max) does not overflow and notification quick actions persist back to repository
+        let overflowDecomposer = DefaultOnDeviceAITodoDecomposer { _, _ in
+            """
+            {
+              "cleanTitle": "防止整数乘法溢出测试",
+              "timeSlot": "evening",
+              "dayOffset": 999999,
+              "explicitHour": null,
+              "explicitMinute": null,
+              "relativeMinutes": \(Int.max),
+              "priority": "P1",
+              "tags": ["#安全"],
+              "subtasks": []
+            }
+            """
+        }
+        let overflowExtractor = DefaultVoiceTodoExtractor(
+            aiDecomposer: overflowDecomposer,
+            timeAnchorLearner: learner,
+            calendar: cal,
+            nowProvider: { fixedNow }
+        )
+        let overflowUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: overflowExtractor,
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            notificationScheduler: scheduler
+        )
+        let overflowOutcome = try await overflowUseCase.recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: "测试大整数",
+            refinedText: "测试大整数",
+            localAudioFileName: nil,
+            durationSeconds: 1,
+            deviceSource: .iPhone
+        )
+        let overflowTodo = try XCTUnwrap(overflowOutcome.todo)
+        XCTAssertNotNil(overflowTodo.scheduledAt)
+
+        // Triggering markDone via notificationScheduler updates the persisted VoiceTodo in the repository via actionEvents stream
+        _ = try await scheduler.handleAction(
+            identifier: VoxNotificationQuickAction.markDone.rawValue,
+            itemID: overflowTodo.id,
+            slot: .evening,
+            tags: ["#安全"],
+            now: fixedNow
+        )
+        try await Task.sleep(for: .milliseconds(50))
+        let persistedAfterNotificationDone = try await todos.fetch(by: overflowTodo.id)
+        XCTAssertEqual(persistedAfterNotificationDone?.executionState, .done)
+    }
+
     func testCaptureToTodoConversionAndAIRunnerExecutionLifecycle() async throws {
         let captures = DefaultVoiceCaptureRepository()
         let todos = DefaultVoiceTodoRepository()

@@ -9,7 +9,7 @@ struct RecorderBackdrop: View {
         ZStack {
             AppTheme.surfacePrimary
             BackgroundAtmosphere(status: status, audioLevel: Double(audioLevel))
-                .opacity(colorScheme == .light ? 0.28 : 1)
+                .opacity(colorScheme == .light ? 0.28 : 0.10)
         }
         .ignoresSafeArea()
     }

@@ -36,12 +36,13 @@ VoxUITesting(standalone,不参与运行时依赖链)
 | Layer | 一句话职责 | tech-context | depends_on |
 |---|---|---|---|
 | VoxDomain | 纯领域模型(CoreModels, TextHistory),无外部依赖 | `Packages/VoxDomain/tech-context.md` | (无) |
+| VoxNotificationKit | 独立零业务耦合的本地通知调度与两级时间锚点习惯学习深模块 | `Packages/VoxNotificationKit/tech-context.md` | (无) |
 | VoxInfrastructure | SDK Combine/Loki 桥接 / 持久化 / 平台适配 / 偏好 | `Packages/VoxInfrastructure/tech-context.md` | VoxDomain, VoxKit(ext), LokiKit(ext) |
-| VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, VoxKit(ext), LokiKit(ext) |
+| VoxApplication | UseCases 业务编排 | `Packages/VoxApplication/tech-context.md` | VoxDomain, VoxInfrastructure, VoxNotificationKit, VoxKit(ext), LokiKit(ext) |
 | VoxPresentation | SwiftUI 视图与 ViewModel | `Packages/VoxPresentation/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxKit(ext), LokiKit(ext) |
 | VoxUITesting | 快照测试 · Claude Vision UI 评估(standalone) | `Packages/VoxUITesting/tech-context.md` | (无) |
 | VoxPocketKit | Watch 录音、传输、iPhone 摄取深模块 | `Packages/VoxPocketKit/tech-context.md` | VoxDomain |
-| VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`、`VoxPocketWatch/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxPocketKit, AppleUITesting(ext), LokiKit(ext), VoxKit(ext) |
+| VoxPocketApp | Xcode App 壳(`VoxPocket/**`、`VoxPocketWidget/**`、`VoxPocketWatch/**`):组装、入口、交付 | `VoxPocket/tech-context.md` | VoxDomain, VoxInfrastructure, VoxApplication, VoxPresentation, VoxNotificationKit, VoxPocketKit, AppleUITesting(ext), LokiKit(ext), VoxKit(ext) |
 
 > **LokiKit 和 VoxKit 是外部包**:LokiKit 源自 `LeePepe/shared-telemetry`,由 SwiftPM 按远程依赖 `exact: "0.2.0"`；VoxKit 源自 `LeePepe/VoxKit`,按 `exact: "0.1.0"`
 > 解析,不再使用仓库同级目录。不受本仓库门禁约束。各层 frontmatter 的 `depends_on` 只列**仓库内**的本地 layer;
