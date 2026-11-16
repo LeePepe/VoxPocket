@@ -407,6 +407,37 @@ final class VoxWorkspaceContractTests: XCTestCase {
         XCTAssertEqual(vm.lastCopiedBannerText, "已复制到剪贴板 · 可直接粘贴")
     }
 
+    @MainActor
+    func testEmptySpeechCaptureClearsPreviousLatestCompletedText() async throws {
+        let useCase = FakeCaptureAndTodoUseCase()
+        let editing = DefaultEditingUseCase()
+        let vm = VoxWorkspaceViewModel(
+            useCase: useCase,
+            preferencesStore: InMemoryTestPreferencesStore(),
+            defaultCaptureMode: .text,
+            editingUseCase: editing
+        )
+
+        // First capture completes with recognized text
+        vm.startCapture(mode: .text)
+        try editing.replaceAll(with: "第一段识别内容")
+        await vm.completeCapture(deviceSource: .iPhone)
+        XCTAssertEqual(vm.latestCompletedText, "第一段识别内容")
+        XCTAssertEqual(vm.captureState, .idle)
+
+        // Starting a new capture immediately clears the previous recognized text and editing buffer
+        vm.startCapture(mode: .text)
+        XCTAssertEqual(vm.latestCompletedText, "")
+        XCTAssertEqual(vm.liveTranscription, "")
+        XCTAssertEqual(editing.currentText, "")
+
+        // Completing the second capture with empty speech must NOT retain "第一段识别内容"
+        await vm.completeCapture(rawTranscript: "", refinedText: "", deviceSource: .iPhone)
+        XCTAssertEqual(vm.latestCompletedText, "")
+        XCTAssertEqual(vm.captureState, .idle)
+        XCTAssertEqual(vm.lastCopiedBannerText, "未检测到语音，按住底部麦克风重新说话。")
+    }
+
     #if os(macOS)
     @MainActor
     func testNativeMacWorkspaceRendersSharedHomeAtActualMinimumSize() async throws {
