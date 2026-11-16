@@ -248,7 +248,7 @@
 		EF7DB075D2D17AB7157AC9E6 /* golden_b_ios.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = golden_b_ios.json; sourceTree = "<group>"; };
 		F2FFC2AEF1058FC6A27344C2 /* WatchSnapshotHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSnapshotHarness.swift; sourceTree = "<group>"; };
 		FC7CDC48D28B190776C3505D /* VoxApplication */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VoxApplication; path = ../Packages/VoxApplication; sourceTree = SOURCE_ROOT; };
-		"TEMP_D1CBBB0D-AF6A-48BE-BCE1-75685BC67EC8" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_17870B89-3907-48F8-A3D5-156FF639C4AF" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -495,10 +495,10 @@
 			path = Complication;
 			sourceTree = "<group>";
 		};
-		"TEMP_3E6DAF89-FED8-4536-8650-3D30E9A43875" /* VoxPocket */ = {
+		"TEMP_710D919C-CDD3-40BB-85E9-664C738E16B3" /* VoxPocket */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_D1CBBB0D-AF6A-48BE-BCE1-75685BC67EC8" /* Config.xcconfig */,
+				"TEMP_17870B89-3907-48F8-A3D5-156FF639C4AF" /* Config.xcconfig */,
 			);
 			path = VoxPocket;
 			sourceTree = "<group>";
@@ -928,6 +928,7 @@
 				CODE_SIGN_STYLE = Manual;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWatch/Complication/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -949,7 +950,7 @@
 		};
 		489E40965BE35970213C29E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D1CBBB0D-AF6A-48BE-BCE1-75685BC67EC8" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_17870B89-3907-48F8-A3D5-156FF639C4AF" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1100,6 +1101,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = VoxPocket;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoxPocket 需要使用麦克风进行语音录入";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leepepe.voxpocket;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
@@ -1213,7 +1215,7 @@
 		};
 		C42F15964F9234EBB655F756 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D1CBBB0D-AF6A-48BE-BCE1-75685BC67EC8" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_17870B89-3907-48F8-A3D5-156FF639C4AF" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1279,6 +1281,7 @@
 				CODE_SIGN_STYLE = Manual;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = VoxPocket;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoxPocket 需要使用麦克风进行语音录入";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leepepe.voxpocket;
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
@@ -1329,6 +1332,7 @@
 			buildSettings = {
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ../VoxPocketWatch/Complication/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = VoxPocketWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
