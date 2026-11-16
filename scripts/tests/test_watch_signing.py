@@ -92,7 +92,7 @@ class WatchSigningTests(unittest.TestCase):
         self.assertEqual(profiles["com.leepepe.voxpocket"], "com.leepepe.voxpocket.example-profile")
         self.assertEqual(profiles["com.leepepe.voxpocket.widget"], "com.leepepe.voxpocket.widget.example-profile")
         self.assertEqual(profiles["com.leepepe.voxpocket.watchkitapp"], "example watch profile")
-        self.assertEqual(profiles["com.leepepe.voxpocket.watchkitapp.complication"], "example complication profile")
+        self.assertEqual(profiles["com.leepepe.voxpocket.watchkitapp.widget"], "example complication profile")
         self.assertIn(r"VOXPOCKET_WATCH_PROFILE_SPECIFIER=example\ watch\ profile", build["xcargs"])
         self.assertEqual(build["export_options"]["signingStyle"], "manual")
         self.assertEqual(build["created_bundle_ids"], [])
@@ -107,13 +107,13 @@ class WatchSigningTests(unittest.TestCase):
                 {
                     "name": "VoxPocket Watch Complication",
                     "platform": "IOS",
-                    "identifier": "com.leepepe.voxpocket.watchkitapp.complication",
+                    "identifier": "com.leepepe.voxpocket.watchkitapp.widget",
                 }
             ],
         )
 
     def test_missing_owner_watch_profile_fails_before_archive(self):
-        for missing_id in ["com.leepepe.voxpocket.watchkitapp", "com.leepepe.voxpocket.watchkitapp.complication"]:
+        for missing_id in ["com.leepepe.voxpocket.watchkitapp", "com.leepepe.voxpocket.watchkitapp.widget"]:
             with self.subTest(missing_id=missing_id):
                 result = self.run_lane("", "", missing_id)
                 self.assertNotEqual(result.returncode, 0)

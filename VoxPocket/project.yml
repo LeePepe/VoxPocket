@@ -199,7 +199,7 @@ targets:
       - sdk: SwiftUI.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.watchkitapp.complication
+        PRODUCT_BUNDLE_IDENTIFIER: com.leepepe.voxpocket.watchkitapp.widget
         PRODUCT_NAME: VoxPocketWatchComplication
         MARKETING_VERSION: "1.0"
         GENERATE_INFOPLIST_FILE: true
