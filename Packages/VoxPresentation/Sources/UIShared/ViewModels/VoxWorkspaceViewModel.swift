@@ -167,7 +167,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         } else {
             appendingTargetTodoID = nil
             effectiveMode = activePage == .todo ? .todo : mode
-            selectedCaptureMode = effectiveMode
+            if activePage != .todo {
+                selectedCaptureMode = mode
+            }
         }
         captureState = .recording(mode: effectiveMode)
         recordingElapsedSeconds = 0

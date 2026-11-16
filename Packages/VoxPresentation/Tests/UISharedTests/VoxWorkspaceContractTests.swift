@@ -351,7 +351,9 @@ final class VoxWorkspaceContractTests: XCTestCase {
 
         // Start recording on Recorder Page, then switch to Todo Page and expand a Todo before completion:
         // must respect the start-time destination (.text) and NOT append to the newly expanded Todo.
+        XCTAssertEqual(vm.selectedCaptureMode, .text)
         vm.startCaptureInPreferredMode()
+        XCTAssertEqual(vm.captureState, .recording(mode: .text))
         XCTAssertNil(vm.appendingTargetTodoID)
         vm.toggleActivePage()
         vm.toggleExpandedTodo(updatedTodo.id)
