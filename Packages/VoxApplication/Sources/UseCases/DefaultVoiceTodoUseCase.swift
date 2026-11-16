@@ -214,7 +214,8 @@ public struct DefaultVoiceTodoExtractor: VoiceTodoExtractionRunning {
 
     private func resolveSchedule(from result: AITodoDecompositionResult, now: Date) -> (Date?, String?) {
         if let relativeMinutes = result.relativeMinutes, relativeMinutes > 0 {
-            let fireDate = now.addingTimeInterval(TimeInterval(relativeMinutes * 60))
+            let clampedMinutes = min(relativeMinutes, 525_600) // 上限 365 天，防止大模型输出极端整数触发乘法溢出
+            let fireDate = now.addingTimeInterval(TimeInterval(clampedMinutes) * 60.0)
             let comps = calendar.dateComponents([.hour, .minute], from: fireDate)
             let mins = (comps.hour ?? 9) * 60 + (comps.minute ?? 0)
             let slot = HabitTimeSlot.inferSlot(fromMinutesFromMidnight: mins)
@@ -223,10 +224,11 @@ public struct DefaultVoiceTodoExtractor: VoiceTodoExtractionRunning {
 
         if let hour = result.explicitHour, (0..<24).contains(hour) {
             let minute = max(0, min(59, result.explicitMinute ?? 0))
+            let clampedDayOffset = max(0, min(result.dayOffset, 365))
             let startOfToday = calendar.startOfDay(for: now)
-            let baseDay = calendar.date(byAdding: .day, value: max(0, result.dayOffset), to: startOfToday) ?? startOfToday
+            let baseDay = calendar.date(byAdding: .day, value: clampedDayOffset, to: startOfToday) ?? startOfToday
             var target = calendar.date(byAdding: .minute, value: hour * 60 + minute, to: baseDay) ?? now.addingTimeInterval(3600)
-            if result.dayOffset == 0 && target <= now.addingTimeInterval(60) {
+            if clampedDayOffset == 0 && target <= now.addingTimeInterval(60) {
                 target = calendar.date(byAdding: .day, value: 1, to: target) ?? target.addingTimeInterval(86_400)
             }
             let inferredSlot = result.timeSlot.flatMap(HabitTimeSlot.init(rawValue:))
@@ -235,9 +237,10 @@ public struct DefaultVoiceTodoExtractor: VoiceTodoExtractionRunning {
         }
 
         if let slotRaw = result.timeSlot, let habitSlot = HabitTimeSlot(rawValue: slotRaw) {
+            let clampedDayOffset = max(0, min(result.dayOffset, 365))
             let resolved = timeAnchorLearner.resolveAnchor(
                 for: habitSlot,
-                dayOffset: max(0, result.dayOffset),
+                dayOffset: clampedDayOffset,
                 tags: result.tags,
                 now: now
             )
@@ -267,6 +270,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     private let notificationScheduler: any VoxNotificationScheduling
     private let projects: @Sendable () -> [ProjectBinding]
     private let telemetry: any TelemetryService
+    private let actionEventsTask: Task<Void, Never>?
 
     public init(
         captures: any VoiceCaptureRepository,
@@ -286,6 +290,35 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         self.notificationScheduler = notificationScheduler
         self.projects = projects
         self.telemetry = telemetry
+
+        let todosRepo = todos
+        let eventsStream = notificationScheduler.actionEvents
+        self.actionEventsTask = Task {
+            for await event in eventsStream {
+                switch event.action {
+                case .markDone:
+                    _ = try? await todosRepo.update(id: event.itemID) { current in
+                        current
+                            .withExecutionState(.done, completedAt: event.triggeredAt)
+                            .withReminder(scheduledAt: nil, timeSlot: current.timeSlot, updatedAt: event.triggeredAt)
+                    }
+                case .snooze15m, .snooze1h, .deferToNextAnchor:
+                    if let newDate = event.rescheduledFireDate {
+                        _ = try? await todosRepo.update(id: event.itemID) { current in
+                            current.withReminder(
+                                scheduledAt: newDate,
+                                timeSlot: event.slot?.rawValue ?? current.timeSlot,
+                                updatedAt: event.triggeredAt
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    deinit {
+        actionEventsTask?.cancel()
     }
 
     public var localNotificationScheduler: any VoxNotificationScheduling {

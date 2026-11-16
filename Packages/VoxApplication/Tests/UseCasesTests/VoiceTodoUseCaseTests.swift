@@ -87,6 +87,58 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         // Marking done cancels pending notification
         _ = try await useCase.markTodoDone(todoID: created.id)
         XCTAssertTrue(scheduler.pendingItems().isEmpty)
+
+        // Verify extreme relativeMinutes (Int.max) does not overflow and notification quick actions persist back to repository
+        let overflowDecomposer = DefaultOnDeviceAITodoDecomposer { _, _ in
+            """
+            {
+              "cleanTitle": "防止整数乘法溢出测试",
+              "timeSlot": "evening",
+              "dayOffset": 999999,
+              "explicitHour": null,
+              "explicitMinute": null,
+              "relativeMinutes": \(Int.max),
+              "priority": "P1",
+              "tags": ["#安全"],
+              "subtasks": []
+            }
+            """
+        }
+        let overflowExtractor = DefaultVoiceTodoExtractor(
+            aiDecomposer: overflowDecomposer,
+            timeAnchorLearner: learner,
+            calendar: cal,
+            nowProvider: { fixedNow }
+        )
+        let overflowUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: overflowExtractor,
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            notificationScheduler: scheduler
+        )
+        let overflowOutcome = try await overflowUseCase.recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: "测试大整数",
+            refinedText: "测试大整数",
+            localAudioFileName: nil,
+            durationSeconds: 1,
+            deviceSource: .iPhone
+        )
+        let overflowTodo = try XCTUnwrap(overflowOutcome.todo)
+        XCTAssertNotNil(overflowTodo.scheduledAt)
+
+        // Triggering markDone via notificationScheduler updates the persisted VoiceTodo in the repository via actionEvents stream
+        _ = try await scheduler.handleAction(
+            identifier: VoxNotificationQuickAction.markDone.rawValue,
+            itemID: overflowTodo.id,
+            slot: .evening,
+            tags: ["#安全"],
+            now: fixedNow
+        )
+        try await Task.sleep(for: .milliseconds(50))
+        let persistedAfterNotificationDone = try await todos.fetch(by: overflowTodo.id)
+        XCTAssertEqual(persistedAfterNotificationDone?.executionState, .done)
     }
 
     func testCaptureToTodoConversionAndAIRunnerExecutionLifecycle() async throws {

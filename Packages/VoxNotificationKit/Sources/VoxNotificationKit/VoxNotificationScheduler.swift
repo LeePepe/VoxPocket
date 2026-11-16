@@ -129,12 +129,57 @@ public final class InMemoryVoxNotificationCenter: VoxNotificationCentering, Send
 
 #if canImport(UserNotifications)
 /// Apple 原生 `UNUserNotificationCenter` 生产环境适配器
-public final class SystemUserNotificationCenterAdapter: VoxNotificationCentering, @unchecked Sendable {
+public final class SystemUserNotificationCenterAdapter: NSObject, VoxNotificationCentering, UNUserNotificationCenterDelegate, @unchecked Sendable {
     // Sendable: UNUserNotificationCenter.current() is thread-safe for category registration and request scheduling.
+    public typealias ActionResponseHandler = @Sendable (
+        _ identifier: String,
+        _ itemID: UUID,
+        _ slot: HabitTimeSlot?,
+        _ tags: [String]
+    ) async -> Void
+
+    private final class HandlerBox: Sendable {
+        let mutex = Mutex<ActionResponseHandler?>(nil)
+    }
+
     private let calendar: Calendar
+    private let handlerBox = HandlerBox()
 
     public init(calendar: Calendar = .current) {
         self.calendar = calendar
+        super.init()
+    }
+
+    public func installDelegate(actionHandler: @escaping ActionResponseHandler) {
+        handlerBox.mutex.withLock { $0 = actionHandler }
+        guard let center = availableCenter else { return }
+        center.delegate = self
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let actionIdentifier = response.actionIdentifier
+        let userInfo = response.notification.request.content.userInfo
+        let itemIDString = (userInfo["itemID"] as? String) ?? ""
+        let slotRaw = userInfo["slot"] as? String
+        let tags = (userInfo["tags"] as? [String]) ?? []
+        let handler = handlerBox.mutex.withLock { $0 }
+
+        guard let itemID = UUID(uuidString: itemIDString), let handler else {
+            return
+        }
+        let slot = slotRaw.flatMap(HabitTimeSlot.init(rawValue:))
+        await handler(actionIdentifier, itemID, slot, tags)
     }
 
     private var availableCenter: UNUserNotificationCenter? {
@@ -289,6 +334,19 @@ public final class VoxNotificationScheduler: VoxNotificationScheduling, Sendable
             capturedContinuation = cont
         }
         self.continuation = capturedContinuation
+
+        #if canImport(UserNotifications)
+        if let systemAdapter = self.center as? SystemUserNotificationCenterAdapter {
+            systemAdapter.installDelegate { [weak self] actionIdentifier, itemID, slot, tags in
+                _ = try? await self?.handleAction(
+                    identifier: actionIdentifier,
+                    itemID: itemID,
+                    slot: slot,
+                    tags: tags
+                )
+            }
+        }
+        #endif
     }
 
     public func registerCategories() async {

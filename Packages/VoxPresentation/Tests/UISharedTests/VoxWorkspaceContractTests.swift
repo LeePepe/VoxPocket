@@ -24,6 +24,40 @@ final class VoxWorkspaceContractTests: XCTestCase {
     }
 
     @MainActor
+    func testTodoReminderRescheduleShiftSlotAssignmentAndClearing() async throws {
+        let useCase = FakeCaptureAndTodoUseCase()
+        let vm = VoxWorkspaceViewModel(useCase: useCase)
+        let created = try await useCase.recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: "提醒我早上取快递",
+            refinedText: "取快递",
+            localAudioFileName: nil,
+            durationSeconds: 3,
+            deviceSource: .iPhone
+        )
+        let todo = try XCTUnwrap(created.todo)
+        await vm.reload()
+
+        vm.assignTodoHabitSlot(todoID: todo.id, slotRawValue: "morning")
+        try await Task.sleep(for: .milliseconds(50))
+        let afterAssign = try XCTUnwrap(vm.todos.first(where: { $0.id == todo.id }))
+        XCTAssertEqual(afterAssign.timeSlot, "morning")
+        let initialScheduled = try XCTUnwrap(afterAssign.scheduledAt)
+
+        vm.shiftTodoReminderByMinutes(todoID: todo.id, deltaMinutes: 15)
+        try await Task.sleep(for: .milliseconds(50))
+        let afterShift = try XCTUnwrap(vm.todos.first(where: { $0.id == todo.id }))
+        let shiftedScheduled = try XCTUnwrap(afterShift.scheduledAt)
+        XCTAssertEqual(shiftedScheduled.timeIntervalSince(initialScheduled), 15 * 60, accuracy: 1.0)
+
+        vm.clearTodoReminder(todoID: todo.id)
+        try await Task.sleep(for: .milliseconds(50))
+        let afterClear = try XCTUnwrap(vm.todos.first(where: { $0.id == todo.id }))
+        XCTAssertNil(afterClear.scheduledAt)
+        XCTAssertNil(afterClear.timeSlot)
+    }
+
+    @MainActor
     func testDeepLinksPreserveLegacyAndSupportCaptureModes() async {
         let router = DefaultDeepLinkRouter()
         XCTAssertEqual(router.resolve(URL(string: "voxpocket://quickRecord")!), .startRecording)
