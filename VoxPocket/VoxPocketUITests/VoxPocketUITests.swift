@@ -128,10 +128,14 @@ final class VoxPocketUITests: XCTestCase {
             let switchBtn = app.buttons["vox.nav.switch.button"]
             XCTAssertTrue(switchBtn.waitForExistence(timeout: 5))
             XCTAssertGreaterThanOrEqual(switchBtn.frame.height, 44)
+            XCTAssertFalse(app.otherElements["vox.recording.indicator"].exists)
+            XCTAssertFalse(app.otherElements["r3-feedback"].exists)
+            XCTAssertFalse(app.staticTexts["r3-feedback"].exists)
             switchBtn.tap()
 
             XCTAssertTrue(app.buttons["vox.ios.filter.all"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["vox.ios.filter.done"].exists)
+            XCTAssertFalse(app.staticTexts["点击任务置顶聚焦 · 标题与属性展示处直接点按修改"].exists)
             XCTAssertTrue(app.staticTexts["整理下周设计评审要展示的液态玻璃交互走查清单"].waitForExistence(timeout: 5))
             saveScreenshot(app, name: "todo-\(appearance)", directory: evidence)
 
@@ -140,6 +144,14 @@ final class VoxPocketUITests: XCTestCase {
             todoRow.tap()
 
             XCTAssertFalse(app.staticTexts["此刻，专注这一件。"].exists)
+            XCTAssertFalse(app.staticTexts["其余待办"].exists)
+            XCTAssertFalse(app.staticTexts["执行步骤树"].exists)
+            XCTAssertFalse(app.staticTexts["点按文字原地修改 · 右下麦克风语音直补"].exists)
+            XCTAssertFalse(app.staticTexts["按住右下麦克风继续追补"].exists)
+            XCTAssertFalse(app.buttons["vox.todo.action.linear"].exists)
+            XCTAssertFalse(app.buttons["vox.todo.action.copy"].exists)
+            XCTAssertFalse(app.otherElements["vox.todo.append.banner"].exists)
+
             let collapseBtn = app.buttons["vox.todo.collapse.button"]
             XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
             XCTAssertTrue(app.textFields["vox.todo.title.editor"].exists || app.textViews["vox.todo.title.editor"].exists)
@@ -147,12 +159,11 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertTrue(app.buttons["vox.todo.priority.pill"].exists)
             let tagsTrigger = app.buttons["vox.todo.tags.trigger"]
             XCTAssertTrue(tagsTrigger.exists)
-
-            let appendBanner = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "补充至")).firstMatch
-            XCTAssertTrue(appendBanner.waitForExistence(timeout: 5))
+            XCTAssertTrue(tagsTrigger.isHittable)
+            XCTAssertTrue(app.frame.contains(tagsTrigger.frame))
             saveScreenshot(app, name: "todo-expanded-\(appearance)", directory: evidence)
 
-            // Open historical tag picker & add-tag panel inside Top Focus Card
+            // Open historical tag picker & add-tag panel inside in-place expanded card
             tagsTrigger.tap()
             XCTAssertTrue(app.textFields["vox.todo.tag.input"].waitForExistence(timeout: 5))
             saveScreenshot(app, name: "todo-tag-picker-\(appearance)", directory: evidence)
