@@ -348,6 +348,15 @@ private struct IOSTodoSlidePageView: View {
                         },
                         onSyncLinear: {
                             viewModel.syncTodoToLinear(todo.id)
+                        },
+                        onShiftReminderMinutes: { deltaMinutes in
+                            viewModel.shiftTodoReminderByMinutes(todoID: todo.id, deltaMinutes: deltaMinutes)
+                        },
+                        onAssignReminderSlot: { slotRaw in
+                            viewModel.assignTodoHabitSlot(todoID: todo.id, slotRawValue: slotRaw)
+                        },
+                        onClearReminder: {
+                            viewModel.clearTodoReminder(todoID: todo.id)
                         }
                     )
                     .accessibilityIdentifier("vox.session.list.item")
@@ -408,6 +417,9 @@ private struct IOSTodoExpandableCard: View {
     let onUpdateSubtaskTitle: (UUID, String) -> Void
     let onAppendSubtask: (String) -> Void
     let onSyncLinear: () -> Void
+    let onShiftReminderMinutes: (Int) -> Void
+    let onAssignReminderSlot: (String) -> Void
+    let onClearReminder: () -> Void
 
     @Namespace private var cardNamespace
     @State private var draftTitle: String = ""
@@ -534,9 +546,19 @@ private struct IOSTodoExpandableCard: View {
 
                     Spacer(minLength: AppTheme.Space.xs)
 
-                    Text("今天 " + Self.timeFormatter.string(from: todo.updatedAt))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                    if let scheduledAt = todo.scheduledAt {
+                        HStack(spacing: 3) {
+                            Image(systemName: "bell.fill")
+                                .font(.caption2)
+                            Text(reminderPillText(for: scheduledAt))
+                                .font(.caption2.weight(.medium).monospacedDigit())
+                        }
+                        .foregroundStyle(Color.accentColor)
+                    } else {
+                        Text("今天 " + Self.timeFormatter.string(from: todo.updatedAt))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
                 }
                 .padding(.top, 2)
             }
@@ -672,6 +694,41 @@ private struct IOSTodoExpandableCard: View {
                 }
                 .accessibilityLabel("优先级：" + todo.priority.rawValue)
                 .accessibilityIdentifier("vox.todo.priority.pill")
+
+                Button(action: { onShiftReminderMinutes(30) }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: todo.scheduledAt == nil ? "bell" : "bell.fill")
+                            .font(.caption.weight(.bold))
+                        Text(todo.scheduledAt.map(reminderPillText(for:)) ?? "提醒")
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                    }
+                    .foregroundStyle(todo.scheduledAt == nil ? Color.secondary : Color.accentColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 32)
+                    .background(
+                        (todo.scheduledAt == nil ? Color.secondary : Color.accentColor).opacity(0.14),
+                        in: Capsule()
+                    )
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .contextMenu {
+                    Button("早上 09:00") { onAssignReminderSlot("morning") }
+                    Button("上午 10:00") { onAssignReminderSlot("forenoon") }
+                    Button("中午 12:30") { onAssignReminderSlot("noon") }
+                    Button("下午 15:00") { onAssignReminderSlot("afternoon") }
+                    Button("傍晚 18:30") { onAssignReminderSlot("evening") }
+                    Button("晚上 20:30") { onAssignReminderSlot("night") }
+                    if todo.scheduledAt != nil {
+                        Divider()
+                        Button("提前 15 分钟") { onShiftReminderMinutes(-15) }
+                        Button("延后 15 分钟") { onShiftReminderMinutes(15) }
+                        Button("延后 1 小时") { onShiftReminderMinutes(60) }
+                        Button("取消提醒", role: .destructive) { onClearReminder() }
+                    }
+                }
+                .accessibilityLabel("提醒时间：" + (todo.scheduledAt.map(reminderPillText(for:)) ?? "未设置"))
+                .accessibilityIdentifier("vox.todo.reminder.pill")
 
                 Spacer(minLength: AppTheme.Space.xs)
 
@@ -904,6 +961,18 @@ private struct IOSTodoExpandableCard: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(priorityColor(priority).opacity(0.15), in: Capsule())
+    }
+
+    private func reminderPillText(for date: Date) -> String {
+        let cal = Calendar.current
+        let timeStr = Self.timeFormatter.string(from: date)
+        if cal.isDateInToday(date) {
+            return "今天 " + timeStr
+        } else if cal.isDateInTomorrow(date) {
+            return "明天 " + timeStr
+        } else {
+            return timeStr
+        }
     }
 
     private func commitTitleIfValid() {

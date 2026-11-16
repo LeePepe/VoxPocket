@@ -17,6 +17,7 @@ let package = Package(
     dependencies: [
         .package(path: "../VoxDomain"),
         .package(path: "../VoxInfrastructure"),
+        .package(path: "../VoxNotificationKit"),
         .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0"),
         // LokiKit from the immutable shared-telemetry v0.2.0 release; tag integrity is checked by scripts/ci/fetch-external-deps.sh.
         .package(url: "https://github.com/LeePepe/shared-telemetry.git", exact: "0.2.0"),
@@ -27,6 +28,7 @@ let package = Package(
             dependencies: [
                 .product(name: "CoreModels", package: "VoxDomain"),
                 .product(name: "TextHistory", package: "VoxDomain"),
+                .product(name: "VoxNotificationKit", package: "VoxNotificationKit"),
                 .product(name: "VoxKitBridge", package: "VoxInfrastructure"),
                 .product(name: "VoxCore", package: "VoxKit"),
                 .product(name: "VoxSpeech", package: "VoxKit"),
@@ -41,6 +43,7 @@ let package = Package(
             dependencies: [
                 "UseCases",
                 .product(name: "CoreModels", package: "VoxDomain"),
+                .product(name: "VoxNotificationKit", package: "VoxNotificationKit"),
                 .product(name: "Persistence", package: "VoxInfrastructure"),
                 .product(name: "PlatformAdapters", package: "VoxInfrastructure"),
                 .product(name: "LokiKit", package: "shared-telemetry"),

@@ -2,10 +2,10 @@
 layer: VoxApplication
 role: UseCases 业务编排 —— 把领域与基础设施组装成录音/转写/精炼/会话流程
 owns: [Packages/VoxApplication/**]
-depends_on: [VoxDomain, VoxInfrastructure]
+depends_on: [VoxDomain, VoxInfrastructure, VoxNotificationKit]
 gate: {build: "swift build --package-path Packages/VoxApplication --explicit-target-dependency-import-check error", test: "swift test --package-path Packages/VoxApplication --explicit-target-dependency-import-check error"}
 red_lines:
-  - 只能依赖 VoxDomain/VoxInfrastructure(+ 外部 LokiKit、VoxKit);禁止 import VoxPresentation(宪法 II)
+  - 只能依赖 VoxDomain/VoxInfrastructure/VoxNotificationKit(+ 外部 LokiKit、VoxKit);禁止 import VoxPresentation(宪法 II)
   - 遥测事件只带指标(duration/count/source/session_id),严禁带转写/精炼文本内容(宪法 IV)
   - 共享可变状态用 Mutex<State> 守护;@MainActor 用于 UI 契约;禁止主线程阻塞(宪法 III)
   - 依赖协议而非具体类型;默认实现命名 Default*(宪法 Additional Constraints)

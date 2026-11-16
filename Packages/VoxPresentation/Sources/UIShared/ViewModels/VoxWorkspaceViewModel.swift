@@ -538,6 +538,54 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
     }
 
+    public func rescheduleTodoReminder(todoID: UUID, newDate: Date, timeSlot: String? = nil) {
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            let updated = try await useCase.rescheduleTodoReminder(todoID: todoID, newDate: newDate, timeSlot: timeSlot)
+            await reload()
+            let fmt = DateFormatter()
+            fmt.dateFormat = "HH:mm"
+            lastCopiedBannerText = "已更新提醒时间 · \(fmt.string(from: updated.scheduledAt ?? newDate)) (\(todo.title))"
+        }
+    }
+
+    public func shiftTodoReminderByMinutes(todoID: UUID, deltaMinutes: Int) {
+        guard let todo = todos.first(where: { $0.id == todoID }) else { return }
+        let baseDate = todo.scheduledAt ?? Date().addingTimeInterval(3600)
+        let newDate = baseDate.addingTimeInterval(TimeInterval(deltaMinutes * 60))
+        rescheduleTodoReminder(todoID: todoID, newDate: newDate, timeSlot: todo.timeSlot)
+    }
+
+    public func assignTodoHabitSlot(todoID: UUID, slotRawValue: String) {
+        let cal = Calendar.current
+        let now = Date()
+        let defaultMinutes: Int
+        switch slotRawValue {
+        case "morning":   defaultMinutes = 540  // 09:00
+        case "forenoon":  defaultMinutes = 600  // 10:00
+        case "noon":      defaultMinutes = 750  // 12:30
+        case "afternoon": defaultMinutes = 900  // 15:00
+        case "evening":   defaultMinutes = 1110 // 18:30
+        case "night":     defaultMinutes = 1230 // 20:30
+        default:          defaultMinutes = 540
+        }
+        let startOfToday = cal.startOfDay(for: now)
+        var target = cal.date(byAdding: .minute, value: defaultMinutes, to: startOfToday) ?? now.addingTimeInterval(3600)
+        if target <= now.addingTimeInterval(60) {
+            target = cal.date(byAdding: .day, value: 1, to: target) ?? target.addingTimeInterval(86_400)
+        }
+        rescheduleTodoReminder(todoID: todoID, newDate: target, timeSlot: slotRawValue)
+    }
+
+    public func clearTodoReminder(todoID: UUID) {
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            let updated = todo.withReminder(scheduledAt: nil, timeSlot: nil)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
     public func addTodoTag(todoID: UUID, tag: String) {
         let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }

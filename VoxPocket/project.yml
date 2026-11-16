@@ -34,6 +34,8 @@ packages:
   # 本地表现层包（提供 UIShared / PlatformUI / WidgetUI 产品）
   VoxPresentation:
     path: ../Packages/VoxPresentation
+  VoxNotificationKit:
+    path: ../Packages/VoxNotificationKit
   VoxPocketKit:
     path: ../Packages/VoxPocketKit
   # 外部 UI 测试桥接包
@@ -73,6 +75,8 @@ targets:
       - package: VoxPresentation
         product: WidgetUI
         platformFilter: iOS
+      - package: VoxNotificationKit
+        product: VoxNotificationKit
       - package: VoxPocketKit
         product: VoxPocketKit
       - target: VoxPocketWatch
