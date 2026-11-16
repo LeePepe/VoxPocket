@@ -159,6 +159,8 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertTrue(app.buttons["vox.todo.priority.pill"].exists)
             let tagsTrigger = app.buttons["vox.todo.tags.trigger"]
             XCTAssertTrue(tagsTrigger.exists)
+            XCTAssertTrue(tagsTrigger.isHittable)
+            XCTAssertTrue(app.frame.contains(tagsTrigger.frame))
             saveScreenshot(app, name: "todo-expanded-\(appearance)", directory: evidence)
 
             // Open historical tag picker & add-tag panel inside in-place expanded card

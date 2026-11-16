@@ -642,65 +642,63 @@ private struct IOSTodoExpandableCard: View {
         .accessibilityIdentifier("vox.todo.progress.badge")
     }
 
-    // Tier 2: Compact Single-Row Metadata & Tag Flow (Status · Priority · Existing Tags · + Add Tag)
+    // Tier 2: Compact Adaptive Wrapping Metadata & Tag Flow (Status · Priority · Existing Tags · + Add Tag)
     private var tierTwoCompactMetadataAndTagStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppTheme.Space.xs) {
-                Button(action: onCycleStatus) {
-                    HStack(spacing: 4) {
-                        Image(systemName: statusSymbol)
-                            .font(.caption.weight(.bold))
-                        Text(statusTitle)
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(statusColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .frame(minHeight: 34)
-                    .background(statusColor.opacity(0.14), in: Capsule())
-                }
-                .buttonStyle(AppPressableButtonStyle())
-                .contextMenu {
-                    Button("待处理") { onSelectStatus(.inbox) }
-                    Button("进行中") { onSelectStatus(.running) }
-                    Button("已完成") { onSelectStatus(.done) }
-                }
-                .accessibilityLabel("状态：" + statusTitle)
-                .accessibilityIdentifier("vox.todo.status.pill")
-
-                Button(action: onCyclePriority) {
-                    Text(todo.priority.rawValue)
-                        .font(.caption.weight(.bold).monospacedDigit())
-                        .foregroundStyle(priorityColor(todo.priority))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .frame(minHeight: 34)
-                        .background(priorityColor(todo.priority).opacity(0.14), in: Capsule())
-                }
-                .buttonStyle(AppPressableButtonStyle())
-                .contextMenu {
-                    ForEach(TodoPriority.allCases, id: \.self) { level in
-                        Button(level.rawValue) { onSelectPriority(level) }
-                    }
-                }
-                .accessibilityLabel("优先级：" + todo.priority.rawValue)
-                .accessibilityIdentifier("vox.todo.priority.pill")
-
-                ForEach(displayTags, id: \.self) { tag in
-                    activeTagPillButton(tag)
-                }
-
-                Button(action: toggleTagPicker) {
-                    Image(systemName: isTagPickerExpanded ? "chevron.up" : "plus")
+        IOSTodoWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+            Button(action: onCycleStatus) {
+                HStack(spacing: 4) {
+                    Image(systemName: statusSymbol)
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 34, height: 34)
-                        .background(Color.accentColor.opacity(0.12), in: Circle())
+                    Text(statusTitle)
+                        .font(.caption.weight(.semibold))
                 }
-                .buttonStyle(AppPressableButtonStyle())
-                .accessibilityLabel("添加或选择标签")
-                .accessibilityIdentifier("vox.todo.tags.trigger")
+                .foregroundStyle(statusColor)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .frame(minHeight: 32)
+                .background(statusColor.opacity(0.14), in: Capsule())
             }
+            .buttonStyle(AppPressableButtonStyle())
+            .contextMenu {
+                Button("待处理") { onSelectStatus(.inbox) }
+                Button("进行中") { onSelectStatus(.running) }
+                Button("已完成") { onSelectStatus(.done) }
+            }
+            .accessibilityLabel("状态：" + statusTitle)
+            .accessibilityIdentifier("vox.todo.status.pill")
+
+            Button(action: onCyclePriority) {
+                Text(todo.priority.rawValue)
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(priorityColor(todo.priority))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 32)
+                    .background(priorityColor(todo.priority).opacity(0.14), in: Capsule())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .contextMenu {
+                ForEach(TodoPriority.allCases, id: \.self) { level in
+                    Button(level.rawValue) { onSelectPriority(level) }
+                }
+            }
+            .accessibilityLabel("优先级：" + todo.priority.rawValue)
+            .accessibilityIdentifier("vox.todo.priority.pill")
+
+            ForEach(displayTags, id: \.self) { tag in
+                activeTagPillButton(tag)
+            }
+
+            Button(action: toggleTagPicker) {
+                Image(systemName: isTagPickerExpanded ? "chevron.up" : "plus")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .accessibilityLabel("添加或选择标签")
+            .accessibilityIdentifier("vox.todo.tags.trigger")
         }
     }
 
@@ -720,9 +718,9 @@ private struct IOSTodoExpandableCard: View {
             Text(tag)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 9)
                 .padding(.vertical, 6)
-                .frame(minHeight: 34)
+                .frame(minHeight: 32)
                 .background(AppTheme.surfaceElevated, in: Capsule())
         }
         .buttonStyle(.plain)
@@ -733,11 +731,9 @@ private struct IOSTodoExpandableCard: View {
     // Historical Tag Picker + Direct Add New Tag Panel
     private var historicalTagPickerPanel: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppTheme.Space.xs) {
-                    ForEach(historicalTags, id: \.self) { candidate in
-                        historicalTagCandidateButton(candidate)
-                    }
+            IOSTodoWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+                ForEach(historicalTags, id: \.self) { candidate in
+                    historicalTagCandidateButton(candidate)
                 }
             }
 
@@ -989,6 +985,55 @@ private struct IOSInPlaceSubtaskBranchRow: View {
             draftSubtaskTitle = subtask.title
         } else if trimmed != subtask.title {
             onCommitTitle(trimmed)
+        }
+    }
+}
+
+private struct IOSTodoWrappingFlowLayout: Layout {
+    var horizontalSpacing: CGFloat = 6
+    var verticalSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > 0 && currentX + size.width > maxWidth {
+                currentX = 0
+                currentY += lineHeight + verticalSpacing
+                lineHeight = 0
+            }
+            totalWidth = max(totalWidth, currentX + size.width)
+            currentX += size.width + horizontalSpacing
+            lineHeight = max(lineHeight, size.height)
+        }
+
+        return CGSize(width: proposal.width ?? totalWidth, height: currentY + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > bounds.minX && currentX + size.width > bounds.maxX {
+                currentX = bounds.minX
+                currentY += lineHeight + verticalSpacing
+                lineHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(size)
+            )
+            currentX += size.width + horizontalSpacing
+            lineHeight = max(lineHeight, size.height)
         }
     }
 }
