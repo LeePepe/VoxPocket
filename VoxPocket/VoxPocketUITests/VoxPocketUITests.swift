@@ -139,12 +139,26 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertTrue(todoRow.exists)
             todoRow.tap()
 
+            XCTAssertFalse(app.staticTexts["此刻，专注这一件。"].exists)
+            let collapseBtn = app.buttons["vox.todo.collapse.button"]
+            XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.textFields["vox.todo.title.editor"].exists || app.textViews["vox.todo.title.editor"].exists)
+            XCTAssertTrue(app.buttons["vox.todo.status.pill"].exists)
+            XCTAssertTrue(app.buttons["vox.todo.priority.pill"].exists)
+            let tagsTrigger = app.buttons["vox.todo.tags.trigger"]
+            XCTAssertTrue(tagsTrigger.exists)
+
             let appendBanner = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "补充至")).firstMatch
             XCTAssertTrue(appendBanner.waitForExistence(timeout: 5))
             saveScreenshot(app, name: "todo-expanded-\(appearance)", directory: evidence)
 
+            // Open historical tag picker & add-tag panel inside Top Focus Card
+            tagsTrigger.tap()
+            XCTAssertTrue(app.textFields["vox.todo.tag.input"].waitForExistence(timeout: 5))
+            saveScreenshot(app, name: "todo-tag-picker-\(appearance)", directory: evidence)
+
             // Collapse before filtering to done
-            todoRow.tap()
+            collapseBtn.tap()
             app.buttons["vox.ios.filter.done"].tap()
             XCTAssertTrue(app.staticTexts["把早间散步录下的播客大纲润色后发给搭档确认"].waitForExistence(timeout: 5))
 

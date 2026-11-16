@@ -65,6 +65,22 @@ final class CleanSlateModelsTests: XCTestCase {
         let encoded = try JSONEncoder().encode(reprioritized)
         let decoded = try JSONDecoder().decode(VoiceTodo.self, from: encoded)
         XCTAssertEqual(decoded, reprioritized)
+
+        let retitled = reprioritized
+            .withTitle("  Updated Top Focus Title  ")
+            .withTitle("   ")
+            .withUpdatedSubtaskTitle(subtaskID, title: "  Verify v02+v04 subtask inline edit  ")
+            .withUpdatedSubtaskTitle(subtaskID, title: "   ")
+            .withToggledTag("#iOS")
+            .withToggledTag("Podcast")
+        XCTAssertEqual(retitled.title, "Updated Top Focus Title")
+        XCTAssertEqual(retitled.subtasks[0].title, "Verify v02+v04 subtask inline edit")
+        XCTAssertEqual(retitled.tags, ["#VoxPocket", "#Glass", "#Podcast"])
+        XCTAssertEqual(retitled.withAddedTag("FourthIgnored").tags, ["#VoxPocket", "#Glass", "#Podcast"])
+
+        let retitledEncoded = try JSONEncoder().encode(retitled)
+        let retitledDecoded = try JSONDecoder().decode(VoiceTodo.self, from: retitledEncoded)
+        XCTAssertEqual(retitledDecoded, retitled)
     }
 
     func testRunnerEscapingAndArguments() {
