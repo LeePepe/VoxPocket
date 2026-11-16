@@ -60,6 +60,12 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
     }
 
     private static func invokeFoundationModels(instructions: String) async throws -> String {
+        // 在 UI 自动化测试或离线 Demo 播种中跳过端侧大模型 XPC 调用，避免 iOS Simulator FoundationModels daemon 超时阻塞主流程
+        let env = ProcessInfo.processInfo.environment
+        let args = ProcessInfo.processInfo.arguments
+        if env["VOXPOCKET_UI_TEST_HOST"] == "1" || env["VOX_DEMO_SEED"] == "1" || env["XCTestConfigurationFilePath"] != nil || args.contains("--vox-ui-test-host") {
+            throw NSError(domain: "DefaultOnDeviceAITodoDecomposer", code: 3, userInfo: [NSLocalizedDescriptionKey: "Skipped in UI test / demo mode"])
+        }
         #if canImport(FoundationModels)
         guard case .available = SystemLanguageModel.default.availability else {
             throw NSError(domain: "DefaultOnDeviceAITodoDecomposer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence unavailable"])

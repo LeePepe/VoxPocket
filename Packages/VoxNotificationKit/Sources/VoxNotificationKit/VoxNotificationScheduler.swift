@@ -138,10 +138,13 @@ public final class SystemUserNotificationCenterAdapter: VoxNotificationCentering
     }
 
     private var availableCenter: UNUserNotificationCenter? {
-        // 仅在具备有效 App Bundle (.app) 宿主中调用 UNUserNotificationCenter.current()，防止命令行 xctest / swift test 抛出 NSInternalInconsistencyException
+        // 仅在具备有效 App Bundle (.app) 宿主中调用 UNUserNotificationCenter.current()，且在 UI 自动化测试或命令行 xctest 中跳过
+        let env = ProcessInfo.processInfo.environment
         guard Bundle.main.bundleIdentifier != nil,
               Bundle.main.bundleURL.pathExtension == "app",
-              ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+              env["XCTestConfigurationFilePath"] == nil,
+              env["VOXPOCKET_UI_TEST_HOST"] != "1",
+              env["VOX_DEMO_SEED"] != "1" else {
             return nil
         }
         return UNUserNotificationCenter.current()
@@ -263,11 +266,14 @@ public final class VoxNotificationScheduler: VoxNotificationScheduling, Sendable
     ) {
         self.timeAnchorLearner = timeAnchorLearner
         #if canImport(UserNotifications)
+        let env = ProcessInfo.processInfo.environment
         if let center {
             self.center = center
         } else if Bundle.main.bundleIdentifier != nil,
                   Bundle.main.bundleURL.pathExtension == "app",
-                  ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+                  env["XCTestConfigurationFilePath"] == nil,
+                  env["VOXPOCKET_UI_TEST_HOST"] != "1",
+                  env["VOX_DEMO_SEED"] != "1" {
             self.center = SystemUserNotificationCenterAdapter(calendar: calendar)
         } else {
             self.center = InMemoryVoxNotificationCenter()

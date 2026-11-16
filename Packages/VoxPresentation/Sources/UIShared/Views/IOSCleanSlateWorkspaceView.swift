@@ -359,7 +359,6 @@ private struct IOSTodoSlidePageView: View {
                             viewModel.clearTodoReminder(todoID: todo.id)
                         }
                     )
-                    .accessibilityIdentifier("vox.session.list.item")
                 }
             }
             .accessibilityIdentifier("vox.session.list")
@@ -421,7 +420,6 @@ private struct IOSTodoExpandableCard: View {
     let onAssignReminderSlot: (String) -> Void
     let onClearReminder: () -> Void
 
-    @Namespace private var cardNamespace
     @State private var draftTitle: String = ""
     @State private var isTagPickerExpanded: Bool = (ProcessInfo.processInfo.environment["VOX_DEMO_OPEN_TAG_PICKER"] == "1")
     @State private var newTagText: String = ""
@@ -461,17 +459,24 @@ private struct IOSTodoExpandableCard: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
+            unifiedTitleHeaderRow
+
+            unifiedMetadataStatusPriorityTimestampRow
+
+            unifiedDedicatedTagRow
+
+            if isTagPickerExpanded {
+                inlineTagTrayPanel
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             if isExpanded {
-                expandedThreeTierContent
-                    .padding(AppTheme.Space.lg)
-                    .transition(.opacity)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("vox.todo.expanded.detail")
-            } else {
-                collapsedRowContent
+                Divider()
+                tierThreeCleanSubtaskList
             }
         }
+        .padding(AppTheme.Space.lg)
         .background(
             AppTheme.surfaceCard,
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
@@ -503,121 +508,52 @@ private struct IOSTodoExpandableCard: View {
         }
     }
 
-    // Collapsed State Row
-    private var collapsedRowContent: some View {
+    // Row 1: Unified Title Header (Editable TextField when expanded, tappable title button when collapsed + Progress + Collapse button)
+    private var unifiedTitleHeaderRow: some View {
         HStack(alignment: .top, spacing: AppTheme.Space.sm) {
-            Button(action: onToggleDone) {
-                Image(systemName: statusSymbol)
-                    .font(.title3)
-                    .foregroundStyle(collapsedStatusColor)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .matchedGeometryEffect(id: "todo-status-\(todo.id)", in: cardNamespace)
-            .accessibilityLabel(isDone ? "已完成" : "待处理")
-            .accessibilityIdentifier("vox.todo.status." + todo.id.uuidString)
-
-            VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
-                HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.xs) {
-                    priorityBadge(todo.priority)
-                        .matchedGeometryEffect(id: "todo-priority-\(todo.id)", in: cardNamespace)
-
+            if isExpanded {
+                TextField("待办标题", text: $draftTitle, axis: .vertical)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .focused($isTitleFocused)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        commitTitleIfValid()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel("待办标题")
+                    .accessibilityIdentifier("vox.todo.title.editor")
+            } else {
+                Button(action: onToggleExpand) {
                     Text(todo.title)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(isDone ? .secondary : .primary)
                         .strikethrough(isDone, color: .secondary)
                         .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .matchedGeometryEffect(id: "todo-title-\(todo.id)", in: cardNamespace)
+                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
-
-                HStack(spacing: AppTheme.Space.xs) {
-                    ForEach(displayTags, id: \.self) { tag in
-                        collapsedTagChip(tag)
-                            .matchedGeometryEffect(id: "todo-tag-\(todo.id)-\(tag)", in: cardNamespace)
-                    }
-
-                    if !todo.subtasks.isEmpty {
-                        Text(String(completedSubtaskCount) + "/" + String(totalSubtaskCount))
-                            .font(.caption2.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: AppTheme.Space.xs)
-
-                    if let scheduledAt = todo.scheduledAt {
-                        HStack(spacing: 3) {
-                            Image(systemName: "bell.fill")
-                                .font(.caption2)
-                            Text(reminderPillText(for: scheduledAt))
-                                .font(.caption2.weight(.medium).monospacedDigit())
-                        }
-                        .foregroundStyle(Color.accentColor)
-                    } else {
-                        Text("今天 " + Self.timeFormatter.string(from: todo.updatedAt))
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .padding(.top, 2)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("vox.todo.row." + todo.id.uuidString)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, AppTheme.Space.md)
-            .padding(.trailing, AppTheme.Space.md)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onToggleExpand)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("vox.todo.row." + todo.id.uuidString)
-        }
-        .padding(.leading, AppTheme.Space.xs)
-    }
-
-    // Expanded v04 3-Tier Content
-    private var expandedThreeTierContent: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.md) {
-            tierOneFocalHeader
-
-            tierTwoCompactMetadataAndTagStrip
-
-            Divider()
-
-            tierThreeCleanSubtaskList
-        }
-    }
-
-    // Tier 1: Primary Focal Header (In-Place Editable Title + Progress & Collapse Chevron)
-    private var tierOneFocalHeader: some View {
-        HStack(alignment: .top, spacing: AppTheme.Space.md) {
-            TextField("待办标题", text: $draftTitle, axis: .vertical)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.primary)
-                .focused($isTitleFocused)
-                .submitLabel(.done)
-                .onSubmit {
-                    commitTitleIfValid()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .matchedGeometryEffect(id: "todo-title-\(todo.id)", in: cardNamespace)
-                .accessibilityLabel("待办标题")
-                .accessibilityIdentifier("vox.todo.title.editor")
 
             HStack(spacing: AppTheme.Space.xs) {
                 progressRingBadge
 
-                Button(action: onToggleExpand) {
-                    Image(systemName: "chevron.up")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 26, height: 26)
-                        .background(AppTheme.surfaceElevated, in: Circle())
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                if isExpanded {
+                    Button(action: onToggleExpand) {
+                        Image(systemName: "chevron.up")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 26, height: 26)
+                            .background(AppTheme.surfaceElevated, in: Circle())
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(AppPressableButtonStyle())
+                    .accessibilityLabel("收起待办详情")
+                    .accessibilityIdentifier("vox.todo.collapse.button")
                 }
-                .buttonStyle(AppPressableButtonStyle())
-                .accessibilityLabel("收起待办详情")
-                .accessibilityIdentifier("vox.todo.collapse.button")
             }
         }
     }
@@ -626,86 +562,90 @@ private struct IOSTodoExpandableCard: View {
         HStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .stroke(Color.secondary.opacity(0.22), lineWidth: 3)
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 2.5)
                 Circle()
                     .trim(from: 0, to: progressFraction)
                     .stroke(
                         Color.accentColor,
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
             }
-            .frame(width: 18, height: 18)
+            .frame(width: 15, height: 15)
 
             Text(String(completedSubtaskCount) + "/" + String(totalSubtaskCount))
-                .font(.caption.weight(.bold).monospacedDigit())
-                .foregroundStyle(.primary)
+                .font(.caption2.weight(.bold).monospacedDigit())
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(AppTheme.surfaceElevated, in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("已完成 \(completedSubtaskCount) / 共 \(totalSubtaskCount) 步")
         .accessibilityIdentifier("vox.todo.progress.badge")
     }
 
-    // Tier 2: Two-Row Metadata & Tag Layout (Row 2A: Round Status/Priority + Linear; Row 2B: Dedicated Squared-Off Tag Row)
-    private var tierTwoCompactMetadataAndTagStrip: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
-            HStack(spacing: AppTheme.Space.sm) {
-                Button(action: onCycleStatus) {
-                    HStack(spacing: 4) {
-                        Image(systemName: statusSymbol)
-                            .font(.caption.weight(.bold))
-                        Text(statusTitle)
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(statusColor)
+    // Row 2: Persistent Unified Status · Priority · Creation Timestamp · Reminder · Linear Row (Zero shape jump between collapsed & expanded!)
+    private var unifiedMetadataStatusPriorityTimestampRow: some View {
+        HStack(spacing: 6) {
+            Button(action: isExpanded ? onCycleStatus : onToggleDone) {
+                HStack(spacing: 4) {
+                    Image(systemName: statusSymbol)
+                        .font(.caption.weight(.bold))
+                    Text(statusTitle)
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(statusColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(minHeight: 32)
+                .background(statusColor.opacity(0.15), in: Capsule())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .contextMenu {
+                Button("待处理") { onSelectStatus(.inbox) }
+                Button("进行中") { onSelectStatus(.running) }
+                Button("已完成") { onSelectStatus(.done) }
+            }
+            .accessibilityLabel("状态：" + statusTitle)
+            .accessibilityIdentifier(isExpanded ? "vox.todo.status.pill" : ("vox.todo.status." + todo.id.uuidString))
+
+            Button(action: onCyclePriority) {
+                Text(todo.priority.rawValue)
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(priorityColor(todo.priority))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .frame(minHeight: 32)
-                    .background(statusColor.opacity(0.15), in: Capsule())
+                    .background(priorityColor(todo.priority).opacity(0.15), in: Capsule())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .contextMenu {
+                ForEach(TodoPriority.allCases, id: \.self) { level in
+                    Button(level.rawValue) { onSelectPriority(level) }
                 }
-                .buttonStyle(AppPressableButtonStyle())
-                .matchedGeometryEffect(id: "todo-status-\(todo.id)", in: cardNamespace)
-                .contextMenu {
-                    Button("待处理") { onSelectStatus(.inbox) }
-                    Button("进行中") { onSelectStatus(.running) }
-                    Button("已完成") { onSelectStatus(.done) }
-                }
-                .accessibilityLabel("状态：" + statusTitle)
-                .accessibilityIdentifier("vox.todo.status.pill")
+            }
+            .accessibilityLabel("优先级：" + todo.priority.rawValue)
+            .accessibilityIdentifier("vox.todo.priority.pill")
 
-                Button(action: onCyclePriority) {
-                    Text(todo.priority.rawValue)
-                        .font(.caption.weight(.bold).monospacedDigit())
-                        .foregroundStyle(priorityColor(todo.priority))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .frame(minHeight: 32)
-                        .background(priorityColor(todo.priority).opacity(0.15), in: Capsule())
-                }
-                .buttonStyle(AppPressableButtonStyle())
-                .matchedGeometryEffect(id: "todo-priority-\(todo.id)", in: cardNamespace)
-                .contextMenu {
-                    ForEach(TodoPriority.allCases, id: \.self) { level in
-                        Button(level.rawValue) { onSelectPriority(level) }
-                    }
-                }
-                .accessibilityLabel("优先级：" + todo.priority.rawValue)
-                .accessibilityIdentifier("vox.todo.priority.pill")
+            // Persistent Creation Timestamp (always visible in both collapsed and expanded states!)
+            Text("今天 " + Self.timeFormatter.string(from: todo.updatedAt))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("vox.todo.timestamp")
 
+            if isExpanded || todo.scheduledAt != nil {
                 Button(action: { onShiftReminderMinutes(30) }) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Image(systemName: todo.scheduledAt == nil ? "bell" : "bell.fill")
-                            .font(.caption.weight(.bold))
+                            .font(.caption2.weight(.bold))
                         Text(todo.scheduledAt.map(reminderPillText(for:)) ?? "提醒")
-                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .font(.caption2.weight(.semibold).monospacedDigit())
                     }
                     .foregroundStyle(todo.scheduledAt == nil ? Color.secondary : Color.accentColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .frame(minHeight: 32)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .frame(minHeight: 28)
                     .background(
                         (todo.scheduledAt == nil ? Color.secondary : Color.accentColor).opacity(0.14),
                         in: Capsule()
@@ -729,9 +669,11 @@ private struct IOSTodoExpandableCard: View {
                 }
                 .accessibilityLabel("提醒时间：" + (todo.scheduledAt.map(reminderPillText(for:)) ?? "未设置"))
                 .accessibilityIdentifier("vox.todo.reminder.pill")
+            }
 
-                Spacer(minLength: AppTheme.Space.xs)
+            Spacer(minLength: AppTheme.Space.xs)
 
+            if isExpanded {
                 Button(action: onSyncLinear) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.up.right.circle")
@@ -749,37 +691,33 @@ private struct IOSTodoExpandableCard: View {
                 .accessibilityLabel("同步到 Linear")
                 .accessibilityIdentifier("vox.todo.action.linear")
             }
+        }
+    }
 
-            IOSTodoWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
-                ForEach(displayTags, id: \.self) { tag in
-                    activeTagPillButton(tag)
-                        .matchedGeometryEffect(id: "todo-tag-\(todo.id)-\(tag)", in: cardNamespace)
-                }
-
-                Button(action: toggleTagPicker) {
-                    Image(systemName: isTagPickerExpanded ? "chevron.up" : "plus")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            AppTheme.surfaceElevated,
-                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
-                        }
-                }
-                .buttonStyle(AppPressableButtonStyle())
-                .accessibilityLabel("添加或选择标签")
-                .accessibilityIdentifier("vox.todo.tags.trigger")
-                .popover(isPresented: $isTagPickerExpanded, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-                    historicalTagPickerPanel
-                        .frame(minWidth: 260, maxWidth: 310)
-                        .padding(AppTheme.Space.md)
-                        .presentationCompactAdaptation(.popover)
-                }
+    // Row 3: Persistent Dedicated Tag Row + Always-Present '+' Button (Zero '+' pop-in jump!)
+    private var unifiedDedicatedTagRow: some View {
+        IOSTodoWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+            ForEach(displayTags, id: \.self) { tag in
+                activeTagPillButton(tag)
             }
+
+            Button(action: toggleTagPicker) {
+                Image(systemName: isTagPickerExpanded ? "chevron.up" : "plus")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        AppTheme.surfaceElevated,
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
+                    }
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .accessibilityLabel("添加或选择标签")
+            .accessibilityIdentifier("vox.todo.tags.trigger")
         }
     }
 
@@ -787,22 +725,6 @@ private struct IOSTodoExpandableCard: View {
         withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
             isTagPickerExpanded.toggle()
         }
-    }
-
-    private func collapsedTagChip(_ tag: String) -> some View {
-        Text(tag)
-            .font(.caption2.weight(.medium).monospacedDigit())
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(
-                AppTheme.surfaceElevated,
-                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
-            }
     }
 
     private func activeTagPillButton(_ tag: String) -> some View {
@@ -832,22 +754,23 @@ private struct IOSTodoExpandableCard: View {
         .accessibilityIdentifier("vox.todo.tag.active." + tag)
     }
 
-    // Historical Tag Picker + Direct Add New Tag Panel
-    private var historicalTagPickerPanel: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
+    // Row 4A: Clean Single-Layer Inline Tag Tray (Replaces the clipped double-box .popover)
+    private var inlineTagTrayPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
             IOSTodoWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
                 ForEach(historicalTags, id: \.self) { candidate in
                     historicalTagCandidateButton(candidate)
                 }
             }
 
-            HStack(spacing: AppTheme.Space.sm) {
-                TextField("新标签", text: $newTagText)
+            HStack(spacing: 6) {
+                Text("#")
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                TextField("添加新标签…", text: $newTagText)
                     .font(.caption)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(AppTheme.surfacePrimary, in: Capsule())
                     .submitLabel(.done)
                     .onSubmit {
                         submitNewTag()
@@ -855,24 +778,36 @@ private struct IOSTodoExpandableCard: View {
                     .accessibilityIdentifier("vox.todo.tag.input")
 
                 Button(action: submitNewTag) {
-                    Text("添加")
-                        .font(.caption.weight(.semibold))
+                    Image(systemName: "plus.circle.fill")
+                        .font(.body)
                         .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .frame(minHeight: 34)
-                        .background(Color.accentColor.opacity(0.14), in: Capsule())
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityIdentifier("vox.todo.tag.add.button")
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                AppTheme.surfacePrimary,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.20), lineWidth: 0.8)
+            }
         }
-        .padding(AppTheme.Space.sm)
+        .padding(10)
         .background(
-            AppTheme.surfaceElevated,
-            in: RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+            AppTheme.surfacePrimary.opacity(0.65),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.18), lineWidth: 0.8)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("vox.todo.tags.picker")
     }
@@ -881,21 +816,26 @@ private struct IOSTodoExpandableCard: View {
         let isSelected = todo.tags.contains(candidate)
         return Button(action: { onToggleTag(candidate) }) {
             HStack(spacing: 4) {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.caption2.weight(.bold))
-                }
+                Image(systemName: isSelected ? "checkmark" : "plus")
+                    .font(.caption2.weight(.bold))
                 Text(candidate)
-                    .font(.caption.weight(isSelected ? .semibold : .regular))
+                    .font(.caption.weight(isSelected ? .semibold : .regular).monospacedDigit())
             }
-            .foregroundStyle(isSelected ? Color.accentColor : .primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .frame(minHeight: 34)
+            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .frame(minHeight: 28)
             .background(
-                isSelected ? Color.accentColor.opacity(0.16) : AppTheme.surfacePrimary,
-                in: Capsule()
+                isSelected ? Color.accentColor.opacity(0.14) : AppTheme.surfaceElevated,
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? Color.accentColor.opacity(0.40) : Color.secondary.opacity(0.22),
+                        lineWidth: 0.8
+                    )
+            }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("vox.todo.tag.option." + candidate)

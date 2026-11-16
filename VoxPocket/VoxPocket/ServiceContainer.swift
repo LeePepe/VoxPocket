@@ -188,7 +188,13 @@ public final class ServiceContainer: ObservableObject {
         aiRunnerService = DefaultAIRunnerExecutionService()
         let habitFileURL = storageDirectory?.appendingPathComponent("time-anchor-habits.json", isDirectory: false)
         let habitLearner = AdaptiveTimeAnchorLearner(store: FileHabitTimeAnchorStore(fileURL: habitFileURL))
-        let localNotificationScheduler = VoxNotificationScheduler(timeAnchorLearner: habitLearner)
+        let isUITestHost = environment[Self.uiTestHostEnvironmentKey] == "1"
+            || processArguments.contains("--vox-ui-test-host")
+            || environment["VOX_DEMO_SEED"] == "1"
+        let localNotificationScheduler = VoxNotificationScheduler(
+            timeAnchorLearner: habitLearner,
+            center: isUITestHost ? InMemoryVoxNotificationCenter() : nil
+        )
         timeAnchorLearner = habitLearner
         notificationScheduler = localNotificationScheduler
         let captureTodoUseCase = DefaultVoiceCaptureAndTodoUseCase(
@@ -200,8 +206,10 @@ public final class ServiceContainer: ObservableObject {
             telemetry: telemetryService
         )
         voiceCaptureAndTodoUseCase = captureTodoUseCase
-        Task {
-            await localNotificationScheduler.registerCategories()
+        if !isUITestHost {
+            Task {
+                await localNotificationScheduler.registerCategories()
+            }
         }
         let productTelemetryInstrumentation = self.productTelemetryInstrumentation!
         sessionUseCase = ProxySessionUseCase(
