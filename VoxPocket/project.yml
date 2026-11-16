@@ -148,6 +148,7 @@ targets:
     info:
       path: ../VoxPocketWatch/Info.plist
       properties:
+        CFBundleDisplayName: VoxPocket
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleURLTypes:
           - CFBundleURLSchemes: [voxpocket-watch]
@@ -167,6 +168,7 @@ targets:
         PRODUCT_NAME: VoxPocketWatch
         MARKETING_VERSION: "1.0"
         GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_CFBundleDisplayName: VoxPocket
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.leepepe.voxpocket
         INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp: true
@@ -187,6 +189,7 @@ targets:
     info:
       path: ../VoxPocketWatch/Complication/Info.plist
       properties:
+        CFBundleDisplayName: VoxPocketWidget
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
@@ -203,6 +206,7 @@ targets:
         PRODUCT_NAME: VoxPocketWatchComplication
         MARKETING_VERSION: "1.0"
         GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_CFBundleDisplayName: VoxPocketWidget
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         SKIP_INSTALL: true
         WATCHOS_DEPLOYMENT_TARGET: "26.0"
