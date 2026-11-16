@@ -15,6 +15,8 @@ public protocol VoxWorkspaceViewState: AnyObject, ObservableObject {
     var selectedProjectFilter: String? { get set }
     var sortOrder: WorkspaceSortOrder { get set }
     var selectedSidebarSection: WorkspaceSidebarSection { get set }
+    var activePage: WorkspacePage { get set }
+    var expandedTodoID: UUID? { get set }
     var selectedTodoID: UUID? { get set }
     var selectedCaptureID: UUID? { get set }
     var filteredTodos: [VoiceTodo] { get }

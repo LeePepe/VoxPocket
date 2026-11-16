@@ -39,6 +39,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     @Published public var selectedProjectFilter: String?
     @Published public var sortOrder: WorkspaceSortOrder = .newestFirst
     @Published public var selectedSidebarSection: WorkspaceSidebarSection = .todoAll { didSet { applySidebarSelection(selectedSidebarSection) } }
+    @Published public var activePage: WorkspacePage = .recorder
+    @Published public var expandedTodoID: UUID?
+    @Published public private(set) var appendingTargetTodoID: UUID?
     @Published public var selectedTodoID: UUID?
     @Published public var selectedCaptureID: UUID?
 
@@ -84,6 +87,32 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
 
     public func clearSearchPreservingFilters() { searchQuery = "" }
     public func dismissReceiptBanner() { lastCopiedBannerText = nil }
+    public var expandedTodo: VoiceTodo? {
+        guard let expandedTodoID else { return nil }
+        return todos.first(where: { $0.id == expandedTodoID })
+    }
+    public var appendingTargetTodoTitle: String? {
+        if let appendingTargetTodoID, let target = todos.first(where: { $0.id == appendingTargetTodoID }) {
+            return target.title
+        }
+        if activePage == .todo, let expanded = expandedTodo {
+            return expanded.title
+        }
+        return nil
+    }
+    public func toggleActivePage() {
+        activePage = (activePage == .recorder) ? .todo : .recorder
+    }
+    public func switchToPage(_ page: WorkspacePage) {
+        activePage = page
+    }
+    public func toggleExpandedTodo(_ todoID: UUID) {
+        if expandedTodoID == todoID {
+            expandedTodoID = nil
+        } else {
+            expandedTodoID = todoID
+        }
+    }
     public var isRecordingActive: Bool { if case .recording = captureState { return true }; return false }
     public var recorderStatus: RecorderStatus {
         switch captureState {
@@ -115,7 +144,11 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     }
 
     public func startCaptureInPreferredMode() {
-        startCapture(mode: selectedCaptureMode)
+        if activePage == .todo {
+            startCapture(mode: .todo)
+        } else {
+            startCapture(mode: selectedCaptureMode)
+        }
     }
 
     public func startCaptureAndWait() async {
@@ -127,18 +160,30 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         guard !isRecordingActive, !isProcessingCapture, !isCompletingCapture, captureStartTask == nil else { return }
         let generation = UUID()
         captureGeneration = generation
-        selectedCaptureMode = mode
-        captureState = .recording(mode: mode)
+        let effectiveMode: CaptureMode
+        if activePage == .todo, let expandedTodoID, todos.contains(where: { $0.id == expandedTodoID }) {
+            appendingTargetTodoID = expandedTodoID
+            effectiveMode = .text
+        } else {
+            appendingTargetTodoID = nil
+            effectiveMode = activePage == .todo ? .todo : mode
+            selectedCaptureMode = effectiveMode
+        }
+        captureState = .recording(mode: effectiveMode)
         recordingElapsedSeconds = 0
         lastCopiedBannerText = nil
         liveTranscription = ""
         streamingRefinedText = ""
-        NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingStarted"), object: nil, userInfo: ["mode": mode.rawValue])
+        NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingStarted"), object: nil, userInfo: ["mode": effectiveMode.rawValue])
         startElapsedTimer()
         try? editingUseCase?.replaceAll(with: "")
         transcriptionUseCase?.clearLiveText()
         if isDemoRecordingEnabled {
-            liveTranscription = "把刚才散步想到的播客开场白记一下，先从一个深夜收到听众来信的故事切入"
+            if appendingTargetTodoID != nil {
+                liveTranscription = "补充子任务：核对双按钮极简底栏在降低透明度模式下的对比度"
+            } else {
+                liveTranscription = "把刚才散步想到的播客开场白记一下，先从一个深夜收到听众来信的故事切入"
+            }
             audioLevel = 0.72
             return
         }
@@ -155,6 +200,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             } catch {
                 guard captureGeneration == generation else { return false }
                 stopElapsedTimer()
+                appendingTargetTodoID = nil
                 captureState = .failed(stage: .recording, reason: error.localizedDescription)
                 NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
                 return false
@@ -170,6 +216,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             recordingUseCase?.cancelRecording()
             transcriptionUseCase?.clearLiveText()
         }
+        appendingTargetTodoID = nil
         liveTranscription = ""
         streamingRefinedText = ""
         captureState = .idle
@@ -225,7 +272,11 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             }
             var refined = recorded?.refinedText ?? refinedText
             if isDemoRecordingEnabled && refined.isEmpty {
-                refined = "播客开场灵感：从一封深夜收到的听众来信切入，顺势引出本期关于「慢下来思考」的核心主题。"
+                if appendingTargetTodoID != nil {
+                    refined = "核对双按钮极简底栏在降低透明度模式下的对比度"
+                } else {
+                    refined = "播客开场灵感：从一封深夜收到的听众来信切入，顺势引出本期关于「慢下来思考」的核心主题。"
+                }
             }
             guard captureGeneration == generation else { return }
             captureState = .refining(mode: mode)
@@ -238,6 +289,23 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             guard captureGeneration == generation else { return }
             let audio = recorded?.localAudioFileName ?? localAudioFileName
             let duration = recorded?.durationSeconds ?? stoppedDuration
+            let targetAppendID = appendingTargetTodoID ?? (activePage == .todo ? expandedTodoID : nil)
+            appendingTargetTodoID = nil
+            if let targetAppendID, todos.contains(where: { $0.id == targetAppendID }) {
+                let appended = try await appendVoiceCaptureToTodo(
+                    targetAppendID,
+                    subtaskTitle: refined.isEmpty ? raw : refined,
+                    rawTranscript: raw,
+                    localAudioFileName: audio,
+                    durationSeconds: duration,
+                    deviceSource: deviceSource
+                )
+                latestCompletedText = (refined.isEmpty ? raw : refined).trimmingCharacters(in: .whitespacesAndNewlines)
+                lastCopiedBannerText = "已补充至待办 · \(appended.title)"
+                captureState = .completed
+                captureState = .idle
+                return
+            }
             let outcome = try await useCase.recordCompletedCapture(mode: mode, rawTranscript: raw, refinedText: refined, localAudioFileName: audio, durationSeconds: duration, deviceSource: deviceSource)
             await reload()
             let finalCopyText = (outcome.capture.refinedText.isEmpty ? outcome.capture.rawTranscript : outcome.capture.refinedText).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -254,7 +322,81 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             latestCompletedText = finalCopyText
             captureState = .completed
             captureState = .idle
-        } catch { captureState = .failed(stage: .ai, reason: error.localizedDescription) }
+        } catch {
+            appendingTargetTodoID = nil
+            captureState = .failed(stage: .ai, reason: error.localizedDescription)
+        }
+    }
+
+    @discardableResult
+    public func appendVoiceCaptureToTodo(
+        _ todoID: UUID,
+        subtaskTitle: String,
+        rawTranscript: String = "",
+        localAudioFileName: String? = nil,
+        durationSeconds: TimeInterval = 0,
+        deviceSource: DeviceSource = .iPhone
+    ) async throws -> VoiceTodo {
+        let cleaned = subtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveRaw = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleaned : rawTranscript
+        _ = try await useCase.recordCompletedCapture(
+            mode: .text,
+            rawTranscript: effectiveRaw,
+            refinedText: cleaned,
+            localAudioFileName: localAudioFileName,
+            durationSeconds: durationSeconds,
+            deviceSource: deviceSource
+        )
+        guard let current = todos.first(where: { $0.id == todoID }) else {
+            await reload()
+            guard let reloaded = todos.first(where: { $0.id == todoID }) else {
+                throw VoiceTodoUseCaseError.todoNotFound
+            }
+            let updated = reloaded.withAppendedSubtask(cleaned)
+            let saved = try await useCase.updateTodo(updated)
+            await reload()
+            lastCopiedBannerText = "已补充至待办 · \(saved.title)"
+            return saved
+        }
+        let updated = current.withAppendedSubtask(cleaned)
+        let saved = try await useCase.updateTodo(updated)
+        await reload()
+        lastCopiedBannerText = "已补充至待办 · \(saved.title)"
+        return saved
+    }
+
+    public func toggleTodoSubtask(todoID: UUID, subtaskID: UUID) {
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            let updated = todo.withToggledSubtask(subtaskID)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
+    public func updateTodoPriority(todoID: UUID, priority: TodoPriority) {
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            let updated = todo.withPriority(priority)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
+    public func copyTodoContent(_ todo: VoiceTodo) {
+        let subtaskLines = todo.subtasks.map { "- [\($0.isCompleted ? "x" : " ")] \($0.title)" }.joined(separator: "\n")
+        let body = subtaskLines.isEmpty ? todo.title : "\(todo.title)\n\(subtaskLines)"
+        onCopyTextToClipboard?(body)
+        lastCopiedBannerText = "已复制待办 · \(todo.title)"
+    }
+
+    public func syncTodoToLinear(_ todoID: UUID) {
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            let synced = try await useCase.syncTodoToExternal(todoID: todoID)
+            await reload()
+            lastCopiedBannerText = "已同步 Linear · \(synced.externalSync?.externalID ?? todo.title)"
+        }
     }
 
     public func toggleTodoDone(_ todoID: UUID) {
@@ -320,10 +462,58 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         await reloadTask?.value
         await reload()
         guard todos.isEmpty && captures.isEmpty else {
+            if !todos.contains(where: { $0.title.contains("整理下周设计评审") }) {
+                let first = try? await useCase.recordCompletedCapture(
+                    mode: .todo,
+                    rawTranscript: "整理下周设计评审要展示的液态玻璃交互走查清单",
+                    refinedText: "整理下周设计评审要展示的液态玻璃交互走查清单",
+                    localAudioFileName: nil,
+                    durationSeconds: 6,
+                    deviceSource: .iPhone
+                )
+                if let firstTodo = first?.todo {
+                    let enrichedFirst = firstTodo
+                        .withPriority(.p0)
+                        .withTags(["#VoxPocket", "#iOS", "#Glass"])
+                        .withAppendedSubtask("录制录音页默认空态与实时转写声波走查")
+                        .withAppendedSubtask("验证左下切换与右下录音双按钮侧滑手势")
+                    _ = try? await useCase.updateTodo(enrichedFirst)
+                }
+            }
+            if !todos.contains(where: { $0.title.contains("把早间散步录下的播客大纲") }) {
+                let second = try? await useCase.recordCompletedCapture(
+                    mode: .todo,
+                    rawTranscript: "把早间散步录下的播客大纲润色后发给搭档确认",
+                    refinedText: "把早间散步录下的播客大纲润色后发给搭档确认",
+                    localAudioFileName: nil,
+                    durationSeconds: 8,
+                    deviceSource: .iPhone
+                )
+                if let secondTodo = second?.todo {
+                    let enrichedSecond = secondTodo
+                        .withPriority(.p1)
+                        .withTags(["#Podcast", "#AI"])
+                        .withAppendedSubtask("补充听众深夜来信的开场引子")
+                    _ = try? await useCase.updateTodo(enrichedSecond)
+                    _ = try? await useCase.markTodoDone(todoID: secondTodo.id)
+                }
+            }
+            if !captures.contains(where: { $0.refinedText.contains("好的工具应当像空气一样安静") }) {
+                _ = try? await useCase.recordCompletedCapture(
+                    mode: .text,
+                    rawTranscript: "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。",
+                    refinedText: "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。",
+                    localAudioFileName: nil,
+                    durationSeconds: 5,
+                    deviceSource: .iPhone
+                )
+            }
+            await reload()
+            latestCompletedText = "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。"
             lastCopiedBannerText = "已存入待办 · 可随时按操作按钮继续录入"
             return
         }
-        _ = try? await useCase.recordCompletedCapture(
+        let first = try? await useCase.recordCompletedCapture(
             mode: .todo,
             rawTranscript: "整理下周设计评审要展示的液态玻璃交互走查清单",
             refinedText: "整理下周设计评审要展示的液态玻璃交互走查清单",
@@ -331,6 +521,14 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             durationSeconds: 6,
             deviceSource: .iPhone
         )
+        if let firstTodo = first?.todo {
+            let enrichedFirst = firstTodo
+                .withPriority(.p0)
+                .withTags(["#VoxPocket", "#iOS", "#Glass"])
+                .withAppendedSubtask("录制录音页默认空态与实时转写声波走查")
+                .withAppendedSubtask("验证左下切换与右下录音双按钮侧滑手势")
+            _ = try? await useCase.updateTodo(enrichedFirst)
+        }
         let second = try? await useCase.recordCompletedCapture(
             mode: .todo,
             rawTranscript: "把早间散步录下的播客大纲润色后发给搭档确认",
@@ -339,8 +537,13 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             durationSeconds: 8,
             deviceSource: .iPhone
         )
-        if let doneID = second?.todo?.id {
-            _ = try? await useCase.markTodoDone(todoID: doneID)
+        if let secondTodo = second?.todo {
+            let enrichedSecond = secondTodo
+                .withPriority(.p1)
+                .withTags(["#Podcast", "#AI"])
+                .withAppendedSubtask("补充听众深夜来信的开场引子")
+            _ = try? await useCase.updateTodo(enrichedSecond)
+            _ = try? await useCase.markTodoDone(todoID: secondTodo.id)
         }
         _ = try? await useCase.recordCompletedCapture(
             mode: .text,

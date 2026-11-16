@@ -7,8 +7,10 @@ import Preferences
 public struct IOSCleanSlateWorkspaceView: View {
     @ObservedObject private var viewModel: VoxWorkspaceViewModel
     private let localModelLoadingStatus: LocalModelLoadingStatus?
-    @State private var isShowingNotesSheet = false
     @State private var isShowingSettingsSheet = false
+    @GestureState private var dragTranslation: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     public init(viewModel: VoxWorkspaceViewModel, localModelLoadingStatus: LocalModelLoadingStatus? = nil) {
         self.viewModel = viewModel
@@ -17,35 +19,128 @@ public struct IOSCleanSlateWorkspaceView: View {
 
     public var body: some View {
         NavigationStack {
-            RecorderSentenceStage(sentence: stageSentence) {
-                guard !viewModel.isRecordingActive, !viewModel.isProcessingCapture else { return }
-                viewModel.copyLatestCompletedText()
+            GeometryReader { geometry in
+                let pageWidth = max(1, geometry.size.width)
+                let drag = clampedHorizontalDrag(dragTranslation, pageWidth: pageWidth)
+
+                ZStack {
+                    if viewModel.activePage == .recorder || drag != 0 {
+                        recorderStagePage
+                            .frame(width: pageWidth, height: geometry.size.height)
+                            .offset(x: (viewModel.activePage == .recorder ? 0 : -pageWidth) + drag)
+                            .transition(reduceMotion ? .opacity : .asymmetric(
+                                insertion: .move(edge: .leading),
+                                removal: .move(edge: .leading)
+                            ))
+                    }
+
+                    if viewModel.activePage == .todo || drag != 0 {
+                        todoStagePage
+                            .frame(width: pageWidth, height: geometry.size.height)
+                            .offset(x: (viewModel.activePage == .todo ? 0 : pageWidth) + drag)
+                            .transition(reduceMotion ? .opacity : .asymmetric(
+                                insertion: .move(edge: .trailing),
+                                removal: .move(edge: .trailing)
+                            ))
+                    }
+                }
+                .animation(reduceMotion ? nil : AppTheme.gestureSpring, value: viewModel.activePage)
+                .frame(width: pageWidth, height: geometry.size.height)
+                .clipped()
+                .simultaneousGesture(horizontalSlideGesture(pageWidth: pageWidth))
             }
             .background { RecorderBackdrop(status: viewModel.recorderStatus, audioLevel: viewModel.audioLevel) }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                RecorderDock(isRecording: viewModel.isRecordingActive, isProcessing: viewModel.isProcessingCapture,
-                             audioLevel: viewModel.audioLevel, feedback: feedback, error: captureError,
-                             start: { await viewModel.startCaptureAndWait() },
-                             stop: { await viewModel.completeCapture(deviceSource: .iPhone) },
-                             cancel: { viewModel.cancelCapture() }, retry: retry,
-                             openTodos: { isShowingNotesSheet = true }, openSettings: { isShowingSettingsSheet = true })
+                IOSDualButtonSlideDock(
+                    activePage: viewModel.activePage,
+                    pendingTodoCount: viewModel.inboxCount + viewModel.runningCount,
+                    isRecording: viewModel.isRecordingActive,
+                    isProcessing: viewModel.isProcessingCapture,
+                    audioLevel: viewModel.audioLevel,
+                    appendingTodoTitle: viewModel.appendingTargetTodoTitle,
+                    feedback: feedback,
+                    error: captureError,
+                    togglePage: {
+                        withAnimation(reduceMotion ? nil : AppTheme.gestureSpring) {
+                            viewModel.toggleActivePage()
+                        }
+                    },
+                    start: { await viewModel.startCaptureAndWait() },
+                    stop: { await viewModel.completeCapture(deviceSource: .iPhone) },
+                    cancel: { viewModel.cancelCapture() },
+                    retry: retry
+                )
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(isPresented: $isShowingNotesSheet) { IOSWorkspaceManagementSheet(viewModel: viewModel) }
         .sheet(isPresented: $isShowingSettingsSheet) {
             IOSWorkspaceSettingsSheet(viewModel: viewModel, localModelLoadingStatus: localModelLoadingStatus)
         }
         .preferredColorScheme(demoAppearance)
         .sensoryFeedback(.success, trigger: viewModel.lastCopiedBannerText)
+        .sensoryFeedback(.selection, trigger: viewModel.activePage)
         .task {
             let env = ProcessInfo.processInfo.environment
             if env["VOX_DEMO_SEED"] == "1" { await viewModel.seedDemoDataIfEmptyForPreview() }
             if env["VOX_DEMO_REFINED"] == "1" { await viewModel.prepareDemoRefinedState() }
+            if env["VOX_DEMO_PAGE"] == "todo" {
+                viewModel.switchToPage(.todo)
+            }
+            if env["VOX_DEMO_EXPAND_FIRST_TODO"] == "1", let firstID = viewModel.todos.first?.id {
+                viewModel.switchToPage(.todo)
+                viewModel.expandedTodoID = firstID
+            }
             if env["VOX_DEMO_RECORDING"] == "1" && env["VOX_DEMO_AUTOSTART"] != "0" {
                 await viewModel.startCaptureAndWait()
             }
+            if env["VOX_OPEN_SETTINGS"] == "1" {
+                isShowingSettingsSheet = true
+            }
         }
+    }
+
+    private var recorderStagePage: some View {
+        RecorderSentenceStage(sentence: stageSentence) {
+            guard !viewModel.isRecordingActive, !viewModel.isProcessingCapture else { return }
+            viewModel.copyLatestCompletedText()
+        }
+    }
+
+    private var todoStagePage: some View {
+        IOSTodoSlidePageView(
+            viewModel: viewModel,
+            onOpenSettings: { isShowingSettingsSheet = true }
+        )
+    }
+
+    private func clampedHorizontalDrag(_ rawDrag: CGFloat, pageWidth: CGFloat) -> CGFloat {
+        guard !reduceMotion else { return 0 }
+        switch viewModel.activePage {
+        case .recorder:
+            return min(rawDrag * 0.18, max(-pageWidth, rawDrag))
+        case .todo:
+            return max(rawDrag * 0.18, min(pageWidth, rawDrag))
+        }
+    }
+
+    private func horizontalSlideGesture(pageWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .updating($dragTranslation) { value, state, _ in
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.25 else { return }
+                state = value.translation.width
+            }
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.25 else { return }
+                let threshold = max(56, pageWidth * 0.18)
+                let predicted = value.predictedEndTranslation.width
+                withAnimation(reduceMotion ? nil : AppTheme.gestureSpring) {
+                    if viewModel.activePage == .recorder && (value.translation.width < -threshold || predicted < -threshold * 1.4) {
+                        viewModel.switchToPage(.todo)
+                    } else if viewModel.activePage == .todo && (value.translation.width > threshold || predicted > threshold * 1.4) {
+                        viewModel.switchToPage(.recorder)
+                    }
+                }
+            }
     }
 
     private var demoAppearance: ColorScheme? {
@@ -65,9 +160,18 @@ public struct IOSCleanSlateWorkspaceView: View {
     }
 
     private var feedback: String {
-        if viewModel.isRecordingActive { return "正在聆听 · \(Self.formatDuration(TimeInterval(viewModel.recordingElapsedSeconds))) · 松手立即润色" }
+        if viewModel.isRecordingActive {
+            if let appendTitle = viewModel.appendingTargetTodoTitle {
+                return "正在继续补充至：\(appendTitle) · \(Self.formatDuration(TimeInterval(viewModel.recordingElapsedSeconds)))"
+            }
+            return "正在聆听 · \(Self.formatDuration(TimeInterval(viewModel.recordingElapsedSeconds))) · 松手立即润色"
+        }
         if viewModel.isProcessingCapture { return "正在提炼语句结构与核心要点…" }
-        return viewModel.lastCopiedBannerText ?? "按住说话 · 点按也可启停"
+        if let banner = viewModel.lastCopiedBannerText { return banner }
+        if viewModel.activePage == .todo, let expanded = viewModel.expandedTodo {
+            return "按住右侧录音键，直接补充至「\(expanded.title)」"
+        }
+        return viewModel.activePage == .todo ? "按住右侧说话新建待办 · 左下返回录音页" : "按住说话 · 点按也可启停"
     }
 
     private var captureError: String? {
@@ -86,32 +190,210 @@ public struct IOSCleanSlateWorkspaceView: View {
     }
 }
 
-private struct IOSWorkspaceManagementSheet: View {
-    @ObservedObject var viewModel: VoxWorkspaceViewModel
-    @State private var selectedTodo: VoiceTodo?
-    @Namespace private var filterAnimation
+// MARK: - Ultra-Pure 2-Button Bottom Bar (Bottom-Leading Switch + Bottom-Trailing Persistent Record)
+
+private struct IOSDualButtonSlideDock: View {
+    let activePage: WorkspacePage
+    let pendingTodoCount: Int
+    let isRecording: Bool
+    let isProcessing: Bool
+    let audioLevel: Float
+    let appendingTodoTitle: String?
+    let feedback: String
+    let error: String?
+    let togglePage: () -> Void
+    let start: @MainActor () async -> Void
+    let stop: @MainActor () async -> Void
+    let cancel: @MainActor () async -> Void
+    let retry: () -> Void
+
+    @Namespace private var glass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var shape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous)
+    }
 
     var body: some View {
-        NavigationStack {
+        GlassEffectContainer(spacing: 14) {
+            VStack(spacing: 14) {
+                if let appendingTodoTitle {
+                    HStack(spacing: 6) {
+                        Image(systemName: isRecording ? "waveform.badge.mic" : "plus.bubble.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isRecording ? Color.red : Color.accentColor)
+                        Text(isRecording ? "🎙️ 正在继续补充至：\(appendingTodoTitle)" : "🎙️ 按右侧麦克风继续补充至：\(appendingTodoTitle)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .modifier(RecorderGlassModifier())
+                    .glassEffectID("appendHint", in: glass)
+                    .accessibilityIdentifier("vox.todo.append.banner")
+                }
+
+                HStack(spacing: 14) {
+                    pageSwitchButton
+                        .glassEffectID("switchPage", in: glass)
+
+                    Spacer(minLength: 0)
+
+                    waveform
+
+                    Spacer(minLength: 0)
+
+                    RecorderButton(
+                        isRecording: isRecording,
+                        isProcessing: isProcessing,
+                        start: start,
+                        stop: stop,
+                        cancel: cancel
+                    )
+                    .glassEffectID("record", in: glass)
+                }
+
+                feedbackRegion
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, minHeight: 148)
+        }
+        .background {
+            ZStack {
+                if reduceTransparency {
+                    shape.fill(.thickMaterial)
+                } else {
+                    shape.fill(AppTheme.surfacePrimary.opacity(0.82))
+                }
+            }
+            .clipShape(shape)
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private var pageSwitchButton: some View {
+        Button(action: togglePage) {
+            HStack(spacing: 6) {
+                Image(systemName: activePage == .recorder ? "checklist" : "waveform")
+                    .font(.body.weight(.semibold))
+                if activePage == .recorder && pendingTodoCount > 0 {
+                    Text("\(pendingTodoCount)")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .contentTransition(.numericText())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, activePage == .recorder && pendingTodoCount > 0 ? 14 : 0)
+            .frame(minWidth: 52, minHeight: 52)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .modifier(RecorderGlassModifier())
+        .accessibilityLabel(activePage == .recorder ? "切换到待办页" : "返回录音页")
+        .accessibilityIdentifier("vox.nav.switch.button")
+    }
+
+    private var waveform: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<7, id: \.self) { index in
+                Capsule()
+                    .fill(LinearGradient(colors: [.cyan, .indigo], startPoint: .bottom, endPoint: .top))
+                    .frame(width: 4, height: barHeight(index))
+            }
+        }
+        .frame(height: 28)
+        .opacity(isRecording ? 1 : 0.4)
+        .animation(reduceMotion ? nil : AppTheme.gestureSpring, value: audioLevel)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isRecording ? "正在录音" : "准备录音")
+        .accessibilityIdentifier("vox.recording.indicator")
+    }
+
+    private func barHeight(_ index: Int) -> CGFloat {
+        let level = audioLevel.isFinite ? min(1, max(0, audioLevel)) : 0
+        let amplitude = isRecording ? (reduceMotion ? 0.5 : CGFloat(level)) : 0.12
+        return max(6, amplitude * [0.45, 0.7, 1, 0.6, 0.85, 0.55, 0.75][index] * 28)
+    }
+
+    private var feedbackRegion: some View {
+        VStack(spacing: 4) {
+            if let error {
+                Text(error).font(.footnote).foregroundStyle(.primary)
+                Button("重试", systemImage: "arrow.clockwise", action: retry)
+                    .frame(minHeight: 44).accessibilityIdentifier("vox.capture.retry")
+            } else {
+                HStack(spacing: 8) {
+                    if isProcessing { ProgressView().controlSize(.small) }
+                    Text(feedback)
+                        .font(.footnote)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, minHeight: 22)
+        .accessibilityIdentifier("r3-feedback")
+    }
+}
+
+// MARK: - Slide Right Page: Todo Page with 5 Core Elements & In-Place Expandable Subtasks
+
+private struct IOSTodoSlidePageView: View {
+    @ObservedObject var viewModel: VoxWorkspaceViewModel
+    let onOpenSettings: () -> Void
+    @Namespace private var filterAnimation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            headerBar
+                .padding(.horizontal, AppTheme.Space.lg)
+                .padding(.top, AppTheme.Space.md)
+                .padding(.bottom, AppTheme.Space.sm)
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: AppTheme.Space.lg) {
                     statusFilterStrip
                     todoPrimaryStage
-                    Text("语音速记").font(.title2.bold())
-                    ForEach(viewModel.filteredCaptures) { capture in
-                        IOSCleanSlateCaptureCard(capture: capture, viewModel: viewModel)
-                    }
                 }
-                .padding(22)
+                .padding(.horizontal, AppTheme.Space.lg)
+                .padding(.top, AppTheme.Space.xs)
+                .padding(.bottom, AppTheme.Space.section)
             }
-            .background(AppTheme.surfacePrimary)
-            .searchable(text: $viewModel.searchQuery, prompt: "搜索待办与语音速记")
-            .navigationTitle("待办与语音速记")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-            .sheet(item: $selectedTodo) { todo in IOSCleanSlateTodoDetail(todo: todo, viewModel: viewModel) }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private var headerBar: some View {
+        HStack(alignment: .center, spacing: AppTheme.Space.md) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("待办清单")
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                Text("点按任务展开子步骤 · 展开时按右下麦克风继续追补")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: AppTheme.Space.sm)
+
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .modifier(RecorderGlassModifier())
+            .accessibilityLabel("设置")
+            .accessibilityIdentifier("vox.ios.settingsButton")
         }
     }
 
@@ -157,8 +439,6 @@ private struct IOSWorkspaceManagementSheet: View {
         .sensoryFeedback(.selection, trigger: viewModel.selectedTodoFilter)
     }
 
-    // MARK: - Group 2: Todo Primary Stage (Borderless Luminance Cards)
-
     @ViewBuilder
     private var todoPrimaryStage: some View {
         if viewModel.filteredTodos.isEmpty {
@@ -169,10 +449,27 @@ private struct IOSWorkspaceManagementSheet: View {
         } else {
             LazyVStack(spacing: AppTheme.Space.md) {
                 ForEach(viewModel.filteredTodos) { todo in
-                    IOSCleanSlateTodoCard(
+                    IOSExpandableTodoCard(
                         todo: todo,
+                        isExpanded: viewModel.expandedTodoID == todo.id,
                         onToggleDone: { viewModel.toggleTodoDone(todo.id) },
-                        onOpenDetail: { selectedTodo = todo }
+                        onToggleExpand: {
+                            withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                viewModel.toggleExpandedTodo(todo.id)
+                            }
+                        },
+                        onToggleSubtask: { subtaskID in
+                            viewModel.toggleTodoSubtask(todoID: todo.id, subtaskID: subtaskID)
+                        },
+                        onSelectPriority: { priority in
+                            viewModel.updateTodoPriority(todoID: todo.id, priority: priority)
+                        },
+                        onSyncLinear: {
+                            viewModel.syncTodoToLinear(todo.id)
+                        },
+                        onCopyTodo: {
+                            viewModel.copyTodoContent(todo)
+                        }
                     )
                     .accessibilityIdentifier("vox.session.list.item")
                 }
@@ -198,7 +495,7 @@ private struct IOSWorkspaceManagementSheet: View {
                 ContentUnavailableView {
                     Label("暂无待办", systemImage: "checklist")
                 } description: {
-                    Text("按操作按钮或点按下方麦克风，一句话直接生成待办。")
+                    Text("按住右下角麦克风说话，一句话直接生成待办。")
                 }
             }
         }
@@ -213,82 +510,233 @@ private struct IOSWorkspaceManagementSheet: View {
         case .failed: viewModel.failedCount
         }
     }
-
 }
 
-// MARK: - Borderless Luminance Todo Card
+// MARK: - 5-Element Todo Card with In-Place Spring Expansion
 
-private struct IOSCleanSlateTodoCard: View {
+private struct IOSExpandableTodoCard: View {
     let todo: VoiceTodo
+    let isExpanded: Bool
     let onToggleDone: () -> Void
-    let onOpenDetail: () -> Void
+    let onToggleExpand: () -> Void
+    let onToggleSubtask: (UUID) -> Void
+    let onSelectPriority: (TodoPriority) -> Void
+    let onSyncLinear: () -> Void
+    let onCopyTodo: () -> Void
 
     private var isDone: Bool { todo.executionState == .done }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: AppTheme.Space.md) {
-            Button(action: onToggleDone) {
-                Image(systemName: statusSymbol)
-                    .font(.title3)
-                    .foregroundStyle(statusColor)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .accessibilityLabel(isDone ? "已完成" : "待处理")
-
-            Button(action: onOpenDetail) {
-                VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
-                    Text(todo.title)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(isDone ? .secondary : .primary)
-                        .strikethrough(isDone, color: .secondary)
-                        .multilineTextAlignment(.leading)
-
-                    if !todo.rawTranscript.isEmpty && todo.rawTranscript != todo.title {
-                        Text(todo.rawTranscript)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    HStack(spacing: AppTheme.Space.sm) {
-                        Label(todo.projectKey ?? "收件箱", systemImage: todo.projectKey == nil ? "tray" : "folder")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, AppTheme.Space.sm)
-                            .padding(.vertical, 3)
-                            .background(AppTheme.surfaceElevated, in: Capsule())
-
-                        if todo.executionState == .running {
-                            HStack(spacing: AppTheme.Space.xs) {
-                                ProgressView()
-                                    .controlSize(.mini)
-                                Text("AI 执行中")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.blue)
-                            }
-                        } else if let summary = todo.lastExecutionSummary, !summary.isEmpty {
-                            Text(summary)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.top, 2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, AppTheme.Space.lg)
-                .padding(.trailing, AppTheme.Space.lg)
-            }
-            .buttonStyle(.plain)
+    private var displayTags: [String] {
+        if !todo.tags.isEmpty {
+            return Array(todo.tags.prefix(3))
         }
-        .padding(.leading, AppTheme.Space.xs)
+        if let projectKey = todo.projectKey, !projectKey.isEmpty {
+            return ["#\(projectKey)"]
+        }
+        return ["#VoxPocket"]
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: AppTheme.Space.sm) {
+                Button(action: onToggleDone) {
+                    Image(systemName: statusSymbol)
+                        .font(.title3)
+                        .foregroundStyle(statusColor)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .accessibilityLabel(isDone ? "已完成" : "待处理")
+                .accessibilityIdentifier("vox.todo.status.\(todo.id.uuidString)")
+
+                Button(action: onToggleExpand) {
+                    VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
+                        HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.xs) {
+                            priorityBadge(todo.priority)
+
+                            Text(todo.title)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(isDone ? .secondary : .primary)
+                                .strikethrough(isDone, color: .secondary)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        HStack(spacing: AppTheme.Space.xs) {
+                            ForEach(displayTags, id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, AppTheme.Space.sm)
+                                    .padding(.vertical, 3)
+                                    .background(AppTheme.surfaceElevated, in: Capsule())
+                            }
+
+                            if !todo.subtasks.isEmpty {
+                                let doneCount = todo.subtasks.filter(\.isCompleted).count
+                                Text("\(doneCount)/\(todo.subtasks.count)")
+                                    .font(.caption2.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: AppTheme.Space.xs)
+
+                            Text("今天 \(Self.timeFormatter.string(from: todo.updatedAt))")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.top, 2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, AppTheme.Space.md)
+                    .padding(.trailing, AppTheme.Space.md)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("vox.todo.row.\(todo.id.uuidString)")
+            }
+            .padding(.leading, AppTheme.Space.xs)
+
+            if isExpanded {
+                expandedDetailSection
+                    .padding(.horizontal, AppTheme.Space.lg)
+                    .padding(.bottom, AppTheme.Space.md)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
         .background(
             AppTheme.surfaceCard,
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
         )
+        .overlay {
+            if isExpanded {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                    .strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1.2)
+            }
+        }
+    }
+
+    private var expandedDetailSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.md) {
+            Divider()
+
+            VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
+                HStack {
+                    Text("子步骤清单")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("按住右下麦克风可直接追加")
+                        .font(.caption2)
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                if todo.subtasks.isEmpty {
+                    Text("暂无拆解子步骤，按住右下角录音键可直接语音补充。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, AppTheme.Space.xs)
+                } else {
+                    ForEach(todo.subtasks) { subtask in
+                        Button {
+                            onToggleSubtask(subtask.id)
+                        } label: {
+                            HStack(spacing: AppTheme.Space.sm) {
+                                Image(systemName: subtask.isCompleted ? "checkmark.circle.fill" : "circle")
+                                    .font(.subheadline)
+                                    .foregroundStyle(subtask.isCompleted ? .green : .secondary)
+                                Text(subtask.title)
+                                    .font(.subheadline)
+                                    .foregroundStyle(subtask.isCompleted ? .secondary : .primary)
+                                    .strikethrough(subtask.isCompleted, color: .secondary)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                            }
+                            .frame(minHeight: 36)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("vox.todo.subtask.\(subtask.id.uuidString)")
+                    }
+                }
+            }
+
+            HStack(spacing: AppTheme.Space.sm) {
+                ForEach(TodoPriority.allCases, id: \.self) { level in
+                    let selected = todo.priority == level
+                    Button {
+                        onSelectPriority(level)
+                    } label: {
+                        Text(level.rawValue)
+                            .font(.caption.weight(.bold).monospacedDigit())
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(minHeight: 32)
+                            .background(
+                                selected ? priorityColor(level).opacity(0.18) : AppTheme.surfaceElevated,
+                                in: Capsule()
+                            )
+                            .foregroundStyle(selected ? priorityColor(level) : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("vox.todo.priority.\(level.rawValue)")
+                }
+
+                Spacer(minLength: AppTheme.Space.xs)
+
+                Button(action: onSyncLinear) {
+                    Label(todo.externalSync?.externalID ?? "Linear", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .frame(minHeight: 32)
+                        .background(AppTheme.surfaceElevated, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("vox.todo.action.linear")
+
+                Button(action: onCopyTodo) {
+                    Label("复制", systemImage: "doc.on.doc")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .frame(minHeight: 32)
+                        .background(AppTheme.surfaceElevated, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("vox.todo.action.copy")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("vox.todo.expanded.detail")
+    }
+
+    private func priorityBadge(_ priority: TodoPriority) -> some View {
+        Text(priority.rawValue)
+            .font(.caption2.weight(.bold).monospacedDigit())
+            .foregroundStyle(priorityColor(priority))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(priorityColor(priority).opacity(0.14), in: Capsule())
+    }
+
+    private func priorityColor(_ priority: TodoPriority) -> Color {
+        switch priority {
+        case .p0: .red
+        case .p1: .orange
+        case .p2: .blue
+        }
     }
 
     private var statusSymbol: String {
@@ -334,7 +782,7 @@ private struct IOSWorkspaceSettingsSheet: View {
                                     Text(mode == .todo ? "直接存入待办" : "自动复制到剪贴板")
                                         .font(.body.weight(.medium))
                                         .foregroundStyle(.primary)
-                                    Text(mode == .todo ? "自动提炼标题并加入首页待办清单" : "润色为干净文字并复制，方便直接粘贴")
+                                    Text(mode == .todo ? "自动提炼标题并加入待办清单" : "润色为干净文字并复制，方便直接粘贴")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                 }
@@ -353,7 +801,7 @@ private struct IOSWorkspaceSettingsSheet: View {
                 } header: {
                     Text("录音完成后去向")
                 } footer: {
-                    Text("通过 iPhone 操作按钮或底部麦克风启动快速录音时，将默认按此去向处理。")
+                    Text("在默认录音页启动快速录音时，将默认按此去向处理。")
                 }
 
                 Section {
@@ -391,55 +839,6 @@ private struct IOSWorkspaceSettingsSheet: View {
     }
 }
 
-private struct IOSCleanSlateCaptureCard: View {
-    let capture: VoiceCapture
-    @ObservedObject var viewModel: VoxWorkspaceViewModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
-            HStack {
-                Text(capture.mode == .todo ? "存入待办" : "语音速记")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(capture.mode == .todo ? Color.orange : Color.accentColor)
-                Spacer()
-                Text(IOSCleanSlateWorkspaceView.formatDuration(capture.durationSeconds))
-                    .monospacedDigit()
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text(capture.refinedText.isEmpty ? capture.rawTranscript : capture.refinedText)
-                .font(.body)
-                .textSelection(.enabled)
-            HStack(spacing: AppTheme.Space.md) {
-                Button("复制文字", systemImage: "doc.on.doc") {
-                    viewModel.copyCaptureText(capture)
-                }
-                .font(.footnote.weight(.medium))
-                .frame(minHeight: 44)
-
-                Button("转为 Todo", systemImage: "checklist") {
-                    viewModel.convertCaptureToTodo(capture.id)
-                }
-                .font(.footnote.weight(.medium))
-                .frame(minHeight: 44)
-
-                if case .failed = capture.state {
-                    Button("重试", systemImage: "arrow.clockwise") {
-                        viewModel.retryCapture(capture.id)
-                    }
-                    .font(.footnote.weight(.medium))
-                    .frame(minHeight: 44)
-                }
-            }
-        }
-        .padding(AppTheme.Space.lg)
-        .background(
-            AppTheme.surfaceCard,
-            in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-        )
-    }
-}
-
 private extension TodoStatusFilter {
     static var primaryFilters: [TodoStatusFilter] {
         [.all, .inbox, .running, .done]
@@ -453,57 +852,6 @@ private extension TodoStatusFilter {
         case .done: "已完成"
         case .failed: "失败"
         }
-    }
-}
-
-private struct IOSCleanSlateTodoDetail: View {
-    let todo: VoiceTodo
-    @ObservedObject var viewModel: VoxWorkspaceViewModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var title: String
-    @State private var prompt: String
-
-    init(todo: VoiceTodo, viewModel: VoxWorkspaceViewModel) {
-        self.todo = todo
-        self.viewModel = viewModel
-        _title = State(initialValue: todo.title)
-        _prompt = State(initialValue: todo.taskPrompt)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("任务") {
-                    TextField("标题", text: $title)
-                    TextField("任务提示", text: $prompt, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-                Section("执行摘要") {
-                    Text(todo.lastExecutionSummary ?? "尚未执行")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("编辑 Todo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") {
-                        viewModel.saveTodoEdits(
-                            id: todo.id,
-                            title: title,
-                            taskPrompt: prompt,
-                            projectKey: todo.projectKey
-                        )
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 }
 #endif
