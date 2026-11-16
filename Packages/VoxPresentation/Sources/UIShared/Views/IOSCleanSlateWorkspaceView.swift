@@ -86,9 +86,15 @@ public struct IOSCleanSlateWorkspaceView: View {
             if env["VOX_DEMO_PAGE"] == "todo" {
                 viewModel.switchToPage(.todo)
             }
-            if env["VOX_DEMO_EXPAND_FIRST_TODO"] == "1", let firstID = viewModel.todos.first?.id {
+            if env["VOX_DEMO_EXPAND_FIRST_TODO"] == "1" {
                 viewModel.switchToPage(.todo)
-                viewModel.expandedTodoID = firstID
+                let targetID = viewModel.todos.first(where: { $0.title.contains("整理下周设计评审") })?.id ?? viewModel.todos.first?.id
+                viewModel.expandedTodoID = targetID
+            }
+            if env["VOX_DEMO_OPEN_TAG_PICKER"] == "1" {
+                viewModel.switchToPage(.todo)
+                let targetID = viewModel.todos.first(where: { $0.title.contains("整理下周设计评审") })?.id ?? viewModel.todos.first?.id
+                viewModel.expandedTodoID = targetID
             }
             if env["VOX_DEMO_RECORDING"] == "1" && env["VOX_DEMO_AUTOSTART"] != "0" {
                 await viewModel.startCaptureAndWait()
@@ -297,8 +303,9 @@ private struct IOSDualButtonSlideDock: View {
     }
 
     private var waveform: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<7, id: \.self) { index in
+        let barIndices = Array(0..<7)
+        return HStack(spacing: 4) {
+            ForEach(barIndices, id: \.self) { index in
                 Capsule()
                     .fill(LinearGradient(colors: [.cyan, .indigo], startPoint: .bottom, endPoint: .top))
                     .frame(width: 4, height: barHeight(index))
@@ -342,7 +349,7 @@ private struct IOSDualButtonSlideDock: View {
     }
 }
 
-// MARK: - Slide Right Page: Todo Page with 5 Core Elements & In-Place Expandable Subtasks
+// MARK: - Slide Right Page: Todo Page (v02 Top Hero Focus Stage + v04 Internal Hierarchy + Direct In-Place Manipulation)
 
 private struct IOSTodoSlidePageView: View {
     @ObservedObject var viewModel: VoxWorkspaceViewModel
@@ -376,7 +383,7 @@ private struct IOSTodoSlidePageView: View {
                 Text("待办清单")
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
-                Text("点按任务展开子步骤 · 展开时按右下麦克风继续追补")
+                Text("点击任务置顶聚焦 · 标题与属性展示处直接点按修改")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -406,6 +413,11 @@ private struct IOSTodoSlidePageView: View {
                     Button {
                         withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
                             viewModel.selectedTodoFilter = filter
+                            if let expanded = viewModel.expandedTodo,
+                               filter != .all,
+                               expanded.executionState.rawValue != filter.rawValue {
+                                viewModel.expandedTodoID = nil
+                            }
                         }
                     } label: {
                         HStack(spacing: AppTheme.Space.xs) {
@@ -447,31 +459,92 @@ private struct IOSTodoSlidePageView: View {
                 .padding(.vertical, AppTheme.Space.section)
                 .accessibilityIdentifier("vox.session.list")
         } else {
-            LazyVStack(spacing: AppTheme.Space.md) {
-                ForEach(viewModel.filteredTodos) { todo in
-                    IOSExpandableTodoCard(
-                        todo: todo,
-                        isExpanded: viewModel.expandedTodoID == todo.id,
-                        onToggleDone: { viewModel.toggleTodoDone(todo.id) },
-                        onToggleExpand: {
+            VStack(alignment: .leading, spacing: AppTheme.Space.lg) {
+                if let focusedTodo = viewModel.expandedTodo,
+                   viewModel.filteredTodos.contains(where: { $0.id == focusedTodo.id }) {
+                    IOSTopFocusTodoCard(
+                        todo: focusedTodo,
+                        historicalTags: viewModel.availableHistoricalTags,
+                        voiceAppendedSubtasks: viewModel.voiceAppendedSubtasks(for: focusedTodo.id),
+                        onCollapse: {
                             withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
-                                viewModel.toggleExpandedTodo(todo.id)
+                                viewModel.toggleExpandedTodo(focusedTodo.id)
                             }
                         },
-                        onToggleSubtask: { subtaskID in
-                            viewModel.toggleTodoSubtask(todoID: todo.id, subtaskID: subtaskID)
+                        onUpdateTitle: { newTitle in
+                            viewModel.updateTodoTitle(todoID: focusedTodo.id, title: newTitle)
+                        },
+                        onCycleStatus: {
+                            viewModel.cycleTodoStatus(todoID: focusedTodo.id)
+                        },
+                        onSelectStatus: { state in
+                            viewModel.updateTodoStatus(todoID: focusedTodo.id, state: state)
+                        },
+                        onCyclePriority: {
+                            viewModel.cycleTodoPriority(todoID: focusedTodo.id)
                         },
                         onSelectPriority: { priority in
-                            viewModel.updateTodoPriority(todoID: todo.id, priority: priority)
+                            viewModel.updateTodoPriority(todoID: focusedTodo.id, priority: priority)
+                        },
+                        onToggleTag: { tag in
+                            viewModel.toggleTodoTag(todoID: focusedTodo.id, tag: tag)
+                        },
+                        onAddTag: { newTag in
+                            viewModel.addTodoTag(todoID: focusedTodo.id, tag: newTag)
+                        },
+                        onToggleSubtask: { subtaskID in
+                            viewModel.toggleTodoSubtask(todoID: focusedTodo.id, subtaskID: subtaskID)
+                        },
+                        onUpdateSubtaskTitle: { subtaskID, newTitle in
+                            viewModel.updateTodoSubtaskTitle(todoID: focusedTodo.id, subtaskID: subtaskID, title: newTitle)
+                        },
+                        onAppendSubtask: { subtaskTitle in
+                            viewModel.appendSubtask(to: focusedTodo.id, title: subtaskTitle)
                         },
                         onSyncLinear: {
-                            viewModel.syncTodoToLinear(todo.id)
+                            viewModel.syncTodoToLinear(focusedTodo.id)
                         },
                         onCopyTodo: {
-                            viewModel.copyTodoContent(todo)
+                            viewModel.copyTodoContent(focusedTodo)
                         }
                     )
-                    .accessibilityIdentifier("vox.session.list.item")
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                }
+
+                let trayTodos = viewModel.companionTodos
+                if !trayTodos.isEmpty {
+                    VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
+                        if viewModel.expandedTodo != nil {
+                            HStack(spacing: AppTheme.Space.xs) {
+                                Text("其余待办")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text("\(trayTodos.count)")
+                                    .font(.caption2.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(.tertiary)
+                                Spacer()
+                                Text("点按任意条目切换至顶部聚焦")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, AppTheme.Space.xs)
+                        }
+
+                        LazyVStack(spacing: AppTheme.Space.md) {
+                            ForEach(trayTodos) { todo in
+                                IOSCompanionTodoRowCard(
+                                    todo: todo,
+                                    onToggleDone: { viewModel.toggleTodoDone(todo.id) },
+                                    onSelectFocus: {
+                                        withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                            viewModel.toggleExpandedTodo(todo.id)
+                                        }
+                                    }
+                                )
+                                .accessibilityIdentifier("vox.session.list.item")
+                            }
+                        }
+                    }
                 }
             }
             .accessibilityIdentifier("vox.session.list")
@@ -512,17 +585,619 @@ private struct IOSTodoSlidePageView: View {
     }
 }
 
-// MARK: - 5-Element Todo Card with In-Place Spring Expansion
+// MARK: - v02 Top Focus Stage Card with v04 Internal Hierarchy & Direct In-Place Manipulation
 
-private struct IOSExpandableTodoCard: View {
+private struct IOSTopFocusTodoCard: View {
     let todo: VoiceTodo
-    let isExpanded: Bool
-    let onToggleDone: () -> Void
-    let onToggleExpand: () -> Void
-    let onToggleSubtask: (UUID) -> Void
+    let historicalTags: [String]
+    let voiceAppendedSubtasks: [VoiceTodoSubtask]
+    let onCollapse: () -> Void
+    let onUpdateTitle: (String) -> Void
+    let onCycleStatus: () -> Void
+    let onSelectStatus: (TodoExecutionState) -> Void
+    let onCyclePriority: () -> Void
     let onSelectPriority: (TodoPriority) -> Void
+    let onToggleTag: (String) -> Void
+    let onAddTag: (String) -> Void
+    let onToggleSubtask: (UUID) -> Void
+    let onUpdateSubtaskTitle: (UUID, String) -> Void
+    let onAppendSubtask: (String) -> Void
     let onSyncLinear: () -> Void
     let onCopyTodo: () -> Void
+
+    @State private var draftTitle: String = ""
+    @State private var isTagPickerExpanded: Bool = (ProcessInfo.processInfo.environment["VOX_DEMO_OPEN_TAG_PICKER"] == "1")
+    @State private var newTagText: String = ""
+    @State private var newSubtaskText: String = ""
+    @FocusState private var isTitleFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var completedSubtaskCount: Int {
+        todo.subtasks.filter(\.isCompleted).count
+    }
+
+    private var totalSubtaskCount: Int {
+        todo.subtasks.count
+    }
+
+    private var progressFraction: Double {
+        guard totalSubtaskCount > 0 else { return todo.executionState == .done ? 1.0 : 0.0 }
+        return Double(completedSubtaskCount) / Double(totalSubtaskCount)
+    }
+
+    private var displayTags: [String] {
+        if !todo.tags.isEmpty {
+            return Array(todo.tags.prefix(3))
+        }
+        if let projectKey = todo.projectKey, !projectKey.isEmpty {
+            return ["#\(projectKey)"]
+        }
+        return ["#VoxPocket"]
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.md) {
+            focalTitleAndProgressHeader
+
+            inPlaceMetadataStrip
+
+            if isTagPickerExpanded {
+                historicalTagPickerPanel
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+            }
+
+            Divider()
+
+            v04SubtaskTreeAndVoiceProvenance
+
+            quietExportFooter
+        }
+        .padding(AppTheme.Space.lg)
+        .background(
+            AppTheme.surfaceCard,
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(0.36), lineWidth: 1.4)
+        }
+        .onAppear {
+            draftTitle = todo.title
+        }
+        .onChange(of: todo.id) { _, _ in
+            draftTitle = todo.title
+            newTagText = ""
+            newSubtaskText = ""
+        }
+        .onChange(of: todo.title) { _, updated in
+            if !isTitleFocused {
+                draftTitle = updated
+            }
+        }
+        .onChange(of: isTitleFocused) { _, focused in
+            if !focused {
+                commitTitleIfValid()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("vox.todo.expanded.detail")
+    }
+
+    // Layer 1: Primary Focal Header (In-Place Editable Title + Progress Ring & Collapse Button)
+    private var focalTitleAndProgressHeader: some View {
+        HStack(alignment: .top, spacing: AppTheme.Space.md) {
+            TextField("待办标题", text: $draftTitle, axis: .vertical)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
+                .focused($isTitleFocused)
+                .submitLabel(.done)
+                .onSubmit {
+                    commitTitleIfValid()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("待办标题（点按直接修改）")
+                .accessibilityIdentifier("vox.todo.title.editor")
+
+            HStack(spacing: AppTheme.Space.xs) {
+                progressRingBadge
+
+                Button(action: onCollapse) {
+                    Image(systemName: "chevron.up")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .background(AppTheme.surfaceElevated, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .accessibilityLabel("收起聚焦待办")
+                .accessibilityIdentifier("vox.todo.collapse.button")
+            }
+        }
+    }
+
+    private var progressRingBadge: some View {
+        HStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: progressFraction)
+                    .stroke(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 18, height: 18)
+
+            Text("\(completedSubtaskCount)/\(totalSubtaskCount)")
+                .font(.caption.weight(.bold).monospacedDigit())
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(AppTheme.surfaceElevated, in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("已完成 \(completedSubtaskCount) / 共 \(totalSubtaskCount) 步")
+        .accessibilityIdentifier("vox.todo.progress.badge")
+    }
+
+    // Layer 2: 5-Element In-Place Manipulation Metadata Strip (Status · Priority · Tags · Time)
+    private var inPlaceMetadataStrip: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
+            HStack(spacing: AppTheme.Space.xs) {
+                Button(action: onCycleStatus) {
+                    HStack(spacing: 4) {
+                        Image(systemName: statusSymbol)
+                            .font(.caption.weight(.bold))
+                        Text(statusTitle)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(statusColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 34)
+                    .background(statusColor.opacity(0.14), in: Capsule())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .contextMenu {
+                    Button("待处理") { onSelectStatus(.inbox) }
+                    Button("进行中") { onSelectStatus(.running) }
+                    Button("已完成") { onSelectStatus(.done) }
+                }
+                .accessibilityLabel("状态：\(statusTitle)，点按切换")
+                .accessibilityIdentifier("vox.todo.status.pill")
+
+                Button(action: onCyclePriority) {
+                    HStack(spacing: 4) {
+                        Text(todo.priority.rawValue)
+                            .font(.caption.weight(.bold).monospacedDigit())
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(priorityColor(todo.priority))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 34)
+                    .background(priorityColor(todo.priority).opacity(0.14), in: Capsule())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .contextMenu {
+                    ForEach(TodoPriority.allCases, id: \.self) { level in
+                        Button(level.rawValue) { onSelectPriority(level) }
+                    }
+                }
+                .accessibilityLabel("优先级：\(todo.priority.rawValue)，点按切换")
+                .accessibilityIdentifier("vox.todo.priority.pill")
+
+                Button {
+                    withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                        isTagPickerExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isTagPickerExpanded ? "chevron.up.circle.fill" : "tag.fill")
+                            .font(.caption2)
+                        Text("+ 标签")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 34)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .accessibilityLabel("选择历史标签或添加新标签")
+                .accessibilityIdentifier("vox.todo.tags.trigger")
+
+                Spacer(minLength: AppTheme.Space.xs)
+
+                Text("今天 \(Self.timeFormatter.string(from: todo.updatedAt))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Space.xs) {
+                    ForEach(displayTags, id: \.self) { tag in
+                        Button {
+                            withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                isTagPickerExpanded = true
+                            }
+                            onToggleTag(tag)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(tag)
+                                    .font(.caption.weight(.medium))
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .frame(minHeight: 32)
+                            .background(AppTheme.surfaceElevated, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("标签 \(tag)，点按移除或展开候选")
+                        .accessibilityIdentifier("vox.todo.tag.active.\(tag)")
+                    }
+                }
+            }
+        }
+    }
+
+    // Historical Tag Picker + Direct Add New Tag Panel
+    private var historicalTagPickerPanel: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
+            HStack {
+                Text("曾用标签（点按即选 / 取消，最多 3 个）")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(todo.tags.count)/3")
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppTheme.Space.xs) {
+                    ForEach(historicalTags, id: \.self) { candidate in
+                        let isSelected = todo.tags.contains(candidate)
+                        Button {
+                            onToggleTag(candidate)
+                        } label: {
+                            HStack(spacing: 4) {
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption2.weight(.bold))
+                                }
+                                Text(candidate)
+                                    .font(.caption.weight(isSelected ? .semibold : .regular))
+                            }
+                            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(minHeight: 34)
+                            .background(
+                                isSelected ? Color.accentColor.opacity(0.16) : AppTheme.surfacePrimary,
+                                in: Capsule()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("vox.todo.tag.option.\(candidate)")
+                    }
+                }
+            }
+
+            HStack(spacing: AppTheme.Space.sm) {
+                TextField("添加新标签（如 Design）", text: $newTagText)
+                    .font(.caption)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(AppTheme.surfacePrimary, in: Capsule())
+                    .submitLabel(.done)
+                    .onSubmit {
+                        submitNewTag()
+                    }
+                    .accessibilityIdentifier("vox.todo.tag.input")
+
+                Button(action: submitNewTag) {
+                    Text("添加")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .frame(minHeight: 34)
+                        .background(Color.accentColor.opacity(0.14), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("vox.todo.tag.add.button")
+            }
+        }
+        .padding(AppTheme.Space.md)
+        .background(
+            AppTheme.surfaceElevated,
+            in: RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("vox.todo.tags.picker")
+    }
+
+    // Layer 3: v04 Vertical Accent Spine Subtask Tree + Voice Append Provenance Rail
+    private var v04SubtaskTreeAndVoiceProvenance: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.md) {
+            HStack {
+                Label("执行步骤树", systemImage: "point.3.connected.trianglepath.dotted")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("点按文字原地修改 · 右下麦克风语音直补")
+                    .font(.caption2)
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
+                ForEach(todo.subtasks) { subtask in
+                    IOSInPlaceSubtaskBranchRow(
+                        subtask: subtask,
+                        onToggle: { onToggleSubtask(subtask.id) },
+                        onCommitTitle: { updatedTitle in
+                            onUpdateSubtaskTitle(subtask.id, updatedTitle)
+                        }
+                    )
+                }
+
+                HStack(alignment: .center, spacing: AppTheme.Space.sm) {
+                    HStack(spacing: 0) {
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.35))
+                            .frame(width: 2, height: 34)
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.35))
+                            .frame(width: 10, height: 2)
+                    }
+                    .padding(.leading, 8)
+                    .accessibilityHidden(true)
+
+                    Image(systemName: "plus.circle.dashed")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.accentColor)
+
+                    TextField("添加新子步骤，回车保存…", text: $newSubtaskText)
+                        .font(.subheadline)
+                        .textFieldStyle(.plain)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            submitNewSubtask()
+                        }
+                        .accessibilityIdentifier("vox.todo.subtask.add.input")
+
+                    if !newSubtaskText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button(action: submitNewSubtask) {
+                            Text("添加")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color.accentColor.opacity(0.14), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("vox.todo.subtask.add.button")
+                    }
+                }
+                .frame(minHeight: 40)
+            }
+
+            if !voiceAppendedSubtasks.isEmpty {
+                VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
+                    ForEach(voiceAppendedSubtasks) { item in
+                        HStack(spacing: AppTheme.Space.xs) {
+                            Image(systemName: "waveform.badge.mic")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Color.accentColor)
+                            Text("\(Self.timeFormatter.string(from: item.createdAt)) · 语音追记 → 新增子任务：\(item.title)")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, AppTheme.Space.sm)
+                        .padding(.vertical, 6)
+                        .background(
+                            AppTheme.surfaceElevated,
+                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous)
+                        )
+                        .accessibilityIdentifier("vox.todo.voice.provenance")
+                    }
+                }
+            }
+        }
+    }
+
+    // Layer 4: Quiet Footer Strip
+    private var quietExportFooter: some View {
+        HStack(spacing: AppTheme.Space.sm) {
+            Button(action: onSyncLinear) {
+                Label(todo.externalSync?.externalID ?? "Linear", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 36)
+                    .background(AppTheme.surfaceElevated, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("vox.todo.action.linear")
+
+            Button(action: onCopyTodo) {
+                Label("复制", systemImage: "doc.on.doc")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 36)
+                    .background(AppTheme.surfaceElevated, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("vox.todo.action.copy")
+
+            Spacer(minLength: AppTheme.Space.xs)
+
+            Text("按住右下麦克风继续追补")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+        }
+    }
+
+    private func commitTitleIfValid() {
+        let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            draftTitle = todo.title
+        } else if trimmed != todo.title {
+            onUpdateTitle(trimmed)
+        }
+    }
+
+    private func submitNewTag() {
+        let trimmed = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onAddTag(trimmed)
+        newTagText = ""
+    }
+
+    private func submitNewSubtask() {
+        let trimmed = newSubtaskText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onAppendSubtask(trimmed)
+        newSubtaskText = ""
+    }
+
+    private func priorityColor(_ priority: TodoPriority) -> Color {
+        switch priority {
+        case .p0: .red
+        case .p1: .orange
+        case .p2: .blue
+        }
+    }
+
+    private var statusTitle: String {
+        switch todo.executionState {
+        case .inbox: "待处理"
+        case .running: "进行中"
+        case .done: "已完成"
+        case .failed: "需重试"
+        }
+    }
+
+    private var statusSymbol: String {
+        switch todo.executionState {
+        case .inbox: "circle"
+        case .running: "timelapse"
+        case .done: "checkmark.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch todo.executionState {
+        case .inbox: .blue
+        case .running: .orange
+        case .done: .green
+        case .failed: .red
+        }
+    }
+}
+
+// MARK: - v04 Vertical Spine Subtask Row with Direct In-Place Text Editing
+
+private struct IOSInPlaceSubtaskBranchRow: View {
+    let subtask: VoiceTodoSubtask
+    let onToggle: () -> Void
+    let onCommitTitle: (String) -> Void
+
+    @State private var draftSubtaskTitle: String = ""
+    @FocusState private var isSubtaskFocused: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: AppTheme.Space.xs) {
+            HStack(spacing: 0) {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.35))
+                    .frame(width: 2, height: 44)
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.35))
+                    .frame(width: 10, height: 2)
+            }
+            .padding(.leading, 8)
+            .accessibilityHidden(true)
+
+            Button(action: onToggle) {
+                Image(systemName: subtask.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.body)
+                    .foregroundStyle(subtask.isCompleted ? .green : .secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(subtask.isCompleted ? "已完成：\(subtask.title)" : "未完成：\(subtask.title)")
+            .accessibilityIdentifier("vox.todo.subtask.\(subtask.id.uuidString)")
+
+            TextField("子步骤内容", text: $draftSubtaskTitle, axis: .vertical)
+                .font(.subheadline)
+                .foregroundStyle(subtask.isCompleted ? .secondary : .primary)
+                .strikethrough(subtask.isCompleted, color: .secondary)
+                .focused($isSubtaskFocused)
+                .submitLabel(.done)
+                .onSubmit {
+                    commitSubtaskIfValid()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 6)
+                .accessibilityLabel("子步骤内容：\(subtask.title)")
+                .accessibilityIdentifier("vox.todo.subtask.editor.\(subtask.id.uuidString)")
+        }
+        .onAppear {
+            draftSubtaskTitle = subtask.title
+        }
+        .onChange(of: subtask.title) { _, updated in
+            if !isSubtaskFocused {
+                draftSubtaskTitle = updated
+            }
+        }
+        .onChange(of: isSubtaskFocused) { _, focused in
+            if !focused {
+                commitSubtaskIfValid()
+            }
+        }
+    }
+
+    private func commitSubtaskIfValid() {
+        let trimmed = draftSubtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            draftSubtaskTitle = subtask.title
+        } else if trimmed != subtask.title {
+            onCommitTitle(trimmed)
+        }
+    }
+}
+
+// MARK: - Companion Secondary Tray Row Card (5 Core Elements)
+
+private struct IOSCompanionTodoRowCard: View {
+    let todo: VoiceTodo
+    let onToggleDone: () -> Void
+    let onSelectFocus: () -> Void
 
     private var isDone: Bool { todo.executionState == .done }
 
@@ -543,183 +1218,73 @@ private struct IOSExpandableTodoCard: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: AppTheme.Space.sm) {
-                Button(action: onToggleDone) {
-                    Image(systemName: statusSymbol)
-                        .font(.title3)
-                        .foregroundStyle(statusColor)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(AppPressableButtonStyle())
-                .accessibilityLabel(isDone ? "已完成" : "待处理")
-                .accessibilityIdentifier("vox.todo.status.\(todo.id.uuidString)")
-
-                Button(action: onToggleExpand) {
-                    VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
-                        HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.xs) {
-                            priorityBadge(todo.priority)
-
-                            Text(todo.title)
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(isDone ? .secondary : .primary)
-                                .strikethrough(isDone, color: .secondary)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-
-                        HStack(spacing: AppTheme.Space.xs) {
-                            ForEach(displayTags, id: \.self) { tag in
-                                Text(tag)
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, AppTheme.Space.sm)
-                                    .padding(.vertical, 3)
-                                    .background(AppTheme.surfaceElevated, in: Capsule())
-                            }
-
-                            if !todo.subtasks.isEmpty {
-                                let doneCount = todo.subtasks.filter(\.isCompleted).count
-                                Text("\(doneCount)/\(todo.subtasks.count)")
-                                    .font(.caption2.weight(.semibold).monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer(minLength: AppTheme.Space.xs)
-
-                            Text("今天 \(Self.timeFormatter.string(from: todo.updatedAt))")
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(.top, 2)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, AppTheme.Space.md)
-                    .padding(.trailing, AppTheme.Space.md)
+        HStack(alignment: .top, spacing: AppTheme.Space.sm) {
+            Button(action: onToggleDone) {
+                Image(systemName: statusSymbol)
+                    .font(.title3)
+                    .foregroundStyle(statusColor)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("vox.todo.row.\(todo.id.uuidString)")
             }
-            .padding(.leading, AppTheme.Space.xs)
+            .buttonStyle(AppPressableButtonStyle())
+            .accessibilityLabel(isDone ? "已完成" : "待处理")
+            .accessibilityIdentifier("vox.todo.status.\(todo.id.uuidString)")
 
-            if isExpanded {
-                expandedDetailSection
-                    .padding(.horizontal, AppTheme.Space.lg)
-                    .padding(.bottom, AppTheme.Space.md)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+            Button(action: onSelectFocus) {
+                VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.xs) {
+                        priorityBadge(todo.priority)
+
+                        Text(todo.title)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(isDone ? .secondary : .primary)
+                            .strikethrough(isDone, color: .secondary)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    HStack(spacing: AppTheme.Space.xs) {
+                        ForEach(displayTags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, AppTheme.Space.sm)
+                                .padding(.vertical, 3)
+                                .background(AppTheme.surfaceElevated, in: Capsule())
+                        }
+
+                        if !todo.subtasks.isEmpty {
+                            let doneCount = todo.subtasks.filter(\.isCompleted).count
+                            Text("\(doneCount)/\(todo.subtasks.count)")
+                                .font(.caption2.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: AppTheme.Space.xs)
+
+                        Text("今天 \(Self.timeFormatter.string(from: todo.updatedAt))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.top, 2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, AppTheme.Space.md)
+                .padding(.trailing, AppTheme.Space.md)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("vox.todo.row.\(todo.id.uuidString)")
         }
+        .padding(.leading, AppTheme.Space.xs)
         .background(
             AppTheme.surfaceCard,
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
         )
-        .overlay {
-            if isExpanded {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                    .strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1.2)
-            }
-        }
-    }
-
-    private var expandedDetailSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.md) {
-            Divider()
-
-            VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
-                HStack {
-                    Text("子步骤清单")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("按住右下麦克风可直接追加")
-                        .font(.caption2)
-                        .foregroundStyle(Color.accentColor)
-                }
-
-                if todo.subtasks.isEmpty {
-                    Text("暂无拆解子步骤，按住右下角录音键可直接语音补充。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, AppTheme.Space.xs)
-                } else {
-                    ForEach(todo.subtasks) { subtask in
-                        Button {
-                            onToggleSubtask(subtask.id)
-                        } label: {
-                            HStack(spacing: AppTheme.Space.sm) {
-                                Image(systemName: subtask.isCompleted ? "checkmark.circle.fill" : "circle")
-                                    .font(.subheadline)
-                                    .foregroundStyle(subtask.isCompleted ? .green : .secondary)
-                                Text(subtask.title)
-                                    .font(.subheadline)
-                                    .foregroundStyle(subtask.isCompleted ? .secondary : .primary)
-                                    .strikethrough(subtask.isCompleted, color: .secondary)
-                                    .multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
-                            }
-                            .frame(minHeight: 36)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("vox.todo.subtask.\(subtask.id.uuidString)")
-                    }
-                }
-            }
-
-            HStack(spacing: AppTheme.Space.sm) {
-                ForEach(TodoPriority.allCases, id: \.self) { level in
-                    let selected = todo.priority == level
-                    Button {
-                        onSelectPriority(level)
-                    } label: {
-                        Text(level.rawValue)
-                            .font(.caption.weight(.bold).monospacedDigit())
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .frame(minHeight: 32)
-                            .background(
-                                selected ? priorityColor(level).opacity(0.18) : AppTheme.surfaceElevated,
-                                in: Capsule()
-                            )
-                            .foregroundStyle(selected ? priorityColor(level) : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("vox.todo.priority.\(level.rawValue)")
-                }
-
-                Spacer(minLength: AppTheme.Space.xs)
-
-                Button(action: onSyncLinear) {
-                    Label(todo.externalSync?.externalID ?? "Linear", systemImage: "arrow.triangle.2.circlepath")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .frame(minHeight: 32)
-                        .background(AppTheme.surfaceElevated, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("vox.todo.action.linear")
-
-                Button(action: onCopyTodo) {
-                    Label("复制", systemImage: "doc.on.doc")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .frame(minHeight: 32)
-                        .background(AppTheme.surfaceElevated, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("vox.todo.action.copy")
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("vox.todo.expanded.detail")
     }
 
     private func priorityBadge(_ priority: TodoPriority) -> some View {
@@ -742,7 +1307,7 @@ private struct IOSExpandableTodoCard: View {
     private var statusSymbol: String {
         switch todo.executionState {
         case .inbox: "circle"
-        case .running: "bolt.horizontal.circle.fill"
+        case .running: "timelapse"
         case .done: "checkmark.circle.fill"
         case .failed: "exclamationmark.triangle.fill"
         }
@@ -751,9 +1316,9 @@ private struct IOSExpandableTodoCard: View {
     private var statusColor: Color {
         switch todo.executionState {
         case .inbox: .secondary
-        case .running: .blue
+        case .running: .orange
         case .done: .green
-        case .failed: .orange
+        case .failed: .red
         }
     }
 }

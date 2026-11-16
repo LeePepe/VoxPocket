@@ -93,6 +93,12 @@ public struct VoiceTodoSubtask: Identifiable, Codable, Equatable, Hashable, Send
         VoiceTodoSubtask(id: id, title: title, isCompleted: isCompleted, createdAt: createdAt)
     }
 
+    public func withTitle(_ title: String) -> VoiceTodoSubtask {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return self }
+        return VoiceTodoSubtask(id: id, title: trimmed, isCompleted: isCompleted, createdAt: createdAt)
+    }
+
     public func sanitizedForCloudSync() -> VoiceTodoSubtask {
         VoiceTodoSubtask(id: id, title: "", isCompleted: isCompleted, createdAt: createdAt)
     }
@@ -281,8 +287,40 @@ public struct VoiceTodo: Identifiable, Codable, Equatable, Hashable, Sendable {
         withEdits(priority: priority, updatedAt: updatedAt)
     }
 
+    public func withTitle(_ title: String, updatedAt: Date = Date()) -> VoiceTodo {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return self }
+        return withEdits(title: trimmed, updatedAt: updatedAt)
+    }
+
     public func withTags(_ tags: [String], updatedAt: Date = Date()) -> VoiceTodo {
         withEdits(tags: Self.normalizeTags(tags), updatedAt: updatedAt)
+    }
+
+    public func withAddedTag(_ rawTag: String, updatedAt: Date = Date()) -> VoiceTodo {
+        let trimmed = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return self }
+        let formatted = trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+        guard !tags.contains(formatted), tags.count < 3 else { return self }
+        return withTags(tags + [formatted], updatedAt: updatedAt)
+    }
+
+    public func withRemovedTag(_ rawTag: String, updatedAt: Date = Date()) -> VoiceTodo {
+        let trimmed = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return self }
+        let formatted = trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+        guard tags.contains(formatted) else { return self }
+        return withTags(tags.filter { $0 != formatted }, updatedAt: updatedAt)
+    }
+
+    public func withToggledTag(_ rawTag: String, updatedAt: Date = Date()) -> VoiceTodo {
+        let trimmed = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return self }
+        let formatted = trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+        if tags.contains(formatted) {
+            return withRemovedTag(formatted, updatedAt: updatedAt)
+        }
+        return withAddedTag(formatted, updatedAt: updatedAt)
     }
 
     public func withAppendedSubtask(_ subtaskTitle: String, createdAt: Date = Date(), updatedAt: Date = Date()) -> VoiceTodo {
@@ -296,6 +334,15 @@ public struct VoiceTodo: Identifiable, Codable, Equatable, Hashable, Sendable {
     public func withToggledSubtask(_ subtaskID: UUID, updatedAt: Date = Date()) -> VoiceTodo {
         let updatedSubtasks = subtasks.map { item in
             item.id == subtaskID ? item.withCompleted(!item.isCompleted) : item
+        }
+        return withEdits(subtasks: updatedSubtasks, updatedAt: updatedAt)
+    }
+
+    public func withUpdatedSubtaskTitle(_ subtaskID: UUID, title: String, updatedAt: Date = Date()) -> VoiceTodo {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, subtasks.contains(where: { $0.id == subtaskID }) else { return self }
+        let updatedSubtasks = subtasks.map { item in
+            item.id == subtaskID ? item.withTitle(trimmed) : item
         }
         return withEdits(subtasks: updatedSubtasks, updatedAt: updatedAt)
     }

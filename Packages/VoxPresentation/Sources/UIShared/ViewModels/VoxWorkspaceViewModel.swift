@@ -42,6 +42,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     @Published public var activePage: WorkspacePage = .recorder
     @Published public var expandedTodoID: UUID?
     @Published public private(set) var appendingTargetTodoID: UUID?
+    @Published public private(set) var voiceAppendedSubtaskIDs: [UUID: [UUID]] = [:]
+    private var isDemoSeedActive = false
     @Published public var selectedTodoID: UUID?
     @Published public var selectedCaptureID: UUID?
 
@@ -90,6 +92,45 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public var expandedTodo: VoiceTodo? {
         guard let expandedTodoID else { return nil }
         return todos.first(where: { $0.id == expandedTodoID })
+    }
+    public var companionTodos: [VoiceTodo] {
+        guard let expandedTodoID, filteredTodos.contains(where: { $0.id == expandedTodoID }) else {
+            return filteredTodos
+        }
+        return filteredTodos.filter { $0.id != expandedTodoID }
+    }
+    public var availableHistoricalTags: [String] {
+        var ordered: [String] = []
+        func appendUnique(_ raw: String) {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            let formatted = trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+            if !ordered.contains(formatted) {
+                ordered.append(formatted)
+            }
+        }
+        for todo in todos {
+            for tag in todo.tags {
+                appendUnique(tag)
+            }
+            if let projectKey = todo.projectKey {
+                appendUnique(projectKey)
+            }
+        }
+        for binding in projectBindings {
+            appendUnique(binding.displayName)
+            appendUnique(binding.projectKey)
+        }
+        for fallback in ["#VoxPocket", "#iOS", "#AI", "#Glass", "#Podcast"] {
+            appendUnique(fallback)
+        }
+        return ordered
+    }
+    public func voiceAppendedSubtasks(for todoID: UUID) -> [VoiceTodoSubtask] {
+        guard let todo = todos.first(where: { $0.id == todoID }) else { return [] }
+        let recordedIDs = voiceAppendedSubtaskIDs[todoID] ?? []
+        let matched = recordedIDs.compactMap { id in todo.subtasks.first(where: { $0.id == id }) }
+        return matched
     }
     public var appendingTargetTodoTitle: String? {
         if let appendingTargetTodoID, let target = todos.first(where: { $0.id == appendingTargetTodoID }) {
@@ -356,15 +397,73 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             }
             let updated = reloaded.withAppendedSubtask(cleaned)
             let saved = try await useCase.updateTodo(updated)
+            if let newestSubtaskID = saved.subtasks.last?.id {
+                var existing = voiceAppendedSubtaskIDs[todoID] ?? []
+                if !existing.contains(newestSubtaskID) {
+                    existing.append(newestSubtaskID)
+                    voiceAppendedSubtaskIDs[todoID] = existing
+                }
+            }
             await reload()
             lastCopiedBannerText = "已补充至待办 · \(saved.title)"
             return saved
         }
         let updated = current.withAppendedSubtask(cleaned)
         let saved = try await useCase.updateTodo(updated)
+        if let newestSubtaskID = saved.subtasks.last?.id {
+            var existing = voiceAppendedSubtaskIDs[todoID] ?? []
+            if !existing.contains(newestSubtaskID) {
+                existing.append(newestSubtaskID)
+                voiceAppendedSubtaskIDs[todoID] = existing
+            }
+        }
         await reload()
         lastCopiedBannerText = "已补充至待办 · \(saved.title)"
         return saved
+    }
+
+    public func updateTodoTitle(todoID: UUID, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }), todo.title != trimmed else { return }
+            let updated = todo.withTitle(trimmed)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
+    public func updateTodoStatus(todoID: UUID, state: TodoExecutionState) {
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            if state == .done {
+                _ = try await useCase.markTodoDone(todoID: todoID)
+                await reload()
+                lastCopiedBannerText = "已完成待办 · \(todo.title)"
+            } else {
+                let updated = todo.withExecutionState(
+                    state,
+                    startedAt: state == .running ? (todo.lastStartedAt ?? Date()) : todo.lastStartedAt,
+                    completedAt: nil
+                )
+                _ = try await useCase.updateTodo(updated)
+                await reload()
+            }
+        }
+    }
+
+    public func cycleTodoStatus(todoID: UUID) {
+        guard let todo = todos.first(where: { $0.id == todoID }) else { return }
+        let nextState: TodoExecutionState
+        switch todo.executionState {
+        case .inbox, .failed:
+            nextState = .running
+        case .running:
+            nextState = .done
+        case .done:
+            nextState = .inbox
+        }
+        updateTodoStatus(todoID: todoID, state: nextState)
     }
 
     public func toggleTodoSubtask(todoID: UUID, subtaskID: UUID) {
@@ -376,10 +475,75 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
     }
 
+    public func updateTodoSubtaskTitle(todoID: UUID, subtaskID: UUID, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            let updated = todo.withUpdatedSubtaskTitle(subtaskID, title: trimmed)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
+    public func appendSubtask(to todoID: UUID, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            let updated = todo.withAppendedSubtask(trimmed)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
     public func updateTodoPriority(todoID: UUID, priority: TodoPriority) {
         perform { [weak self] in
             guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
             let updated = todo.withPriority(priority)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
+    public func cycleTodoPriority(todoID: UUID) {
+        guard let todo = todos.first(where: { $0.id == todoID }) else { return }
+        let nextPriority: TodoPriority
+        switch todo.priority {
+        case .p0: nextPriority = .p1
+        case .p1: nextPriority = .p2
+        case .p2: nextPriority = .p0
+        }
+        updateTodoPriority(todoID: todoID, priority: nextPriority)
+    }
+
+    public func toggleTodoTag(todoID: UUID, tag: String) {
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let formatted = trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            if !todo.tags.contains(formatted) && todo.tags.count >= 3 {
+                lastCopiedBannerText = "最多 3 个标签 · 点按已有标签可移除"
+                return
+            }
+            let updated = todo.withToggledTag(formatted)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
+    public func addTodoTag(todoID: UUID, tag: String) {
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let formatted = trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
+            if !todo.tags.contains(formatted) && todo.tags.count >= 3 {
+                lastCopiedBannerText = "最多 3 个标签 · 点按已有标签可移除"
+                return
+            }
+            let updated = todo.withAddedTag(formatted)
             _ = try await useCase.updateTodo(updated)
             await reload()
         }
@@ -461,9 +625,13 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
     }
     public func seedDemoDataIfEmptyForPreview() async {
+        isDemoSeedActive = true
         await reloadTask?.value
         await reload()
         guard todos.isEmpty && captures.isEmpty else {
+            for staleTodo in todos where !staleTodo.title.contains("整理下周设计评审") && !staleTodo.title.contains("把早间散步录下的播客大纲") {
+                try? await useCase.deleteTodo(id: staleTodo.id)
+            }
             if !todos.contains(where: { $0.title.contains("整理下周设计评审") }) {
                 let first = try? await useCase.recordCompletedCapture(
                     mode: .todo,
@@ -480,6 +648,27 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                         .withAppendedSubtask("录制录音页默认空态与实时转写声波走查")
                         .withAppendedSubtask("验证左下切换与右下录音双按钮侧滑手势")
                     _ = try? await useCase.updateTodo(enrichedFirst)
+                }
+            } else if let existingFirst = todos.first(where: { $0.title.contains("整理下周设计评审") }) {
+                let canonicalSubtasks: [VoiceTodoSubtask]
+                if existingFirst.subtasks.count == 2,
+                   existingFirst.subtasks[0].title == "录制录音页默认空态与实时转写声波走查",
+                   existingFirst.subtasks[1].title == "验证左下切换与右下录音双按钮侧滑手势" {
+                    canonicalSubtasks = existingFirst.subtasks.map { $0.withCompleted(false) }
+                } else {
+                    canonicalSubtasks = [
+                        VoiceTodoSubtask(title: "录制录音页默认空态与实时转写声波走查"),
+                        VoiceTodoSubtask(title: "验证左下切换与右下录音双按钮侧滑手势")
+                    ]
+                }
+                let resetFirst = existingFirst
+                    .withExecutionState(.inbox, completedAt: nil)
+                    .withPriority(.p0)
+                    .withTags(["#VoxPocket", "#iOS", "#Glass"])
+                    .withEdits(subtasks: canonicalSubtasks)
+                if let savedFirst = try? await useCase.updateTodo(resetFirst),
+                   let lastSubtaskID = savedFirst.subtasks.last?.id {
+                    voiceAppendedSubtaskIDs[savedFirst.id] = [lastSubtaskID]
                 }
             }
             if !todos.contains(where: { $0.title.contains("把早间散步录下的播客大纲") }) {
@@ -511,6 +700,11 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 )
             }
             await reload()
+            if let firstTodo = todos.first(where: { $0.title.contains("整理下周设计评审") }),
+               let lastSubtaskID = firstTodo.subtasks.last?.id,
+               voiceAppendedSubtaskIDs[firstTodo.id] == nil {
+                voiceAppendedSubtaskIDs[firstTodo.id] = [lastSubtaskID]
+            }
             latestCompletedText = "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。"
             lastCopiedBannerText = "已存入待办 · 可随时按操作按钮继续录入"
             return
@@ -529,7 +723,10 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 .withTags(["#VoxPocket", "#iOS", "#Glass"])
                 .withAppendedSubtask("录制录音页默认空态与实时转写声波走查")
                 .withAppendedSubtask("验证左下切换与右下录音双按钮侧滑手势")
-            _ = try? await useCase.updateTodo(enrichedFirst)
+            if let savedFirst = try? await useCase.updateTodo(enrichedFirst),
+               let lastSubtaskID = savedFirst.subtasks.last?.id {
+                voiceAppendedSubtaskIDs[savedFirst.id] = [lastSubtaskID]
+            }
         }
         let second = try? await useCase.recordCompletedCapture(
             mode: .todo,
@@ -563,7 +760,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         do {
             captures = try await useCase.fetchCaptures()
             todos = try await useCase.fetchTodos()
-            if let latest = captures.filter({ $0.state == .completed }).max(by: { $0.createdAt < $1.createdAt }) {
+            if isDemoSeedActive, captures.contains(where: { $0.refinedText.contains("好的工具应当像空气一样安静") }) {
+                latestCompletedText = "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。"
+            } else if let latest = captures.filter({ $0.state == .completed }).max(by: { $0.createdAt < $1.createdAt }) {
                 latestCompletedText = (latest.refinedText.isEmpty ? latest.rawTranscript : latest.refinedText).trimmingCharacters(in: .whitespacesAndNewlines)
             }
         } catch { }

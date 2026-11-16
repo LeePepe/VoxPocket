@@ -338,14 +338,58 @@ final class VoxWorkspaceContractTests: XCTestCase {
         vm.toggleTodoSubtask(todoID: updatedTodo.id, subtaskID: updatedTodo.subtasks[0].id)
         try await Task.sleep(for: .milliseconds(30))
         XCTAssertEqual(vm.todos.first?.subtasks.first?.isCompleted, true)
+        XCTAssertEqual(vm.voiceAppendedSubtasks(for: updatedTodo.id).count, 1)
+
+        // Direct in-place manipulation: subtask title, todo title, status cycle, priority cycle, historical tags & add tag
+        let firstSubtaskID = try XCTUnwrap(vm.todos.first?.subtasks.first?.id)
+        vm.updateTodoSubtaskTitle(todoID: updatedTodo.id, subtaskID: firstSubtaskID, title: "原地修改后的子任务标题")
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.subtasks.first?.title, "原地修改后的子任务标题")
+
+        vm.updateTodoTitle(todoID: updatedTodo.id, title: "原地修改后的顶部聚焦标题")
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.title, "原地修改后的顶部聚焦标题")
+        vm.updateTodoTitle(todoID: updatedTodo.id, title: "   ")
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.title, "原地修改后的顶部聚焦标题")
+
+        vm.cycleTodoStatus(todoID: updatedTodo.id)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.executionState, .running)
+        vm.cycleTodoStatus(todoID: updatedTodo.id)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.executionState, .done)
+        vm.cycleTodoStatus(todoID: updatedTodo.id)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.executionState, .inbox)
 
         vm.updateTodoPriority(todoID: updatedTodo.id, priority: .p0)
         try await Task.sleep(for: .milliseconds(30))
         XCTAssertEqual(vm.todos.first?.priority, .p0)
+        vm.cycleTodoPriority(todoID: updatedTodo.id)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.priority, .p1)
+
+        XCTAssertTrue(vm.availableHistoricalTags.contains("#VoxPocket"))
+        XCTAssertTrue(vm.availableHistoricalTags.contains("#AI"))
+        vm.toggleTodoTag(todoID: updatedTodo.id, tag: "#VoxPocket")
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.tags, ["#VoxPocket"])
+        vm.addTodoTag(todoID: updatedTodo.id, tag: "Design")
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.tags, ["#VoxPocket", "#Design"])
+        XCTAssertTrue(vm.availableHistoricalTags.contains("#Design"))
+        vm.toggleTodoTag(todoID: updatedTodo.id, tag: "#VoxPocket")
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.tags, ["#Design"])
+
+        // Companion tray excludes the currently expanded todo
+        XCTAssertTrue(vm.companionTodos.isEmpty)
 
         // Collapse Todo and slide back to Recorder Page
         vm.toggleExpandedTodo(updatedTodo.id)
         XCTAssertNil(vm.expandedTodoID)
+        XCTAssertEqual(vm.companionTodos.count, 1)
         vm.toggleActivePage()
         XCTAssertEqual(vm.activePage, .recorder)
 
