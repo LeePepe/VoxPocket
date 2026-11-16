@@ -453,7 +453,7 @@ private struct IOSTodoExpandableCard: View {
             if isExpanded {
                 expandedThreeTierContent
                     .padding(AppTheme.Space.lg)
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                    .transition(.opacity)
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("vox.todo.expanded.detail")
             } else {
@@ -502,53 +502,51 @@ private struct IOSTodoExpandableCard: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(AppPressableButtonStyle())
+            .matchedGeometryEffect(id: "todo-status-\(todo.id)", in: cardNamespace)
             .accessibilityLabel(isDone ? "已完成" : "待处理")
             .accessibilityIdentifier("vox.todo.status." + todo.id.uuidString)
 
-            Button(action: onToggleExpand) {
-                VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
-                    HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.xs) {
-                        priorityBadge(todo.priority)
+            VStack(alignment: .leading, spacing: AppTheme.Space.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.xs) {
+                    priorityBadge(todo.priority)
+                        .matchedGeometryEffect(id: "todo-priority-\(todo.id)", in: cardNamespace)
 
-                        Text(todo.title)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(isDone ? .secondary : .primary)
-                            .strikethrough(isDone, color: .secondary)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .matchedGeometryEffect(id: "todo-title-\(todo.id)", in: cardNamespace)
-                    }
-
-                    HStack(spacing: AppTheme.Space.xs) {
-                        ForEach(displayTags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, AppTheme.Space.sm)
-                                .padding(.vertical, 3)
-                                .background(AppTheme.surfaceElevated, in: Capsule())
-                        }
-
-                        if !todo.subtasks.isEmpty {
-                            Text(String(completedSubtaskCount) + "/" + String(totalSubtaskCount))
-                                .font(.caption2.weight(.semibold).monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: AppTheme.Space.xs)
-
-                        Text("今天 " + Self.timeFormatter.string(from: todo.updatedAt))
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.top, 2)
+                    Text(todo.title)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(isDone ? .secondary : .primary)
+                        .strikethrough(isDone, color: .secondary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .matchedGeometryEffect(id: "todo-title-\(todo.id)", in: cardNamespace)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, AppTheme.Space.md)
-                .padding(.trailing, AppTheme.Space.md)
-                .contentShape(Rectangle())
+
+                HStack(spacing: AppTheme.Space.xs) {
+                    ForEach(displayTags, id: \.self) { tag in
+                        collapsedTagChip(tag)
+                            .matchedGeometryEffect(id: "todo-tag-\(todo.id)-\(tag)", in: cardNamespace)
+                    }
+
+                    if !todo.subtasks.isEmpty {
+                        Text(String(completedSubtaskCount) + "/" + String(totalSubtaskCount))
+                            .font(.caption2.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: AppTheme.Space.xs)
+
+                    Text("今天 " + Self.timeFormatter.string(from: todo.updatedAt))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.top, 2)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, AppTheme.Space.md)
+            .padding(.trailing, AppTheme.Space.md)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onToggleExpand)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("vox.todo.row." + todo.id.uuidString)
         }
         .padding(.leading, AppTheme.Space.xs)
@@ -629,86 +627,102 @@ private struct IOSTodoExpandableCard: View {
         .accessibilityIdentifier("vox.todo.progress.badge")
     }
 
-    // Tier 2: Compact Adaptive Wrapping Metadata & Tag Flow (Status · Priority · Existing Tags · + Add Tag)
+    // Tier 2: Two-Row Metadata & Tag Layout (Row 2A: Round Status/Priority + Linear; Row 2B: Dedicated Squared-Off Tag Row)
     private var tierTwoCompactMetadataAndTagStrip: some View {
-        IOSTodoWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
-            Button(action: onCycleStatus) {
-                HStack(spacing: 4) {
-                    Image(systemName: statusSymbol)
-                        .font(.caption.weight(.bold))
-                    Text(statusTitle)
-                        .font(.caption.weight(.semibold))
-                }
-                .foregroundStyle(statusColor)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .frame(minHeight: 32)
-                .background(statusColor.opacity(0.14), in: Capsule())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .contextMenu {
-                Button("待处理") { onSelectStatus(.inbox) }
-                Button("进行中") { onSelectStatus(.running) }
-                Button("已完成") { onSelectStatus(.done) }
-            }
-            .accessibilityLabel("状态：" + statusTitle)
-            .accessibilityIdentifier("vox.todo.status.pill")
-
-            Button(action: onCyclePriority) {
-                Text(todo.priority.rawValue)
-                    .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(priorityColor(todo.priority))
-                    .padding(.horizontal, 9)
+        VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
+            HStack(spacing: AppTheme.Space.sm) {
+                Button(action: onCycleStatus) {
+                    HStack(spacing: 4) {
+                        Image(systemName: statusSymbol)
+                            .font(.caption.weight(.bold))
+                        Text(statusTitle)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(statusColor)
+                    .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .frame(minHeight: 32)
-                    .background(priorityColor(todo.priority).opacity(0.14), in: Capsule())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .contextMenu {
-                ForEach(TodoPriority.allCases, id: \.self) { level in
-                    Button(level.rawValue) { onSelectPriority(level) }
+                    .background(statusColor.opacity(0.15), in: Capsule())
                 }
-            }
-            .accessibilityLabel("优先级：" + todo.priority.rawValue)
-            .accessibilityIdentifier("vox.todo.priority.pill")
+                .buttonStyle(AppPressableButtonStyle())
+                .matchedGeometryEffect(id: "todo-status-\(todo.id)", in: cardNamespace)
+                .contextMenu {
+                    Button("待处理") { onSelectStatus(.inbox) }
+                    Button("进行中") { onSelectStatus(.running) }
+                    Button("已完成") { onSelectStatus(.done) }
+                }
+                .accessibilityLabel("状态：" + statusTitle)
+                .accessibilityIdentifier("vox.todo.status.pill")
 
-            ForEach(displayTags, id: \.self) { tag in
-                activeTagPillButton(tag)
-            }
+                Button(action: onCyclePriority) {
+                    Text(todo.priority.rawValue)
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(priorityColor(todo.priority))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .frame(minHeight: 32)
+                        .background(priorityColor(todo.priority).opacity(0.15), in: Capsule())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .matchedGeometryEffect(id: "todo-priority-\(todo.id)", in: cardNamespace)
+                .contextMenu {
+                    ForEach(TodoPriority.allCases, id: \.self) { level in
+                        Button(level.rawValue) { onSelectPriority(level) }
+                    }
+                }
+                .accessibilityLabel("优先级：" + todo.priority.rawValue)
+                .accessibilityIdentifier("vox.todo.priority.pill")
 
-            Button(action: toggleTagPicker) {
-                Image(systemName: isTagPickerExpanded ? "chevron.up" : "plus")
-                    .font(.caption.weight(.bold))
+                Spacer(minLength: AppTheme.Space.xs)
+
+                Button(action: onSyncLinear) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.right.circle")
+                            .font(.caption.weight(.bold))
+                        Text(todo.externalSync?.externalID ?? "Linear")
+                            .font(.caption.weight(.semibold))
+                    }
                     .foregroundStyle(Color.accentColor)
-                    .frame(width: 32, height: 32)
-                    .background(Color.accentColor.opacity(0.12), in: Circle())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .accessibilityLabel("添加或选择标签")
-            .accessibilityIdentifier("vox.todo.tags.trigger")
-            .popover(isPresented: $isTagPickerExpanded, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-                historicalTagPickerPanel
-                    .frame(minWidth: 260, maxWidth: 310)
-                    .padding(AppTheme.Space.md)
-                    .presentationCompactAdaptation(.popover)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 32)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .accessibilityLabel("同步到 Linear")
+                .accessibilityIdentifier("vox.todo.action.linear")
             }
 
-            Button(action: onSyncLinear) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.right.circle")
-                        .font(.caption.weight(.bold))
-                    Text(todo.externalSync?.externalID ?? "Linear")
-                        .font(.caption.weight(.semibold))
+            IOSTodoWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+                ForEach(displayTags, id: \.self) { tag in
+                    activeTagPillButton(tag)
+                        .matchedGeometryEffect(id: "todo-tag-\(todo.id)-\(tag)", in: cardNamespace)
                 }
-                .foregroundStyle(Color.accentColor)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .frame(minHeight: 32)
-                .background(Color.accentColor.opacity(0.12), in: Capsule())
+
+                Button(action: toggleTagPicker) {
+                    Image(systemName: isTagPickerExpanded ? "chevron.up" : "plus")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            AppTheme.surfaceElevated,
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
+                        }
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .accessibilityLabel("添加或选择标签")
+                .accessibilityIdentifier("vox.todo.tags.trigger")
+                .popover(isPresented: $isTagPickerExpanded, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                    historicalTagPickerPanel
+                        .frame(minWidth: 260, maxWidth: 310)
+                        .padding(AppTheme.Space.md)
+                        .presentationCompactAdaptation(.popover)
+                }
             }
-            .buttonStyle(AppPressableButtonStyle())
-            .accessibilityLabel("同步到 Linear")
-            .accessibilityIdentifier("vox.todo.action.linear")
         }
     }
 
@@ -716,6 +730,22 @@ private struct IOSTodoExpandableCard: View {
         withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
             isTagPickerExpanded.toggle()
         }
+    }
+
+    private func collapsedTagChip(_ tag: String) -> some View {
+        Text(tag)
+            .font(.caption2.weight(.medium).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                AppTheme.surfaceElevated,
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
+            }
     }
 
     private func activeTagPillButton(_ tag: String) -> some View {
@@ -726,12 +756,19 @@ private struct IOSTodoExpandableCard: View {
             onToggleTag(tag)
         }) {
             Text(tag)
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(.medium).monospacedDigit())
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .frame(minHeight: 32)
-                .background(AppTheme.surfaceElevated, in: Capsule())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .frame(minHeight: 28)
+                .background(
+                    AppTheme.surfaceElevated,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
+                }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("标签 " + tag)
@@ -866,7 +903,7 @@ private struct IOSTodoExpandableCard: View {
             .foregroundStyle(priorityColor(priority))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(priorityColor(priority).opacity(0.14), in: Capsule())
+            .background(priorityColor(priority).opacity(0.15), in: Capsule())
     }
 
     private func commitTitleIfValid() {

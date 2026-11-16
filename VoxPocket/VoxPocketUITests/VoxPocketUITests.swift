@@ -160,12 +160,19 @@ final class VoxPocketUITests: XCTestCase {
             let collapseBtn = app.buttons["vox.todo.collapse.button"]
             XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
             XCTAssertTrue(app.textFields["vox.todo.title.editor"].exists || app.textViews["vox.todo.title.editor"].exists)
-            XCTAssertTrue(app.buttons["vox.todo.status.pill"].exists)
-            XCTAssertTrue(app.buttons["vox.todo.priority.pill"].exists)
+            let statusPill = app.buttons["vox.todo.status.pill"]
+            let priorityPill = app.buttons["vox.todo.priority.pill"]
+            let linearBtn = app.buttons["vox.todo.action.linear"]
+            XCTAssertTrue(statusPill.exists)
+            XCTAssertTrue(priorityPill.exists)
+            XCTAssertTrue(linearBtn.exists)
             let tagsTrigger = app.buttons["vox.todo.tags.trigger"]
             XCTAssertTrue(tagsTrigger.exists)
             XCTAssertTrue(tagsTrigger.isHittable)
             XCTAssertTrue(app.frame.contains(tagsTrigger.frame))
+            // Verify Row 2B (Dedicated Tag Row) sits vertically below Row 2A (Status / Priority / Linear)
+            XCTAssertGreaterThan(tagsTrigger.frame.minY, statusPill.frame.maxY - 2)
+            XCTAssertGreaterThan(tagsTrigger.frame.minY, priorityPill.frame.maxY - 2)
             saveScreenshot(app, name: "todo-expanded-\(appearance)", directory: evidence)
 
             // Open historical tag picker & add-tag popover attached to + tag trigger
