@@ -61,9 +61,10 @@ production Watch view; it is absent from device/Release builds and has no on-scr
 Native screenshot evidence belongs outside Git and must be independently reviewed.
 
 XcodeGen remains the source of truth, with a dedicated Watch scheme and an unchanged main
-scheme target set. Watch app/complication Release signing remains manual. Before an iOS
-release the Owner must provision and install profiles for the two new bundle IDs and provide
-`VOXPOCKET_WATCH_PROFILE_SPECIFIER` / `VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER`.
-Fastlane fails closed when either mapping is missing and exports all four iOS bundle profiles;
-it does not create Watch profiles. Existing macOS delivery is unchanged. Unsigned builds do
-not establish Release signing or TestFlight distribution; this record makes no release claim.
+scheme target set. Watch app/complication Release signing remains manual. When
+`VOXPOCKET_WATCH_PROFILE_SPECIFIER` or `VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER` is
+not pre-supplied, Fastlane idempotently registers the missing Watch bundle IDs via the App
+Store Connect API (`Spaceship::ConnectAPI::BundleId`) and fetches/creates their App Store
+provisioning profiles, failing closed when either profile mapping remains empty. Existing
+macOS delivery is unchanged. Unsigned builds do not establish Release signing or TestFlight
+distribution; this record makes no release claim.

@@ -44,6 +44,26 @@ def regenerate_project
   sh("cd ../VoxPocket && xcodegen generate")
 end
 
+def ensure_bundle_id_registered(api_key, identifier:, name:, platform: "IOS")
+  return unless defined?(Spaceship::ConnectAPI::BundleId)
+  return if Spaceship::ConnectAPI.token.nil?
+
+  existing = Spaceship::ConnectAPI::BundleId.find(identifier)
+  if existing
+    UI.message("Bundle ID #{identifier} already registered in App Store Connect")
+    return existing
+  end
+
+  UI.important("Registering missing Bundle ID #{identifier} (#{name}) in App Store Connect...")
+  created = Spaceship::ConnectAPI::BundleId.create(
+    name: name,
+    platform: platform,
+    identifier: identifier
+  )
+  UI.success("Registered Bundle ID #{identifier} in App Store Connect")
+  created
+end
+
 # Build number 按目标平台递增，跨 marketing version 不重置。
 # macOS 必须显式查询 osx；iOS 暂停后不能继续用默认 iOS 计数，否则 macOS 会重复用号。
 def next_build_number(api_key, platform: "ios")
@@ -117,9 +137,14 @@ platform :ios do
       UI.user_error!("iOS widget provisioning profile name for #{WIDGET_IDENTIFIER} could not be determined from App Store Connect output; refusing archive")
     end
 
-    # 新 Watch profiles 优先读取显式环境变量，否则通过 App Store Connect API 检索已安装 profile（此 lane 不自动创建新 bundle ID，skip_certificate_verification 保持一致）。
+    # 新 Watch profiles 优先读取显式环境变量，否则先幂等确保 Watch Bundle IDs 已在 App Store Connect 注册，再通过 API 检索/创建并安装 profile。
     watch_profile_name = ENV.fetch("VOXPOCKET_WATCH_PROFILE_SPECIFIER", "").strip
     if watch_profile_name.empty?
+      ensure_bundle_id_registered(
+        api_key,
+        identifier: WATCH_IDENTIFIER,
+        name: "VoxPocket Watch"
+      )
       get_provisioning_profile(
         api_key: api_key,
         app_identifier: WATCH_IDENTIFIER,
@@ -132,6 +157,11 @@ platform :ios do
     end
     complication_profile_name = ENV.fetch("VOXPOCKET_WATCH_COMPLICATION_PROFILE_SPECIFIER", "").strip
     if complication_profile_name.empty?
+      ensure_bundle_id_registered(
+        api_key,
+        identifier: WATCH_COMPLICATION_IDENTIFIER,
+        name: "VoxPocket Watch Complication"
+      )
       get_provisioning_profile(
         api_key: api_key,
         app_identifier: WATCH_COMPLICATION_IDENTIFIER,
