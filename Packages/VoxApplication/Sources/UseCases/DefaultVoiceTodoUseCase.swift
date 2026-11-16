@@ -275,7 +275,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     public init(
         captures: any VoiceCaptureRepository,
         todos: any VoiceTodoRepository,
-        extractor: any VoiceTodoExtractionRunning? = nil,
+        extractor: (any VoiceTodoExtractionRunning)? = nil,
         runner: any AIRunnerExecutionService,
         externalSync: any TodoExternalSyncService = NoopTodoExternalSyncService(),
         notificationScheduler: any VoxNotificationScheduling = VoxNotificationScheduler(),
