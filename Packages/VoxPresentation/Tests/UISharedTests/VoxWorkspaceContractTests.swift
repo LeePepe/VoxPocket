@@ -348,6 +348,17 @@ final class VoxWorkspaceContractTests: XCTestCase {
         XCTAssertNil(vm.expandedTodoID)
         vm.toggleActivePage()
         XCTAssertEqual(vm.activePage, .recorder)
+
+        // Start recording on Recorder Page, then switch to Todo Page and expand a Todo before completion:
+        // must respect the start-time destination (.text) and NOT append to the newly expanded Todo.
+        vm.startCaptureInPreferredMode()
+        XCTAssertNil(vm.appendingTargetTodoID)
+        vm.toggleActivePage()
+        vm.toggleExpandedTodo(updatedTodo.id)
+        try editing.replaceAll(with: "独立速记不应混入展开待办")
+        await vm.completeCapture(refinedText: "独立速记不应混入展开待办", deviceSource: .iPhone)
+        XCTAssertEqual(vm.todos.first?.subtasks.count, 1)
+        XCTAssertEqual(vm.lastCopiedBannerText, "已复制到剪贴板 · 可直接粘贴")
     }
 
     #if os(macOS)

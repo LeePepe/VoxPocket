@@ -289,7 +289,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             guard captureGeneration == generation else { return }
             let audio = recorded?.localAudioFileName ?? localAudioFileName
             let duration = recorded?.durationSeconds ?? stoppedDuration
-            let targetAppendID = appendingTargetTodoID ?? (activePage == .todo ? expandedTodoID : nil)
+            let targetAppendID = appendingTargetTodoID
             appendingTargetTodoID = nil
             if let targetAppendID, todos.contains(where: { $0.id == targetAppendID }) {
                 let appended = try await appendVoiceCaptureToTodo(
