@@ -9,13 +9,62 @@ final class CleanSlateModelsTests: XCTestCase {
         XCTAssertEqual(sanitizedCapture.refinedText, "")
         XCTAssertNil(sanitizedCapture.localAudioFileName)
 
-        let todo = VoiceTodo(title: "title", taskPrompt: "prompt", rawTranscript: "raw", lastExecutionSummary: "summary", localAudioFileName: "audio.m4a")
+        let todo = VoiceTodo(
+            title: "title",
+            taskPrompt: "prompt",
+            rawTranscript: "raw",
+            priority: .p0,
+            tags: ["VoxPocket", "AI", "Design", "ExtraIgnored"],
+            subtasks: [VoiceTodoSubtask(title: "Secret subtask from voice")],
+            lastExecutionSummary: "summary",
+            localAudioFileName: "audio.m4a"
+        )
+        XCTAssertEqual(todo.tags, ["#VoxPocket", "#AI", "#Design"])
         let sanitizedTodo = todo.sanitizedForCloudSync()
         XCTAssertEqual(sanitizedTodo.title, "")
         XCTAssertEqual(sanitizedTodo.taskPrompt, "")
         XCTAssertEqual(sanitizedTodo.rawTranscript, "")
+        XCTAssertEqual(sanitizedTodo.tags, [])
+        XCTAssertEqual(sanitizedTodo.subtasks.map(\.title), [""])
         XCTAssertNil(sanitizedTodo.lastExecutionSummary)
         XCTAssertNil(sanitizedTodo.localAudioFileName)
+    }
+
+    func testVoiceTodoSubtasksPriorityTagsAndCopyPreservation() throws {
+        let base = VoiceTodo(
+            title: "Prepare iOS slide nav",
+            taskPrompt: "## Goal\nSlide nav",
+            rawTranscript: "Prepare iOS slide nav",
+            projectKey: "VP",
+            priority: .p0,
+            tags: ["VoxPocket", "#iOS", "Glass", "OverflowTag"]
+        )
+        XCTAssertEqual(base.priority, .p0)
+        XCTAssertEqual(base.tags, ["#VoxPocket", "#iOS", "#Glass"])
+        XCTAssertTrue(base.subtasks.isEmpty)
+
+        let withSubtask = base.withAppendedSubtask("Add bottom-left switch button")
+        XCTAssertEqual(withSubtask.subtasks.count, 1)
+        XCTAssertEqual(withSubtask.subtasks[0].title, "Add bottom-left switch button")
+        XCTAssertFalse(withSubtask.subtasks[0].isCompleted)
+        XCTAssertTrue(withSubtask.taskPrompt.contains("- [ ] Add bottom-left switch button"))
+
+        let subtaskID = withSubtask.subtasks[0].id
+        let toggled = withSubtask.withToggledSubtask(subtaskID)
+        XCTAssertTrue(toggled.subtasks[0].isCompleted)
+
+        let stateUpdated = toggled.withExecutionState(.running)
+        XCTAssertEqual(stateUpdated.priority, .p0)
+        XCTAssertEqual(stateUpdated.tags, ["#VoxPocket", "#iOS", "#Glass"])
+        XCTAssertEqual(stateUpdated.subtasks, toggled.subtasks)
+
+        let reprioritized = stateUpdated.withPriority(.p2)
+        XCTAssertEqual(reprioritized.priority, .p2)
+        XCTAssertEqual(reprioritized.subtasks, toggled.subtasks)
+
+        let encoded = try JSONEncoder().encode(reprioritized)
+        let decoded = try JSONDecoder().decode(VoiceTodo.self, from: encoded)
+        XCTAssertEqual(decoded, reprioritized)
     }
 
     func testRunnerEscapingAndArguments() {

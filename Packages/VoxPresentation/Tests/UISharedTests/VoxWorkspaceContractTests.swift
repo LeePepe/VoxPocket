@@ -70,7 +70,14 @@ final class VoxWorkspaceContractTests: XCTestCase {
             (storedCaptures[0], storedTodos.first)
         }
         func convertCaptureToTodo(captureID: UUID) async throws -> VoiceTodo { storedTodos[0] }
-        func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo { todo }
+        func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo {
+            if let index = storedTodos.firstIndex(where: { $0.id == todo.id }) {
+                storedTodos[index] = todo
+            } else {
+                storedTodos.append(todo)
+            }
+            return todo
+        }
         func runTodoWithAI(todoID: UUID, project: ProjectBinding, template: AIRunnerTemplate) async throws -> VoiceTodo { storedTodos[0] }
         func markTodoDone(todoID: UUID) async throws -> VoiceTodo {
             guard let index = storedTodos.firstIndex(where: { $0.id == todoID }) else { throw NSError(domain: "test", code: 1) }
@@ -132,6 +139,7 @@ final class VoxWorkspaceContractTests: XCTestCase {
         let restored = VoxWorkspaceViewModel(useCase: useCase)
         restored.searchQuery = "no-match"
         restored.sortOrder = .oldestFirst
+        await restored.reload()
         await restored.seedDemoDataIfEmptyForPreview()
         XCTAssertEqual(restored.latestCompletedText, vm.latestCompletedText)
         XCTAssertTrue(restored.filteredCaptures.isEmpty)
@@ -280,6 +288,79 @@ final class VoxWorkspaceContractTests: XCTestCase {
         await vm.completeCapture()
         XCTAssertTrue(vm.latestCompletedText.hasPrefix("播客开场灵感："))
         XCTAssertEqual(vm.captureState, .idle)
+    }
+
+    @MainActor
+    func testSlidePageNavigationExpandableTodoAndSameTodoVoiceAppend() async throws {
+        let useCase = FakeCaptureAndTodoUseCase()
+        let editing = DefaultEditingUseCase()
+        let vm = VoxWorkspaceViewModel(
+            useCase: useCase,
+            preferencesStore: InMemoryTestPreferencesStore(),
+            defaultCaptureMode: .text,
+            editingUseCase: editing
+        )
+        XCTAssertEqual(vm.activePage, .recorder)
+        XCTAssertNil(vm.expandedTodoID)
+
+        // Slide to Todo Page: recording with no expanded todo creates a new VoiceTodo
+        vm.toggleActivePage()
+        XCTAssertEqual(vm.activePage, .todo)
+        vm.startCaptureInPreferredMode()
+        XCTAssertEqual(vm.captureState, .recording(mode: .todo))
+        try editing.replaceAll(with: "整理 iOS 双按钮极简导航验收")
+        await vm.completeCapture(deviceSource: .iPhone)
+        XCTAssertEqual(vm.todos.count, 1)
+        let createdTodo = try XCTUnwrap(vm.todos.first)
+        XCTAssertEqual(createdTodo.title, "整理 iOS 双按钮极简导航验收")
+        XCTAssertEqual(vm.lastCopiedBannerText, "已存入待办 · 整理 iOS 双按钮极简导航验收")
+
+        // Tap to expand Todo in-place, then press Record: appends voice capture as a subtask to the expanded Todo
+        vm.toggleExpandedTodo(createdTodo.id)
+        XCTAssertEqual(vm.expandedTodoID, createdTodo.id)
+        XCTAssertEqual(vm.appendingTargetTodoTitle, "整理 iOS 双按钮极简导航验收")
+
+        vm.startCaptureInPreferredMode()
+        XCTAssertTrue(vm.isRecordingActive)
+        XCTAssertEqual(vm.appendingTargetTodoID, createdTodo.id)
+        try editing.replaceAll(with: "补齐展开态语音直补子任务单测")
+        await vm.completeCapture(refinedText: "补齐展开态语音直补子任务单测", deviceSource: .iPhone)
+
+        // Must NOT create a second standalone VoiceTodo; must append to the expanded Todo
+        XCTAssertEqual(vm.todos.count, 1)
+        let updatedTodo = try XCTUnwrap(vm.todos.first)
+        XCTAssertEqual(updatedTodo.subtasks.count, 1)
+        XCTAssertEqual(updatedTodo.subtasks[0].title, "补齐展开态语音直补子任务单测")
+        XCTAssertFalse(updatedTodo.subtasks[0].isCompleted)
+        XCTAssertEqual(vm.lastCopiedBannerText, "已补充至待办 · 整理 iOS 双按钮极简导航验收")
+
+        // Toggle subtask completion and priority
+        vm.toggleTodoSubtask(todoID: updatedTodo.id, subtaskID: updatedTodo.subtasks[0].id)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.subtasks.first?.isCompleted, true)
+
+        vm.updateTodoPriority(todoID: updatedTodo.id, priority: .p0)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.priority, .p0)
+
+        // Collapse Todo and slide back to Recorder Page
+        vm.toggleExpandedTodo(updatedTodo.id)
+        XCTAssertNil(vm.expandedTodoID)
+        vm.toggleActivePage()
+        XCTAssertEqual(vm.activePage, .recorder)
+
+        // Start recording on Recorder Page, then switch to Todo Page and expand a Todo before completion:
+        // must respect the start-time destination (.text) and NOT append to the newly expanded Todo.
+        XCTAssertEqual(vm.selectedCaptureMode, .text)
+        vm.startCaptureInPreferredMode()
+        XCTAssertEqual(vm.captureState, .recording(mode: .text))
+        XCTAssertNil(vm.appendingTargetTodoID)
+        vm.toggleActivePage()
+        vm.toggleExpandedTodo(updatedTodo.id)
+        try editing.replaceAll(with: "独立速记不应混入展开待办")
+        await vm.completeCapture(refinedText: "独立速记不应混入展开待办", deviceSource: .iPhone)
+        XCTAssertEqual(vm.todos.first?.subtasks.count, 1)
+        XCTAssertEqual(vm.lastCopiedBannerText, "已复制到剪贴板 · 可直接粘贴")
     }
 
     #if os(macOS)
