@@ -43,7 +43,6 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     @Published public var expandedTodoID: UUID?
     @Published public private(set) var appendingTargetTodoID: UUID?
     @Published public private(set) var voiceAppendedSubtaskIDs: [UUID: [UUID]] = [:]
-    private var isDemoSeedActive = false
     @Published public var selectedTodoID: UUID?
     @Published public var selectedCaptureID: UUID?
 
@@ -625,13 +624,9 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
     }
     public func seedDemoDataIfEmptyForPreview() async {
-        isDemoSeedActive = true
         await reloadTask?.value
         await reload()
         guard todos.isEmpty && captures.isEmpty else {
-            for staleTodo in todos where !staleTodo.title.contains("整理下周设计评审") && !staleTodo.title.contains("把早间散步录下的播客大纲") {
-                try? await useCase.deleteTodo(id: staleTodo.id)
-            }
             if !todos.contains(where: { $0.title.contains("整理下周设计评审") }) {
                 let first = try? await useCase.recordCompletedCapture(
                     mode: .todo,
@@ -648,27 +643,6 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                         .withAppendedSubtask("录制录音页默认空态与实时转写声波走查")
                         .withAppendedSubtask("验证左下切换与右下录音双按钮侧滑手势")
                     _ = try? await useCase.updateTodo(enrichedFirst)
-                }
-            } else if let existingFirst = todos.first(where: { $0.title.contains("整理下周设计评审") }) {
-                let canonicalSubtasks: [VoiceTodoSubtask]
-                if existingFirst.subtasks.count == 2,
-                   existingFirst.subtasks[0].title == "录制录音页默认空态与实时转写声波走查",
-                   existingFirst.subtasks[1].title == "验证左下切换与右下录音双按钮侧滑手势" {
-                    canonicalSubtasks = existingFirst.subtasks.map { $0.withCompleted(false) }
-                } else {
-                    canonicalSubtasks = [
-                        VoiceTodoSubtask(title: "录制录音页默认空态与实时转写声波走查"),
-                        VoiceTodoSubtask(title: "验证左下切换与右下录音双按钮侧滑手势")
-                    ]
-                }
-                let resetFirst = existingFirst
-                    .withExecutionState(.inbox, completedAt: nil)
-                    .withPriority(.p0)
-                    .withTags(["#VoxPocket", "#iOS", "#Glass"])
-                    .withEdits(subtasks: canonicalSubtasks)
-                if let savedFirst = try? await useCase.updateTodo(resetFirst),
-                   let lastSubtaskID = savedFirst.subtasks.last?.id {
-                    voiceAppendedSubtaskIDs[savedFirst.id] = [lastSubtaskID]
                 }
             }
             if !todos.contains(where: { $0.title.contains("把早间散步录下的播客大纲") }) {
@@ -760,9 +734,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         do {
             captures = try await useCase.fetchCaptures()
             todos = try await useCase.fetchTodos()
-            if isDemoSeedActive, captures.contains(where: { $0.refinedText.contains("好的工具应当像空气一样安静") }) {
-                latestCompletedText = "傍晚路过书店读到一句话：好的工具应当像空气一样安静，只在你需要开口时浮现光亮。"
-            } else if let latest = captures.filter({ $0.state == .completed }).max(by: { $0.createdAt < $1.createdAt }) {
+            if let latest = captures.filter({ $0.state == .completed }).max(by: { $0.createdAt < $1.createdAt }) {
                 latestCompletedText = (latest.refinedText.isEmpty ? latest.rawTranscript : latest.refinedText).trimmingCharacters(in: .whitespacesAndNewlines)
             }
         } catch { }

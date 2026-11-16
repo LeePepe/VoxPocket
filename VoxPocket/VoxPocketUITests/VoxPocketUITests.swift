@@ -157,8 +157,7 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertTrue(app.textFields["vox.todo.tag.input"].waitForExistence(timeout: 5))
             saveScreenshot(app, name: "todo-tag-picker-\(appearance)", directory: evidence)
 
-            // Cycle status in-place and collapse Top Focus Card
-            app.buttons["vox.todo.status.pill"].tap()
+            // Collapse before filtering to done
             collapseBtn.tap()
             app.buttons["vox.ios.filter.done"].tap()
             XCTAssertTrue(app.staticTexts["把早间散步录下的播客大纲润色后发给搭档确认"].waitForExistence(timeout: 5))
