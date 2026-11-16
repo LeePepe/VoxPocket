@@ -23,7 +23,7 @@ default_platform(:ios)
 APP_IDENTIFIER = "com.leepepe.voxpocket".freeze
 WIDGET_IDENTIFIER = "com.leepepe.voxpocket.widget".freeze
 WATCH_IDENTIFIER = "com.leepepe.voxpocket.watchkitapp".freeze
-WATCH_COMPLICATION_IDENTIFIER = "com.leepepe.voxpocket.watchkitapp.complication".freeze
+WATCH_COMPLICATION_IDENTIFIER = "com.leepepe.voxpocket.watchkitapp.widget".freeze
 SCHEME = "VoxPocket".freeze
 XCODEPROJ = "VoxPocket/VoxPocket.xcodeproj".freeze
 TEAM_ID = "4Z8GG667QD".freeze
