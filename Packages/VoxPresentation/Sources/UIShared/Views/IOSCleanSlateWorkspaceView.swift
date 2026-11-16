@@ -8,7 +8,7 @@ public struct IOSCleanSlateWorkspaceView: View {
     @ObservedObject private var viewModel: VoxWorkspaceViewModel
     private let localModelLoadingStatus: LocalModelLoadingStatus?
     @State private var isShowingSettingsSheet = false
-    @GestureState private var dragTranslation: CGFloat = 0
+    @State private var interactiveDragOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(viewModel: VoxWorkspaceViewModel, localModelLoadingStatus: LocalModelLoadingStatus? = nil) {
@@ -20,31 +20,21 @@ public struct IOSCleanSlateWorkspaceView: View {
         NavigationStack {
             GeometryReader { geometry in
                 let pageWidth = max(1, geometry.size.width)
-                let drag = clampedHorizontalDrag(dragTranslation, pageWidth: pageWidth)
 
-                ZStack {
-                    if viewModel.activePage == .recorder || drag != 0 {
-                        recorderStagePage
-                            .frame(width: pageWidth, height: geometry.size.height)
-                            .offset(x: (viewModel.activePage == .recorder ? 0 : -pageWidth) + drag)
-                            .transition(reduceMotion ? .opacity : .asymmetric(
-                                insertion: .move(edge: .leading),
-                                removal: .move(edge: .leading)
-                            ))
-                    }
+                HStack(spacing: 0) {
+                    recorderStagePage
+                        .frame(width: pageWidth, height: geometry.size.height)
+                        .allowsHitTesting(viewModel.activePage == .recorder && interactiveDragOffset == 0)
+                        .accessibilityHidden(viewModel.activePage != .recorder)
 
-                    if viewModel.activePage == .todo || drag != 0 {
-                        todoStagePage
-                            .frame(width: pageWidth, height: geometry.size.height)
-                            .offset(x: (viewModel.activePage == .todo ? 0 : pageWidth) + drag)
-                            .transition(reduceMotion ? .opacity : .asymmetric(
-                                insertion: .move(edge: .trailing),
-                                removal: .move(edge: .trailing)
-                            ))
-                    }
+                    todoStagePage
+                        .frame(width: pageWidth, height: geometry.size.height)
+                        .allowsHitTesting(viewModel.activePage == .todo && interactiveDragOffset == 0)
+                        .accessibilityHidden(viewModel.activePage != .todo)
                 }
-                .animation(reduceMotion ? nil : AppTheme.gestureSpring, value: viewModel.activePage)
-                .frame(width: pageWidth, height: geometry.size.height)
+                .frame(width: pageWidth * 2, height: geometry.size.height, alignment: .leading)
+                .offset(x: (viewModel.activePage == .recorder ? 0 : -pageWidth) + interactiveDragOffset)
+                .frame(width: pageWidth, height: geometry.size.height, alignment: .leading)
                 .clipped()
                 .simultaneousGesture(horizontalSlideGesture(pageWidth: pageWidth))
             }
@@ -56,6 +46,7 @@ public struct IOSCleanSlateWorkspaceView: View {
                     isProcessing: viewModel.isProcessingCapture,
                     togglePage: {
                         withAnimation(reduceMotion ? nil : AppTheme.gestureSpring) {
+                            interactiveDragOffset = 0
                             viewModel.toggleActivePage()
                         }
                     },
@@ -123,21 +114,24 @@ public struct IOSCleanSlateWorkspaceView: View {
     }
 
     private func horizontalSlideGesture(pageWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 24, coordinateSpace: .local)
-            .updating($dragTranslation) { value, state, _ in
-                guard abs(value.translation.width) > abs(value.translation.height) * 1.25 else { return }
-                state = value.translation.width
+        DragGesture(minimumDistance: 16, coordinateSpace: .local)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                interactiveDragOffset = clampedHorizontalDrag(value.translation.width, pageWidth: pageWidth)
             }
             .onEnded { value in
-                guard abs(value.translation.width) > abs(value.translation.height) * 1.25 else { return }
                 let threshold = max(56, pageWidth * 0.18)
                 let predicted = value.predictedEndTranslation.width
+                let isHorizontal = abs(value.translation.width) > abs(value.translation.height) || interactiveDragOffset != 0
                 withAnimation(reduceMotion ? nil : AppTheme.gestureSpring) {
-                    if viewModel.activePage == .recorder && (value.translation.width < -threshold || predicted < -threshold * 1.4) {
-                        viewModel.switchToPage(.todo)
-                    } else if viewModel.activePage == .todo && (value.translation.width > threshold || predicted > threshold * 1.4) {
-                        viewModel.switchToPage(.recorder)
+                    if isHorizontal {
+                        if viewModel.activePage == .recorder && (value.translation.width < -threshold || predicted < -threshold * 1.4) {
+                            viewModel.switchToPage(.todo)
+                        } else if viewModel.activePage == .todo && (value.translation.width > threshold || predicted > threshold * 1.4) {
+                            viewModel.switchToPage(.recorder)
+                        }
                     }
+                    interactiveDragOffset = 0
                 }
             }
     }
@@ -212,7 +206,6 @@ private struct IOSDualButtonSlideDock: View {
 private struct IOSTodoSlidePageView: View {
     @ObservedObject var viewModel: VoxWorkspaceViewModel
     let onOpenSettings: () -> Void
-    @Namespace private var filterAnimation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -283,14 +276,8 @@ private struct IOSTodoSlidePageView: View {
             .padding(.vertical, AppTheme.Space.sm)
             .frame(minHeight: 44)
             .background {
-                if isSelected {
-                    Capsule()
-                        .fill(Color.accentColor.opacity(0.16))
-                        .matchedGeometryEffect(id: "todoFilterPill", in: filterAnimation)
-                } else {
-                    Capsule()
-                        .fill(AppTheme.surfaceCard)
-                }
+                Capsule()
+                    .fill(isSelected ? Color.accentColor.opacity(0.16) : AppTheme.surfaceCard)
             }
             .foregroundStyle(isSelected ? Color.accentColor : .primary)
         }
@@ -358,6 +345,9 @@ private struct IOSTodoSlidePageView: View {
                         },
                         onAppendSubtask: { subtaskTitle in
                             viewModel.appendSubtask(to: todo.id, title: subtaskTitle)
+                        },
+                        onSyncLinear: {
+                            viewModel.syncTodoToLinear(todo.id)
                         }
                     )
                     .accessibilityIdentifier("vox.session.list.item")
@@ -417,7 +407,9 @@ private struct IOSTodoExpandableCard: View {
     let onToggleSubtask: (UUID) -> Void
     let onUpdateSubtaskTitle: (UUID, String) -> Void
     let onAppendSubtask: (String) -> Void
+    let onSyncLinear: () -> Void
 
+    @Namespace private var cardNamespace
     @State private var draftTitle: String = ""
     @State private var isTagPickerExpanded: Bool = (ProcessInfo.processInfo.environment["VOX_DEMO_OPEN_TAG_PICKER"] == "1")
     @State private var newTagText: String = ""
@@ -472,6 +464,7 @@ private struct IOSTodoExpandableCard: View {
             AppTheme.surfaceCard,
             in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
         )
+        .clipped()
         .overlay {
             if isExpanded {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
@@ -523,10 +516,7 @@ private struct IOSTodoExpandableCard: View {
                             .strikethrough(isDone, color: .secondary)
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Image(systemName: "chevron.down")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
+                            .matchedGeometryEffect(id: "todo-title-\(todo.id)", in: cardNamespace)
                     }
 
                     HStack(spacing: AppTheme.Space.xs) {
@@ -571,11 +561,6 @@ private struct IOSTodoExpandableCard: View {
 
             tierTwoCompactMetadataAndTagStrip
 
-            if isTagPickerExpanded {
-                historicalTagPickerPanel
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
-            }
-
             Divider()
 
             tierThreeCleanSubtaskList
@@ -594,6 +579,7 @@ private struct IOSTodoExpandableCard: View {
                     commitTitleIfValid()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .matchedGeometryEffect(id: "todo-title-\(todo.id)", in: cardNamespace)
                 .accessibilityLabel("待办标题")
                 .accessibilityIdentifier("vox.todo.title.editor")
 
@@ -602,11 +588,12 @@ private struct IOSTodoExpandableCard: View {
 
                 Button(action: onToggleExpand) {
                     Image(systemName: "chevron.up")
-                        .font(.subheadline.weight(.bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 26, height: 26)
                         .background(AppTheme.surfaceElevated, in: Circle())
-                        .contentShape(Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(AppPressableButtonStyle())
                 .accessibilityLabel("收起待办详情")
@@ -699,6 +686,29 @@ private struct IOSTodoExpandableCard: View {
             .buttonStyle(AppPressableButtonStyle())
             .accessibilityLabel("添加或选择标签")
             .accessibilityIdentifier("vox.todo.tags.trigger")
+            .popover(isPresented: $isTagPickerExpanded, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                historicalTagPickerPanel
+                    .frame(minWidth: 260, maxWidth: 310)
+                    .padding(AppTheme.Space.md)
+                    .presentationCompactAdaptation(.popover)
+            }
+
+            Button(action: onSyncLinear) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.right.circle")
+                        .font(.caption.weight(.bold))
+                    Text(todo.externalSync?.externalID ?? "Linear")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .frame(minHeight: 32)
+                .background(Color.accentColor.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .accessibilityLabel("同步到 Linear")
+            .accessibilityIdentifier("vox.todo.action.linear")
         }
     }
 

@@ -216,6 +216,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         lastCopiedBannerText = nil
         liveTranscription = ""
         streamingRefinedText = ""
+        latestCompletedText = ""
         NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingStarted"), object: nil, userInfo: ["mode": effectiveMode.rawValue])
         startElapsedTimer()
         try? editingUseCase?.replaceAll(with: "")
@@ -309,7 +310,12 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             let fallbackRaw = (isDemoRecordingEnabled ? liveTranscription : editingUseCase?.currentText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let raw = (recorded?.rawTranscript ?? (!rawTranscript.isEmpty ? rawTranscript : fallbackRaw)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !raw.isEmpty else {
-                captureState = .failed(stage: .asr, reason: "No transcription content produced")
+                appendingTargetTodoID = nil
+                liveTranscription = ""
+                streamingRefinedText = ""
+                latestCompletedText = ""
+                lastCopiedBannerText = "未检测到语音，按住底部麦克风重新说话。"
+                captureState = .idle
                 return
             }
             var refined = recorded?.refinedText ?? refinedText
