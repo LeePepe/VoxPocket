@@ -238,7 +238,9 @@ public struct VoxCaptureLiveActivity: Widget {
                                             .buttonStyle(.bordered)
                                         }
                                     }
+                                    .padding(.horizontal, 14)
                                 }
+                                .padding(.horizontal, -14)
                             }
 
                             if let todoID = context.state.todoID, !todoID.isEmpty {

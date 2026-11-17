@@ -2568,7 +2568,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
         case .expanded, .lockScreenBanner:
             switch kind {
             case .diV01:
-                // ① DI-v01: 经典三段层叠岛 (Classic Stacked 3-Tier: Header + Conditional Read-Only Description + Conditional Horizontal ScrollView of ALL Subtasks + Bottom [🎙️ 语音补录] & [✨ AI 直接做])
+                // ① DI-v01 (Final Locked Winner): 经典三段层叠岛 + Edge-to-Edge Horizontal ScrollView Bleed
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 6) {
                         Button(action: {
@@ -2601,12 +2601,14 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                 .foregroundStyle(accent)
                         }
                     }
+                    .padding(.horizontal, 14)
 
                     if !descriptionText.isEmpty {
                         Text(descriptionText)
                             .font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.74))
                             .lineLimit(1)
+                            .padding(.horizontal, 14)
                     }
 
                     if !subtasks.isEmpty {
@@ -2635,16 +2637,18 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.horizontal, 14)
                         }
+                        .frame(maxWidth: .infinity)
                     }
 
                     islandVoiceAndAIDualActionBar(for: kind, accent: accent, aiStatus: aiStatus, spring: spring)
+                        .padding(.horizontal, 14)
                 }
-                .padding(.horizontal, 14)
                 .padding(.vertical, 10)
 
             case .diV02:
-                // ② DI-v02: 上层左右 Bento + 下层大号横滑步骤卡岛 (Top Split Bento with Right Actions + Bottom Full-Width Horizontal Subtask Cards)
+                // ② DI-v02: 上层左右 Bento + 下层大号横滑步骤卡岛 (Edge-to-Edge Horizontal ScrollView Bleed)
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -2706,6 +2710,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, 14)
 
                     if !subtasks.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -2733,14 +2738,15 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.horizontal, 14)
                         }
+                        .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.horizontal, 14)
                 .padding(.vertical, 10)
 
             case .diV03:
-                // ③ DI-v03: 流光竖线引言槽 + 编号横滑步骤轨 + 底部双核动作岛 (Atmosphere Quote Description + Numbered Horizontal Rail)
+                // ③ DI-v03: 流光竖线引言槽 + 编号横滑步骤轨 + 底部双核动作岛 (Edge-to-Edge Horizontal ScrollView Bleed)
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 6) {
                         Circle()
@@ -2763,6 +2769,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                 .background(accent.opacity(0.16), in: Capsule())
                         }
                     }
+                    .padding(.horizontal, 14)
 
                     if !descriptionText.isEmpty {
                         HStack(spacing: 6) {
@@ -2778,6 +2785,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                         .padding(.vertical, 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .padding(.horizontal, 14)
                     }
 
                     if !subtasks.isEmpty {
@@ -2808,16 +2816,18 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.horizontal, 14)
                         }
+                        .frame(maxWidth: .infinity)
                     }
 
                     islandVoiceAndAIDualActionBar(for: kind, accent: accent, aiStatus: aiStatus, spring: spring)
+                        .padding(.horizontal, 14)
                 }
-                .padding(.horizontal, 14)
                 .padding(.vertical, 10)
 
             case .diV04:
-                // ④ DI-v04: 极简顶栏内联动作 + 按需自收缩横滑岛 (Ultra-Compact Header-Inline [🎙️ 补录] & [✨ AI 直接做] + Auto-Shrinking Description & Subtask Rail)
+                // ④ DI-v04: 极简顶栏内联动作 + 按需自收缩横滑岛 (Edge-to-Edge Horizontal ScrollView Bleed)
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 6) {
                         Button(action: {
@@ -2860,12 +2870,14 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 14)
 
                     if !descriptionText.isEmpty {
                         Text(descriptionText)
                             .font(.system(size: 10.5))
                             .foregroundStyle(.white.opacity(0.72))
                             .lineLimit(1)
+                            .padding(.horizontal, 14)
                     }
 
                     if !subtasks.isEmpty {
@@ -2894,10 +2906,11 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.horizontal, 14)
                         }
+                        .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             }
         }

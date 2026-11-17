@@ -30,11 +30,11 @@ struct VoxTodoPreviewHostEntry {
 #if os(macOS)
 @MainActor
 final class LocalPreviewChooserState: ObservableObject {
-    @Published var selectedVariant: TodoUnfoldVariantKind = .v02
-    @Published var starredVariants: Set<TodoUnfoldVariantKind> = [.v02]
+    @Published var selectedVariant: TodoUnfoldVariantKind = .v01
+    @Published var starredVariants: Set<TodoUnfoldVariantKind> = [.v01, .v02]
     @Published var notesByVariant: [TodoUnfoldVariantKind: String] = [
-        .v01: "",
-        .v02: "用 2。落实：左下返回按钮正上方 Liquid Glass Filter + 第 1 行独占标题平滑缩放 + 第 2 行固定顺序 + Linear 独立行",
+        .v01: "DI-v01 经典三段层叠岛 + 横滑子步骤 Edge-to-Edge 切边在灵动岛边界",
+        .v02: "Todo 卡片 v02 同框裁剪标签架 + 左下竖向 Liquid Glass Filter",
         .v03: "",
         .v04: ""
     ]
