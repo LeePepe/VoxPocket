@@ -9,31 +9,32 @@ import CoreVideo
 
 @main
 struct VoxTodoPreviewHostEntry {
-    @MainActor
-    static func main() {
+    static func main() async {
         #if os(macOS)
         let args = CommandLine.arguments
         if let exportIdx = args.firstIndex(of: "--export-gallery"), exportIdx + 1 < args.count {
             let outputDir = args[exportIdx + 1]
-            let code = GalleryFrameExporter.exportAll(to: URL(fileURLWithPath: outputDir))
+            let code = await GalleryFrameExporter.exportAll(to: URL(fileURLWithPath: outputDir))
             exit(code)
         }
         if let encodeIdx = args.firstIndex(of: "--encode-videos"), encodeIdx + 1 < args.count {
             let outputDir = args[encodeIdx + 1]
-            let code = GalleryFrameExporter.encodeVideosFromExistingFrames(at: URL(fileURLWithPath: outputDir))
+            let code = await OffscreenMP4VideoEncoder.encodeVideosFromExistingFrames(at: URL(fileURLWithPath: outputDir))
             exit(code)
         }
         if let snapshotIdx = args.firstIndex(of: "--snapshot-board"), snapshotIdx + 1 < args.count {
             let outputFile = args[snapshotIdx + 1]
-            let code = GalleryFrameExporter.exportBoardSnapshot(to: URL(fileURLWithPath: outputFile))
+            let code = await GalleryFrameExporter.exportBoardSnapshot(to: URL(fileURLWithPath: outputFile))
             exit(code)
         }
 
-        let app = NSApplication.shared
-        let delegate = PreviewHostAppDelegate()
-        app.delegate = delegate
-        app.setActivationPolicy(.regular)
-        app.run()
+        await MainActor.run {
+            let app = NSApplication.shared
+            let delegate = PreviewHostAppDelegate()
+            app.delegate = delegate
+            app.setActivationPolicy(.regular)
+            app.run()
+        }
         #endif
     }
 }
@@ -87,11 +88,15 @@ final class PreviewHostAppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 enum GalleryFrameExporter {
-    static func exportBoardSnapshot(to outputURL: URL) -> Int32 {
-        try? FileManager.default.createDirectory(
-            at: outputURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
+    static func exportBoardSnapshot(to outputURL: URL) async -> Int32 {
+        do {
+            try FileManager.default.createDirectory(
+                at: outputURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+        } catch {
+            return 1
+        }
         let board = TodoUnfoldFourUpPreviewBoard()
             .environment(\.colorScheme, .dark)
             .frame(width: 1680, height: 980)
@@ -108,18 +113,24 @@ enum GalleryFrameExporter {
         panel.orderFront(nil)
         defer { panel.orderOut(nil) }
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        try? await Task.sleep(for: .milliseconds(120))
         host.layoutSubtreeIfNeeded()
         return captureViewPNG(host, to: outputURL) ? 0 : 1
     }
 
-    static func exportAll(to baseDir: URL) -> Int32 {
+    static func exportAll(to baseDir: URL) async -> Int32 {
         let fm = FileManager.default
-        try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
+        do {
+            try fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
+        } catch {
+            return 1
+        }
 
         // Export a full 4-up board snapshot first
         let boardSnapURL = baseDir.appendingPathComponent("four-up-board-dark.png")
-        _ = exportBoardSnapshot(to: boardSnapURL)
+        guard await exportBoardSnapshot(to: boardSnapURL) == 0 else {
+            return 1
+        }
 
         let schemes: [(name: String, scheme: ColorScheme, appearance: NSAppearance.Name)] = [
             ("dark", .dark, .darkAqua),
@@ -131,14 +142,17 @@ enum GalleryFrameExporter {
                 let variantDir = baseDir
                     .appendingPathComponent("frames", isDirectory: true)
                     .appendingPathComponent("\(variant.rawValue)-\(mode.name)", isDirectory: true)
-                try? fm.createDirectory(at: variantDir, withIntermediateDirectories: true)
-
                 let keyframesDir = baseDir
                     .appendingPathComponent("keyframes", isDirectory: true)
-                try? fm.createDirectory(at: keyframesDir, withIntermediateDirectories: true)
+                do {
+                    try fm.createDirectory(at: variantDir, withIntermediateDirectories: true)
+                    try fm.createDirectory(at: keyframesDir, withIntermediateDirectories: true)
+                } catch {
+                    return 1
+                }
 
                 // Keyframes: collapsed, expanded, tag-tray
-                exportSingleState(
+                guard await exportSingleState(
                     variant: variant,
                     scheme: mode.scheme,
                     appearanceName: mode.appearance,
@@ -146,8 +160,9 @@ enum GalleryFrameExporter {
                     tagTrayOpen: false,
                     interpolation: 0.0,
                     to: keyframesDir.appendingPathComponent("\(variant.rawValue)-\(mode.name)-collapsed.png")
-                )
-                exportSingleState(
+                ) else { return 1 }
+
+                guard await exportSingleState(
                     variant: variant,
                     scheme: mode.scheme,
                     appearanceName: mode.appearance,
@@ -155,8 +170,9 @@ enum GalleryFrameExporter {
                     tagTrayOpen: false,
                     interpolation: 1.0,
                     to: keyframesDir.appendingPathComponent("\(variant.rawValue)-\(mode.name)-expanded.png")
-                )
-                exportSingleState(
+                ) else { return 1 }
+
+                guard await exportSingleState(
                     variant: variant,
                     scheme: mode.scheme,
                     appearanceName: mode.appearance,
@@ -164,20 +180,13 @@ enum GalleryFrameExporter {
                     tagTrayOpen: true,
                     interpolation: 1.0,
                     to: keyframesDir.appendingPathComponent("\(variant.rawValue)-\(mode.name)-tagtray.png")
-                )
+                ) else { return 1 }
 
-                // Export 90 frames (1.5s @ 60fps):
-                // Frames 0..11: collapsed hold
-                // Frames 12..35: spring unfold (0.0 -> 1.0)
-                // Frames 36..51: expanded hold
-                // Frames 52..67: tag tray open hold
-                // Frames 68..83: spring collapse (1.0 -> 0.0)
-                // Frames 84..89: collapsed hold
                 let totalFrames = 90
                 for frameIdx in 0..<totalFrames {
                     let (progress, tagTray) = choreographyState(for: variant, frame: frameIdx)
                     let frameURL = variantDir.appendingPathComponent(String(format: "frame_%03d.png", frameIdx))
-                    exportSingleState(
+                    guard await exportSingleState(
                         variant: variant,
                         scheme: mode.scheme,
                         appearanceName: mode.appearance,
@@ -185,131 +194,13 @@ enum GalleryFrameExporter {
                         tagTrayOpen: tagTray,
                         interpolation: progress,
                         to: frameURL
-                    )
+                    ) else {
+                        return 1
+                    }
                 }
             }
         }
-        _ = encodeVideosFromExistingFrames(at: baseDir)
-        return 0
-    }
-
-    static func encodeVideosFromExistingFrames(at baseDir: URL) -> Int32 {
-        let videosDir = baseDir.appendingPathComponent("videos", isDirectory: true)
-        try? FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
-
-        for variant in TodoUnfoldVariantKind.allCases {
-            for modeName in ["dark", "light"] {
-                let framesDir = baseDir
-                    .appendingPathComponent("frames", isDirectory: true)
-                    .appendingPathComponent("\(variant.rawValue)-\(modeName)", isDirectory: true)
-                let mp4URL = videosDir.appendingPathComponent("\(variant.rawValue)-\(modeName).mp4")
-                _ = encodeFrameSequenceToMP4(framesDir: framesDir, frameCount: 90, fps: 60, outputURL: mp4URL)
-            }
-        }
-        return 0
-    }
-
-    private static func encodeFrameSequenceToMP4(
-        framesDir: URL,
-        frameCount: Int,
-        fps: Int32,
-        outputURL: URL
-    ) -> Bool {
-        try? FileManager.default.removeItem(at: outputURL)
-        let firstFrameURL = framesDir.appendingPathComponent("frame_000.png")
-        guard let firstImage = NSImage(contentsOf: firstFrameURL),
-              let firstCG = firstImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return false
-        }
-        let width = firstCG.width
-        let height = firstCG.height
-
-        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
-            return false
-        }
-        let videoSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: width,
-            AVVideoHeightKey: height
-        ]
-        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
-        writerInput.expectsMediaDataInRealTime = false
-
-        let sourceBufferAttributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height
-        ]
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: writerInput,
-            sourcePixelBufferAttributes: sourceBufferAttributes
-        )
-
-        guard writer.canAdd(writerInput) else { return false }
-        writer.add(writerInput)
-        writer.startWriting()
-        writer.startSession(atSourceTime: .zero)
-
-        for idx in 0..<frameCount {
-            while !writerInput.isReadyForMoreMediaData {
-                RunLoop.current.run(until: Date().addingTimeInterval(0.002))
-            }
-            let frameURL = framesDir.appendingPathComponent(String(format: "frame_%03d.png", idx))
-            guard let img = NSImage(contentsOf: frameURL),
-                  let cgImg = img.cgImage(forProposedRect: nil, context: nil, hints: nil),
-                  let pixelBuffer = makePixelBuffer(from: cgImg, width: width, height: height) else {
-                continue
-            }
-            let presentationTime = CMTime(value: CMTimeValue(idx), timescale: fps)
-            _ = adaptor.append(pixelBuffer, withPresentationTime: presentationTime)
-        }
-
-        writerInput.markAsFinished()
-        let semaphore = DispatchSemaphore(value: 0)
-        writer.finishWriting {
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return writer.status == .completed
-    }
-
-    private static func makePixelBuffer(from cgImage: CGImage, width: Int, height: Int) -> CVPixelBuffer? {
-        var pixelBuffer: CVPixelBuffer?
-        let options: [String: Any] = [
-            kCVPixelBufferCGImageCompatibilityKey as String: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
-        ]
-        let status = CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            width,
-            height,
-            kCVPixelFormatType_32ARGB,
-            options as CFDictionary,
-            &pixelBuffer
-        )
-        guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
-            return nil
-        }
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-
-        guard let baseAddress = CVPixelBufferGetBaseAddress(buffer) else {
-            return nil
-        }
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: baseAddress,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
-        ) else {
-            return nil
-        }
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return buffer
+        return await OffscreenMP4VideoEncoder.encodeVideosFromExistingFrames(at: baseDir)
     }
 
     private static func choreographyState(for variant: TodoUnfoldVariantKind, frame: Int) -> (Double, Bool) {
@@ -355,7 +246,7 @@ enum GalleryFrameExporter {
         tagTrayOpen: Bool,
         interpolation: Double,
         to url: URL
-    ) {
+    ) async -> Bool {
         let store = TodoUnfoldVariantPreviewStore(
             variant: variant,
             initiallyExpanded: expanded,
@@ -381,9 +272,9 @@ enum GalleryFrameExporter {
         panel.orderFront(nil)
         defer { panel.orderOut(nil) }
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        await Task.yield()
         host.layoutSubtreeIfNeeded()
-        _ = captureViewPNG(host, to: url)
+        return captureViewPNG(host, to: url)
     }
 
     static func captureViewPNG(_ view: NSView, to url: URL) -> Bool {
@@ -401,6 +292,164 @@ enum GalleryFrameExporter {
         } catch {
             return false
         }
+    }
+}
+
+enum OffscreenMP4VideoEncoder {
+    static func encodeVideosFromExistingFrames(at baseDir: URL) async -> Int32 {
+        let videosDir = baseDir.appendingPathComponent("videos", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
+        } catch {
+            return 1
+        }
+
+        for variant in TodoUnfoldVariantKind.allCases {
+            for modeName in ["dark", "light"] {
+                let framesDir = baseDir
+                    .appendingPathComponent("frames", isDirectory: true)
+                    .appendingPathComponent("\(variant.rawValue)-\(modeName)", isDirectory: true)
+                let mp4URL = videosDir.appendingPathComponent("\(variant.rawValue)-\(modeName).mp4")
+                let ok = await encodeFrameSequenceToMP4(
+                    framesDir: framesDir,
+                    frameCount: 90,
+                    fps: 60,
+                    outputURL: mp4URL
+                )
+                if !ok {
+                    return 1
+                }
+            }
+        }
+        return 0
+    }
+
+    private static func encodeFrameSequenceToMP4(
+        framesDir: URL,
+        frameCount: Int,
+        fps: Int32,
+        outputURL: URL
+    ) async -> Bool {
+        try? FileManager.default.removeItem(at: outputURL)
+        let firstFrameURL = framesDir.appendingPathComponent("frame_000.png")
+        guard let firstCG = loadCGImage(at: firstFrameURL) else {
+            return false
+        }
+        let width = firstCG.width
+        let height = firstCG.height
+
+        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
+            return false
+        }
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height
+        ]
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.expectsMediaDataInRealTime = false
+
+        let sourceBufferAttributes: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height
+        ]
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: writerInput,
+            sourcePixelBufferAttributes: sourceBufferAttributes
+        )
+
+        guard writer.canAdd(writerInput) else { return false }
+        writer.add(writerInput)
+        guard writer.startWriting() else { return false }
+        writer.startSession(atSourceTime: .zero)
+
+        for idx in 0..<frameCount {
+            if Task.isCancelled || writer.status != .writing {
+                writer.cancelWriting()
+                return false
+            }
+            var waitCycles = 0
+            while !writerInput.isReadyForMoreMediaData {
+                if Task.isCancelled || writer.status != .writing || waitCycles > 2500 {
+                    writer.cancelWriting()
+                    return false
+                }
+                waitCycles += 1
+                try? await Task.sleep(for: .milliseconds(2))
+            }
+            let frameURL = framesDir.appendingPathComponent(String(format: "frame_%03d.png", idx))
+            guard let cgImg = loadCGImage(at: frameURL),
+                  let pixelBuffer = makePixelBuffer(from: cgImg, width: width, height: height) else {
+                writer.cancelWriting()
+                return false
+            }
+            let presentationTime = CMTime(value: CMTimeValue(idx), timescale: fps)
+            guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime),
+                  writer.status == .writing else {
+                writer.cancelWriting()
+                return false
+            }
+        }
+
+        writerInput.markAsFinished()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            writer.finishWriting {
+                continuation.resume()
+            }
+        }
+        return writer.status == .completed
+    }
+
+    private static func loadCGImage(at url: URL) -> CGImage? {
+        guard let dataProvider = CGDataProvider(url: url as CFURL) else {
+            return nil
+        }
+        return CGImage(
+            pngDataProviderSource: dataProvider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        )
+    }
+
+    private static func makePixelBuffer(from cgImage: CGImage, width: Int, height: Int) -> CVPixelBuffer? {
+        var pixelBuffer: CVPixelBuffer?
+        let options: [String: Any] = [
+            kCVPixelBufferCGImageCompatibilityKey as String: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+        ]
+        let status = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_32ARGB,
+            options as CFDictionary,
+            &pixelBuffer
+        )
+        guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
+            return nil
+        }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+
+        guard let baseAddress = CVPixelBufferGetBaseAddress(buffer) else {
+            return nil
+        }
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: baseAddress,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
+        ) else {
+            return nil
+        }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return buffer
     }
 }
 #endif
