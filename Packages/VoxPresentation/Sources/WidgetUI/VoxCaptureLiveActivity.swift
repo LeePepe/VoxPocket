@@ -214,32 +214,50 @@ public struct VoxCaptureLiveActivity: Widget {
                                 .buttonStyle(.borderedProminent)
                                 .tint(accent)
                             }
-                        } else if let todoID = context.state.todoID, !todoID.isEmpty {
-                            HStack(spacing: 8) {
-                                Button(intent: TodoIslandActionIntent(actionKind: "done", todoID: todoID)) {
-                                    Image(systemName: context.state.phase == .completedReceipt ? "checkmark.circle.fill" : "circle")
-                                        .font(.caption.weight(.bold))
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(accent)
+                        } else {
+                            if let desc = context.state.subtitle, !desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text(desc)
+                                    .font(.caption2)
+                                    .foregroundStyle(.white.opacity(0.75))
+                                    .lineLimit(1)
+                            }
 
-                                Button(intent: TodoIslandActionIntent(actionKind: "subtask", todoID: todoID)) {
-                                    Text("○ \(context.state.completedSubtasks)/\(max(1, context.state.totalSubtasks))")
-                                        .font(.caption2.weight(.bold).monospacedDigit())
+                            if !context.state.subtasks.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(context.state.subtasks) { sub in
+                                            Button(intent: TodoIslandActionIntent(actionKind: "subtask", todoID: context.state.todoID ?? "", subtaskID: sub.id)) {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
+                                                        .font(.caption2.weight(.bold))
+                                                    Text(sub.title)
+                                                        .font(.caption2.weight(.medium))
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            .buttonStyle(.bordered)
+                                        }
+                                    }
+                                    .padding(.horizontal, 14)
                                 }
-                                .buttonStyle(.bordered)
+                                .padding(.horizontal, -14)
+                            }
 
-                                Button(intent: TodoIslandActionIntent(actionKind: "snooze15m", todoID: todoID)) {
-                                    Text("⏰ +15m")
-                                        .font(.caption2.weight(.semibold))
-                                }
-                                .buttonStyle(.bordered)
+                            if let todoID = context.state.todoID, !todoID.isEmpty {
+                                HStack(spacing: 8) {
+                                    Button(intent: ToggleQuickCaptureIntent()) {
+                                        Text("🎙️ 语音补录")
+                                            .font(.caption2.weight(.semibold))
+                                    }
+                                    .buttonStyle(.bordered)
 
-                                Button(intent: TodoIslandActionIntent(actionKind: "deferMorning", todoID: todoID)) {
-                                    Text("🌙 明早 08:35")
-                                        .font(.caption2.weight(.semibold))
+                                    Button(intent: TodoIslandActionIntent(actionKind: "aiDoIt", todoID: todoID)) {
+                                        Text("✨ AI 直接做")
+                                            .font(.caption2.weight(.bold))
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(accent)
                                 }
-                                .buttonStyle(.bordered)
                             }
                         }
                     }
@@ -277,7 +295,7 @@ public struct TodoIslandActionIntent: LiveActivityIntent {
     public static let description = IntentDescription("在灵动岛上直接勾选子任务、一键完成、+15m 延后或顺延至习惯锚点")
     public static let openAppWhenRun: Bool = false
     public static let didRequestActionNotification = Notification.Name("vox.liveActivity.todoAction")
-    @MainActor public static var performHandler: ((_ actionKind: String, _ todoID: String) async -> Void)?
+    @MainActor public static var performHandler: ((_ actionKind: String, _ todoID: String, _ subtaskID: String?) async -> Void)?
 
     @Parameter(title: "动作类型")
     public var actionKind: String
@@ -285,25 +303,34 @@ public struct TodoIslandActionIntent: LiveActivityIntent {
     @Parameter(title: "待办 ID")
     public var todoID: String
 
+    @Parameter(title: "子任务 ID")
+    public var subtaskID: String?
+
     public init() {
         self.actionKind = "done"
         self.todoID = ""
+        self.subtaskID = nil
     }
 
-    public init(actionKind: String, todoID: String) {
+    public init(actionKind: String, todoID: String, subtaskID: String? = nil) {
         self.actionKind = actionKind
         self.todoID = todoID
+        self.subtaskID = subtaskID
     }
 
     @MainActor
     public func perform() async throws -> some IntentResult {
         if let handler = Self.performHandler {
-            await handler(actionKind, todoID)
+            await handler(actionKind, todoID, subtaskID)
         } else {
+            var info: [String: String] = ["actionKind": actionKind, "todoID": todoID]
+            if let subtaskID {
+                info["subtaskID"] = subtaskID
+            }
             NotificationCenter.default.post(
                 name: Self.didRequestActionNotification,
                 object: nil,
-                userInfo: ["actionKind": actionKind, "todoID": todoID]
+                userInfo: info
             )
         }
         return .result()

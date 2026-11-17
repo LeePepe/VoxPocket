@@ -763,8 +763,9 @@ public final class ServiceContainer: ObservableObject {
         ) { [weak self] note in
             let actionKind = (note.userInfo?["actionKind"] as? String) ?? "done"
             let todoIDStr = (note.userInfo?["todoID"] as? String) ?? ""
+            let subtaskIDStr = note.userInfo?["subtaskID"] as? String
             Task { @MainActor in
-                await self?.handleTodoIslandAction(actionKind: actionKind, todoIDString: todoIDStr)
+                await self?.handleTodoIslandAction(actionKind: actionKind, todoIDString: todoIDStr, subtaskIDString: subtaskIDStr)
             }
         }
         notificationCenter.addObserver(
@@ -887,17 +888,49 @@ public final class ServiceContainer: ObservableObject {
         #endif
     }
 
-    private func handleTodoIslandAction(actionKind: String, todoIDString: String) async {
+    private func endIOSCaptureLiveActivities() {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.2, *) else { return }
+        Task {
+            for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+        #endif
+    }
+#endif
+
+    public func handleTodoIslandAction(
+        actionKind: String,
+        todoIDString: String,
+        subtaskIDString: String? = nil
+    ) async {
         guard let todoID = UUID(uuidString: todoIDString) else { return }
         switch actionKind {
         case "subtask":
-            if let todo = workspaceViewModel.todos.first(where: { $0.id == todoID }),
-               let firstIncomplete = todo.subtasks.first(where: { !$0.isCompleted }) {
-                workspaceViewModel.toggleTodoSubtask(todoID: todoID, subtaskID: firstIncomplete.id)
-                let newCompleted = todo.subtasks.filter(\.isCompleted).count + 1
+            guard let todo = workspaceViewModel.todos.first(where: { $0.id == todoID }) else { return }
+            let targetSubtask: VoiceTodoSubtask? = {
+                if let subStr = subtaskIDString,
+                   let subUUID = UUID(uuidString: subStr),
+                   let matched = todo.subtasks.first(where: { $0.id == subUUID }) {
+                    return matched
+                }
+                return todo.subtasks.first(where: { !$0.isCompleted })
+            }()
+            if let targetSubtask {
+                workspaceViewModel.toggleTodoSubtask(todoID: todoID, subtaskID: targetSubtask.id)
+                let delta = targetSubtask.isCompleted ? -1 : 1
+                let newCompleted = max(0, todo.subtasks.filter(\.isCompleted).count + delta)
                 let total = max(1, todo.subtasks.count)
-                #if canImport(ActivityKit)
+                #if os(iOS) && canImport(ActivityKit)
                 if #available(iOS 16.2, *) {
+                    let updatedSubtasks = todo.subtasks.map { item in
+                        VoxIslandSubtaskPayload(
+                            id: item.id.uuidString,
+                            title: item.title,
+                            isCompleted: item.id == targetSubtask.id ? !item.isCompleted : item.isCompleted
+                        )
+                    }
                     let updatedContent = ActivityContent(
                         state: VoxCaptureActivityAttributes.ContentState(
                             mode: "存入待办",
@@ -906,7 +939,9 @@ public final class ServiceContainer: ObservableObject {
                             phase: newCompleted >= total ? .completedReceipt : .todoFocusPinned,
                             todoID: todoIDString,
                             title: todo.title,
+                            subtitle: todo.description,
                             priorityBadge: todo.priority.rawValue,
+                            subtasks: updatedSubtasks,
                             completedSubtasks: newCompleted,
                             totalSubtasks: total,
                             statusReceiptText: "进度 \(newCompleted)/\(total)"
@@ -921,7 +956,7 @@ public final class ServiceContainer: ObservableObject {
             }
         case "done":
             workspaceViewModel.toggleTodoDone(todoID)
-            #if canImport(ActivityKit)
+            #if os(iOS) && canImport(ActivityKit)
             if #available(iOS 16.2, *) {
                 let doneContent = ActivityContent(
                     state: VoxCaptureActivityAttributes.ContentState(
@@ -943,7 +978,7 @@ public final class ServiceContainer: ObservableObject {
             #endif
         case "snooze15m":
             workspaceViewModel.shiftTodoReminderByMinutes(todoID: todoID, deltaMinutes: 15)
-            #if canImport(ActivityKit)
+            #if os(iOS) && canImport(ActivityKit)
             if #available(iOS 16.2, *) {
                 for activity in Activity<VoxCaptureActivityAttributes>.activities {
                     var nextState = activity.content.state
@@ -954,7 +989,7 @@ public final class ServiceContainer: ObservableObject {
             #endif
         case "deferMorning":
             workspaceViewModel.assignTodoHabitSlot(todoID: todoID, slotRawValue: "morning")
-            #if canImport(ActivityKit)
+            #if os(iOS) && canImport(ActivityKit)
             if #available(iOS 16.2, *) {
                 for activity in Activity<VoxCaptureActivityAttributes>.activities {
                     var nextState = activity.content.state
@@ -965,22 +1000,21 @@ public final class ServiceContainer: ObservableObject {
                 }
             }
             #endif
+        case "aiDoIt":
+            workspaceViewModel.dispatchTodoToICloudAI(todoID)
+            #if os(iOS) && canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                    var nextState = activity.content.state
+                    nextState.statusReceiptText = "☁️ 已上传 iCloud"
+                    await activity.update(ActivityContent(state: nextState, staleDate: nil))
+                }
+            }
+            #endif
         default:
             break
         }
     }
-
-    private func endIOSCaptureLiveActivities() {
-        #if canImport(ActivityKit)
-        guard #available(iOS 16.2, *) else { return }
-        Task {
-            for activity in Activity<VoxCaptureActivityAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
-        }
-        #endif
-    }
-#endif
 
     public func makeWorkspaceViewModel() -> VoxWorkspaceViewModel {
         #if os(iOS)

@@ -559,9 +559,24 @@ final class VoxWorkspaceContractTests: XCTestCase {
         XCTAssertEqual(boardController.recorderStagesByBezel[0], .refining)
         boardController.setAllRecorderStages(.idle)
         XCTAssertEqual(PreviewHostTopTab.allCases.count, 3)
+        XCTAssertEqual(boardController.activeTab, .dynamicIslandFourVariants)
         XCTAssertEqual(DynamicIslandPreviewVariantKind.allCases.count, 4)
-        boardController.advanceIslandSubtask(for: .diV01)
-        XCTAssertEqual(boardController.islandCompletedSubtasksByVariant[.diV01], 2)
+        XCTAssertEqual(DynamicIslandDataPreset.allCases.count, 4)
+
+        // Verify Dynamic Island conditional description + horizontal subtasks + voice/AI actions across all 4 presets
+        boardController.islandDataPreset = .fullWithSubtasksAndDescription
+        XCTAssertFalse(boardController.islandDescriptionByVariant[.diV01]?.isEmpty ?? true)
+        XCTAssertEqual(boardController.islandSubtasksByVariant[.diV01]?.count, 4)
+        let fullHeight = DynamicIslandPreviewVariantKind.diV04.expandedHeight(hasDescription: true, hasSubtasks: true)
+
+        boardController.islandDataPreset = .minimalTitleOnly
+        XCTAssertTrue(boardController.islandDescriptionByVariant[.diV01]?.isEmpty ?? false)
+        XCTAssertTrue(boardController.islandSubtasksByVariant[.diV01]?.isEmpty ?? false)
+        let shrunkHeight = DynamicIslandPreviewVariantKind.diV04.expandedHeight(hasDescription: false, hasSubtasks: false)
+        XCTAssertLessThan(shrunkHeight, fullHeight)
+
+        boardController.appendVoiceSubtaskOnIsland(for: .diV01)
+        XCTAssertEqual(boardController.islandSubtasksByVariant[.diV01]?.count, 1)
     }
 
     @MainActor

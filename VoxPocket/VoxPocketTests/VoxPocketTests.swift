@@ -126,6 +126,35 @@ struct VoxPocketTests {
         }
         #expect(container.workspaceViewModel.isRecordingActive == false)
         #endif
+
+        // Verify handleTodoIslandAction routes specific subtask IDs and aiDoIt dispatch in ServiceContainer
+        await container.workspaceViewModel.seedDemoDataIfEmptyForPreview()
+        if let firstTodo = container.workspaceViewModel.todos.first,
+           firstTodo.subtasks.count >= 2 {
+            let secondSubtask = firstTodo.subtasks[1]
+            let initialCompleted = secondSubtask.isCompleted
+            await container.handleTodoIslandAction(
+                actionKind: "subtask",
+                todoIDString: firstTodo.id.uuidString,
+                subtaskIDString: secondSubtask.id.uuidString
+            )
+            for _ in 0..<100 {
+                await Task.yield()
+            }
+            let updatedSubtask = container.workspaceViewModel.todos
+                .first(where: { $0.id == firstTodo.id })?
+                .subtasks.first(where: { $0.id == secondSubtask.id })
+            #expect(updatedSubtask?.isCompleted == !initialCompleted)
+
+            await container.handleTodoIslandAction(
+                actionKind: "aiDoIt",
+                todoIDString: firstTodo.id.uuidString
+            )
+            for _ in 0..<100 where container.workspaceViewModel.aiOrder(for: firstTodo.id) == nil {
+                await Task.yield()
+            }
+            #expect(container.workspaceViewModel.aiOrder(for: firstTodo.id) != nil)
+        }
     }
 
     #if os(macOS)

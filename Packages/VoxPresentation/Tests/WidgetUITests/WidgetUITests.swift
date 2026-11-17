@@ -50,5 +50,27 @@ final class WidgetUITests: XCTestCase {
         XCTAssertTrue(toggleInvoked)
         XCTAssertTrue(finishInvoked)
     }
+
+    @MainActor
+    func test_todo_island_action_intent_passes_subtask_id_and_todo_id() async throws {
+        defer {
+            TodoIslandActionIntent.performHandler = nil
+        }
+
+        var capturedArgs: [(String, String, String?)] = []
+        TodoIslandActionIntent.performHandler = { @MainActor actionKind, todoID, subtaskID in
+            capturedArgs.append((actionKind, todoID, subtaskID))
+        }
+
+        _ = try await TodoIslandActionIntent(actionKind: "subtask", todoID: "todo-1", subtaskID: "sub-2").perform()
+        _ = try await TodoIslandActionIntent(actionKind: "aiDoIt", todoID: "todo-1").perform()
+
+        XCTAssertEqual(capturedArgs.count, 2)
+        XCTAssertEqual(capturedArgs[0].0, "subtask")
+        XCTAssertEqual(capturedArgs[0].1, "todo-1")
+        XCTAssertEqual(capturedArgs[0].2, "sub-2")
+        XCTAssertEqual(capturedArgs[1].0, "aiDoIt")
+        XCTAssertNil(capturedArgs[1].2)
+    }
     #endif
 }
