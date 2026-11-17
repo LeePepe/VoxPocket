@@ -21,6 +21,10 @@ let package = Package(
             name: "WidgetUI",
             targets: ["WidgetUI"]
         ),
+        .executable(
+            name: "VoxTodoPreviewHost",
+            targets: ["VoxTodoPreviewHost"]
+        ),
     ],
     dependencies: [
         .package(path: "../VoxDomain"),
@@ -66,6 +70,18 @@ let package = Package(
         .target(
             name: "WidgetUI",
             dependencies: []
+        ),
+        .executableTarget(
+            name: "VoxTodoPreviewHost",
+            dependencies: [
+                "UIShared",
+                .product(name: "CoreModels", package: "VoxDomain"),
+                .product(name: "Preferences", package: "VoxInfrastructure"),
+                .product(name: "UseCases", package: "VoxApplication"),
+            ],
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-interposable"], .when(platforms: [.macOS], configuration: .debug)),
+            ]
         ),
         .testTarget(
             name: "UISharedTests",
