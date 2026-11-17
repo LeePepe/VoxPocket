@@ -1,6 +1,5 @@
 import SwiftUI
 import CoreModels
-import PlatformAdapters
 import Preferences
 import UseCases
 
@@ -47,22 +46,30 @@ public enum MacOSWorkspaceDestination: String, CaseIterable, Identifiable, Senda
 public struct MacOSCleanSlateWorkspaceView: View {
     @ObservedObject private var viewModel: VoxWorkspaceViewModel
     @State private var selectedDestination: MacOSWorkspaceDestination
+    private let isPreviewDemoMode: Bool
     @State private var aiRunnerConfig: UserAIRunnerConfig = UserAIRunnerConfig()
-    @State private var consoleLogLines: [String] = [
-        "[09:41:02] MacAIOrderAutoPickupService listening on iCloud AIOrders (poll=2.0s)",
-        "[09:41:05] VOX_STATUS: 已认领订单 · 准备启动 Mac AI Agent",
-        "[09:41:08] VOX_PROGRESS: 0.45",
-        "[09:41:09] VOX_STATUS: 正在分析与执行子步骤 (1/3) · 液态玻璃交互走查"
-    ]
+    @State private var consoleLogLines: [String]
     @State private var isSimulatingPickup: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         viewModel: VoxWorkspaceViewModel,
-        initialDestination: MacOSWorkspaceDestination = .recorderAndNotes
+        initialDestination: MacOSWorkspaceDestination = .recorderAndNotes,
+        isPreviewDemoMode: Bool = false
     ) {
         self.viewModel = viewModel
         _selectedDestination = State(initialValue: initialDestination)
+        self.isPreviewDemoMode = isPreviewDemoMode
+        _consoleLogLines = State(
+            initialValue: isPreviewDemoMode
+                ? [
+                    "[DEMO 09:41:02] MacAIOrderAutoPickupService listening on iCloud AIOrders (poll=2.0s)",
+                    "[DEMO 09:41:05] VOX_STATUS: 已认领订单 · 准备启动 Mac AI Agent",
+                    "[DEMO 09:41:08] VOX_PROGRESS: 0.45",
+                    "[DEMO 09:41:09] VOX_STATUS: 正在分析与执行子步骤 (1/3) · 液态玻璃交互走查"
+                ]
+                : []
+        )
     }
 
     public var body: some View {
@@ -102,6 +109,14 @@ public struct MacOSCleanSlateWorkspaceView: View {
             }
             if viewModel.expandedTodoID == nil {
                 viewModel.expandedTodoID = viewModel.todos.first?.id
+            }
+        }
+        .onChange(of: viewModel.aiOrdersByTodoID) { _, orders in
+            guard let newest = orders.values.max(by: { $0.updatedAt < $1.updatedAt }) else { return }
+            let pct = Int((newest.progressFraction * 100).rounded())
+            let line = "[\(Self.logTimeFormatter.string(from: newest.updatedAt))] VOX_STATUS: [\(newest.state.rawValue)] \(newest.progressStage) (\(pct)%)"
+            if consoleLogLines.last != line {
+                consoleLogLines.append(line)
             }
         }
     }
@@ -239,34 +254,36 @@ public struct MacOSCleanSlateWorkspaceView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 6)
 
-            ForEach([TodoStatusFilter.all, .inbox, .running, .done], id: \.self) { filter in
-                let isSelected = viewModel.selectedTodoFilter == filter
-                Button(action: {
-                    withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
-                        viewModel.selectedTodoFilter = filter
+            ForEach([TodoStatusFilter.all, .inbox, .running, .done, .failed], id: \.self) { filter in
+                if filter != .failed || viewModel.failedCount > 0 || viewModel.selectedTodoFilter == .failed {
+                    let isSelected = viewModel.selectedTodoFilter == filter
+                    Button(action: {
+                        withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                            viewModel.selectedTodoFilter = filter
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.45))
+                                .frame(width: 6, height: 6)
+                            Text(filterTitle(for: filter))
+                                .font(.system(size: 11.5, weight: isSelected ? .semibold : .regular))
+                                .foregroundStyle(isSelected ? .primary : .secondary)
+                            Spacer(minLength: 4)
+                            Text("\(filterCount(for: filter))")
+                                .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(
+                            isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
                     }
-                }) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.45))
-                            .frame(width: 6, height: 6)
-                        Text(filterTitle(for: filter))
-                            .font(.system(size: 11.5, weight: isSelected ? .semibold : .regular))
-                            .foregroundStyle(isSelected ? .primary : .secondary)
-                        Spacer(minLength: 4)
-                        Text("\(filterCount(for: filter))")
-                            .font(.system(size: 10.5, weight: .bold).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(
-                        isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    )
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("vox.macos.todo.filter." + filter.rawValue)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("vox.macos.todo.filter." + filter.rawValue)
             }
         }
     }
@@ -473,26 +490,28 @@ public struct MacOSCleanSlateWorkspaceView: View {
                     .font(.title3.bold())
 
                 HStack(spacing: 5) {
-                    ForEach([TodoStatusFilter.all, .inbox, .running, .done], id: \.self) { filter in
-                        let isSelected = viewModel.selectedTodoFilter == filter
-                        Button(action: {
-                            withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
-                                viewModel.selectedTodoFilter = filter
+                    ForEach([TodoStatusFilter.all, .inbox, .running, .done, .failed], id: \.self) { filter in
+                        if filter != .failed || viewModel.failedCount > 0 || viewModel.selectedTodoFilter == .failed {
+                            let isSelected = viewModel.selectedTodoFilter == filter
+                            Button(action: {
+                                withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                    viewModel.selectedTodoFilter = filter
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Text(filterTitle(for: filter))
+                                        .font(.caption.weight(isSelected ? .bold : .medium))
+                                    Text("\(filterCount(for: filter))")
+                                        .font(.caption2.weight(.bold).monospacedDigit())
+                                        .opacity(0.8)
+                                }
+                                .foregroundStyle(isSelected ? .white : .primary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(isSelected ? Color.accentColor : Color.primary.opacity(0.07), in: Capsule())
                             }
-                        }) {
-                            HStack(spacing: 4) {
-                                Text(filterTitle(for: filter))
-                                    .font(.caption.weight(isSelected ? .bold : .medium))
-                                Text("\(filterCount(for: filter))")
-                                    .font(.caption2.weight(.bold).monospacedDigit())
-                                    .opacity(0.8)
-                            }
-                            .foregroundStyle(isSelected ? .white : .primary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(isSelected ? Color.accentColor : Color.primary.opacity(0.07), in: Capsule())
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
 
@@ -642,11 +661,34 @@ public struct MacOSCleanSlateWorkspaceView: View {
 
                 // Active & recent orders list
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("iCloud AI 执行订单队列")
-                        .font(.subheadline.bold())
+                    HStack {
+                        Text("iCloud AI 执行订单队列")
+                            .font(.subheadline.bold())
+                        if isPreviewDemoMode && viewModel.aiOrdersByTodoID.isEmpty {
+                            Text("Preview 示例数据")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.primary.opacity(0.08), in: Capsule())
+                        }
+                    }
 
-                    ForEach(displayedAIOrders) { order in
-                        aiOrderMonitorCard(order)
+                    if displayedAIOrders.isEmpty {
+                        ContentUnavailableView(
+                            "暂无活跃或排队的 iCloud AI 订单",
+                            systemImage: "icloud.and.arrow.up",
+                            description: Text("在待办清单中点击「✨ AI do it」将待办提交至 iCloud AIOrders，等待 Mac Runner 认领执行。")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 110)
+                        .background(
+                            AppTheme.surfaceCard.opacity(0.55),
+                            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        )
+                    } else {
+                        ForEach(displayedAIOrders) { order in
+                            aiOrderMonitorCard(order)
+                        }
                     }
                 }
 
@@ -663,19 +705,31 @@ public struct MacOSCleanSlateWorkspaceView: View {
                         .buttonStyle(.borderless)
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(Array(consoleLogLines.enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                                .font(.system(size: 11.5, design: .monospaced))
-                                .foregroundStyle(line.contains("VOX_STATUS:") ? Color.cyan : .secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    if consoleLogLines.isEmpty {
+                        Text("等待 iCloud AIOrders 状态流更新…")
+                            .font(.system(size: 11.5, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(
+                                Color.black.opacity(0.78),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(consoleLogLines.enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.system(size: 11.5, design: .monospaced))
+                                    .foregroundStyle(line.contains("VOX_STATUS:") ? Color.cyan : .secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
+                        .padding(12)
+                        .background(
+                            Color.black.opacity(0.78),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
                     }
-                    .padding(12)
-                    .background(
-                        Color.black.opacity(0.78),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    )
                 }
             }
             .padding(18)
@@ -704,6 +758,9 @@ public struct MacOSCleanSlateWorkspaceView: View {
             .sorted { $0.updatedAt > $1.updatedAt }
         if !liveOrders.isEmpty {
             return liveOrders
+        }
+        guard isPreviewDemoMode else {
+            return []
         }
         return viewModel.todos.prefix(3).enumerated().map { idx, todo in
             let state: AIOrderExecutionState = idx == 0 ? .running : (todo.executionState == .done ? .completed : .queued)
@@ -815,84 +872,20 @@ public struct MacOSCleanSlateWorkspaceView: View {
     // MARK: - Interactive AI Order Dispatch & Live `MacAIOrderAutoPickupService` Execution
 
     private func dispatchAndStreamOrderInWorkspace(for todo: VoiceTodo) {
+        consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] 已派发待办至 iCloud AIOrders (todoID=\(todo.id.uuidString.prefix(8)))")
         viewModel.dispatchTodoToICloudAI(todo.id)
-        consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] 已派发待办「\(todo.title)」至 iCloud AIOrders")
-        Task { @MainActor in
-            await runLivePickupCycle(for: todo)
-        }
     }
 
     private func triggerSimulatedAutoPickupPass() {
         guard let targetTodo = viewModel.todos.first(where: { $0.executionState != .done }) ?? viewModel.todos.first else {
             return
         }
-        Task { @MainActor in
-            await runLivePickupCycle(for: targetTodo)
+        if isPreviewDemoMode {
+            consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] [Preview Demo] 触发 iCloud AIOrders 轮询与接单演示 (todoID=\(targetTodo.id.uuidString.prefix(8)))")
+        } else {
+            consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] 触发 iCloud AIOrders 派单与状态同步 (todoID=\(targetTodo.id.uuidString.prefix(8)))")
         }
-    }
-
-    private func runLivePickupCycle(for todo: VoiceTodo) async {
-        guard !isSimulatingPickup else { return }
-        isSimulatingPickup = true
-        defer { isSimulatingPickup = false }
-
-        let syncService = ICloudAIOrderSyncService(kvStore: InMemoryUbiquitousAIOrderKVStore(isCloudAvailable: true))
-        let configStore = UserAIRunnerConfigStore()
-        try? configStore.saveConfig(aiRunnerConfig)
-
-        let pickupService = MacAIOrderAutoPickupService(
-            syncService: syncService,
-            configStore: configStore,
-            customCodeHandler: { order, reporter in
-                _ = try await reporter.reportProgress(
-                    stage: "已认领订单 · 准备启动 \(aiRunnerConfig.runnerDisplayName)",
-                    fraction: 0.28,
-                    state: .claimedByMac
-                )
-                try await reporter.ingestScriptOutput(
-                    """
-                    VOX_PROGRESS: 0.65
-                    VOX_STATUS: 正在执行 \(max(1, order.subtaskCount)) 项子任务…
-                    """
-                )
-                return "完成 \(max(1, order.subtaskCount)) 项步骤"
-            }
-        )
-
-        do {
-            let queued = try await syncService.submitOrderToICloud(todo: todo, now: Date())
-            await viewModel.applyAIExecutionStatusReport(
-                AIExecutionStatusReport(
-                    orderID: queued.orderID,
-                    todoID: todo.id,
-                    state: .queued,
-                    progressStage: "已上传 iCloud · 等待 Mac 接单",
-                    progressFraction: 0.12,
-                    assignedRunnerName: aiRunnerConfig.runnerDisplayName
-                )
-            )
-            consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] VOX_STATUS: 发现排队订单 \(queued.orderID.uuidString.prefix(8)) · \(todo.title)")
-
-            try? await Task.sleep(for: .milliseconds(180))
-            let processed = try await pickupService.pollAndProcessQueuedOrders(now: Date())
-            if let finalOrder = processed.first {
-                await viewModel.applyAIExecutionStatusReport(
-                    AIExecutionStatusReport(
-                        orderID: finalOrder.orderID,
-                        todoID: todo.id,
-                        state: finalOrder.state,
-                        progressStage: finalOrder.progressStage,
-                        progressFraction: finalOrder.progressFraction,
-                        outputSummary: finalOrder.outputSummary,
-                        assignedRunnerName: finalOrder.assignedRunnerName
-                    )
-                )
-                consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] VOX_PROGRESS: 1.00")
-                consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] VOX_STATUS: ✅ \(finalOrder.outputSummary ?? "执行完成")")
-            }
-        } catch {
-            consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] VOX_STATUS: ⚠️ 接单异常 \(error.localizedDescription)")
-        }
+        viewModel.dispatchTodoToICloudAI(targetTodo.id)
     }
 
     private func filterTitle(for filter: TodoStatusFilter) -> String {
@@ -964,6 +957,8 @@ private struct MacOSParityTodoCardView: View {
     @State private var isTagTrayOpen: Bool = false
     @State private var newTagText: String = ""
     @State private var newSubtaskText: String = ""
+    @FocusState private var isTitleFocused: Bool
+    @FocusState private var isDescriptionFocused: Bool
 
     private var isDone: Bool { todo.executionState == .done }
     private var completedSubtaskCount: Int { todo.subtasks.filter(\.isCompleted).count }
@@ -983,7 +978,8 @@ private struct MacOSParityTodoCardView: View {
                     TextField("待办短标题", text: $draftTitle)
                         .font(.system(size: 15.5, weight: .semibold))
                         .textFieldStyle(.plain)
-                        .onSubmit { onUpdateTitle(draftTitle) }
+                        .focused($isTitleFocused)
+                        .onSubmit { commitTitleIfValid() }
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     Text(todo.title)
@@ -1098,7 +1094,8 @@ private struct MacOSParityTodoCardView: View {
                         .foregroundStyle(.secondary)
                         .textFieldStyle(.plain)
                         .lineLimit(1...4)
-                        .onSubmit { onUpdateDescription(draftDescription) }
+                        .focused($isDescriptionFocused)
+                        .onSubmit { commitDescriptionIfChanged() }
                         .padding(.horizontal, 9)
                         .padding(.vertical, 6)
                         .background(
@@ -1162,8 +1159,40 @@ private struct MacOSParityTodoCardView: View {
             draftTitle = todo.title
             draftDescription = todo.description
         }
-        .onChange(of: todo.title) { _, updated in draftTitle = updated }
-        .onChange(of: todo.description) { _, updated in draftDescription = updated }
+        .onChange(of: todo.title) { _, updated in
+            if !isTitleFocused { draftTitle = updated }
+        }
+        .onChange(of: todo.description) { _, updated in
+            if !isDescriptionFocused { draftDescription = updated }
+        }
+        .onChange(of: isTitleFocused) { _, focused in
+            if !focused { commitTitleIfValid() }
+        }
+        .onChange(of: isDescriptionFocused) { _, focused in
+            if !focused { commitDescriptionIfChanged() }
+        }
+        .onChange(of: isExpanded) { _, expanded in
+            if !expanded {
+                commitTitleIfValid()
+                commitDescriptionIfChanged()
+            }
+        }
+    }
+
+    private func commitTitleIfValid() {
+        let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            draftTitle = todo.title
+        } else if trimmed != todo.title {
+            onUpdateTitle(trimmed)
+        }
+    }
+
+    private func commitDescriptionIfChanged() {
+        let trimmed = draftDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed != todo.description {
+            onUpdateDescription(trimmed)
+        }
     }
 
     private var v02ClippedTagShelf: some View {

@@ -3073,7 +3073,8 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
 
             MacOSCleanSlateWorkspaceView(
                 viewModel: controller.macPreviewViewModel,
-                initialDestination: controller.macWorkspaceDestination
+                initialDestination: controller.macWorkspaceDestination,
+                isPreviewDemoMode: true
             )
             .id(controller.macWorkspaceDestination)
             .environment(\.colorScheme, controller.colorScheme)
