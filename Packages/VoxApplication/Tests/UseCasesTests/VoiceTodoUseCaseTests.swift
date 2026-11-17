@@ -128,6 +128,58 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         let overflowTodo = try XCTUnwrap(overflowOutcome.todo)
         XCTAssertNotNil(overflowTodo.scheduledAt)
 
+        // Verify long spoken utterance is decomposed into a concise <=14 char title + rich description
+        let longSpeechDecomposer = DefaultOnDeviceAITodoDecomposer { instructions, _ in
+            XCTAssertTrue(instructions.contains("description"))
+            return """
+            {
+              "cleanTitle": "整理下周设计评审要展示的液态玻璃交互走查清单",
+              "description": "整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单",
+              "timeSlot": "morning",
+              "dayOffset": 1,
+              "explicitHour": null,
+              "explicitMinute": null,
+              "relativeMinutes": null,
+              "priority": "P0",
+              "tags": ["#VoxPocket", "#iOS", "#Glass"],
+              "subtasks": ["录制声波走查", "验证原地展开"]
+            }
+            """
+        }
+        let longSpeechExtractor = DefaultVoiceTodoExtractor(
+            aiDecomposer: longSpeechDecomposer,
+            timeAnchorLearner: learner,
+            calendar: cal,
+            nowProvider: { fixedNow }
+        )
+        let longSpeechUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: longSpeechExtractor,
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            notificationScheduler: scheduler
+        )
+        let longSpeechOutcome = try await longSpeechUseCase.recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: "提醒我明天早上整理下周设计评审要展示的液态玻璃交互走查清单",
+            refinedText: "提醒我明天早上整理下周设计评审要展示的液态玻璃交互走查清单",
+            localAudioFileName: nil,
+            durationSeconds: 5,
+            deviceSource: .iPhone
+        )
+        let longSpeechTodo = try XCTUnwrap(longSpeechOutcome.todo)
+        XCTAssertLessThanOrEqual(longSpeechTodo.title.count, 14)
+        XCTAssertEqual(longSpeechTodo.title, "整理液态玻璃交互走查清单")
+        XCTAssertEqual(longSpeechTodo.description, "整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单")
+
+        // Also verify deterministic fallbackSentenceSplit compacts >14 char spoken sentences into <=14 char title + description
+        let fallbackResult = DefaultOnDeviceAITodoDecomposer.fallbackSentenceSplit(
+            from: "提醒我明天早上把早间散步录下的播客大纲润色后发给搭档确认"
+        )
+        XCTAssertLessThanOrEqual(fallbackResult.cleanTitle.count, 14)
+        XCTAssertFalse(fallbackResult.description.isEmpty)
+        XCTAssertTrue(fallbackResult.description.contains("播客大纲"))
+
         // Triggering markDone via notificationScheduler updates the persisted VoiceTodo in the repository via actionEvents stream
         _ = try await scheduler.handleAction(
             identifier: VoxNotificationQuickAction.markDone.rawValue,

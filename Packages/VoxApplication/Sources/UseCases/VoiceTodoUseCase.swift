@@ -4,6 +4,7 @@ import CoreModels
 /// 端侧 AI（Apple Intelligence `FoundationModels.LanguageModelSession`）对转写文本执行语义拆分后的结构化结果
 public struct AITodoDecompositionResult: Codable, Equatable, Sendable {
     public let cleanTitle: String
+    public let description: String
     public let timeSlot: String?
     public let dayOffset: Int
     public let explicitHour: Int?
@@ -15,6 +16,7 @@ public struct AITodoDecompositionResult: Codable, Equatable, Sendable {
 
     public init(
         cleanTitle: String,
+        description: String = "",
         timeSlot: String? = nil,
         dayOffset: Int = 0,
         explicitHour: Int? = nil,
@@ -25,6 +27,7 @@ public struct AITodoDecompositionResult: Codable, Equatable, Sendable {
         subtasks: [String] = []
     ) {
         self.cleanTitle = cleanTitle
+        self.description = description
         self.timeSlot = timeSlot
         self.dayOffset = dayOffset
         self.explicitHour = explicitHour
@@ -52,6 +55,7 @@ public protocol VoiceTodoExtractionRunning: Sendable {
 
 public struct ExtractedTodoDraft: Equatable, Sendable {
     public let title: String
+    public let description: String
     public let taskPrompt: String
     public let matchedProjectKey: String?
     public let priority: TodoPriority
@@ -62,6 +66,7 @@ public struct ExtractedTodoDraft: Equatable, Sendable {
 
     public init(
         title: String,
+        description: String = "",
         taskPrompt: String,
         matchedProjectKey: String?,
         priority: TodoPriority = .p1,
@@ -71,6 +76,7 @@ public struct ExtractedTodoDraft: Equatable, Sendable {
         timeSlot: String? = nil
     ) {
         self.title = title
+        self.description = description
         self.taskPrompt = taskPrompt
         self.matchedProjectKey = matchedProjectKey
         self.priority = priority

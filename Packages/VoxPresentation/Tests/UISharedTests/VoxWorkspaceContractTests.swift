@@ -387,6 +387,10 @@ final class VoxWorkspaceContractTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(30))
         XCTAssertEqual(vm.todos.first?.title, "原地修改后的顶部聚焦标题")
 
+        vm.updateTodoDescription(todoID: updatedTodo.id, description: "  展开态可编辑的详细背景说明  ")
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(vm.todos.first?.description, "展开态可编辑的详细背景说明")
+
         vm.cycleTodoStatus(todoID: updatedTodo.id)
         try await Task.sleep(for: .milliseconds(30))
         XCTAssertEqual(vm.todos.first?.executionState, .running)
@@ -494,6 +498,11 @@ final class VoxWorkspaceContractTests: XCTestCase {
         for kind in TodoUnfoldVariantKind.allCases {
             let store = boardController.store(for: kind)
             XCTAssertNotNil(store.expandedTodoID)
+            XCTAssertGreaterThanOrEqual(store.todos.count, 6)
+            for item in store.todos {
+                XCTAssertLessThanOrEqual(item.title.count, 14)
+                XCTAssertFalse(item.description.isEmpty)
+            }
             let viewportHost = NSHostingView(
                 rootView: TodoUnfoldVariantPhoneViewport(store: store, interpolationProgress: 1.0)
                     .frame(width: 390, height: 844)

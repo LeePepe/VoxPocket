@@ -438,6 +438,16 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         }
     }
 
+    public func updateTodoDescription(todoID: UUID, description: String) {
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }), todo.description != trimmed else { return }
+            let updated = todo.withDescription(trimmed)
+            _ = try await useCase.updateTodo(updated)
+            await reload()
+        }
+    }
+
     public func updateTodoStatus(todoID: UUID, state: TodoExecutionState) {
         perform { [weak self] in
             guard let self, let todo = todos.first(where: { $0.id == todoID }) else { return }
@@ -604,7 +614,14 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
 
     public func copyTodoContent(_ todo: VoiceTodo) {
         let subtaskLines = todo.subtasks.map { "- [\($0.isCompleted ? "x" : " ")] \($0.title)" }.joined(separator: "\n")
-        let body = subtaskLines.isEmpty ? todo.title : "\(todo.title)\n\(subtaskLines)"
+        var sections = [todo.title]
+        if !todo.description.isEmpty {
+            sections.append(todo.description)
+        }
+        if !subtaskLines.isEmpty {
+            sections.append(subtaskLines)
+        }
+        let body = sections.joined(separator: "\n")
         onCopyTextToClipboard?(body)
         lastCopiedBannerText = "已复制待办 · \(todo.title)"
     }
@@ -681,7 +698,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         await reloadTask?.value
         await reload()
         guard todos.isEmpty && captures.isEmpty else {
-            if !todos.contains(where: { $0.title.contains("整理下周设计评审") }) {
+            if !todos.contains(where: { $0.title.contains("液态玻璃") || $0.title.contains("整理下周设计评审") }) {
                 let first = try? await useCase.recordCompletedCapture(
                     mode: .todo,
                     rawTranscript: "整理下周设计评审要展示的液态玻璃交互走查清单",
@@ -692,6 +709,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 )
                 if let firstTodo = first?.todo {
                     let enrichedFirst = firstTodo
+                        .withTitle("液态玻璃交互走查")
+                        .withDescription("整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单")
                         .withPriority(.p0)
                         .withTags(["#VoxPocket", "#iOS", "#Glass"])
                         .withAppendedSubtask("录制录音页默认空态与实时转写声波走查")
@@ -699,7 +718,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                     _ = try? await useCase.updateTodo(enrichedFirst)
                 }
             }
-            if !todos.contains(where: { $0.title.contains("把早间散步录下的播客大纲") }) {
+            if !todos.contains(where: { $0.title.contains("播客大纲") || $0.title.contains("把早间散步录下的播客大纲") }) {
                 let second = try? await useCase.recordCompletedCapture(
                     mode: .todo,
                     rawTranscript: "把早间散步录下的播客大纲润色后发给搭档确认",
@@ -710,6 +729,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 )
                 if let secondTodo = second?.todo {
                     let enrichedSecond = secondTodo
+                        .withTitle("早间播客大纲润色")
+                        .withDescription("把早间散步录下的播客大纲润色后发给搭档确认，重点核对听众来信切入段")
                         .withPriority(.p1)
                         .withTags(["#Podcast", "#AI"])
                         .withAppendedSubtask("补充听众深夜来信的开场引子")
@@ -728,7 +749,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 )
             }
             await reload()
-            if let firstTodo = todos.first(where: { $0.title.contains("整理下周设计评审") }),
+            if let firstTodo = todos.first(where: { $0.title.contains("液态玻璃") || $0.title.contains("整理下周设计评审") }),
                let lastSubtaskID = firstTodo.subtasks.last?.id,
                voiceAppendedSubtaskIDs[firstTodo.id] == nil {
                 voiceAppendedSubtaskIDs[firstTodo.id] = [lastSubtaskID]
@@ -747,6 +768,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         )
         if let firstTodo = first?.todo {
             let enrichedFirst = firstTodo
+                .withTitle("液态玻璃交互走查")
+                .withDescription("整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单")
                 .withPriority(.p0)
                 .withTags(["#VoxPocket", "#iOS", "#Glass"])
                 .withAppendedSubtask("录制录音页默认空态与实时转写声波走查")
@@ -766,6 +789,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         )
         if let secondTodo = second?.todo {
             let enrichedSecond = secondTodo
+                .withTitle("早间播客大纲润色")
+                .withDescription("把早间散步录下的播客大纲润色后发给搭档确认，重点核对听众来信切入段")
                 .withPriority(.p1)
                 .withTags(["#Podcast", "#AI"])
                 .withAppendedSubtask("补充听众深夜来信的开场引子")
@@ -844,6 +869,6 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     }
     private func perform(_ operation: @escaping () async throws -> Void) { Task { do { try await operation() } catch { captureState = .failed(stage: .ai, reason: error.localizedDescription) } } }
     private func count(_ state: TodoExecutionState) -> Int { todos.filter { $0.executionState == state }.count }
-    private func matches(_ todo: VoiceTodo) -> Bool { (selectedTodoFilter == .all || todo.executionState.rawValue == selectedTodoFilter.rawValue) && (selectedProjectFilter == nil || todo.projectKey == selectedProjectFilter) && (searchQuery.isEmpty || todo.title.localizedCaseInsensitiveContains(searchQuery) || todo.taskPrompt.localizedCaseInsensitiveContains(searchQuery) || todo.rawTranscript.localizedCaseInsensitiveContains(searchQuery)) }
+    private func matches(_ todo: VoiceTodo) -> Bool { (selectedTodoFilter == .all || todo.executionState.rawValue == selectedTodoFilter.rawValue) && (selectedProjectFilter == nil || todo.projectKey == selectedProjectFilter) && (searchQuery.isEmpty || todo.title.localizedCaseInsensitiveContains(searchQuery) || todo.description.localizedCaseInsensitiveContains(searchQuery) || todo.taskPrompt.localizedCaseInsensitiveContains(searchQuery) || todo.rawTranscript.localizedCaseInsensitiveContains(searchQuery)) }
     private func ordered(_ lhs: Date, _ rhs: Date) -> Bool { sortOrder == .newestFirst ? lhs > rhs : lhs < rhs }
 }

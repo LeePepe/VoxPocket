@@ -41,7 +41,7 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
         // 遵循 VoxKit AppleIntelligenceProvider.swift:150 经验：使用紧凑单次 JSON 指令而非多字段复杂 @Generable，避免端侧受限解码 120s+ 超时
         let instructions = """
         You are an on-device Voice Todo semantic decomposer. Given the user's spoken transcript, output ONLY a single compact JSON object with these keys:
-        {"cleanTitle":"string (strip reminder/imperative prefixes like 提醒我/帮我记一下 and time phrases)","timeSlot":"morning|forenoon|noon|afternoon|evening|night|null","dayOffset":0,"explicitHour":null,"explicitMinute":null,"relativeMinutes":null,"priority":"P0|P1|P2","tags":["#Tag"],"subtasks":["step 1"]}
+        {"cleanTitle":"string (MUST be a concise 4-10 character action phrase <= 14 chars that fits on a single line, e.g. 液态玻璃交互走查, 早间播客大纲润色, 取顺丰快递; strip reminder/imperative prefixes like 提醒我/帮我记一下 and time phrases)","description":"string (detailed background context, conditions, or full spoken summary when the utterance has more detail than cleanTitle)","timeSlot":"morning|forenoon|noon|afternoon|evening|night|null","dayOffset":0,"explicitHour":null,"explicitMinute":null,"relativeMinutes":null,"priority":"P0|P1|P2","tags":["#Tag"],"subtasks":["step 1"]}
         Current time: \(refISO). User habit anchors: \(anchorsDesc). Known projects: \(knownProjectNames.joined(separator: ", ")).
         User transcript: \(trimmed)
         """
@@ -91,7 +91,9 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
         }
 
         let rawTitle = (dict["cleanTitle"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let cleanTitle = rawTitle.isEmpty ? compactTitle(fallbackTranscript) : compactTitle(rawTitle)
+        let rawDescription = (dict["description"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let (cleanTitle, compactedDescription) = compactActionTitle(from: rawTitle.isEmpty ? fallbackTranscript : rawTitle, fallbackContext: fallbackTranscript)
+        let resolvedDescription = !rawDescription.isEmpty ? rawDescription : compactedDescription
 
         let rawSlot = (dict["timeSlot"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let timeSlot: String? = (rawSlot != nil && rawSlot != "null" && !rawSlot!.isEmpty && HabitTimeSlot(rawValue: rawSlot!) != nil)
@@ -116,6 +118,7 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
 
         return AITodoDecompositionResult(
             cleanTitle: cleanTitle.isEmpty ? "Untitled task" : cleanTitle,
+            description: resolvedDescription,
             timeSlot: timeSlot,
             dayOffset: dayOffset,
             explicitHour: explicitHour,
@@ -128,18 +131,89 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
     }
 
     internal static func fallbackSentenceSplit(from source: String) -> AITodoDecompositionResult {
-        let sentence = source.split(whereSeparator: { ".!?。！？\n".contains($0) }).first.map(String.init) ?? source
-        let title = compactTitle(sentence)
+        let normalizedSource = source.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let sentence = normalizedSource.split(whereSeparator: { ".!?。！？\n".contains($0) }).first.map(String.init) ?? normalizedSource
+        let (shortTitle, extractedDescription) = compactActionTitle(from: sentence, fallbackContext: normalizedSource)
         return AITodoDecompositionResult(
-            cleanTitle: title.isEmpty ? "Untitled task" : title
+            cleanTitle: shortTitle.isEmpty ? "Untitled task" : shortTitle,
+            description: extractedDescription
         )
     }
 
-    internal static func compactTitle(_ value: String) -> String {
-        let normalized = value.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    internal static func compactActionTitle(from value: String, fallbackContext: String = "") -> (title: String, description: String) {
+        let fullSource = (fallbackContext.isEmpty ? value : fallbackContext)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalized.count > 60 else { return normalized }
-        return String(normalized.prefix(57)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+            .trimmingCharacters(in: CharacterSet(charactersIn: "。！？.!?"))
+        var candidate = value
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "。！？.!?"))
+
+        let reminderPrefixes = [
+            "请提醒我", "麻烦提醒我", "帮我提醒一下", "提醒我一下", "提醒我",
+            "帮我记一下", "帮我记录一下", "帮我记个待办", "记一下", "记得",
+            "需要", "我要", "待办：", "待办:"
+        ]
+        for prefix in reminderPrefixes where candidate.hasPrefix(prefix) {
+            candidate = String(candidate.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let timePrefixes = [
+            "今天早上", "今天上午", "今天中午", "今天下午", "今天傍晚", "今天晚上",
+            "明天早上", "明天上午", "明天中午", "明天下午", "明天傍晚", "明天晚上",
+            "后天早上", "后天上午", "后天下午", "后天晚上",
+            "下周一", "下周二", "下周三", "下周四", "下周五", "下周",
+            "早上", "上午", "中午", "下午", "傍晚", "晚上", "今晚", "明早", "明天", "今天"
+        ]
+        for prefix in timePrefixes where candidate.hasPrefix(prefix) {
+            candidate = String(candidate.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let strippedContext = candidate
+        guard candidate.count > 14 else {
+            let desc = (fullSource.count > candidate.count && fullSource != candidate) ? fullSource : ""
+            return (candidate, desc)
+        }
+
+        // First clause before comma/semicolon
+        if let firstClause = candidate.split(whereSeparator: { "，,；;：:—-".contains($0) }).first.map(String.init)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !firstClause.isEmpty {
+            candidate = firstClause
+        }
+
+        // Strip verbose relative modifier clauses ("要展示的", "录下的", etc.) when still > 14 chars
+        if candidate.count > 14 {
+            let clausePatterns = [
+                "下周设计评审要展示的",
+                "设计评审要展示的",
+                "早间散步录下的",
+                "刚才散步想到的",
+                "散步录下的"
+            ]
+            for pattern in clausePatterns where candidate.contains(pattern) {
+                candidate = candidate.replacingOccurrences(of: pattern, with: "")
+            }
+        }
+
+        if candidate.count > 14, let deRange = candidate.range(of: "的") {
+            let suffixAfterDe = String(candidate[deRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if (4...12).contains(suffixAfterDe.count) {
+                candidate = suffixAfterDe
+            }
+        }
+
+        if candidate.count > 14 {
+            candidate = String(candidate.prefix(14)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let finalDescription = !strippedContext.isEmpty ? strippedContext : fullSource
+        return (candidate, finalDescription)
+    }
+
+    internal static func compactTitle(_ value: String) -> String {
+        compactActionTitle(from: value).title
     }
 }
 
@@ -202,6 +276,7 @@ public struct DefaultVoiceTodoExtractor: VoiceTodoExtractionRunning {
 
         return ExtractedTodoDraft(
             title: decomposition.cleanTitle.isEmpty ? "Untitled task" : decomposition.cleanTitle,
+            description: decomposition.description,
             taskPrompt: promptLines.joined(separator: "\n"),
             matchedProjectKey: ProjectBinding.matchProjectKey(in: source, bindings: availableProjects),
             priority: decomposition.priority,
@@ -333,6 +408,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
             let draft = try await extractor.extractTodo(from: rawTranscript, refinedText: refinedText, availableProjects: projects())
             var created = VoiceTodo(
                 title: draft.title,
+                description: draft.description,
                 taskPrompt: draft.taskPrompt,
                 rawTranscript: rawTranscript,
                 projectKey: draft.matchedProjectKey,
@@ -421,6 +497,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         let draft = try await extractor.extractTodo(from: capture.rawTranscript, refinedText: capture.refinedText, availableProjects: projects())
         var todo = VoiceTodo(
             title: draft.title,
+            description: draft.description,
             taskPrompt: draft.taskPrompt,
             rawTranscript: capture.rawTranscript,
             projectKey: draft.matchedProjectKey,
@@ -622,6 +699,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
             let syncedMeta = try await externalSync.pushTodo(snapshot)
             let updated = try? await todos.update(id: snapshot.id) { current in
                 let localChangedDuringPush = current.title != snapshot.title
+                    || current.description != snapshot.description
                     || current.taskPrompt != snapshot.taskPrompt
                     || current.executionState != snapshot.executionState
                     || current.projectKey != snapshot.projectKey
@@ -634,6 +712,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
             let failedMeta = baseMeta.withState(fallbackStateOnFailure, lastError: .some(error.localizedDescription))
             let updated = try? await todos.update(id: snapshot.id) { current in
                 let localChangedDuringPush = current.title != snapshot.title
+                    || current.description != snapshot.description
                     || current.taskPrompt != snapshot.taskPrompt
                     || current.executionState != snapshot.executionState
                     || current.projectKey != snapshot.projectKey
