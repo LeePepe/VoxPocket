@@ -158,6 +158,7 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
     private let kvStore: any UbiquitousAIOrderKVStoring
     private let continuationsMutex = Mutex<[UUID: AsyncStream<AIExecutionStatusReport>.Continuation]>([:])
     private let fileMutex = Mutex<Void>(())
+    private let latestReportByTodoMutex = Mutex<[UUID: AIExecutionStatusReport]>([:])
 
     public static let kvsKeyPrefix = "vox.icloud.ai.order."
 
@@ -176,15 +177,29 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
         }
     }
 
-    /// Reads remotely updated KVS order payloads and broadcasts `AIExecutionStatusReport` events to local subscribers.
+    /// Reads remotely updated KVS order payloads, selects only the newest order per `todoID`,
+    /// and broadcasts only fresh `AIExecutionStatusReport` events (rejecting stale or duplicate reports).
     public func reconcileExternalKVSOrders() async {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        var newestOrderByTodo: [UUID: ICloudAIExecutionOrder] = [:]
+
         for (key, value) in kvStore.dictionaryRepresentation() where key.hasPrefix(Self.kvsKeyPrefix) {
             guard let data = value as? Data,
                   let remoteOrder = try? decoder.decode(ICloudAIExecutionOrder.self, from: data) else {
                 continue
             }
+            if let existing = newestOrderByTodo[remoteOrder.todoID] {
+                if Self.isNewerOrder(remoteOrder, than: existing) {
+                    newestOrderByTodo[remoteOrder.todoID] = remoteOrder
+                }
+            } else {
+                newestOrderByTodo[remoteOrder.todoID] = remoteOrder
+            }
+        }
+
+        let sortedOrders = newestOrderByTodo.values.sorted { $0.updatedAt < $1.updatedAt }
+        for remoteOrder in sortedOrders {
             let report = AIExecutionStatusReport(
                 orderID: remoteOrder.orderID,
                 todoID: remoteOrder.todoID,
@@ -195,8 +210,18 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
                 assignedRunnerName: remoteOrder.assignedRunnerName,
                 updatedAt: remoteOrder.updatedAt
             )
-            broadcast(report)
+            broadcastIfFresh(report, orderCreatedAt: remoteOrder.createdAt)
         }
+    }
+
+    private static func isNewerOrder(_ candidate: ICloudAIExecutionOrder, than existing: ICloudAIExecutionOrder) -> Bool {
+        if candidate.createdAt != existing.createdAt {
+            return candidate.createdAt > existing.createdAt
+        }
+        if candidate.updatedAt != existing.updatedAt {
+            return candidate.updatedAt > existing.updatedAt
+        }
+        return candidate.orderID.uuidString > existing.orderID.uuidString
     }
 
     public var isCloudSyncAvailable: Bool {
@@ -239,7 +264,7 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
             assignedRunnerName: nil,
             updatedAt: now
         )
-        broadcast(queuedReport)
+        broadcastIfFresh(queuedReport, orderCreatedAt: order.createdAt, forceCurrentOrder: true)
         return order
     }
 
@@ -351,12 +376,12 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
     @discardableResult
     public func publishStatusReport(_ report: AIExecutionStatusReport) async throws -> ICloudAIExecutionOrder? {
         guard let existing = try await loadOrder(orderID: report.orderID) else {
-            broadcast(report)
+            broadcastIfFresh(report, orderCreatedAt: nil)
             return nil
         }
         let updated = existing.applying(report)
         try await saveOrder(updated)
-        broadcast(report)
+        broadcastIfFresh(report, orderCreatedAt: updated.createdAt)
         return updated
     }
 
@@ -368,7 +393,43 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
         ordersDirectoryURL.appendingPathComponent("\(orderID.uuidString).status.json")
     }
 
-    private func broadcast(_ report: AIExecutionStatusReport) {
+    private func broadcastIfFresh(
+        _ report: AIExecutionStatusReport,
+        orderCreatedAt: Date?,
+        forceCurrentOrder: Bool = false
+    ) {
+        let shouldBroadcast = latestReportByTodoMutex.withLock { map -> Bool in
+            if forceCurrentOrder {
+                map[report.todoID] = report
+                return true
+            }
+            guard let previous = map[report.todoID] else {
+                map[report.todoID] = report
+                return true
+            }
+            if previous.orderID == report.orderID {
+                // Same order: ignore exact duplicates or older timestamps, and never regress a terminal order back to non-terminal
+                if previous.state.isTerminal && !report.state.isTerminal {
+                    return false
+                }
+                if report.updatedAt < previous.updatedAt {
+                    return false
+                }
+                if previous == report {
+                    return false
+                }
+                map[report.todoID] = report
+                return true
+            } else {
+                // Different order for the same todoID: only accept if strictly newer than previous report
+                guard report.updatedAt > previous.updatedAt else {
+                    return false
+                }
+                map[report.todoID] = report
+                return true
+            }
+        }
+        guard shouldBroadcast else { return }
         let continuations = continuationsMutex.withLock { Array($0.values) }
         for continuation in continuations {
             continuation.yield(report)

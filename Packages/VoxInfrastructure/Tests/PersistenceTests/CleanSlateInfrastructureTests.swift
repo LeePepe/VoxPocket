@@ -473,5 +473,31 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         let processedThird = try await pickupService.claimAndExecuteOrder(thirdOrder)
         XCTAssertEqual(processedThird.state, .completed)
         XCTAssertEqual(processedThird.outputSummary, "Swift 闭包完成: 2 步")
+
+        // 5. Verify external KVS notification selects only the newest order per todo and ignores stale historical orders
+        let receivedReportsMutex = Mutex<[AIExecutionStatusReport]>([])
+        let streamTask = Task {
+            for await report in syncService.statusReports {
+                receivedReportsMutex.withLock { $0.append(report) }
+            }
+        }
+        defer { streamTask.cancel() }
+        try await Task.sleep(for: .milliseconds(20))
+
+        // Inject an older queued order into KVS alongside the newer completed thirdOrder and simulate external KVS change
+        let staleOrder = ICloudAIExecutionOrder(
+            todoID: todo.id,
+            state: .queued,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        ).sanitizedForCloudSync()
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        kvStore.setData(try encoder.encode(staleOrder), forKey: ICloudAIOrderSyncService.kvsKeyPrefix + staleOrder.orderID.uuidString)
+        kvStore.simulateExternalSyncNotification()
+        try await Task.sleep(for: .milliseconds(40))
+
+        let replayed = receivedReportsMutex.withLock { $0 }
+        XCTAssertFalse(replayed.contains(where: { $0.orderID == staleOrder.orderID }), "Stale historical order must never be broadcast over a newer order")
     }
 }
