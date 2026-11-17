@@ -388,7 +388,21 @@ final class CleanSlateInfrastructureTests: XCTestCase {
             ]
         )
 
-        // 1. iPhone submits order to iCloud (sanitized on disk/KVS so no transcription-derived text leaves sandbox)
+        // 1. Verify unavailable cloud transport fails explicitly on submitOrderToICloud
+        let offlineKVStore = InMemoryUbiquitousAIOrderKVStore(isCloudAvailable: false)
+        let offlineSync = ICloudAIOrderSyncService(
+            ordersDirectoryURL: tempDir.appendingPathComponent("OfflineOrders", isDirectory: true),
+            kvStore: offlineKVStore
+        )
+        XCTAssertFalse(offlineSync.isCloudSyncAvailable)
+        do {
+            _ = try await offlineSync.submitOrderToICloud(todo: todo)
+            XCTFail("Expected cloudTransportUnavailable error when iCloud is unavailable")
+        } catch let error as ICloudAIOrderSyncError {
+            XCTAssertEqual(error, .cloudTransportUnavailable)
+        }
+
+        // 2. iPhone submits order to iCloud (sanitized on disk/KVS so no transcription-derived text leaves sandbox)
         let submitted = try await syncService.submitOrderToICloud(todo: todo)
         XCTAssertEqual(submitted.state, .queued)
         XCTAssertEqual(submitted.subtaskCount, 2)
@@ -398,7 +412,7 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         XCTAssertEqual(loadedFromDisk?.subtasks, [])
         XCTAssertEqual(loadedFromDisk?.subtaskCount, 2)
 
-        // 2. Unconfigured Mac pickup service fails explicitly instead of fabricating completion
+        // 3. Unconfigured Mac pickup service fails explicitly instead of fabricating completion
         let unconfiguredPickup = MacAIOrderAutoPickupService(
             syncService: syncService,
             configStore: configStore
@@ -406,6 +420,15 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         let unconfiguredResult = try await unconfiguredPickup.claimAndExecuteOrder(submitted)
         XCTAssertEqual(unconfiguredResult.state, .failed)
         XCTAssertTrue(unconfiguredResult.outputSummary?.contains("disabled by the sandbox privacy boundary") == true)
+
+        // Verify cloud KVS payload strips outputSummary, progressStage, and assignedRunnerName completely
+        let kvsData = try XCTUnwrap(kvStore.data(forKey: ICloudAIOrderSyncService.kvsKeyPrefix + submitted.orderID.uuidString))
+        let kvsDecoder = JSONDecoder()
+        kvsDecoder.dateDecodingStrategy = .iso8601
+        let kvsOrder = try kvsDecoder.decode(ICloudAIExecutionOrder.self, from: kvsData)
+        XCTAssertNil(kvsOrder.outputSummary)
+        XCTAssertNil(kvsOrder.assignedRunnerName)
+        XCTAssertEqual(kvsOrder.progressStage, "failed")
 
         // 3. Re-submit and verify Mac auto-pickup service with injected shellExecutor claims queued order, streams VOX_STATUS/VOX_PROGRESS lines, and completes
         let secondSubmitted = try await syncService.submitOrderToICloud(todo: todo)

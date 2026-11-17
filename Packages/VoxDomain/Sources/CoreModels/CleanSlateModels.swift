@@ -392,6 +392,16 @@ public enum AIOrderExecutionState: String, Codable, Equatable, Hashable, CaseIte
         case .failed: "⚠️ AI 执行失败 · 点击重试"
         }
     }
+
+    public var sanitizedStageCode: String {
+        switch self {
+        case .queued: "queued"
+        case .claimedByMac: "claimed"
+        case .running: "running"
+        case .completed: "completed"
+        case .failed: "failed"
+        }
+    }
 }
 
 public struct AIExecutionStatusReport: Codable, Equatable, Hashable, Sendable {
@@ -422,6 +432,21 @@ public struct AIExecutionStatusReport: Codable, Equatable, Hashable, Sendable {
         self.outputSummary = outputSummary
         self.assignedRunnerName = assignedRunnerName
         self.updatedAt = updatedAt
+    }
+
+    /// Strips free-form execution text (`progressStage`, `outputSummary`, `assignedRunnerName`)
+    /// so cloud-synchronized metadata contains only non-content state, fraction, and identifiers.
+    public func sanitizedForCloudSync() -> AIExecutionStatusReport {
+        AIExecutionStatusReport(
+            orderID: orderID,
+            todoID: todoID,
+            state: state,
+            progressStage: state.sanitizedStageCode,
+            progressFraction: progressFraction,
+            outputSummary: nil,
+            assignedRunnerName: nil,
+            updatedAt: updatedAt
+        )
     }
 }
 
@@ -550,8 +575,9 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
         )
     }
 
-    /// Strips transcription-derived text (`title`, `description`, `subtasks`, `tags`) before persisting
-    /// to any cloud/KVS or disk metadata channel so sensitive voice/text never leaves the sandbox (Constitution IV).
+    /// Strips transcription-derived and execution-derived text (`title`, `description`, `subtasks`, `tags`,
+    /// `progressStage`, `outputSummary`, `assignedRunnerName`) before persisting to any cloud/KVS channel
+    /// so sensitive voice/text or runner output never leaves the local sandbox (Constitution IV).
     public func sanitizedForCloudSync() -> ICloudAIExecutionOrder {
         ICloudAIExecutionOrder(
             orderID: orderID,
@@ -564,10 +590,10 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
             priority: priority,
             projectKey: projectKey,
             state: state,
-            progressStage: progressStage,
+            progressStage: state.sanitizedStageCode,
             progressFraction: progressFraction,
-            outputSummary: outputSummary,
-            assignedRunnerName: assignedRunnerName,
+            outputSummary: nil,
+            assignedRunnerName: nil,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -578,14 +604,20 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
         case .queued:
             return "☁️ 已上传 iCloud · 等待 Mac 接单"
         case .claimedByMac:
-            return "⚡ Mac 已接单 · \(progressStage)"
+            let stageText = (progressStage.isEmpty || progressStage == state.sanitizedStageCode) ? "准备启动 AI" : progressStage
+            return "⚡ Mac 已接单 · \(stageText)"
         case .running:
-            return "⚡ Mac 已接单 · AI 执行中: \(progressStage)"
+            let stageText = (progressStage.isEmpty || progressStage == state.sanitizedStageCode)
+                ? "\(Int((progressFraction * 100).rounded()))%"
+                : progressStage
+            return "⚡ Mac 已接单 · AI 执行中: \(stageText)"
         case .completed:
-            let summary = (outputSummary ?? progressStage).trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawSummary = (outputSummary ?? progressStage).trimmingCharacters(in: .whitespacesAndNewlines)
+            let summary = (rawSummary.isEmpty || rawSummary == state.sanitizedStageCode) ? "" : rawSummary
             return summary.isEmpty ? "✅ AI 已完成" : "✅ AI 已完成 · \(summary)"
         case .failed:
-            let reason = (outputSummary ?? progressStage).trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawReason = (outputSummary ?? progressStage).trimmingCharacters(in: .whitespacesAndNewlines)
+            let reason = (rawReason.isEmpty || rawReason == state.sanitizedStageCode) ? "" : rawReason
             return reason.isEmpty ? "⚠️ AI 执行失败 · 点击重试" : "⚠️ AI 执行失败 · \(reason)"
         }
     }

@@ -206,6 +206,21 @@ final class CleanSlateModelsTests: XCTestCase {
         )
         XCTAssertEqual(completedOrder.formattedButtonLabel, "✅ AI 已完成 · 2 项检查通过")
 
+        let cloudSanitized = completedOrder.sanitizedForCloudSync()
+        XCTAssertEqual(cloudSanitized.title, "")
+        XCTAssertEqual(cloudSanitized.description, "")
+        XCTAssertEqual(cloudSanitized.subtasks, [])
+        XCTAssertEqual(cloudSanitized.tags, [])
+        XCTAssertEqual(cloudSanitized.progressStage, "completed")
+        XCTAssertNil(cloudSanitized.outputSummary)
+        XCTAssertNil(cloudSanitized.assignedRunnerName)
+        XCTAssertEqual(cloudSanitized.formattedButtonLabel, "✅ AI 已完成")
+
+        let sanitizedReport = runningReport.sanitizedForCloudSync()
+        XCTAssertEqual(sanitizedReport.progressStage, "running")
+        XCTAssertNil(sanitizedReport.outputSummary)
+        XCTAssertNil(sanitizedReport.assignedRunnerName)
+
         let config = UserAIRunnerConfig(
             isAutoPickupEnabled: true,
             runnerDisplayName: "Custom Agent",

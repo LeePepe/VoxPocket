@@ -157,14 +157,14 @@ public struct VoxCaptureLiveActivity: Widget {
                     } else if let todoID = context.state.todoID, !todoID.isEmpty {
                         HStack(spacing: 6) {
                             Button(intent: TodoIslandActionIntent(actionKind: "done", todoID: todoID)) {
-                                Text("✓ 完成")
-                                    .font(.caption2.weight(.bold))
+                                Image(systemName: "circle")
+                                    .font(.caption.weight(.bold))
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(accent)
 
                             Button(intent: TodoIslandActionIntent(actionKind: "snooze15m", todoID: todoID)) {
-                                Text("+15m")
+                                Text("⏰ +15m")
                                     .font(.caption2.weight(.semibold))
                             }
                             .buttonStyle(.bordered)
@@ -215,22 +215,22 @@ public struct VoxCaptureLiveActivity: Widget {
                                 .tint(accent)
                             }
                         } else if let todoID = context.state.todoID, !todoID.isEmpty {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
+                                Button(intent: TodoIslandActionIntent(actionKind: "done", todoID: todoID)) {
+                                    Image(systemName: context.state.phase == .completedReceipt ? "checkmark.circle.fill" : "circle")
+                                        .font(.caption.weight(.bold))
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(accent)
+
                                 Button(intent: TodoIslandActionIntent(actionKind: "subtask", todoID: todoID)) {
                                     Text("○ \(context.state.completedSubtasks)/\(max(1, context.state.totalSubtasks))")
                                         .font(.caption2.weight(.bold).monospacedDigit())
                                 }
                                 .buttonStyle(.bordered)
 
-                                Button(intent: TodoIslandActionIntent(actionKind: "done", todoID: todoID)) {
-                                    Text("✓ 完成")
-                                        .font(.caption2.weight(.bold))
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(accent)
-
                                 Button(intent: TodoIslandActionIntent(actionKind: "snooze15m", todoID: todoID)) {
-                                    Text("+15m")
+                                    Text("⏰ +15m")
                                         .font(.caption2.weight(.semibold))
                                 }
                                 .buttonStyle(.bordered)

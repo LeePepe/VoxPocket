@@ -4,6 +4,7 @@ import CoreModels
 
 /// Key-value store abstraction for `NSUbiquitousKeyValueStore` or in-memory test doubles.
 public protocol UbiquitousAIOrderKVStoring: AnyObject, Sendable {
+    var isCloudAvailable: Bool { get }
     func setData(_ data: Data, forKey key: String)
     func data(forKey key: String) -> Data?
     func dictionaryRepresentation() -> [String: Any]
@@ -11,11 +12,33 @@ public protocol UbiquitousAIOrderKVStoring: AnyObject, Sendable {
     func synchronize() -> Bool
 }
 
-/// Thread-safe in-memory KV store used when iCloud KVS is unavailable or in unit tests.
+public enum ICloudAIOrderSyncError: Error, LocalizedError, Equatable, Sendable {
+    case cloudTransportUnavailable
+
+    public var errorDescription: String? {
+        switch self {
+        case .cloudTransportUnavailable:
+            "iCloud cross-device order sync is unavailable on this device or account."
+        }
+    }
+}
+
+/// Thread-safe in-memory KV store used in unit tests or offline test hosts.
 public final class InMemoryUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring, Sendable {
     private let mutex = Mutex<[String: Data]>([:])
+    private let availableMutex: Mutex<Bool>
 
-    public init() {}
+    public init(isCloudAvailable: Bool = true) {
+        self.availableMutex = Mutex(isCloudAvailable)
+    }
+
+    public var isCloudAvailable: Bool {
+        availableMutex.withLock { $0 }
+    }
+
+    public func setCloudAvailable(_ available: Bool) {
+        availableMutex.withLock { $0 = available }
+    }
 
     public func setData(_ data: Data, forKey key: String) {
         mutex.withLock { $0[key] = data }
@@ -31,15 +54,26 @@ public final class InMemoryUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring,
 
     @discardableResult
     public func synchronize() -> Bool {
-        true
+        availableMutex.withLock { $0 }
     }
 }
 
 /// Production wrapper around `NSUbiquitousKeyValueStore.default`.
 public final class SystemUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring, @unchecked Sendable {
     private let lock = NSLock()
+    private let availabilityCheck: @Sendable () -> Bool
 
-    public init() {}
+    public init(
+        availabilityCheck: @escaping @Sendable () -> Bool = {
+            FileManager.default.ubiquityIdentityToken != nil
+        }
+    ) {
+        self.availabilityCheck = availabilityCheck
+    }
+
+    public var isCloudAvailable: Bool {
+        availabilityCheck()
+    }
 
     public func setData(_ data: Data, forKey key: String) {
         lock.lock()
@@ -63,13 +97,17 @@ public final class SystemUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring, @
     public func synchronize() -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        guard availabilityCheck() else { return false }
         return NSUbiquitousKeyValueStore.default.synchronize()
     }
 }
 
-/// Dual-channel iCloud sync protocol (`iCloud Drive AIOrders directory` + `NSUbiquitousKeyValueStore` + injectable local directory fallback).
+/// Dual-channel iCloud sync protocol:
+/// - Local full order & execution status reside strictly inside `Application Support/VoxPocket/AIOrders/` (`0600`, excluded from backups);
+/// - Cross-device sync uses `SystemUbiquitousAIOrderKVStore` (`NSUbiquitousKeyValueStore.default`) carrying ONLY `sanitizedForCloudSync()` metadata (zero transcription or runner text).
 public protocol ICloudAIOrderSyncing: AnyObject, Sendable {
     var ordersDirectoryURL: URL { get }
+    var isCloudSyncAvailable: Bool { get }
     var statusReports: AsyncStream<AIExecutionStatusReport> { get }
 
     @discardableResult
@@ -97,8 +135,12 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
         kvStore: (any UbiquitousAIOrderKVStoring)? = nil
     ) {
         self.ordersDirectoryURL = ordersDirectoryURL ?? Self.resolveDefaultOrdersDirectory()
-        self.kvStore = kvStore ?? InMemoryUbiquitousAIOrderKVStore()
+        self.kvStore = kvStore ?? SystemUbiquitousAIOrderKVStore()
         try? FileManager.default.createDirectory(at: self.ordersDirectoryURL, withIntermediateDirectories: true)
+    }
+
+    public var isCloudSyncAvailable: Bool {
+        kvStore.isCloudAvailable
     }
 
     public static func resolveDefaultOrdersDirectory() -> URL {
@@ -122,6 +164,9 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
 
     @discardableResult
     public func submitOrderToICloud(todo: VoiceTodo, now: Date = Date()) async throws -> ICloudAIExecutionOrder {
+        guard kvStore.isCloudAvailable, kvStore.synchronize() else {
+            throw ICloudAIOrderSyncError.cloudTransportUnavailable
+        }
         let order = ICloudAIExecutionOrder(from: todo, now: now).sanitizedForCloudSync()
         try await saveOrder(order)
         let queuedReport = AIExecutionStatusReport(
@@ -139,22 +184,45 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
     }
 
     public func saveOrder(_ order: ICloudAIExecutionOrder) async throws {
-        let sanitized = order.sanitizedForCloudSync()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(sanitized)
+
+        // 1. Local sandbox file keeps local execution summary/stage inside Application Support/VoxPocket/AIOrders (0600, excluded from backups),
+        //    while stripping raw voice/todo text (title/description/subtasks/tags).
+        let localSnapshot = ICloudAIExecutionOrder(
+            orderID: order.orderID,
+            todoID: order.todoID,
+            title: "",
+            description: "",
+            subtasks: [],
+            subtaskCount: order.subtaskCount,
+            tags: [],
+            priority: order.priority,
+            projectKey: order.projectKey,
+            state: order.state,
+            progressStage: order.progressStage,
+            progressFraction: order.progressFraction,
+            outputSummary: order.outputSummary,
+            assignedRunnerName: order.assignedRunnerName,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt
+        )
+        let localData = try encoder.encode(localSnapshot)
 
         try fileMutex.withLock { _ in
             try FileManager.default.createDirectory(at: ordersDirectoryURL, withIntermediateDirectories: true)
-            var fileURL = orderFileURL(for: sanitized.orderID)
-            try data.write(to: fileURL, options: .atomic)
+            var fileURL = orderFileURL(for: localSnapshot.orderID)
+            try localData.write(to: fileURL, options: .atomic)
             var resourceValues = URLResourceValues()
             resourceValues.isExcludedFromBackup = true
             try? fileURL.setResourceValues(resourceValues)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         }
 
-        kvStore.setData(data, forKey: Self.kvsKeyPrefix + sanitized.orderID.uuidString)
+        // 2. Cloud KVS receives strictly sanitized metadata (`sanitizedForCloudSync()`), stripping progressStage, outputSummary, and assignedRunnerName.
+        let cloudSanitized = order.sanitizedForCloudSync()
+        let cloudData = try encoder.encode(cloudSanitized)
+        kvStore.setData(cloudData, forKey: Self.kvsKeyPrefix + cloudSanitized.orderID.uuidString)
         _ = kvStore.synchronize()
     }
 
