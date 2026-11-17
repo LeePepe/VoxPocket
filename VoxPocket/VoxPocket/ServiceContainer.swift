@@ -768,7 +768,7 @@ public final class ServiceContainer: ObservableObject {
             }
         }
         notificationCenter.addObserver(
-            forName: Notification.Name("vox.liveActivity.recordingEnded"),
+            forName: Notification.Name("vox.liveActivity.captureAborted"),
             object: nil,
             queue: .main
         ) { [weak self] _ in

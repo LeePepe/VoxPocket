@@ -5,6 +5,7 @@ import CoreModels
 /// Key-value store abstraction for `NSUbiquitousKeyValueStore` or in-memory test doubles.
 public protocol UbiquitousAIOrderKVStoring: AnyObject, Sendable {
     var isCloudAvailable: Bool { get }
+    func setExternalChangeHandler(_ handler: (@Sendable () -> Void)?)
     func setData(_ data: Data, forKey key: String)
     func data(forKey key: String) -> Data?
     func dictionaryRepresentation() -> [String: Any]
@@ -27,6 +28,7 @@ public enum ICloudAIOrderSyncError: Error, LocalizedError, Equatable, Sendable {
 public final class InMemoryUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring, Sendable {
     private let mutex = Mutex<[String: Data]>([:])
     private let availableMutex: Mutex<Bool>
+    private let externalHandlerMutex = Mutex<(@Sendable () -> Void)?>(nil)
 
     public init(isCloudAvailable: Bool = true) {
         self.availableMutex = Mutex(isCloudAvailable)
@@ -34,6 +36,15 @@ public final class InMemoryUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring,
 
     public var isCloudAvailable: Bool {
         availableMutex.withLock { $0 }
+    }
+
+    public func setExternalChangeHandler(_ handler: (@Sendable () -> Void)?) {
+        externalHandlerMutex.withLock { $0 = handler }
+    }
+
+    public func simulateExternalSyncNotification() {
+        let handler = externalHandlerMutex.withLock { $0 }
+        handler?()
     }
 
     public func setCloudAvailable(_ available: Bool) {
@@ -62,6 +73,8 @@ public final class InMemoryUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring,
 public final class SystemUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring, @unchecked Sendable {
     private let lock = NSLock()
     private let availabilityCheck: @Sendable () -> Bool
+    private var changeObserver: NSObjectProtocol?
+    private let onExternalChangeMutex = Mutex<(@Sendable () -> Void)?>(nil)
 
     public init(
         availabilityCheck: @escaping @Sendable () -> Bool = {
@@ -69,6 +82,24 @@ public final class SystemUbiquitousAIOrderKVStore: UbiquitousAIOrderKVStoring, @
         }
     ) {
         self.availabilityCheck = availabilityCheck
+        self.changeObserver = NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: NSUbiquitousKeyValueStore.default,
+            queue: nil
+        ) { [weak self] _ in
+            guard let callback = self?.onExternalChangeMutex.withLock({ $0 }) else { return }
+            callback()
+        }
+    }
+
+    deinit {
+        if let changeObserver {
+            NotificationCenter.default.removeObserver(changeObserver)
+        }
+    }
+
+    public func setExternalChangeHandler(_ handler: (@Sendable () -> Void)?) {
+        onExternalChangeMutex.withLock { $0 = handler }
     }
 
     public var isCloudAvailable: Bool {
@@ -135,8 +166,37 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
         kvStore: (any UbiquitousAIOrderKVStoring)? = nil
     ) {
         self.ordersDirectoryURL = ordersDirectoryURL ?? Self.resolveDefaultOrdersDirectory()
-        self.kvStore = kvStore ?? SystemUbiquitousAIOrderKVStore()
+        let resolvedKV = kvStore ?? SystemUbiquitousAIOrderKVStore()
+        self.kvStore = resolvedKV
         try? FileManager.default.createDirectory(at: self.ordersDirectoryURL, withIntermediateDirectories: true)
+        resolvedKV.setExternalChangeHandler { [weak self] in
+            Task {
+                await self?.reconcileExternalKVSOrders()
+            }
+        }
+    }
+
+    /// Reads remotely updated KVS order payloads and broadcasts `AIExecutionStatusReport` events to local subscribers.
+    public func reconcileExternalKVSOrders() async {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        for (key, value) in kvStore.dictionaryRepresentation() where key.hasPrefix(Self.kvsKeyPrefix) {
+            guard let data = value as? Data,
+                  let remoteOrder = try? decoder.decode(ICloudAIExecutionOrder.self, from: data) else {
+                continue
+            }
+            let report = AIExecutionStatusReport(
+                orderID: remoteOrder.orderID,
+                todoID: remoteOrder.todoID,
+                state: remoteOrder.state,
+                progressStage: remoteOrder.progressStage,
+                progressFraction: remoteOrder.progressFraction,
+                outputSummary: remoteOrder.outputSummary,
+                assignedRunnerName: remoteOrder.assignedRunnerName,
+                updatedAt: remoteOrder.updatedAt
+            )
+            broadcast(report)
+        }
     }
 
     public var isCloudSyncAvailable: Bool {

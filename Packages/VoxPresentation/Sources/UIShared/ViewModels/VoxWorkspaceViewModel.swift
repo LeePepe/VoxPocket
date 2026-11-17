@@ -254,6 +254,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 appendingTargetTodoID = nil
                 captureState = .failed(stage: .recording, reason: error.localizedDescription)
                 NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return false
             }
         }
@@ -274,6 +275,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         recordingElapsedSeconds = 0
         audioLevel = 0
         NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+        NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
     }
     public func finishCapture() {
         #if os(iOS)
@@ -286,15 +288,13 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public func completeCapture(rawTranscript: String = "", refinedText: String = "", localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac) async {
         guard isRecordingActive, !isCompletingCapture else { return }
         isCompletingCapture = true
-        defer { isCompletingCapture = false }
+        defer {
+            isCompletingCapture = false
+            NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+        }
         let generation = captureGeneration
         let started = await captureStartTask?.value ?? true
-        guard started, captureGeneration == generation, isRecordingActive else {
-            if !isRecordingActive {
-                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
-            }
-            return
-        }
+        guard started, captureGeneration == generation, isRecordingActive else { return }
         stopElapsedTimer()
         let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
         captureState = .transcribing
@@ -314,7 +314,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 try await recordingUseCase.stopRecording()
             } catch {
                 captureState = .failed(stage: .recording, reason: error.localizedDescription)
-                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return
             }
         }
@@ -323,7 +323,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 try await transcriptionUseCase.commitCurrentTranscription()
             } catch {
                 captureState = .failed(stage: .asr, reason: error.localizedDescription)
-                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return
             }
         }
@@ -338,7 +338,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 latestCompletedText = ""
                 lastCopiedBannerText = "未检测到语音，按住底部麦克风重新说话。"
                 captureState = .idle
-                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return
             }
             var refined = recorded?.refinedText ?? refinedText
@@ -435,7 +435,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         } catch {
             appendingTargetTodoID = nil
             captureState = .failed(stage: .ai, reason: error.localizedDescription)
-            NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+            NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
         }
     }
 
