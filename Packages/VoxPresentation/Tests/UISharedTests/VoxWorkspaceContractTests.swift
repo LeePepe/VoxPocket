@@ -474,6 +474,39 @@ final class VoxWorkspaceContractTests: XCTestCase {
 
     #if os(macOS)
     @MainActor
+    func testIOSCleanSlateWorkspaceViewAndFourUpSwiftUIPreviewsRenderOnMacOS() async throws {
+        let previewVM = IOSCleanSlatePreviewFactory.makePreviewViewModel(
+            activePage: .todo,
+            expandFirstTodo: true
+        )
+        let iosHost = NSHostingView(
+            rootView: IOSCleanSlateWorkspaceView(viewModel: previewVM)
+                .environment(\.colorScheme, .dark)
+                .frame(width: 390, height: 844)
+        )
+        iosHost.frame = NSRect(x: 0, y: 0, width: 390, height: 844)
+        iosHost.layoutSubtreeIfNeeded()
+        XCTAssertEqual(iosHost.bounds.width, 390)
+        XCTAssertEqual(iosHost.bounds.height, 844)
+
+        let boardController = TodoUnfoldFourUpBoardController(initiallyExpanded: true)
+        XCTAssertEqual(TodoUnfoldVariantKind.allCases.count, 4)
+        for kind in TodoUnfoldVariantKind.allCases {
+            let store = boardController.store(for: kind)
+            XCTAssertNotNil(store.expandedTodoID)
+            let viewportHost = NSHostingView(
+                rootView: TodoUnfoldVariantPhoneViewport(store: store, interpolationProgress: 1.0)
+                    .frame(width: 390, height: 844)
+            )
+            viewportHost.frame = NSRect(x: 0, y: 0, width: 390, height: 844)
+            viewportHost.layoutSubtreeIfNeeded()
+            XCTAssertEqual(viewportHost.bounds.size, NSSize(width: 390, height: 844))
+        }
+        boardController.toggleAllExpanded()
+        XCTAssertFalse(boardController.allExpanded)
+    }
+
+    @MainActor
     func testNativeMacWorkspaceRendersSharedHomeAtActualMinimumSize() async throws {
         let vm = VoxWorkspaceViewModel(useCase: FakeCaptureAndTodoUseCase())
         await vm.seedDemoDataIfEmptyForPreview()

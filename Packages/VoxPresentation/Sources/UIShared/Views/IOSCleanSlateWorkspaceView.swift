@@ -1,8 +1,8 @@
 import SwiftUI
 import CoreModels
 import Preferences
+import UseCases
 
-#if os(iOS)
 @MainActor
 public struct IOSCleanSlateWorkspaceView: View {
     @ObservedObject private var viewModel: VoxWorkspaceViewModel
@@ -55,7 +55,7 @@ public struct IOSCleanSlateWorkspaceView: View {
                     cancel: { viewModel.cancelCapture() }
                 )
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .iosWorkspaceNavigationBarHidden()
         }
         .sheet(isPresented: $isShowingSettingsSheet) {
             IOSWorkspaceSettingsSheet(viewModel: viewModel, localModelLoadingStatus: localModelLoadingStatus)
@@ -1161,7 +1161,7 @@ private struct IOSWorkspaceSettingsSheet: View {
                 }
             }
             .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.inline)
+            .iosWorkspaceInlineNavigationBarTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
@@ -1170,6 +1170,26 @@ private struct IOSWorkspaceSettingsSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func iosWorkspaceNavigationBarHidden() -> some View {
+        #if os(iOS)
+        self.toolbar(.hidden, for: .navigationBar)
+        #else
+        self.toolbar(.hidden, for: .windowToolbar)
+        #endif
+    }
+
+    @ViewBuilder
+    func iosWorkspaceInlineNavigationBarTitle() -> some View {
+        #if os(iOS)
+        self.navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
     }
 }
 
@@ -1188,4 +1208,181 @@ private extension TodoStatusFilter {
         }
     }
 }
-#endif
+
+// MARK: - Cross-Platform Preview Support (macOS & iOS Canvas)
+
+@MainActor
+public enum IOSCleanSlatePreviewFactory {
+    public static func makePreviewViewModel(
+        activePage: WorkspacePage = .todo,
+        expandFirstTodo: Bool = true
+    ) -> VoxWorkspaceViewModel {
+        let now = Date()
+        let firstID = UUID()
+        let secondID = UUID()
+        let initialTodos: [VoiceTodo] = [
+            VoiceTodo(
+                id: firstID,
+                title: "整理下周设计评审要展示的液态玻璃交互走查清单",
+                taskPrompt: "整理下周设计评审要展示的液态玻璃交互走查清单",
+                rawTranscript: "整理下周设计评审要展示的液态玻璃交互走查清单",
+                projectKey: "VP",
+                executionState: .inbox,
+                priority: .p0,
+                tags: ["#VoxPocket", "#iOS", "#Glass"],
+                subtasks: [
+                    VoiceTodoSubtask(title: "录制录音页默认空态与实时转写声波走查", isCompleted: true),
+                    VoiceTodoSubtask(title: "验证左下切换与右下录音双按钮侧滑手势", isCompleted: false)
+                ],
+                createdAt: now,
+                updatedAt: now
+            ),
+            VoiceTodo(
+                id: secondID,
+                title: "把早间散步录下的播客大纲润色后发给搭档确认",
+                taskPrompt: "把早间散步录下的播客大纲润色后发给搭档确认",
+                rawTranscript: "把早间散步录下的播客大纲润色后发给搭档确认",
+                projectKey: "VP",
+                executionState: .done,
+                priority: .p1,
+                tags: ["#Podcast", "#AI"],
+                subtasks: [
+                    VoiceTodoSubtask(title: "补充听众深夜来信的开场引子", isCompleted: true)
+                ],
+                lastCompletedAt: now.addingTimeInterval(-900),
+                createdAt: now.addingTimeInterval(-1800),
+                updatedAt: now.addingTimeInterval(-900)
+            )
+        ]
+        let useCase = PreviewCaptureAndTodoUseCase(initialTodos: initialTodos)
+        let vm = VoxWorkspaceViewModel(useCase: useCase, defaultCaptureMode: .todo)
+        vm.switchToPage(activePage)
+        if expandFirstTodo {
+            vm.expandedTodoID = firstID
+        }
+        return vm
+    }
+}
+
+private actor PreviewCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase {
+    private var captures: [VoiceCapture] = []
+    private var todos: [VoiceTodo]
+
+    init(initialTodos: [VoiceTodo] = []) {
+        self.todos = initialTodos
+    }
+
+    func recordCompletedCapture(
+        mode: CaptureMode,
+        rawTranscript: String,
+        refinedText: String,
+        localAudioFileName: String?,
+        durationSeconds: TimeInterval,
+        deviceSource: DeviceSource
+    ) async throws -> (capture: VoiceCapture, todo: VoiceTodo?) {
+        let capture = VoiceCapture(
+            mode: mode,
+            rawTranscript: rawTranscript,
+            refinedText: refinedText,
+            localAudioFileName: localAudioFileName,
+            durationSeconds: durationSeconds,
+            deviceSource: deviceSource,
+            state: .completed
+        )
+        captures.append(capture)
+        let todo = mode == .todo
+            ? VoiceTodo(title: rawTranscript, taskPrompt: refinedText, rawTranscript: rawTranscript, projectKey: "VP", sourceCaptureID: capture.id)
+            : nil
+        if let todo {
+            todos.append(todo)
+        }
+        return (capture, todo)
+    }
+
+    func recordFailedCapture(
+        mode: CaptureMode,
+        stage: FailureStage,
+        reason: String,
+        rawTranscript: String,
+        localAudioFileName: String?,
+        durationSeconds: TimeInterval,
+        deviceSource: DeviceSource
+    ) async throws -> VoiceCapture {
+        VoiceCapture(mode: mode, rawTranscript: rawTranscript, state: .failed(stage: stage, reason: reason))
+    }
+
+    func retryCapture(id: UUID, targetMode: CaptureMode?) async throws -> (capture: VoiceCapture, todo: VoiceTodo?) {
+        let fallback = captures.first ?? VoiceCapture(mode: .todo, rawTranscript: "Preview", refinedText: "Preview", state: .completed)
+        return (fallback, todos.first)
+    }
+
+    func convertCaptureToTodo(captureID: UUID) async throws -> VoiceTodo {
+        if let existing = todos.first { return existing }
+        let created = VoiceTodo(title: "Preview Todo", taskPrompt: "Preview Todo", rawTranscript: "Preview Todo")
+        todos.append(created)
+        return created
+    }
+
+    func updateTodo(_ todo: VoiceTodo) async throws -> VoiceTodo {
+        if let index = todos.firstIndex(where: { $0.id == todo.id }) {
+            todos[index] = todo
+        } else {
+            todos.append(todo)
+        }
+        return todo
+    }
+
+    func runTodoWithAI(todoID: UUID, project: ProjectBinding, template: AIRunnerTemplate) async throws -> VoiceTodo {
+        guard let index = todos.firstIndex(where: { $0.id == todoID }) else {
+            throw NSError(domain: "PreviewCaptureAndTodoUseCase", code: 404)
+        }
+        let updated = todos[index].withExecutionState(.running, startedAt: Date(), completedAt: nil)
+        todos[index] = updated
+        return updated
+    }
+
+    func markTodoDone(todoID: UUID) async throws -> VoiceTodo {
+        guard let index = todos.firstIndex(where: { $0.id == todoID }) else {
+            throw NSError(domain: "PreviewCaptureAndTodoUseCase", code: 404)
+        }
+        let updated = todos[index].withExecutionState(.done, completedAt: Date())
+        todos[index] = updated
+        return updated
+    }
+
+    func deleteCapture(id: UUID) async throws {
+        captures.removeAll { $0.id == id }
+    }
+
+    func deleteTodo(id: UUID) async throws {
+        todos.removeAll { $0.id == id }
+    }
+
+    func fetchCaptures() async throws -> [VoiceCapture] {
+        captures
+    }
+
+    func fetchTodos() async throws -> [VoiceTodo] {
+        todos
+    }
+}
+
+#Preview("iOS Clean Slate · Todo Unfold") {
+    IOSCleanSlateWorkspaceView(
+        viewModel: IOSCleanSlatePreviewFactory.makePreviewViewModel(
+            activePage: .todo,
+            expandFirstTodo: true
+        )
+    )
+    .frame(width: 390, height: 844)
+}
+
+#Preview("iOS Clean Slate · Recorder") {
+    IOSCleanSlateWorkspaceView(
+        viewModel: IOSCleanSlatePreviewFactory.makePreviewViewModel(
+            activePage: .recorder,
+            expandFirstTodo: false
+        )
+    )
+    .frame(width: 390, height: 844)
+}

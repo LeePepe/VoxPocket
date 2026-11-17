@@ -12,9 +12,9 @@ red_lines:
 roles:
   Types:   [ViewStates, Models, DesignSystem]
   Runtime: [ViewModels, Snackbar]
-  UI:      [Views, Components]
+  UI:      [Views, Components, VoxTodoPreviewHost]
 test: swift test --package-path Packages/VoxPresentation --explicit-target-dependency-import-check error
-targets: [UIShared, PlatformUI, WidgetUI]
+targets: [UIShared, PlatformUI, WidgetUI, VoxTodoPreviewHost]
 ---
 
 # VoxPresentation Tech Context
