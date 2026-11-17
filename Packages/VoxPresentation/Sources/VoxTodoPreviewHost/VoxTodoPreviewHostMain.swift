@@ -3,8 +3,6 @@ import CoreModels
 import UIShared
 #if os(macOS)
 import AppKit
-import AVFoundation
-import CoreVideo
 #endif
 
 @main
@@ -12,31 +10,9 @@ struct VoxTodoPreviewHostEntry {
     static func main() async {
         #if os(macOS)
         let args = CommandLine.arguments
-        if let exportIdx = args.firstIndex(of: "--export-gallery"), exportIdx + 1 < args.count {
-            let outputDir = args[exportIdx + 1]
-            let code = await GalleryFrameExporter.exportAll(to: URL(fileURLWithPath: outputDir))
-            exit(code)
-        }
-        if let exportFramesIdx = args.firstIndex(of: "--export-frames-only"), exportFramesIdx + 1 < args.count {
-            let outputDir = args[exportFramesIdx + 1]
-            let code = await GalleryFrameExporter.exportAll(to: URL(fileURLWithPath: outputDir), encodeVideosInProcess: false)
-            exit(code)
-        }
-        if let encodeIdx = args.firstIndex(of: "--encode-videos"), encodeIdx + 1 < args.count {
-            let outputDir = args[encodeIdx + 1]
-            let code = await OffscreenMP4VideoEncoder.encodeVideosFromExistingFrames(at: URL(fileURLWithPath: outputDir))
-            exit(code)
-        }
-        if let encodeOneIdx = args.firstIndex(of: "--encode-single-video"), encodeOneIdx + 3 < args.count {
-            let outputDir = URL(fileURLWithPath: args[encodeOneIdx + 1])
-            let variantRaw = args[encodeOneIdx + 2]
-            let modeName = args[encodeOneIdx + 3]
-            let ok = await OffscreenMP4VideoEncoder.encodeSingleVariant(at: outputDir, variantRaw: variantRaw, modeName: modeName)
-            exit(ok ? 0 : 1)
-        }
         if let snapshotIdx = args.firstIndex(of: "--snapshot-board"), snapshotIdx + 1 < args.count {
             let outputFile = args[snapshotIdx + 1]
-            let code = await GalleryFrameExporter.exportBoardSnapshot(to: URL(fileURLWithPath: outputFile))
+            let code = await LocalBoardSnapshotExporter.exportBoardSnapshot(to: URL(fileURLWithPath: outputFile))
             exit(code)
         }
 
@@ -53,16 +29,143 @@ struct VoxTodoPreviewHostEntry {
 
 #if os(macOS)
 @MainActor
+final class LocalPreviewChooserState: ObservableObject {
+    @Published var selectedVariant: TodoUnfoldVariantKind = .v02
+    @Published var starredVariants: Set<TodoUnfoldVariantKind> = [.v02]
+    @Published var notesByVariant: [TodoUnfoldVariantKind: String] = [
+        .v01: "",
+        .v02: "用 2。落实：左下返回按钮正上方 Liquid Glass Filter + 第 1 行独占标题平滑缩放 + 第 2 行固定顺序 + Linear 独立行",
+        .v03: "",
+        .v04: ""
+    ]
+    @Published var copiedToastVisible: Bool = false
+
+    func toggleStar(_ kind: TodoUnfoldVariantKind) {
+        if starredVariants.contains(kind) {
+            starredVariants.remove(kind)
+        } else {
+            starredVariants.insert(kind)
+        }
+    }
+
+    func buildSelectionSummary() -> String {
+        var lines: [String] = []
+        lines.append("SELECTED: todo-swiftui/\(selectedVariant.rawValue) (\(selectedVariant.title))")
+        let stars = TodoUnfoldVariantKind.allCases
+            .filter { starredVariants.contains($0) }
+            .map { "todo-swiftui/\($0.rawValue)" }
+        lines.append("STARRED: \(stars.isEmpty ? "none" : stars.joined(separator: ", "))")
+        for kind in TodoUnfoldVariantKind.allCases {
+            let note = (notesByVariant[kind] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !note.isEmpty {
+                lines.append("NOTES [todo-swiftui/\(kind.rawValue)]: \(note)")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    func copySelectionSummaryToPasteboard() {
+        let summary = buildSelectionSummary()
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(summary, forType: .string)
+        copiedToastVisible = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1600))
+            self.copiedToastVisible = false
+        }
+    }
+}
+
+@MainActor
+struct LocalNativePreviewHostRootView: View {
+    @StateObject private var chooser = LocalPreviewChooserState()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TodoUnfoldFourUpPreviewBoard()
+
+            Divider()
+
+            nativeChooserFooterBar
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+        }
+    }
+
+    private var nativeChooserFooterBar: some View {
+        HStack(spacing: 14) {
+            HStack(spacing: 8) {
+                ForEach(TodoUnfoldVariantKind.allCases) { kind in
+                    let isSelected = chooser.selectedVariant == kind
+                    let isStarred = chooser.starredVariants.contains(kind)
+
+                    HStack(spacing: 4) {
+                        Button(action: { chooser.selectedVariant = kind }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption.weight(.bold))
+                                Text("SELECT \(kind.badgeCode)")
+                                    .font(.caption.weight(.bold).monospaced())
+                            }
+                            .foregroundStyle(isSelected ? .white : .primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(isSelected ? Color.accentColor : Color.primary.opacity(0.08), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: { chooser.toggleStar(kind) }) {
+                            Image(systemName: isStarred ? "star.fill" : "star")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(isStarred ? Color.orange : .secondary)
+                                .frame(width: 26, height: 26)
+                                .background(Color.primary.opacity(0.06), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            TextField(
+                "记录对 \(chooser.selectedVariant.badgeCode) 的评审备注 (NOTES)…",
+                text: Binding(
+                    get: { chooser.notesByVariant[chooser.selectedVariant] ?? "" },
+                    set: { chooser.notesByVariant[chooser.selectedVariant] = $0 }
+                )
+            )
+            .font(.caption)
+            .textFieldStyle(.roundedBorder)
+            .frame(minWidth: 220, maxWidth: .infinity)
+
+            Button(action: { chooser.copySelectionSummaryToPasteboard() }) {
+                Label(
+                    chooser.copiedToastVisible ? "已复制 Summary" : "复制 Selection Summary",
+                    systemImage: chooser.copiedToastVisible ? "checkmark.circle.fill" : "doc.on.clipboard"
+                )
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(chooser.copiedToastVisible ? Color.green : Color.accentColor, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+@MainActor
 final class PreviewHostAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let boardView = TodoUnfoldFourUpPreviewBoard()
-        let hostingView = NSHostingView(rootView: boardView)
+        let rootView = LocalNativePreviewHostRootView()
+        let hostingView = NSHostingView(rootView: rootView)
 
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1720, height: 1000)
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1720, height: 1020)
         let width = min(1720, max(1280, screenFrame.width - 24))
-        let height = min(980, max(780, screenFrame.height - 24))
+        let height = min(1020, max(820, screenFrame.height - 24))
         let rect = NSRect(
             x: screenFrame.minX + (screenFrame.width - width) / 2,
             y: screenFrame.minY + (screenFrame.height - height) / 2,
@@ -76,7 +179,7 @@ final class PreviewHostAppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "VoxPocket · Todo 卡片原地展开 4 套真 SwiftUI 交互预览窗 (v01–v04 · 120Hz Native)"
+        window.title = "VoxPocket · Todo 卡片原地展开 4 套真 SwiftUI 交互预览窗 (v01–v04 · 120Hz Pure Local Native)"
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -88,7 +191,7 @@ final class PreviewHostAppDelegate: NSObject, NSApplicationDelegate {
 
         if let autoShotPath = ProcessInfo.processInfo.environment["VOX_PREVIEW_AUTOSHOT"], !autoShotPath.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                _ = GalleryFrameExporter.captureViewPNG(hostingView, to: URL(fileURLWithPath: autoShotPath))
+                _ = LocalBoardSnapshotExporter.captureViewPNG(hostingView, to: URL(fileURLWithPath: autoShotPath))
             }
         }
     }
@@ -99,7 +202,7 @@ final class PreviewHostAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @MainActor
-enum GalleryFrameExporter {
+enum LocalBoardSnapshotExporter {
     static func exportBoardSnapshot(to outputURL: URL) async -> Int32 {
         do {
             try FileManager.default.createDirectory(
@@ -109,13 +212,13 @@ enum GalleryFrameExporter {
         } catch {
             return 1
         }
-        let board = TodoUnfoldFourUpPreviewBoard()
+        let board = LocalNativePreviewHostRootView()
             .environment(\.colorScheme, .dark)
-            .frame(width: 1680, height: 980)
+            .frame(width: 1680, height: 1020)
         let host = NSHostingView(rootView: board)
-        host.frame = NSRect(x: 0, y: 0, width: 1680, height: 980)
+        host.frame = NSRect(x: 0, y: 0, width: 1680, height: 1020)
         let panel = NSPanel(
-            contentRect: NSRect(x: -10000, y: -10000, width: 1680, height: 980),
+            contentRect: NSRect(x: -10000, y: -10000, width: 1680, height: 1020),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -128,168 +231,6 @@ enum GalleryFrameExporter {
         try? await Task.sleep(for: .milliseconds(120))
         host.layoutSubtreeIfNeeded()
         return captureViewPNG(host, to: outputURL) ? 0 : 1
-    }
-
-    static func exportAll(to baseDir: URL, encodeVideosInProcess: Bool = true) async -> Int32 {
-        let fm = FileManager.default
-        do {
-            try fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
-        } catch {
-            return 1
-        }
-
-        // Export a full 4-up board snapshot first
-        let boardSnapURL = baseDir.appendingPathComponent("four-up-board-dark.png")
-        guard await exportBoardSnapshot(to: boardSnapURL) == 0 else {
-            return 1
-        }
-
-        let schemes: [(name: String, scheme: ColorScheme, appearance: NSAppearance.Name)] = [
-            ("dark", .dark, .darkAqua),
-            ("light", .light, .aqua)
-        ]
-
-        for variant in TodoUnfoldVariantKind.allCases {
-            for mode in schemes {
-                let variantDir = baseDir
-                    .appendingPathComponent("frames", isDirectory: true)
-                    .appendingPathComponent("\(variant.rawValue)-\(mode.name)", isDirectory: true)
-                let keyframesDir = baseDir
-                    .appendingPathComponent("keyframes", isDirectory: true)
-                do {
-                    try fm.createDirectory(at: variantDir, withIntermediateDirectories: true)
-                    try fm.createDirectory(at: keyframesDir, withIntermediateDirectories: true)
-                } catch {
-                    return 1
-                }
-
-                // Keyframes: collapsed, expanded, tag-tray
-                guard await exportSingleState(
-                    variant: variant,
-                    scheme: mode.scheme,
-                    appearanceName: mode.appearance,
-                    expanded: false,
-                    tagTrayOpen: false,
-                    interpolation: 0.0,
-                    to: keyframesDir.appendingPathComponent("\(variant.rawValue)-\(mode.name)-collapsed.png")
-                ) else { return 1 }
-
-                guard await exportSingleState(
-                    variant: variant,
-                    scheme: mode.scheme,
-                    appearanceName: mode.appearance,
-                    expanded: true,
-                    tagTrayOpen: false,
-                    interpolation: 1.0,
-                    to: keyframesDir.appendingPathComponent("\(variant.rawValue)-\(mode.name)-expanded.png")
-                ) else { return 1 }
-
-                guard await exportSingleState(
-                    variant: variant,
-                    scheme: mode.scheme,
-                    appearanceName: mode.appearance,
-                    expanded: true,
-                    tagTrayOpen: true,
-                    interpolation: 1.0,
-                    to: keyframesDir.appendingPathComponent("\(variant.rawValue)-\(mode.name)-tagtray.png")
-                ) else { return 1 }
-
-                let totalFrames = 90
-                for frameIdx in 0..<totalFrames {
-                    let (progress, tagTray) = choreographyState(for: variant, frame: frameIdx)
-                    let frameURL = variantDir.appendingPathComponent(String(format: "frame_%03d.png", frameIdx))
-                    guard await exportSingleState(
-                        variant: variant,
-                        scheme: mode.scheme,
-                        appearanceName: mode.appearance,
-                        expanded: progress > 0.005,
-                        tagTrayOpen: tagTray,
-                        interpolation: progress,
-                        to: frameURL
-                    ) else {
-                        return 1
-                    }
-                }
-            }
-        }
-        if !encodeVideosInProcess {
-            return 0
-        }
-        return await OffscreenMP4VideoEncoder.encodeVideosFromExistingFrames(at: baseDir)
-    }
-
-    private static func choreographyState(for variant: TodoUnfoldVariantKind, frame: Int) -> (Double, Bool) {
-        if frame < 12 {
-            return (0.0, false)
-        } else if frame < 36 {
-            let t = Double(frame - 12) / 24.0
-            return (springCurve(t, variant: variant), false)
-        } else if frame < 52 {
-            return (1.0, false)
-        } else if frame < 68 {
-            return (1.0, true)
-        } else if frame < 84 {
-            let t = Double(frame - 68) / 16.0
-            return (max(0.0, 1.0 - springCurve(t, variant: variant)), false)
-        } else {
-            return (0.0, false)
-        }
-    }
-
-    private static func springCurve(_ t: Double, variant: TodoUnfoldVariantKind) -> Double {
-        let clamped = min(1.0, max(0.0, t))
-        switch variant {
-        case .v01:
-            return 1.0 - pow(1.0 - clamped, 3.2)
-        case .v02:
-            return 1.0 - pow(1.0 - clamped, 3.8)
-        case .v03:
-            let base = 1.0 - exp(-5.2 * clamped) * cos(4.2 * clamped)
-            return min(1.0, max(0.0, base))
-        case .v04:
-            return clamped < 0.5
-                ? 4.0 * clamped * clamped * clamped
-                : 1.0 - pow(-2.0 * clamped + 2.0, 3.0) / 2.0
-        }
-    }
-
-    private static func exportSingleState(
-        variant: TodoUnfoldVariantKind,
-        scheme: ColorScheme,
-        appearanceName: NSAppearance.Name,
-        expanded: Bool,
-        tagTrayOpen: Bool,
-        interpolation: Double,
-        to url: URL
-    ) async -> Bool {
-        let store = TodoUnfoldVariantPreviewStore(
-            variant: variant,
-            initiallyExpanded: expanded,
-            initiallyTagTrayOpen: tagTrayOpen
-        )
-        let view = TodoUnfoldVariantPhoneViewport(
-            store: store,
-            interpolationProgress: interpolation
-        )
-        .environment(\.colorScheme, scheme)
-        .frame(width: 390, height: 844)
-
-        let host = NSHostingView(rootView: view)
-        host.frame = NSRect(x: 0, y: 0, width: 390, height: 844)
-        let panel = NSPanel(
-            contentRect: NSRect(x: -10000, y: -10000, width: 390, height: 844),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.appearance = NSAppearance(named: appearanceName)
-        panel.contentView = host
-        panel.orderFront(nil)
-        defer { panel.orderOut(nil) }
-
-        await Task.yield()
-        host.layoutSubtreeIfNeeded()
-        return captureViewPNG(host, to: url)
     }
 
     static func captureViewPNG(_ view: NSView, to url: URL) -> Bool {
@@ -307,179 +248,6 @@ enum GalleryFrameExporter {
         } catch {
             return false
         }
-    }
-}
-
-enum OffscreenMP4VideoEncoder {
-    static func encodeSingleVariant(at baseDir: URL, variantRaw: String, modeName: String) async -> Bool {
-        let videosDir = baseDir.appendingPathComponent("videos", isDirectory: true)
-        try? FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
-        let framesDir = baseDir
-            .appendingPathComponent("frames", isDirectory: true)
-            .appendingPathComponent("\(variantRaw)-\(modeName)", isDirectory: true)
-        let mp4URL = videosDir.appendingPathComponent("\(variantRaw)-\(modeName).mp4")
-        return await encodeFrameSequenceToMP4(
-            framesDir: framesDir,
-            frameCount: 90,
-            fps: 60,
-            outputURL: mp4URL
-        )
-    }
-
-    static func encodeVideosFromExistingFrames(at baseDir: URL) async -> Int32 {
-        let videosDir = baseDir.appendingPathComponent("videos", isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
-        } catch {
-            return 1
-        }
-
-        for variant in TodoUnfoldVariantKind.allCases {
-            for modeName in ["dark", "light"] {
-                let framesDir = baseDir
-                    .appendingPathComponent("frames", isDirectory: true)
-                    .appendingPathComponent("\(variant.rawValue)-\(modeName)", isDirectory: true)
-                let mp4URL = videosDir.appendingPathComponent("\(variant.rawValue)-\(modeName).mp4")
-                let ok = await encodeFrameSequenceToMP4(
-                    framesDir: framesDir,
-                    frameCount: 90,
-                    fps: 60,
-                    outputURL: mp4URL
-                )
-                if !ok {
-                    return 1
-                }
-            }
-        }
-        return 0
-    }
-
-    private static func encodeFrameSequenceToMP4(
-        framesDir: URL,
-        frameCount: Int,
-        fps: Int32,
-        outputURL: URL
-    ) async -> Bool {
-        try? FileManager.default.removeItem(at: outputURL)
-        let firstFrameURL = framesDir.appendingPathComponent("frame_000.png")
-        guard let firstCG = loadCGImage(at: firstFrameURL) else {
-            return false
-        }
-        let width = firstCG.width
-        let height = firstCG.height
-
-        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
-            return false
-        }
-        let videoSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: width,
-            AVVideoHeightKey: height
-        ]
-        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
-        writerInput.expectsMediaDataInRealTime = false
-
-        let sourceBufferAttributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height
-        ]
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: writerInput,
-            sourcePixelBufferAttributes: sourceBufferAttributes
-        )
-
-        guard writer.canAdd(writerInput) else { return false }
-        writer.add(writerInput)
-        guard writer.startWriting() else { return false }
-        writer.startSession(atSourceTime: .zero)
-
-        for idx in 0..<frameCount {
-            if Task.isCancelled || writer.status != .writing {
-                writer.cancelWriting()
-                return false
-            }
-            var waitCycles = 0
-            while !writerInput.isReadyForMoreMediaData {
-                if Task.isCancelled || writer.status != .writing || waitCycles > 2500 {
-                    writer.cancelWriting()
-                    return false
-                }
-                waitCycles += 1
-                try? await Task.sleep(for: .milliseconds(2))
-            }
-            let frameURL = framesDir.appendingPathComponent(String(format: "frame_%03d.png", idx))
-            guard let cgImg = loadCGImage(at: frameURL),
-                  let pixelBuffer = makePixelBuffer(from: cgImg, width: width, height: height) else {
-                writer.cancelWriting()
-                return false
-            }
-            let presentationTime = CMTime(value: CMTimeValue(idx), timescale: fps)
-            guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime),
-                  writer.status == .writing else {
-                writer.cancelWriting()
-                return false
-            }
-        }
-
-        writerInput.markAsFinished()
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            writer.finishWriting {
-                continuation.resume()
-            }
-        }
-        return writer.status == .completed
-    }
-
-    private static func loadCGImage(at url: URL) -> CGImage? {
-        guard let dataProvider = CGDataProvider(url: url as CFURL) else {
-            return nil
-        }
-        return CGImage(
-            pngDataProviderSource: dataProvider,
-            decode: nil,
-            shouldInterpolate: false,
-            intent: .defaultIntent
-        )
-    }
-
-    private static func makePixelBuffer(from cgImage: CGImage, width: Int, height: Int) -> CVPixelBuffer? {
-        var pixelBuffer: CVPixelBuffer?
-        let options: [String: Any] = [
-            kCVPixelBufferCGImageCompatibilityKey as String: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
-        ]
-        let status = CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            width,
-            height,
-            kCVPixelFormatType_32ARGB,
-            options as CFDictionary,
-            &pixelBuffer
-        )
-        guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
-            return nil
-        }
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-
-        guard let baseAddress = CVPixelBufferGetBaseAddress(buffer) else {
-            return nil
-        }
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: baseAddress,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
-        ) else {
-            return nil
-        }
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return buffer
     }
 }
 #endif

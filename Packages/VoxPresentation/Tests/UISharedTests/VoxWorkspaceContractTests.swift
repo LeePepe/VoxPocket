@@ -541,6 +541,7 @@ final class VoxWorkspaceContractTests: XCTestCase {
         recorderHost.frame = NSRect(x: 0, y: 0, width: 390, height: 844)
         recorderHost.layoutSubtreeIfNeeded()
         XCTAssertEqual(recorderHost.bounds.size, NSSize(width: 390, height: 844))
+        XCTAssertEqual(boardController.store(for: .v02).variant.badgeCode, "V02")
     }
 
     @MainActor
