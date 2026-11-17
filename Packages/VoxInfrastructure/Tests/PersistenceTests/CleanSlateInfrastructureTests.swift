@@ -499,5 +499,29 @@ final class CleanSlateInfrastructureTests: XCTestCase {
 
         let replayed = receivedReportsMutex.withLock { $0 }
         XCTAssertFalse(replayed.contains(where: { $0.orderID == staleOrder.orderID }), "Stale historical order must never be broadcast over a newer order")
+
+        // 6. Verify a delayed report from an older order (even with a newer report updatedAt) cannot overwrite a newer retry order B
+        let retryOrderB = try await syncService.submitOrderToICloud(todo: todo, now: Date().addingTimeInterval(10))
+        try await Task.sleep(for: .milliseconds(20))
+        receivedReportsMutex.withLock { $0.removeAll() }
+
+        let delayedReportFromOlderOrderA = AIExecutionStatusReport(
+            orderID: secondSubmitted.orderID,
+            todoID: todo.id,
+            state: .failed,
+            progressStage: "Delayed failure from older order A",
+            progressFraction: 1.0,
+            outputSummary: "Older order A timed out",
+            updatedAt: Date().addingTimeInterval(500) // Later updatedAt than retryOrderB, but older orderCreatedAt!
+        )
+        _ = try await syncService.publishStatusReport(delayedReportFromOlderOrderA)
+        try await Task.sleep(for: .milliseconds(30))
+
+        let afterDelayedFromA = receivedReportsMutex.withLock { $0 }
+        XCTAssertFalse(
+            afterDelayedFromA.contains(where: { $0.orderID == secondSubmitted.orderID }),
+            "Delayed report from older order A must be rejected after retry order B is active"
+        )
+        XCTAssertEqual(retryOrderB.state, .queued)
     }
 }

@@ -154,11 +154,17 @@ public protocol ICloudAIOrderSyncing: AnyObject, Sendable {
 }
 
 public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
+    private struct TrackedTodoOrderState: Sendable {
+        var orderID: UUID
+        var orderCreatedAt: Date
+        var latestReport: AIExecutionStatusReport
+    }
+
     public let ordersDirectoryURL: URL
     private let kvStore: any UbiquitousAIOrderKVStoring
     private let continuationsMutex = Mutex<[UUID: AsyncStream<AIExecutionStatusReport>.Continuation]>([:])
     private let fileMutex = Mutex<Void>(())
-    private let latestReportByTodoMutex = Mutex<[UUID: AIExecutionStatusReport]>([:])
+    private let latestReportByTodoMutex = Mutex<[UUID: TrackedTodoOrderState]>([:])
 
     public static let kvsKeyPrefix = "vox.icloud.ai.order."
 
@@ -400,32 +406,57 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
     ) {
         let shouldBroadcast = latestReportByTodoMutex.withLock { map -> Bool in
             if forceCurrentOrder {
-                map[report.todoID] = report
+                map[report.todoID] = TrackedTodoOrderState(
+                    orderID: report.orderID,
+                    orderCreatedAt: orderCreatedAt ?? report.updatedAt,
+                    latestReport: report
+                )
                 return true
             }
             guard let previous = map[report.todoID] else {
-                map[report.todoID] = report
+                map[report.todoID] = TrackedTodoOrderState(
+                    orderID: report.orderID,
+                    orderCreatedAt: orderCreatedAt ?? report.updatedAt,
+                    latestReport: report
+                )
                 return true
             }
             if previous.orderID == report.orderID {
                 // Same order: ignore exact duplicates or older timestamps, and never regress a terminal order back to non-terminal
-                if previous.state.isTerminal && !report.state.isTerminal {
+                if previous.latestReport.state.isTerminal && !report.state.isTerminal {
                     return false
                 }
-                if report.updatedAt < previous.updatedAt {
+                if report.updatedAt < previous.latestReport.updatedAt {
                     return false
                 }
-                if previous == report {
+                if previous.latestReport == report {
                     return false
                 }
-                map[report.todoID] = report
+                map[report.todoID] = TrackedTodoOrderState(
+                    orderID: report.orderID,
+                    orderCreatedAt: orderCreatedAt ?? previous.orderCreatedAt,
+                    latestReport: report
+                )
                 return true
             } else {
-                // Different order for the same todoID: only accept if strictly newer than previous report
-                guard report.updatedAt > previous.updatedAt else {
+                // Different order for the same todoID: ONLY accept if the candidate order's creation time is strictly newer
+                // than the currently tracked order's creation time (or equal creation time with newer orderID).
+                // A delayed report from an older order (orderCreatedAt < previous.orderCreatedAt, or unknown nil orderCreatedAt)
+                // must never overwrite a newer retry order!
+                guard let candidateCreatedAt = orderCreatedAt else {
                     return false
                 }
-                map[report.todoID] = report
+                if candidateCreatedAt < previous.orderCreatedAt {
+                    return false
+                }
+                if candidateCreatedAt == previous.orderCreatedAt && report.orderID.uuidString < previous.orderID.uuidString {
+                    return false
+                }
+                map[report.todoID] = TrackedTodoOrderState(
+                    orderID: report.orderID,
+                    orderCreatedAt: candidateCreatedAt,
+                    latestReport: report
+                )
                 return true
             }
         }
