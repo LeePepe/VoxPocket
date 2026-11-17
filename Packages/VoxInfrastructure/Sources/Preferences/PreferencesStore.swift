@@ -22,6 +22,7 @@ public enum PreferencesKey: String, CaseIterable, Sendable {
     case linearTodoSyncEnabled = "sync.linear.enabled"
     case linearTodoAutoSync = "sync.linear.autoSync"
     case linearTodoTeamKey = "sync.linear.teamKey"
+    case userAIRunnerConfig = "ai.userRunnerConfig"
 }
 
 public actor ProductTelemetryPreferences {
@@ -108,6 +109,7 @@ public enum PreferencesNotification {
     public static let llmAnalysisSettingsDidChange = Notification.Name("vox.preferences.llmAnalysisSettingsDidChange")
     public static let stageModelsDidChange = Notification.Name("vox.preferences.stageModelsDidChange")
     public static let iosQuickCaptureDestinationDidChange = Notification.Name("vox.preferences.iosQuickCaptureDestinationDidChange")
+    public static let userAIRunnerConfigDidChange = Notification.Name("vox.preferences.userAIRunnerConfigDidChange")
 }
 
 public protocol PreferencesStore: AnyObject, Sendable {

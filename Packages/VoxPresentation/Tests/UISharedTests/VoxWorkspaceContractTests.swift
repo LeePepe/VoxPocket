@@ -550,12 +550,18 @@ final class VoxWorkspaceContractTests: XCTestCase {
             XCTAssertEqual(RecorderBackdrop.atmosphereOpacity(for: activeStage, colorScheme: .dark), 0.62, accuracy: 0.001)
             XCTAssertEqual(RecorderBackdrop.atmosphereOpacity(for: activeStage, colorScheme: .light), 0.46, accuracy: 0.001)
         }
-        boardController.stageOption = .listening
-        XCTAssertEqual(boardController.store(for: .v02).recorderStatus, .listening)
-        XCTAssertEqual(boardController.store(for: .v02).audioLevel, 0.68, accuracy: 0.01)
-        boardController.stageOption = .refining
-        XCTAssertEqual(boardController.store(for: .v02).recorderStatus, .refining)
-        boardController.stageOption = .idle
+        // Todo list preview store background stays constantly at .idle while Recorder Page (Tab 2) switches 5 stages
+        XCTAssertEqual(boardController.store(for: .v02).recorderStatus, .idle)
+        boardController.setAllRecorderStages(.listening)
+        XCTAssertEqual(boardController.recorderStagesByBezel[0], .listening)
+        XCTAssertEqual(boardController.store(for: .v02).recorderStatus, .idle)
+        boardController.setAllRecorderStages(.refining)
+        XCTAssertEqual(boardController.recorderStagesByBezel[0], .refining)
+        boardController.setAllRecorderStages(.idle)
+        XCTAssertEqual(PreviewHostTopTab.allCases.count, 3)
+        XCTAssertEqual(DynamicIslandPreviewVariantKind.allCases.count, 4)
+        boardController.advanceIslandSubtask(for: .diV01)
+        XCTAssertEqual(boardController.islandCompletedSubtasksByVariant[.diV01], 2)
     }
 
     @MainActor

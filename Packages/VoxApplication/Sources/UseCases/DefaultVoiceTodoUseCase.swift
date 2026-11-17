@@ -342,10 +342,12 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
     private let extractor: any VoiceTodoExtractionRunning
     private let runner: any AIRunnerExecutionService
     private let externalSync: any TodoExternalSyncService
+    private let icloudOrderSync: any ICloudAIOrderSyncing
     private let notificationScheduler: any VoxNotificationScheduling
     private let projects: @Sendable () -> [ProjectBinding]
     private let telemetry: any TelemetryService
     private let actionEventsTask: Task<Void, Never>?
+    private let icloudOrderStatusTask: Task<Void, Never>?
 
     public init(
         captures: any VoiceCaptureRepository,
@@ -353,6 +355,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         extractor: (any VoiceTodoExtractionRunning)? = nil,
         runner: any AIRunnerExecutionService,
         externalSync: any TodoExternalSyncService = NoopTodoExternalSyncService(),
+        icloudOrderSync: any ICloudAIOrderSyncing = ICloudAIOrderSyncService(),
         notificationScheduler: any VoxNotificationScheduling = VoxNotificationScheduler(),
         projects: @escaping @Sendable () -> [ProjectBinding] = { [] },
         telemetry: any TelemetryService = NoopTelemetryService()
@@ -362,6 +365,7 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         self.extractor = extractor ?? DefaultVoiceTodoExtractor(timeAnchorLearner: notificationScheduler.timeAnchorLearner)
         self.runner = runner
         self.externalSync = externalSync
+        self.icloudOrderSync = icloudOrderSync
         self.notificationScheduler = notificationScheduler
         self.projects = projects
         self.telemetry = telemetry
@@ -390,10 +394,44 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
                 }
             }
         }
+
+        let icloudReports = icloudOrderSync.statusReports
+        self.icloudOrderStatusTask = Task {
+            for await report in icloudReports {
+                let mappedState: TodoExecutionState
+                switch report.state {
+                case .queued, .claimedByMac, .running:
+                    mappedState = .running
+                case .completed:
+                    mappedState = .done
+                case .failed:
+                    mappedState = .failed
+                }
+                let summaryText = report.outputSummary ?? report.progressStage
+                _ = try? await todosRepo.update(id: report.todoID) { current in
+                    current.withExecutionState(
+                        mappedState,
+                        summary: summaryText,
+                        startedAt: current.lastStartedAt ?? report.updatedAt,
+                        completedAt: report.state.isTerminal ? report.updatedAt : nil,
+                        updatedAt: report.updatedAt
+                    )
+                }
+            }
+        }
     }
 
     deinit {
         actionEventsTask?.cancel()
+        icloudOrderStatusTask?.cancel()
+    }
+
+    public var iCloudOrderSyncService: any ICloudAIOrderSyncing {
+        icloudOrderSync
+    }
+
+    public var aiOrderStatusReports: AsyncStream<AIExecutionStatusReport> {
+        icloudOrderSync.statusReports
     }
 
     public var localNotificationScheduler: any VoxNotificationScheduling {
@@ -569,6 +607,27 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
             let failed = started.withExecutionState(.failed, summary: "Runner failed", completedAt: Date())
             try? await todos.save(failed); throw error
         }
+    }
+
+    public func dispatchTodoToICloudAI(todoID: UUID) async throws -> ICloudAIExecutionOrder {
+        guard let todo = try await todos.fetch(by: todoID) else {
+            throw VoiceTodoUseCaseError.todoNotFound
+        }
+        let now = Date()
+        let order = try await icloudOrderSync.submitOrderToICloud(todo: todo, now: now)
+        let updated = todo.withExecutionState(
+            .running,
+            summary: order.progressStage,
+            startedAt: now,
+            completedAt: nil,
+            updatedAt: now
+        )
+        try await todos.save(updated)
+        telemetry.track(
+            name: "todo.ai_order.queued",
+            properties: ["order_id": order.orderID.uuidString]
+        )
+        return order
     }
 
     public func markTodoDone(todoID: UUID) async throws -> VoiceTodo {

@@ -20,9 +20,11 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     private var isCompletingCapture = false
     private var timerTask: Task<Void, Never>?
     private var subscriptions = Set<AnyCancellable>()
+    private var aiOrderProgressTasks: [UUID: Task<Void, Never>] = [:]
 
     @Published public private(set) var captures: [VoiceCapture] = []
     @Published public private(set) var todos: [VoiceTodo] = []
+    @Published public private(set) var aiOrdersByTodoID: [UUID: ICloudAIExecutionOrder] = [:]
     @Published public private(set) var projectBindings: [ProjectBinding]
     @Published public private(set) var runnerTemplates: [AIRunnerTemplate]
     @Published public private(set) var captureState: CaptureSessionState = .idle
@@ -74,6 +76,12 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         reloadTask = Task { [weak self] in
             await self?.loadPreferredCaptureDestination(defaultMode: defaultCaptureMode)
             await self?.reload()
+        }
+        let reportsStream = useCase.aiOrderStatusReports
+        Task { [weak self] in
+            for await report in reportsStream {
+                await self?.applyAIExecutionStatusReport(report)
+            }
         }
     }
 
@@ -246,6 +254,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 appendingTargetTodoID = nil
                 captureState = .failed(stage: .recording, reason: error.localizedDescription)
                 NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return false
             }
         }
@@ -266,6 +275,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         recordingElapsedSeconds = 0
         audioLevel = 0
         NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
+        NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
     }
     public func finishCapture() {
         #if os(iOS)
@@ -278,22 +288,33 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public func completeCapture(rawTranscript: String = "", refinedText: String = "", localAudioFileName: String? = nil, durationSeconds: TimeInterval = 0, deviceSource: DeviceSource = .mac) async {
         guard isRecordingActive, !isCompletingCapture else { return }
         isCompletingCapture = true
-        let generation = captureGeneration
         defer {
             isCompletingCapture = false
             NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.recordingEnded"), object: nil)
         }
+        let generation = captureGeneration
         let started = await captureStartTask?.value ?? true
         guard started, captureGeneration == generation, isRecordingActive else { return }
         stopElapsedTimer()
         let mode: CaptureMode = { if case .recording(let mode) = captureState { return mode }; return selectedCaptureMode }()
         captureState = .transcribing
+        NotificationCenter.default.post(
+            name: Notification.Name("vox.liveActivity.phaseUpdated"),
+            object: nil,
+            userInfo: [
+                "phase": "transcribing",
+                "mode": mode.rawValue,
+                "title": "语音转译中…",
+                "hex": "#578FE6"
+            ]
+        )
         let stoppedDuration = recordingUseCase?.state.duration ?? durationSeconds
         if !isDemoRecordingEnabled, let recordingUseCase {
             do {
                 try await recordingUseCase.stopRecording()
             } catch {
                 captureState = .failed(stage: .recording, reason: error.localizedDescription)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return
             }
         }
@@ -302,6 +323,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 try await transcriptionUseCase.commitCurrentTranscription()
             } catch {
                 captureState = .failed(stage: .asr, reason: error.localizedDescription)
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return
             }
         }
@@ -316,6 +338,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 latestCompletedText = ""
                 lastCopiedBannerText = "未检测到语音，按住底部麦克风重新说话。"
                 captureState = .idle
+                NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
                 return
             }
             var refined = recorded?.refinedText ?? refinedText
@@ -328,6 +351,17 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             }
             guard captureGeneration == generation else { return }
             captureState = .refining(mode: mode)
+            NotificationCenter.default.post(
+                name: Notification.Name("vox.liveActivity.phaseUpdated"),
+                object: nil,
+                userInfo: [
+                    "phase": "refining",
+                    "mode": mode.rawValue,
+                    "title": "AI 提炼中…",
+                    "subtitle": String(raw.prefix(40)),
+                    "hex": "#9480E6"
+                ]
+            )
             if refined.isEmpty, let refinementUseCase, refinementUseCase.isConfigured {
                 try await refinementUseCase.refine(customPrompt: nil)
                 if let current = editingUseCase?.currentText, !current.isEmpty {
@@ -350,6 +384,20 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 )
                 latestCompletedText = (refined.isEmpty ? raw : refined).trimmingCharacters(in: .whitespacesAndNewlines)
                 lastCopiedBannerText = "已补充至待办 · \(appended.title)"
+                NotificationCenter.default.post(
+                    name: Notification.Name("vox.liveActivity.completedReceipt"),
+                    object: nil,
+                    userInfo: [
+                        "phase": "completedReceipt",
+                        "mode": mode.rawValue,
+                        "todoID": appended.id.uuidString,
+                        "title": appended.title,
+                        "priority": appended.priority.rawValue,
+                        "completedSubtasks": appended.subtasks.filter(\.isCompleted).count,
+                        "totalSubtasks": appended.subtasks.count,
+                        "hex": "#57BD99"
+                    ]
+                )
                 captureState = .completed
                 captureState = .idle
                 return
@@ -368,11 +416,26 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 lastCopiedBannerText = "已存入待办"
             }
             latestCompletedText = finalCopyText
+            NotificationCenter.default.post(
+                name: Notification.Name("vox.liveActivity.completedReceipt"),
+                object: nil,
+                userInfo: [
+                    "phase": "completedReceipt",
+                    "mode": mode.rawValue,
+                    "todoID": outcome.todo?.id.uuidString ?? "",
+                    "title": outcome.todo?.title ?? String(finalCopyText.prefix(20)),
+                    "priority": outcome.todo?.priority.rawValue ?? "P1",
+                    "completedSubtasks": outcome.todo?.subtasks.filter(\.isCompleted).count ?? 0,
+                    "totalSubtasks": outcome.todo?.subtasks.count ?? 0,
+                    "hex": "#57BD99"
+                ]
+            )
             captureState = .completed
             captureState = .idle
         } catch {
             appendingTargetTodoID = nil
             captureState = .failed(stage: .ai, reason: error.localizedDescription)
+            NotificationCenter.default.post(name: Notification.Name("vox.liveActivity.captureAborted"), object: nil)
         }
     }
 
@@ -632,6 +695,60 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             let synced = try await useCase.syncTodoToExternal(todoID: todoID)
             await reload()
             lastCopiedBannerText = "已同步 Linear · \(synced.externalSync?.externalID ?? todo.title)"
+        }
+    }
+
+    public func aiOrder(for todoID: UUID) -> ICloudAIExecutionOrder? {
+        aiOrdersByTodoID[todoID]
+    }
+
+    public func applyAIExecutionStatusReport(_ report: AIExecutionStatusReport) async {
+        let existing = aiOrdersByTodoID[report.todoID]
+            ?? ICloudAIExecutionOrder(
+                orderID: report.orderID,
+                todoID: report.todoID,
+                state: report.state,
+                progressStage: report.progressStage,
+                progressFraction: report.progressFraction,
+                outputSummary: report.outputSummary,
+                assignedRunnerName: report.assignedRunnerName,
+                updatedAt: report.updatedAt
+            )
+        let updatedOrder = existing.applying(report)
+        aiOrdersByTodoID[report.todoID] = updatedOrder
+        await reload()
+        switch report.state {
+        case .queued:
+            lastCopiedBannerText = "已上传 iCloud · 等待 Mac 接单"
+        case .claimedByMac, .running:
+            lastCopiedBannerText = "Mac 已接单 · \(report.progressStage)"
+        case .completed:
+            lastCopiedBannerText = "AI 已完成 · \(report.outputSummary ?? report.progressStage)"
+        case .failed:
+            lastCopiedBannerText = "AI 执行失败 · \(report.outputSummary ?? report.progressStage)"
+        }
+    }
+
+    public func dispatchTodoToICloudAI(_ todoID: UUID) {
+        guard let todo = todos.first(where: { $0.id == todoID }) else { return }
+        aiOrderProgressTasks[todoID]?.cancel()
+        aiOrderProgressTasks[todoID] = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let queued = try await useCase.dispatchTodoToICloudAI(todoID: todoID)
+                self.aiOrdersByTodoID[todoID] = queued
+                await self.reload()
+                self.lastCopiedBannerText = "已上传 iCloud · 等待 Mac 接单 (\(todo.title))"
+            } catch {
+                let failed = ICloudAIExecutionOrder(from: todo).sanitizedForCloudSync().withState(
+                    .failed,
+                    progressStage: "执行失败",
+                    progressFraction: 1.0,
+                    outputSummary: error.localizedDescription
+                )
+                self.aiOrdersByTodoID[todoID] = failed
+                self.lastCopiedBannerText = "AI 派单失败 · \(error.localizedDescription)"
+            }
         }
     }
 

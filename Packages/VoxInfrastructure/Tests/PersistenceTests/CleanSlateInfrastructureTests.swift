@@ -1,4 +1,5 @@
 import XCTest
+import Synchronization
 import CoreModels
 @testable import Persistence
 @testable import PlatformAdapters
@@ -352,5 +353,199 @@ final class CleanSlateInfrastructureTests: XCTestCase {
 
         let legacyMask = HotkeyDefinition(keyCode: 98, modifiers: (1 << 0) | (1 << 3), identifier: HotkeyIdentifier.showPopover)
         XCTAssertEqual(legacyMask.displayString, "⌃⌘F7")
+    }
+
+    func testICloudAIOrderSyncAndMacAutoPickupClosedLoop() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("icloud-ai-orders-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let kvStore = InMemoryUbiquitousAIOrderKVStore()
+        let syncService = ICloudAIOrderSyncService(
+            ordersDirectoryURL: tempDir.appendingPathComponent("AIOrders", isDirectory: true),
+            kvStore: kvStore
+        )
+        let configStore = UserAIRunnerConfigStore(
+            configFileURL: tempDir.appendingPathComponent("ai-runner-config.json")
+        )
+        try configStore.saveConfig(
+            UserAIRunnerConfig(
+                isAutoPickupEnabled: true,
+                runnerDisplayName: "Mac Test Agent",
+                scriptPathOrCommand: "custom-runner --order {{order_file}} --status {{status_file}}",
+                defaultWorkingDirectory: tempDir.path
+            )
+        )
+
+        let todo = VoiceTodo(
+            title: "液态玻璃交互走查",
+            description: "核对双按钮极简底栏对比度",
+            priority: .p0,
+            tags: ["#VoxPocket", "#iOS"],
+            subtasks: [
+                VoiceTodoSubtask(title: "步骤 1"),
+                VoiceTodoSubtask(title: "步骤 2")
+            ]
+        )
+
+        // 1. Verify unavailable cloud transport fails explicitly on submitOrderToICloud
+        let offlineKVStore = InMemoryUbiquitousAIOrderKVStore(isCloudAvailable: false)
+        let offlineSync = ICloudAIOrderSyncService(
+            ordersDirectoryURL: tempDir.appendingPathComponent("OfflineOrders", isDirectory: true),
+            kvStore: offlineKVStore
+        )
+        XCTAssertFalse(offlineSync.isCloudSyncAvailable)
+        do {
+            _ = try await offlineSync.submitOrderToICloud(todo: todo)
+            XCTFail("Expected cloudTransportUnavailable error when iCloud is unavailable")
+        } catch let error as ICloudAIOrderSyncError {
+            XCTAssertEqual(error, .cloudTransportUnavailable)
+        }
+
+        // 2. iPhone submits order to iCloud (sanitized on disk/KVS so no transcription-derived text leaves sandbox)
+        let submitted = try await syncService.submitOrderToICloud(todo: todo)
+        XCTAssertEqual(submitted.state, .queued)
+        XCTAssertEqual(submitted.subtaskCount, 2)
+        let loadedFromDisk = try await syncService.loadOrder(orderID: submitted.orderID)
+        XCTAssertEqual(loadedFromDisk?.title, "")
+        XCTAssertEqual(loadedFromDisk?.description, "")
+        XCTAssertEqual(loadedFromDisk?.subtasks, [])
+        XCTAssertEqual(loadedFromDisk?.subtaskCount, 2)
+
+        // 3. Unconfigured Mac pickup service fails explicitly instead of fabricating completion
+        let unconfiguredPickup = MacAIOrderAutoPickupService(
+            syncService: syncService,
+            configStore: configStore
+        )
+        let unconfiguredResult = try await unconfiguredPickup.claimAndExecuteOrder(submitted)
+        XCTAssertEqual(unconfiguredResult.state, .failed)
+        XCTAssertTrue(unconfiguredResult.outputSummary?.contains("disabled by the sandbox privacy boundary") == true)
+
+        // Verify cloud KVS payload strips outputSummary, progressStage, and assignedRunnerName completely
+        let kvsData = try XCTUnwrap(kvStore.data(forKey: ICloudAIOrderSyncService.kvsKeyPrefix + submitted.orderID.uuidString))
+        let kvsOrder = try JSONDecoder().decode(ICloudAIExecutionOrder.self, from: kvsData)
+        XCTAssertNil(kvsOrder.outputSummary)
+        XCTAssertNil(kvsOrder.assignedRunnerName)
+        XCTAssertEqual(kvsOrder.progressStage, "failed")
+
+        // 3. Re-submit and verify Mac auto-pickup service with injected shellExecutor claims queued order, streams VOX_STATUS/VOX_PROGRESS lines, and completes
+        let secondSubmitted = try await syncService.submitOrderToICloud(todo: todo)
+        let observedStatesMutex = Mutex<[AIOrderExecutionState]>([])
+        let pickupService = MacAIOrderAutoPickupService(
+            syncService: syncService,
+            configStore: configStore,
+            shellExecutor: { command, env, cwd, reporter in
+                XCTAssertTrue(command.contains("custom-runner"))
+                XCTAssertEqual(env["VOX_TODO_ID"], todo.id.uuidString)
+                if let claimed = try await syncService.loadOrder(orderID: secondSubmitted.orderID) {
+                    observedStatesMutex.withLock { $0.append(claimed.state) }
+                }
+                let stdout = """
+                VOX_PROGRESS: 0.45
+                VOX_STATUS: 正在执行步骤 1 与步骤 2
+                VOX_PROGRESS: 0.85
+                VOX_STATUS: 正在汇总检查结果
+                已完成 2 项液态玻璃走查子步骤
+                """
+                return (0, stdout)
+            }
+        )
+
+        let processed = try await pickupService.pollAndProcessQueuedOrders()
+        XCTAssertEqual(processed.count, 1)
+        let observedStates = observedStatesMutex.withLock { $0 }
+        XCTAssertTrue(observedStates.contains(.claimedByMac) || observedStates.contains(.running))
+
+        let loadedFinalOrder = try await syncService.loadOrder(orderID: secondSubmitted.orderID)
+        let finalOrder = try XCTUnwrap(loadedFinalOrder)
+        XCTAssertEqual(finalOrder.state, .completed)
+        XCTAssertEqual(finalOrder.outputSummary, "已完成 2 项液态玻璃走查子步骤")
+        XCTAssertEqual(finalOrder.assignedRunnerName, "Mac Test Agent")
+
+        // 4. Verify programmatic custom code handler registration
+        pickupService.registerCustomCodeHandler { order, reporter in
+            _ = try await reporter.reportProgress(stage: "Swift 闭包处理器执行中", fraction: 0.7)
+            return "Swift 闭包完成: \(order.subtaskCount) 步"
+        }
+        let thirdOrder = try await syncService.submitOrderToICloud(todo: todo)
+        let processedThird = try await pickupService.claimAndExecuteOrder(thirdOrder)
+        XCTAssertEqual(processedThird.state, .completed)
+        XCTAssertEqual(processedThird.outputSummary, "Swift 闭包完成: 2 步")
+
+        // 5. Verify external KVS notification selects only the newest order per todo and ignores stale historical orders
+        let receivedReportsMutex = Mutex<[AIExecutionStatusReport]>([])
+        let streamTask = Task {
+            for await report in syncService.statusReports {
+                receivedReportsMutex.withLock { $0.append(report) }
+            }
+        }
+        defer { streamTask.cancel() }
+        try await Task.sleep(for: .milliseconds(20))
+
+        // Inject an older queued order into KVS alongside the newer completed thirdOrder and simulate external KVS change
+        let staleOrder = ICloudAIExecutionOrder(
+            todoID: todo.id,
+            state: .queued,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        ).sanitizedForCloudSync()
+        kvStore.setData(try JSONEncoder().encode(staleOrder), forKey: ICloudAIOrderSyncService.kvsKeyPrefix + staleOrder.orderID.uuidString)
+        kvStore.simulateExternalSyncNotification()
+        try await Task.sleep(for: .milliseconds(40))
+
+        let replayed = receivedReportsMutex.withLock { $0 }
+        XCTAssertFalse(replayed.contains(where: { $0.orderID == staleOrder.orderID }), "Stale historical order must never be broadcast over a newer order")
+
+        // 6. Verify sub-second precision: two orders created within the SAME second (e.g. .100s and .450s)
+        //    must preserve sub-second `createdAt` across JSON persistence so a delayed report from older order A
+        //    is rejected even after retry order B publishes its first status report!
+        let sameSecondWhole = floor(Date().timeIntervalSince1970) + 100.0
+        let sameSecondBase = Date(timeIntervalSince1970: sameSecondWhole + 0.100)
+        let subSecondOrderA = ICloudAIExecutionOrder(
+            orderID: UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!, // Artificially highest UUID
+            todoID: todo.id,
+            state: .queued,
+            createdAt: sameSecondBase,
+            updatedAt: sameSecondBase
+        ).sanitizedForCloudSync()
+        try await syncService.saveOrder(subSecondOrderA)
+
+        let retryOrderB = try await syncService.submitOrderToICloud(
+            todo: todo,
+            now: Date(timeIntervalSince1970: sameSecondWhole + 0.450) // Within the exact same whole second (.450s vs .100s)!
+        )
+        // Publish a first progress report for retryOrderB (which reloads retryOrderB from disk)
+        _ = try await syncService.publishStatusReport(
+            AIExecutionStatusReport(
+                orderID: retryOrderB.orderID,
+                todoID: todo.id,
+                state: .running,
+                progressStage: "Retry B running",
+                progressFraction: 0.4,
+                updatedAt: sameSecondBase.addingTimeInterval(0.500)
+            )
+        )
+        try await Task.sleep(for: .milliseconds(20))
+        receivedReportsMutex.withLock { $0.removeAll() }
+
+        let delayedReportFromOlderOrderA = AIExecutionStatusReport(
+            orderID: subSecondOrderA.orderID,
+            todoID: todo.id,
+            state: .failed,
+            progressStage: "Delayed failure from older order A",
+            progressFraction: 1.0,
+            outputSummary: "Older order A timed out",
+            updatedAt: sameSecondBase.addingTimeInterval(5.0)
+        )
+        _ = try await syncService.publishStatusReport(delayedReportFromOlderOrderA)
+        try await Task.sleep(for: .milliseconds(30))
+
+        let afterDelayedFromA = receivedReportsMutex.withLock { $0 }
+        XCTAssertFalse(
+            afterDelayedFromA.contains(where: { $0.orderID == subSecondOrderA.orderID }),
+            "Delayed report from older order A created in the same second must be rejected after retry order B is active"
+        )
+        let latestPersistedForTodo = try await syncService.loadLatestOrder(forTodoID: todo.id)
+        XCTAssertEqual(latestPersistedForTodo?.orderID, retryOrderB.orderID)
     }
 }

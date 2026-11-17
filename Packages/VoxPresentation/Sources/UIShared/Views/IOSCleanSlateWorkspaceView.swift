@@ -38,7 +38,12 @@ public struct IOSCleanSlateWorkspaceView: View {
                 .clipped()
                 .simultaneousGesture(horizontalSlideGesture(pageWidth: pageWidth))
             }
-            .background { RecorderBackdrop(status: viewModel.recorderStatus, audioLevel: viewModel.audioLevel) }
+            .background {
+                RecorderBackdrop(
+                    status: viewModel.activePage == .todo ? .idle : viewModel.recorderStatus,
+                    audioLevel: viewModel.activePage == .todo ? 0 : viewModel.audioLevel
+                )
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 IOSDualButtonSlideDock(
                     activePage: viewModel.activePage,
@@ -192,13 +197,15 @@ private struct IOSDualButtonSlideDock: View {
     let cancel: @MainActor () async -> Void
 
     @Namespace private var glass
+    @State private var isFilterMenuOpen = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GlassEffectContainer(spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 if activePage == .todo {
-                    bottomLeadingGlassFilterBar
+                    bottomLeadingVerticalFilterStack
                         .glassEffectID("todoFilterBar", in: glass)
                         .transition(.opacity)
                 }
@@ -221,43 +228,92 @@ private struct IOSDualButtonSlideDock: View {
             .padding(.bottom, 12)
             .padding(.top, 4)
         }
+        .onChange(of: activePage) { _, nextPage in
+            if nextPage != .todo {
+                isFilterMenuOpen = false
+            }
+        }
     }
 
-    private var bottomLeadingGlassFilterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(TodoStatusFilter.primaryFilters, id: \.self) { filter in
-                    filterPillButton(for: filter)
+    private var bottomLeadingVerticalFilterStack: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TodoExpandRevealLayout(progress: isFilterMenuOpen ? 1.0 : 0.0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(TodoStatusFilter.primaryFilters, id: \.self) { filter in
+                        verticalFilterOptionRow(for: filter)
+                    }
                 }
+                .padding(6)
+                .frame(width: 158, alignment: .leading)
+                .modifier(RecorderGlassModifier())
+                .padding(.bottom, 2)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .clipped()
+            .opacity(isFilterMenuOpen ? 1.0 : 0.0)
+            .allowsHitTesting(isFilterMenuOpen)
+
+            Button(action: {
+                withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                    isFilterMenuOpen.toggle()
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.accentColor)
+                    Text(selectedFilter.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(String(countForFilter(selectedFilter)))
+                        .font(.caption2.weight(.bold).monospacedDigit())
+                        .contentTransition(.numericText())
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isFilterMenuOpen ? 180 : 0))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(minHeight: 36)
+                .modifier(RecorderGlassModifier())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .accessibilityLabel("筛选待办：\(selectedFilter.title)")
+            .accessibilityIdentifier("vox.ios.filter.trigger")
         }
-        .fixedSize(horizontal: true, vertical: false)
-        .modifier(RecorderGlassModifier())
         .sensoryFeedback(.selection, trigger: selectedFilter)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("vox.ios.filter.bar")
     }
 
-    private func filterPillButton(for filter: TodoStatusFilter) -> some View {
+    private func verticalFilterOptionRow(for filter: TodoStatusFilter) -> some View {
         let isSelected = selectedFilter == filter
         let count = countForFilter(filter)
-        return Button(action: { onSelectFilter(filter) }) {
-            HStack(spacing: 4) {
+        return Button(action: {
+            onSelectFilter(filter)
+            withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                isFilterMenuOpen = false
+            }
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
                 Text(filter.title)
                     .font(.caption.weight(isSelected ? .semibold : .regular))
+                Spacer(minLength: 6)
                 Text(String(count))
                     .font(.caption2.weight(.semibold).monospacedDigit())
                     .contentTransition(.numericText())
                     .foregroundStyle(isSelected ? .primary : .secondary)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .frame(minHeight: 32)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             .background {
                 if isSelected {
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.accentColor.opacity(reduceTransparency ? 0.24 : 0.18))
                 }
             }
@@ -341,6 +397,7 @@ private struct IOSTodoSlidePageView: View {
                     IOSTodoExpandableCard(
                         todo: todo,
                         isExpanded: viewModel.expandedTodoID == todo.id,
+                        aiOrder: viewModel.aiOrder(for: todo.id),
                         historicalTags: viewModel.availableHistoricalTags,
                         onToggleDone: { viewModel.toggleTodoDone(todo.id) },
                         onToggleExpand: {
@@ -381,8 +438,8 @@ private struct IOSTodoSlidePageView: View {
                         onAppendSubtask: { subtaskTitle in
                             viewModel.appendSubtask(to: todo.id, title: subtaskTitle)
                         },
-                        onSyncLinear: {
-                            viewModel.syncTodoToLinear(todo.id)
+                        onDispatchAI: {
+                            viewModel.dispatchTodoToICloudAI(todo.id)
                         },
                         onShiftReminderMinutes: { deltaMinutes in
                             viewModel.shiftTodoReminderByMinutes(todoID: todo.id, deltaMinutes: deltaMinutes)
@@ -422,7 +479,8 @@ private struct IOSTodoSlidePageView: View {
     }
 }
 
-/// Smoothly interpolates title font size between `15.5pt semibold` (collapsed) and `18.0pt bold` (expanded).
+/// Smoothly scales the title text with constant `.font(.system(size: 16, weight: .semibold))`
+/// and pure GPU affine `.scaleEffect(1.0 + clamped * 0.06, anchor: .leading)` (zero weight jump, zero node swap).
 public struct AnimatableTitleFontModifier: ViewModifier {
     public var progress: Double
 
@@ -432,11 +490,10 @@ public struct AnimatableTitleFontModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         let clamped = max(0.0, min(1.0, progress))
-        let scale = 1.0 + ((18.0 - 15.5) / 15.5) * clamped
+        let scale = 1.0 + clamped * 0.06
         content
-            .font(.system(size: 15.5, weight: clamped > 0.5 ? .bold : .semibold))
+            .font(.system(size: 16, weight: .semibold))
             .scaleEffect(scale, anchor: .leading)
-            .padding(.vertical, clamped * 1.5)
     }
 }
 
@@ -445,6 +502,7 @@ public struct AnimatableTitleFontModifier: ViewModifier {
 private struct IOSTodoExpandableCard: View {
     let todo: VoiceTodo
     let isExpanded: Bool
+    let aiOrder: ICloudAIExecutionOrder?
     let historicalTags: [String]
     let onToggleDone: () -> Void
     let onToggleExpand: () -> Void
@@ -459,7 +517,7 @@ private struct IOSTodoExpandableCard: View {
     let onToggleSubtask: (UUID) -> Void
     let onUpdateSubtaskTitle: (UUID, String) -> Void
     let onAppendSubtask: (String) -> Void
-    let onSyncLinear: () -> Void
+    let onDispatchAI: () -> Void
     let onShiftReminderMinutes: (Int) -> Void
     let onAssignReminderSlot: (String) -> Void
     let onClearReminder: () -> Void
@@ -467,6 +525,7 @@ private struct IOSTodoExpandableCard: View {
     @Namespace private var cardMorphNamespace
     @State private var draftTitle: String = ""
     @State private var draftDescription: String = ""
+    @State private var isEditingTitle: Bool = false
     @State private var isTagPickerExpanded: Bool = (ProcessInfo.processInfo.environment["VOX_DEMO_OPEN_TAG_PICKER"] == "1")
     @State private var newTagText: String = ""
     @State private var newSubtaskText: String = ""
@@ -579,6 +638,14 @@ private struct IOSTodoExpandableCard: View {
         .onChange(of: isTitleFocused) { _, focused in
             if !focused {
                 commitTitleIfValid()
+                isEditingTitle = false
+            }
+        }
+        .onChange(of: isExpanded) { _, expanded in
+            if !expanded {
+                commitTitleIfValid()
+                isEditingTitle = false
+                isTitleFocused = false
             }
         }
         .onChange(of: isDescriptionFocused) { _, focused in
@@ -588,33 +655,69 @@ private struct IOSTodoExpandableCard: View {
         }
     }
 
-    // Header Row 1: Full-Width Title ONLY with smooth v03 font-size scaling (15.5pt semibold <-> 18pt bold)
+    // Header Row 1: Left = Title (constant Text node + GPU scaleEffect, tap-when-expanded to edit);
+    // Right = Creation time (`今天 17:31`) + Persistent rotating `chevron.down` (NO subtask progress on Row 1!)
     private var unifiedTitleHeaderRow: some View {
-        HStack(alignment: .center, spacing: 0) {
-            if isExpanded {
-                TextField("待办短标题", text: $draftTitle, axis: .vertical)
-                    .modifier(AnimatableTitleFontModifier(progress: isExpanded ? 1.0 : 0.0))
+        HStack(alignment: .center, spacing: 6) {
+            if isExpanded && isEditingTitle {
+                TextField("待办短标题", text: $draftTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .scaleEffect(1.0 + (isExpanded ? 0.06 : 0.0), anchor: .leading)
                     .foregroundStyle(.primary)
-                    .lineLimit(1...2)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1)
                     .focused($isTitleFocused)
                     .submitLabel(.done)
                     .onSubmit {
                         commitTitleIfValid()
+                        isEditingTitle = false
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityLabel("待办标题")
                     .accessibilityIdentifier("vox.todo.title.editor")
             } else {
                 Text(todo.title)
-                    .modifier(AnimatableTitleFontModifier(progress: isExpanded ? 1.0 : 0.0))
+                    .font(.system(size: 16, weight: .semibold))
+                    .scaleEffect(1.0 + (isExpanded ? 0.06 : 0.0), anchor: .leading)
                     .foregroundStyle(isDone ? .secondary : .primary)
                     .strikethrough(isDone, color: .secondary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if isExpanded {
+                            draftTitle = todo.title
+                            isEditingTitle = true
+                            isTitleFocused = true
+                        } else {
+                            onToggleExpand()
+                        }
+                    }
                     .accessibilityIdentifier("vox.todo.row." + todo.id.uuidString)
             }
+
+            Spacer(minLength: 6)
+
+            Text("今天 " + Self.timeFormatter.string(from: todo.createdAt))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("vox.todo.timestamp")
+
+            Button(action: onToggleExpand) {
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    .frame(width: 24, height: 24)
+                    .background(AppTheme.surfaceElevated, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .accessibilityLabel(isExpanded ? "收起待办详情" : "展开待办详情")
+            .accessibilityIdentifier("vox.todo.collapse.button")
         }
-        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
         .contentShape(Rectangle())
     }
 
@@ -666,7 +769,7 @@ private struct IOSTodoExpandableCard: View {
         .accessibilityIdentifier("vox.todo.progress.badge")
     }
 
-    // Header Row 2: Fixed Order `Status (24pt) + Priority (24pt) + Conditional Subtask Count (ONLY when >=2, left of timestamp) + Timestamp + Spacer + Persistent Rotating Chevron`
+    // Header Row 2: Left to right = `[状态 (status)]` + `[Pri (P0/P1/P2)]` + `[🔔 提醒时间 (scheduledAt)]` + `[>=2 子流程进度 1/3]` + `Spacer()`
     private var unifiedMetadataStatusPriorityTimestampRow: some View {
         HStack(spacing: 6) {
             Button(action: isExpanded ? onCycleStatus : onToggleDone) {
@@ -708,56 +811,54 @@ private struct IOSTodoExpandableCard: View {
             .accessibilityLabel("优先级：" + todo.priority.rawValue)
             .accessibilityIdentifier("vox.todo.priority.pill")
 
+            if let scheduledAt = todo.scheduledAt {
+                Button(action: { onShiftReminderMinutes(30) }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(reminderPillText(for: scheduledAt))
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    }
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 7)
+                    .frame(height: 24)
+                    .background(Color.accentColor.opacity(0.14), in: Capsule())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+                .allowsHitTesting(isExpanded)
+                .accessibilityLabel("提醒时间：" + reminderPillText(for: scheduledAt))
+                .accessibilityIdentifier("vox.todo.header.reminder.pill")
+            }
+
             if totalSubtaskCount >= 2 {
                 progressRingBadge
                     .allowsHitTesting(false)
             }
 
-            Text("今天 " + Self.timeFormatter.string(from: todo.updatedAt))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .allowsHitTesting(false)
-                .accessibilityIdentifier("vox.todo.timestamp")
-
             Spacer(minLength: 4)
-
-            Button(action: onToggleExpand) {
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                    .frame(width: 24, height: 24)
-                    .background(AppTheme.surfaceElevated, in: Circle())
-                    .contentShape(Circle())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .accessibilityLabel(isExpanded ? "收起待办详情" : "展开待办详情")
-            .accessibilityIdentifier("vox.todo.collapse.button")
         }
         .frame(height: 24)
     }
 
-    // Dedicated row inside expanded drawer for Linear sync action + reminder pill
+    // Dedicated row inside expanded drawer for `✨ AI do it` action + live iCloud/Mac execution status + reminder pill
     private var dedicatedLinearAndReminderRow: some View {
         HStack(spacing: 8) {
-            Button(action: onSyncLinear) {
+            Button(action: onDispatchAI) {
                 HStack(spacing: 5) {
-                    Image(systemName: "arrow.up.right.circle.fill")
+                    Image(systemName: aiActionSymbol)
                         .font(.caption.weight(.bold))
-                    Text(todo.externalSync?.externalID ?? "Linear")
+                    Text(aiActionTitle)
                         .font(.caption.weight(.semibold).monospacedDigit())
-                    Text("同步工单")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(aiActionTint)
                 .padding(.horizontal, 10)
                 .frame(height: 28)
-                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                .background(aiActionTint.opacity(0.14), in: Capsule())
             }
             .buttonStyle(AppPressableButtonStyle())
-            .accessibilityLabel("同步到 Linear")
-            .accessibilityIdentifier("vox.todo.action.linear")
+            .accessibilityLabel(aiActionTitle)
+            .accessibilityIdentifier("vox.todo.action.aiDoIt")
 
             Spacer(minLength: 4)
 
@@ -796,6 +897,40 @@ private struct IOSTodoExpandableCard: View {
             .accessibilityIdentifier("vox.todo.reminder.pill")
         }
         .padding(.top, 2)
+    }
+
+    private var aiActionTitle: String {
+        if let aiOrder {
+            return aiOrder.formattedButtonLabel
+        }
+        if let summary = todo.lastExecutionSummary, !summary.isEmpty {
+            if todo.executionState == .running {
+                return "⚡ Mac 已接单 · AI 执行中: \(summary)"
+            } else if todo.executionState == .done {
+                return "✅ AI 已完成 · \(summary)"
+            }
+        }
+        return "✨ AI do it"
+    }
+
+    private var aiActionSymbol: String {
+        guard let aiOrder else { return "sparkles" }
+        switch aiOrder.state {
+        case .queued: return "icloud.and.arrow.up.fill"
+        case .claimedByMac, .running: return "bolt.horizontal.circle.fill"
+        case .completed: return "checkmark.seal.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var aiActionTint: Color {
+        guard let aiOrder else { return Color.accentColor }
+        switch aiOrder.state {
+        case .queued: return Color.cyan
+        case .claimedByMac, .running: return Color.orange
+        case .completed: return Color.green
+        case .failed: return Color.red
+        }
     }
 
     // Expanded Zero-Overlap Unified Clipped Tag Shelf (`v02` Tag Shelf — no `.move(edge: .top)` overlap!)
@@ -1403,9 +1538,64 @@ public enum IOSCleanSlatePreviewFactory {
 private actor PreviewCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase {
     private var captures: [VoiceCapture] = []
     private var todos: [VoiceTodo]
+    private var reportContinuation: AsyncStream<AIExecutionStatusReport>.Continuation?
+    nonisolated let aiOrderStatusReports: AsyncStream<AIExecutionStatusReport>
 
     init(initialTodos: [VoiceTodo] = []) {
         self.todos = initialTodos
+        var continuationBox: AsyncStream<AIExecutionStatusReport>.Continuation?
+        self.aiOrderStatusReports = AsyncStream { continuation in
+            continuationBox = continuation
+        }
+        self.reportContinuation = continuationBox
+    }
+
+    func dispatchTodoToICloudAI(todoID: UUID) async throws -> ICloudAIExecutionOrder {
+        guard let index = todos.firstIndex(where: { $0.id == todoID }) else {
+            throw NSError(domain: "PreviewCaptureAndTodoUseCase", code: 404)
+        }
+        let todo = todos[index]
+        let order = ICloudAIExecutionOrder(from: todo).sanitizedForCloudSync()
+        todos[index] = todo.withExecutionState(.running, summary: order.progressStage, startedAt: Date())
+        let continuation = reportContinuation
+        let stepCount = max(1, todo.subtasks.count)
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            continuation?.yield(
+                AIExecutionStatusReport(
+                    orderID: order.orderID,
+                    todoID: todoID,
+                    state: .claimedByMac,
+                    progressStage: "已认领订单 · 准备启动 AI",
+                    progressFraction: 0.25,
+                    assignedRunnerName: "Preview AI Agent"
+                )
+            )
+            try? await Task.sleep(for: .milliseconds(450))
+            continuation?.yield(
+                AIExecutionStatusReport(
+                    orderID: order.orderID,
+                    todoID: todoID,
+                    state: .running,
+                    progressStage: "正在分析与执行 \(stepCount) 项子任务…",
+                    progressFraction: 0.68,
+                    assignedRunnerName: "Preview AI Agent"
+                )
+            )
+            try? await Task.sleep(for: .milliseconds(550))
+            continuation?.yield(
+                AIExecutionStatusReport(
+                    orderID: order.orderID,
+                    todoID: todoID,
+                    state: .completed,
+                    progressStage: "执行完成",
+                    progressFraction: 1.0,
+                    outputSummary: "完成 \(stepCount) 项步骤",
+                    assignedRunnerName: "Preview AI Agent"
+                )
+            )
+        }
+        return order
     }
 
     func recordCompletedCapture(
