@@ -17,10 +17,22 @@ struct VoxTodoPreviewHostEntry {
             let code = await GalleryFrameExporter.exportAll(to: URL(fileURLWithPath: outputDir))
             exit(code)
         }
+        if let exportFramesIdx = args.firstIndex(of: "--export-frames-only"), exportFramesIdx + 1 < args.count {
+            let outputDir = args[exportFramesIdx + 1]
+            let code = await GalleryFrameExporter.exportAll(to: URL(fileURLWithPath: outputDir), encodeVideosInProcess: false)
+            exit(code)
+        }
         if let encodeIdx = args.firstIndex(of: "--encode-videos"), encodeIdx + 1 < args.count {
             let outputDir = args[encodeIdx + 1]
             let code = await OffscreenMP4VideoEncoder.encodeVideosFromExistingFrames(at: URL(fileURLWithPath: outputDir))
             exit(code)
+        }
+        if let encodeOneIdx = args.firstIndex(of: "--encode-single-video"), encodeOneIdx + 3 < args.count {
+            let outputDir = URL(fileURLWithPath: args[encodeOneIdx + 1])
+            let variantRaw = args[encodeOneIdx + 2]
+            let modeName = args[encodeOneIdx + 3]
+            let ok = await OffscreenMP4VideoEncoder.encodeSingleVariant(at: outputDir, variantRaw: variantRaw, modeName: modeName)
+            exit(ok ? 0 : 1)
         }
         if let snapshotIdx = args.firstIndex(of: "--snapshot-board"), snapshotIdx + 1 < args.count {
             let outputFile = args[snapshotIdx + 1]
@@ -118,7 +130,7 @@ enum GalleryFrameExporter {
         return captureViewPNG(host, to: outputURL) ? 0 : 1
     }
 
-    static func exportAll(to baseDir: URL) async -> Int32 {
+    static func exportAll(to baseDir: URL, encodeVideosInProcess: Bool = true) async -> Int32 {
         let fm = FileManager.default
         do {
             try fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
@@ -199,6 +211,9 @@ enum GalleryFrameExporter {
                     }
                 }
             }
+        }
+        if !encodeVideosInProcess {
+            return 0
         }
         return await OffscreenMP4VideoEncoder.encodeVideosFromExistingFrames(at: baseDir)
     }
@@ -296,6 +311,21 @@ enum GalleryFrameExporter {
 }
 
 enum OffscreenMP4VideoEncoder {
+    static func encodeSingleVariant(at baseDir: URL, variantRaw: String, modeName: String) async -> Bool {
+        let videosDir = baseDir.appendingPathComponent("videos", isDirectory: true)
+        try? FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
+        let framesDir = baseDir
+            .appendingPathComponent("frames", isDirectory: true)
+            .appendingPathComponent("\(variantRaw)-\(modeName)", isDirectory: true)
+        let mp4URL = videosDir.appendingPathComponent("\(variantRaw)-\(modeName).mp4")
+        return await encodeFrameSequenceToMP4(
+            framesDir: framesDir,
+            frameCount: 90,
+            fps: 60,
+            outputURL: mp4URL
+        )
+    }
+
     static func encodeVideosFromExistingFrames(at baseDir: URL) async -> Int32 {
         let videosDir = baseDir.appendingPathComponent("videos", isDirectory: true)
         do {
