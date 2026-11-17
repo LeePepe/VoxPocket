@@ -226,7 +226,7 @@ public struct VoxCaptureLiveActivity: Widget {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 6) {
                                         ForEach(context.state.subtasks) { sub in
-                                            Button(intent: TodoIslandActionIntent(actionKind: "subtask", todoID: context.state.todoID ?? "")) {
+                                            Button(intent: TodoIslandActionIntent(actionKind: "subtask", todoID: context.state.todoID ?? "", subtaskID: sub.id)) {
                                                 HStack(spacing: 4) {
                                                     Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
                                                         .font(.caption2.weight(.bold))
@@ -295,7 +295,7 @@ public struct TodoIslandActionIntent: LiveActivityIntent {
     public static let description = IntentDescription("在灵动岛上直接勾选子任务、一键完成、+15m 延后或顺延至习惯锚点")
     public static let openAppWhenRun: Bool = false
     public static let didRequestActionNotification = Notification.Name("vox.liveActivity.todoAction")
-    @MainActor public static var performHandler: ((_ actionKind: String, _ todoID: String) async -> Void)?
+    @MainActor public static var performHandler: ((_ actionKind: String, _ todoID: String, _ subtaskID: String?) async -> Void)?
 
     @Parameter(title: "动作类型")
     public var actionKind: String
@@ -303,25 +303,34 @@ public struct TodoIslandActionIntent: LiveActivityIntent {
     @Parameter(title: "待办 ID")
     public var todoID: String
 
+    @Parameter(title: "子任务 ID")
+    public var subtaskID: String?
+
     public init() {
         self.actionKind = "done"
         self.todoID = ""
+        self.subtaskID = nil
     }
 
-    public init(actionKind: String, todoID: String) {
+    public init(actionKind: String, todoID: String, subtaskID: String? = nil) {
         self.actionKind = actionKind
         self.todoID = todoID
+        self.subtaskID = subtaskID
     }
 
     @MainActor
     public func perform() async throws -> some IntentResult {
         if let handler = Self.performHandler {
-            await handler(actionKind, todoID)
+            await handler(actionKind, todoID, subtaskID)
         } else {
+            var info: [String: String] = ["actionKind": actionKind, "todoID": todoID]
+            if let subtaskID {
+                info["subtaskID"] = subtaskID
+            }
             NotificationCenter.default.post(
                 name: Self.didRequestActionNotification,
                 object: nil,
-                userInfo: ["actionKind": actionKind, "todoID": todoID]
+                userInfo: info
             )
         }
         return .result()
