@@ -19,7 +19,14 @@ case "${1:-}" in
     --export)
         OUT_DIR="${2:?--export requires an output directory}"
         echo "[open-local-preview] Exporting real SwiftUI frames & keyframes to $OUT_DIR..."
-        swift run --package-path "$ROOT/Packages/VoxPresentation" VoxTodoPreviewHost --export-gallery "$OUT_DIR"
+        swift build --package-path "$ROOT/Packages/VoxPresentation" --product VoxTodoPreviewHost
+        BIN_PATH="$(swift build --package-path "$ROOT/Packages/VoxPresentation" --product VoxTodoPreviewHost --show-bin-path)/VoxTodoPreviewHost"
+        "$BIN_PATH" --export-frames-only "$OUT_DIR"
+        for v in v01 v02 v03 v04; do
+            for m in dark light; do
+                "$BIN_PATH" --encode-single-video "$OUT_DIR" "$v" "$m"
+            done
+        done
         exit 0
         ;;
     --snapshot)

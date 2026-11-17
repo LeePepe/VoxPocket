@@ -510,7 +510,17 @@ final class VoxWorkspaceContractTests: XCTestCase {
             viewportHost.frame = NSRect(x: 0, y: 0, width: 390, height: 844)
             viewportHost.layoutSubtreeIfNeeded()
             XCTAssertEqual(viewportHost.bounds.size, NSSize(width: 390, height: 844))
+
+            let collapsedHost = NSHostingView(
+                rootView: TodoUnfoldVariantPhoneViewport(store: store, interpolationProgress: 0.0)
+                    .frame(width: 390, height: 844)
+            )
+            collapsedHost.frame = NSRect(x: 0, y: 0, width: 390, height: 844)
+            collapsedHost.layoutSubtreeIfNeeded()
+            XCTAssertEqual(collapsedHost.bounds.size, NSSize(width: 390, height: 844))
         }
+        boardController.toggleAllTagTrays()
+        XCTAssertTrue(boardController.allTagTraysOpen)
         boardController.toggleAllExpanded()
         XCTAssertFalse(boardController.allExpanded)
     }
