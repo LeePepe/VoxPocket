@@ -11,6 +11,7 @@ final class CleanSlateModelsTests: XCTestCase {
 
         let todo = VoiceTodo(
             title: "title",
+            description: "Sensitive spoken context and background details",
             taskPrompt: "prompt",
             rawTranscript: "raw",
             priority: .p0,
@@ -19,9 +20,11 @@ final class CleanSlateModelsTests: XCTestCase {
             lastExecutionSummary: "summary",
             localAudioFileName: "audio.m4a"
         )
+        XCTAssertEqual(todo.description, "Sensitive spoken context and background details")
         XCTAssertEqual(todo.tags, ["#VoxPocket", "#AI", "#Design"])
         let sanitizedTodo = todo.sanitizedForCloudSync()
         XCTAssertEqual(sanitizedTodo.title, "")
+        XCTAssertEqual(sanitizedTodo.description, "")
         XCTAssertEqual(sanitizedTodo.taskPrompt, "")
         XCTAssertEqual(sanitizedTodo.rawTranscript, "")
         XCTAssertEqual(sanitizedTodo.tags, [])
@@ -83,10 +86,17 @@ final class CleanSlateModelsTests: XCTestCase {
         XCTAssertEqual(retitledDecoded, retitled)
 
         let reminderDate = Date(timeIntervalSince1970: 1_763_300_000)
-        let scheduled = retitled.withReminder(scheduledAt: reminderDate, timeSlot: "morning")
+        let scheduled = retitled
+            .withDescription("  整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单  ")
+            .withReminderSchedule(scheduledAt: reminderDate, timeSlot: "morning")
+        XCTAssertEqual(scheduled.description, "整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单")
+        XCTAssertEqual(scheduled.withExecutionState(.running).description, scheduled.description)
+        XCTAssertEqual(scheduled.withPriority(.p0).description, scheduled.description)
+        XCTAssertEqual(scheduled.withAppendedSubtask("Check description").description, scheduled.description)
         XCTAssertEqual(scheduled.scheduledAt, reminderDate)
         XCTAssertEqual(scheduled.timeSlot, "morning")
         let scheduledDecoded = try JSONDecoder().decode(VoiceTodo.self, from: JSONEncoder().encode(scheduled))
+        XCTAssertEqual(scheduledDecoded.description, scheduled.description)
         XCTAssertEqual(scheduledDecoded.scheduledAt, reminderDate)
         XCTAssertEqual(scheduledDecoded.timeSlot, "morning")
     }

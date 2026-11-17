@@ -1,7 +1,9 @@
 import SwiftUI
 import CoreModels
 
-/// Four distinct 100% real SwiftUI Todo card in-place unfold choreographies (`v01..v04`).
+/// Four distinct 100% real SwiftUI Todo card in-place unfold choreographies (`v01..v04`)
+/// featuring ultra-compact `52–68pt` collapsed cards, concise short titles (`<= 14` chars),
+/// and smooth `matchedGeometryEffect` transitions into `description` + metadata + subtasks.
 public enum TodoUnfoldVariantKind: String, CaseIterable, Identifiable, Sendable {
     case v01
     case v02
@@ -14,23 +16,23 @@ public enum TodoUnfoldVariantKind: String, CaseIterable, Identifiable, Sendable 
 
     public var title: String {
         switch self {
-        case .v01: "Continuous Morph · 单树连续几何变形"
-        case .v02: "Inline Drawer · 头部零位移纯下推抽屉"
-        case .v03: "Spatial Hero Elevation · 景深微抬升与分步卡"
-        case .v04: "Two-Stage Cascade · 两段式错峰瀑布展开"
+        case .v01: "Single-Line Pill Rail · 单行超紧凑胶囊轨 (~52pt)"
+        case .v02: "Compact Two-Line Micro-Card · 头部零位移双行微卡 (~62pt)"
+        case .v03: "Description Peek & Spatial Unfold · 单行微预览景深展开 (~66pt)"
+        case .v04: "Staggered Minimal Strip · 极简横条两段式瀑布展开 (~54pt)"
         }
     }
 
     public var summary: String {
         switch self {
         case .v01:
-            "单树持久化 Header，标题字重与字号连续平滑插值，Status · Priority · 今天 17:31 原位锚定零跳变，#Tag + 下方内联展开标签托盘与垂直细线子任务树。"
+            "收起态压至 ~52pt 单行胶囊轨（状态圆环 + <=14字极简短标题 + P0 + #VoxPocket + 1/3），隐藏 + 与子任务；展开时标题平滑放大至 17.5pt，Status/Priority/Tag 经 matchedGeometryEffect 零跳变连续过渡，下方生长出可编辑 Description 详情块与子任务树。"
         case .v02:
-            "收起态与展开态的卡片头部（Title + Status/Priority/时间 + #Tag + 行）像素坐标 100% 锁定不动（0px 位移），仅在底部通过顶部锚点弹簧抽屉纯净展开子任务与 Linear 操作。"
+            "收起态上下内边距压至 10pt（~62pt 紧凑双行微卡），第 1 行短标题 + 1/3 + 17:31，第 2 行 22pt 微轨共排 [待处理] [P0] · #VoxPocket #iOS；展开时第 1、2 行 0px 零位移，末端平滑滑出 + 与 Linear，下方抽屉展开 Description 与子任务。"
         case .v03:
-            "点击展开时卡片以高阻尼弹簧（response: 0.38, damping: 0.86）微幅抬升阴影与亮色描边，子任务化作独立圆角微卡片，未选中兄弟卡片柔和退后至 0.78 透明度。"
+            "收起态（~66pt）第 1 行展示状态点 + 短标题 + P0 + #VoxPocket + 17:31，第 2 行带 12pt 单行浅色 Description 截断微预览；展开时卡片微抬升，单行 Description 经 matchedGeometryEffect 平滑伸展为多行可编辑详情段，并显现完整操作栏与分步卡。"
         case .v04:
-            "两段式相位编排：第 1 阶段（0–120ms）外框撑开并显现右侧 Linear 与收起按钮；第 2 阶段（60–260ms）子任务分支按 35ms 梯次自上而下错峰滑入。"
+            "收起态为 ~54pt 极简高密度清单条（间距 8pt，一屏容纳 7–8 条待办）；点击后第 1 阶段（0–130ms）外框撑开并经 matchedGeometryEffect 原位伸展 Status/Priority/Tag 胶囊，第 2 阶段（50–230ms）瀑布式滑入 Description 详情块、+ 标签触发器与子任务。"
         }
     }
 
@@ -70,16 +72,21 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
         self.variant = variant
         self.speedMultiplier = speedMultiplier
         let fixedTimestamp = Calendar.current.date(bySettingHour: 17, minute: 31, second: 0, of: Date()) ?? Date()
+        let morningReminder = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: fixedTimestamp.addingTimeInterval(86_400)) ?? fixedTimestamp
         let firstID = UUID(uuidString: "11111111-2222-3333-4444-555555555501") ?? UUID()
         let secondID = UUID(uuidString: "11111111-2222-3333-4444-555555555502") ?? UUID()
         let thirdID = UUID(uuidString: "11111111-2222-3333-4444-555555555503") ?? UUID()
+        let fourthID = UUID(uuidString: "11111111-2222-3333-4444-555555555504") ?? UUID()
+        let fifthID = UUID(uuidString: "11111111-2222-3333-4444-555555555505") ?? UUID()
+        let sixthID = UUID(uuidString: "11111111-2222-3333-4444-555555555506") ?? UUID()
 
         self.todos = [
             VoiceTodo(
                 id: firstID,
-                title: "整理下周设计评审要展示的液态玻璃交互走查清单",
-                taskPrompt: "整理下周设计评审要展示的液态玻璃交互走查清单",
-                rawTranscript: "整理下周设计评审要展示的液态玻璃交互走查清单",
+                title: "液态玻璃交互走查",
+                description: "整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单",
+                taskPrompt: "整理下周设计评审要展示的 iOS 26 液态玻璃底栏与原地展开交互走查清单",
+                rawTranscript: "提醒我明天早上整理下周设计评审要展示的液态玻璃交互走查清单",
                 projectKey: "VP",
                 executionState: .inbox,
                 priority: .p0,
@@ -101,13 +108,16 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
                         isCompleted: false
                     )
                 ],
+                scheduledAt: morningReminder,
+                timeSlot: "morning",
                 externalSync: ExternalTodoSyncMetadata(provider: "linear", externalID: "TIA-508"),
                 createdAt: fixedTimestamp,
                 updatedAt: fixedTimestamp
             ),
             VoiceTodo(
                 id: secondID,
-                title: "把早间散步录下的播客大纲润色后发给搭档确认",
+                title: "早间播客大纲润色",
+                description: "把早间散步录下的播客大纲润色后发给搭档确认，重点核对听众来信切入段",
                 taskPrompt: "把早间散步录下的播客大纲润色后发给搭档确认",
                 rawTranscript: "把早间散步录下的播客大纲润色后发给搭档确认",
                 projectKey: "VP",
@@ -127,7 +137,8 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
             ),
             VoiceTodo(
                 id: thirdID,
-                title: "验证 Apple Watch 离线语音同步至待办收件箱",
+                title: "Watch 离线录音联调",
+                description: "验证 Apple Watch 锁屏录音后通过 WCSession 后台回传 iPhone 自动入库回执",
                 taskPrompt: "验证 Apple Watch 离线语音同步至待办收件箱",
                 rawTranscript: "验证 Apple Watch 离线语音同步至待办收件箱",
                 projectKey: "VP",
@@ -148,6 +159,56 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
                 ],
                 createdAt: fixedTimestamp.addingTimeInterval(-3600),
                 updatedAt: fixedTimestamp.addingTimeInterval(-3600)
+            ),
+            VoiceTodo(
+                id: fourthID,
+                title: "端侧短标题提示词压测",
+                description: "压测 FoundationModels JSON 指令将 40 字口语长句稳定提炼为 <=14 字动作短语",
+                taskPrompt: "压测 FoundationModels JSON 指令将长句提炼为短标题",
+                rawTranscript: "压测 FoundationModels JSON 指令将长句提炼为短标题",
+                projectKey: "VP",
+                executionState: .inbox,
+                priority: .p0,
+                tags: ["#AI", "#VoxPocket"],
+                subtasks: [
+                    VoiceTodoSubtask(title: "校验中英文混排短标题字数上限", isCompleted: true),
+                    VoiceTodoSubtask(title: "验证离线兜底提取器保留完整 Description", isCompleted: false)
+                ],
+                createdAt: fixedTimestamp.addingTimeInterval(-5400),
+                updatedAt: fixedTimestamp.addingTimeInterval(-5400)
+            ),
+            VoiceTodo(
+                id: fifthID,
+                title: "自适应提醒槽位回归",
+                description: "检查早间 09:00 与晚间 20:30 习惯锚点在手动改期后的指数平滑收敛表现",
+                taskPrompt: "检查自适应提醒槽位收敛表现",
+                rawTranscript: "检查自适应提醒槽位收敛表现",
+                projectKey: "VP",
+                executionState: .inbox,
+                priority: .p2,
+                tags: ["#iOS", "#AI"],
+                subtasks: [
+                    VoiceTodoSubtask(title: "模拟连续 3 次提前 30 分钟完成待办", isCompleted: false)
+                ],
+                createdAt: fixedTimestamp.addingTimeInterval(-7200),
+                updatedAt: fixedTimestamp.addingTimeInterval(-7200)
+            ),
+            VoiceTodo(
+                id: sixthID,
+                title: "归档本周架构周报",
+                description: "汇总 Clean-Slate 六包分层依赖门禁与云端同步脱敏测试证据并同步至 Linear",
+                taskPrompt: "汇总 Clean-Slate 六包分层依赖门禁与云端同步脱敏测试证据",
+                rawTranscript: "汇总 Clean-Slate 六包分层依赖门禁与云端同步脱敏测试证据",
+                projectKey: "VP",
+                executionState: .done,
+                priority: .p2,
+                tags: ["#VoxPocket"],
+                subtasks: [
+                    VoiceTodoSubtask(title: "确认 sanitizedForCloudSync 清空 description", isCompleted: true)
+                ],
+                lastCompletedAt: fixedTimestamp.addingTimeInterval(-8400),
+                createdAt: fixedTimestamp.addingTimeInterval(-9000),
+                updatedAt: fixedTimestamp.addingTimeInterval(-9000)
             )
         ]
 
@@ -180,7 +241,7 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
                 }
             }
             if variant == .v04 {
-                let delayMs = Int(85.0 / max(0.15, speedMultiplier))
+                let delayMs = Int(65.0 / max(0.15, speedMultiplier))
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(delayMs))
                     guard self.expandedTodoID == id else { return }
@@ -267,6 +328,11 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
         todos[idx] = todos[idx].withTitle(trimmed)
     }
 
+    public func updateDescription(todoID: UUID, description: String) {
+        guard let idx = todos.firstIndex(where: { $0.id == todoID }) else { return }
+        todos[idx] = todos[idx].withDescription(description)
+    }
+
     public func updateSubtaskTitle(todoID: UUID, subtaskID: UUID, title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let idx = todos.firstIndex(where: { $0.id == todoID }) else { return }
@@ -296,6 +362,15 @@ public struct TodoUnfoldVariantPhoneViewport: View {
         self.interpolationProgress = interpolationProgress
     }
 
+    private var listCardSpacing: CGFloat {
+        switch store.variant {
+        case .v01: return 8
+        case .v02: return 9
+        case .v03: return 10
+        case .v04: return 8
+        }
+    }
+
     public var body: some View {
         ZStack(alignment: .bottom) {
             RecorderBackdrop(status: .idle, audioLevel: 0)
@@ -312,10 +387,10 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                     .padding(.bottom, AppTheme.Space.sm)
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: AppTheme.Space.md) {
+                    VStack(alignment: .leading, spacing: 10) {
                         filterPillRow
 
-                        VStack(spacing: store.variant == .v03 ? 16 : AppTheme.Space.md) {
+                        VStack(spacing: listCardSpacing) {
                             ForEach(Array(store.todos.enumerated()), id: \.element.id) { index, todo in
                                 let isExpanded = store.expandedTodoID == todo.id
                                 let expandFraction: Double = {
@@ -332,7 +407,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                                     isExpanded: expandFraction > 0.01,
                                     expandFraction: expandFraction,
                                     isTagTrayOpen: index == 0 && store.isTagTrayOpen,
-                                    cascadeStageTwoVisible: store.cascadeStageTwoVisible || (interpolationProgress ?? 0) > 0.32,
+                                    cascadeStageTwoVisible: store.cascadeStageTwoVisible || (interpolationProgress ?? 0) > 0.30,
                                     historicalTags: store.historicalTags,
                                     speedMultiplier: store.speedMultiplier,
                                     onToggleExpand: { store.toggleExpand(todo.id) },
@@ -343,17 +418,18 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                                     onAddTag: { tag in store.addTag(todoID: todo.id, tag: tag) },
                                     onToggleSubtask: { subID in store.toggleSubtask(todoID: todo.id, subtaskID: subID) },
                                     onUpdateTitle: { title in store.updateTitle(todoID: todo.id, title: title) },
+                                    onUpdateDescription: { desc in store.updateDescription(todoID: todo.id, description: desc) },
                                     onUpdateSubtaskTitle: { subID, title in store.updateSubtaskTitle(todoID: todo.id, subtaskID: subID, title: title) },
                                     onAppendSubtask: { title in store.appendSubtask(todoID: todo.id, title: title) }
                                 )
-                                .opacity(siblingDimmed ? 0.78 : 1.0)
-                                .scaleEffect(siblingDimmed ? 0.985 : 1.0)
+                                .opacity(siblingDimmed ? 0.82 : 1.0)
+                                .scaleEffect(siblingDimmed ? 0.99 : 1.0)
                             }
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.lg)
                     .padding(.top, AppTheme.Space.xs)
-                    .padding(.bottom, 96)
+                    .padding(.bottom, 92)
                 }
             }
 
@@ -397,7 +473,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
 
             Image(systemName: "gearshape")
                 .font(.body.weight(.semibold))
-                .frame(width: 40, height: 40)
+                .frame(width: 38, height: 38)
                 .background(AppTheme.surfaceCard, in: Circle())
                 .overlay {
                     Circle()
@@ -408,10 +484,10 @@ public struct TodoUnfoldVariantPhoneViewport: View {
 
     private var filterPillRow: some View {
         HStack(spacing: AppTheme.Space.sm) {
-            filterChip(title: "全部", count: 3, isSelected: true)
-            filterChip(title: "待处理", count: 1, isSelected: false)
-            filterChip(title: "AI 执行中", count: 1, isSelected: false)
-            filterChip(title: "已完成", count: 1, isSelected: false)
+            filterChip(title: "全部", count: store.todos.count, isSelected: true)
+            filterChip(title: "待处理", count: store.todos.filter { $0.executionState == .inbox }.count, isSelected: false)
+            filterChip(title: "AI 执行中", count: store.todos.filter { $0.executionState == .running }.count, isSelected: false)
+            filterChip(title: "已完成", count: store.todos.filter { $0.executionState == .done }.count, isSelected: false)
         }
     }
 
@@ -423,8 +499,8 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(isSelected ? .primary : .secondary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
         .background(
             isSelected ? Color.accentColor.opacity(0.16) : AppTheme.surfaceCard,
             in: Capsule()
@@ -437,7 +513,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
             Image(systemName: "waveform")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.primary)
-                .frame(width: 50, height: 50)
+                .frame(width: 48, height: 48)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay {
                     Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.8)
@@ -454,7 +530,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 56, height: 56)
+                    .frame(width: 54, height: 54)
                     .shadow(color: Color.accentColor.opacity(0.28), radius: 10, y: 4)
 
                 Image(systemName: "mic.fill")
@@ -463,12 +539,12 @@ public struct TodoUnfoldVariantPhoneViewport: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.bottom, 16)
-        .padding(.top, 6)
+        .padding(.bottom, 14)
+        .padding(.top, 4)
     }
 }
 
-// MARK: - Individual Variant Card (`v01..v04`)
+// MARK: - Individual Variant Card (`v01..v04` Ultra-Compact 52–68pt Collapsed <-> Rich Unfolded)
 
 @MainActor
 public struct TodoUnfoldVariantCardView: View {
@@ -488,12 +564,57 @@ public struct TodoUnfoldVariantCardView: View {
     public let onAddTag: (String) -> Void
     public let onToggleSubtask: (UUID) -> Void
     public let onUpdateTitle: (String) -> Void
+    public let onUpdateDescription: (String) -> Void
     public let onUpdateSubtaskTitle: (UUID, String) -> Void
     public let onAppendSubtask: (String) -> Void
 
+    @Namespace private var morphNamespace
     @State private var draftTitle: String = ""
+    @State private var draftDescription: String = ""
     @State private var newTagText: String = ""
     @State private var newSubtaskText: String = ""
+
+    public init(
+        variant: TodoUnfoldVariantKind,
+        todo: VoiceTodo,
+        isExpanded: Bool,
+        expandFraction: Double,
+        isTagTrayOpen: Bool,
+        cascadeStageTwoVisible: Bool,
+        historicalTags: [String],
+        speedMultiplier: Double,
+        onToggleExpand: @escaping () -> Void,
+        onToggleTagTray: @escaping () -> Void,
+        onCycleStatus: @escaping () -> Void,
+        onCyclePriority: @escaping () -> Void,
+        onToggleTag: @escaping (String) -> Void,
+        onAddTag: @escaping (String) -> Void,
+        onToggleSubtask: @escaping (UUID) -> Void,
+        onUpdateTitle: @escaping (String) -> Void,
+        onUpdateDescription: @escaping (String) -> Void = { _ in },
+        onUpdateSubtaskTitle: @escaping (UUID, String) -> Void,
+        onAppendSubtask: @escaping (String) -> Void
+    ) {
+        self.variant = variant
+        self.todo = todo
+        self.isExpanded = isExpanded
+        self.expandFraction = expandFraction
+        self.isTagTrayOpen = isTagTrayOpen
+        self.cascadeStageTwoVisible = cascadeStageTwoVisible
+        self.historicalTags = historicalTags
+        self.speedMultiplier = speedMultiplier
+        self.onToggleExpand = onToggleExpand
+        self.onToggleTagTray = onToggleTagTray
+        self.onCycleStatus = onCycleStatus
+        self.onCyclePriority = onCyclePriority
+        self.onToggleTag = onToggleTag
+        self.onAddTag = onAddTag
+        self.onToggleSubtask = onToggleSubtask
+        self.onUpdateTitle = onUpdateTitle
+        self.onUpdateDescription = onUpdateDescription
+        self.onUpdateSubtaskTitle = onUpdateSubtaskTitle
+        self.onAppendSubtask = onAppendSubtask
+    }
 
     private var isDone: Bool { todo.executionState == .done }
 
@@ -510,187 +631,567 @@ public struct TodoUnfoldVariantCardView: View {
         return Double(completedSubtaskCount) / Double(totalSubtaskCount)
     }
 
-    private var titleFontSize: CGFloat {
-        switch variant {
-        case .v01:
-            return 17.0 + CGFloat(expandFraction) * 2.5
-        case .v02:
-            // v02 Zero-Header-Shift: locked at 17pt so the header never reflows or jumps even 1px
-            return 17.0
-        case .v03:
-            return 17.0 + CGFloat(expandFraction) * 2.0
-        case .v04:
-            return 17.0 + CGFloat(expandFraction) * 1.5
-        }
+    private var primaryTag: String {
+        todo.tags.first ?? "#VoxPocket"
     }
 
-    private var cardVerticalSpacing: CGFloat {
-        switch variant {
-        case .v03:
-            return 8.0 + CGFloat(expandFraction) * 4.0
-        default:
-            return AppTheme.Space.sm
+    private var horizontalPadding: CGFloat {
+        if !isExpanded {
+            return 12
         }
+        return variant == .v03 ? 16 : 14
+    }
+
+    private var verticalPadding: CGFloat {
+        if !isExpanded {
+            switch variant {
+            case .v01: return 11 // ~52pt single-line pill rail
+            case .v02: return 9  // ~62pt compact two-line micro-card
+            case .v03: return 10 // ~66pt description peek card
+            case .v04: return 11 // ~54pt staggered minimal strip
+            }
+        }
+        return variant == .v03 ? 14 : 12
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: cardVerticalSpacing) {
-            row1TitleAndProgress
+        VStack(alignment: .leading, spacing: isExpanded ? 8 : 4) {
+            switch variant {
+            case .v01:
+                v01CardContent
+            case .v02:
+                v02CardContent
+            case .v03:
+                v03CardContent
+            case .v04:
+                v04CardContent
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, verticalPadding)
+        .background(
+            AppTheme.surfaceCard,
+            in: RoundedRectangle(cornerRadius: isExpanded ? AppTheme.Radius.md : 14, style: .continuous)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: isExpanded ? AppTheme.Radius.md : 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: isExpanded ? AppTheme.Radius.md : 14, style: .continuous)
+                .strokeBorder(
+                    isExpanded
+                        ? Color.accentColor.opacity(variant == .v03 ? 0.52 : 0.34)
+                        : Color.primary.opacity(0.06),
+                    lineWidth: isExpanded ? (variant == .v03 ? 1.4 : 1.1) : 0.8
+                )
+        }
+        .shadow(
+            color: Color.black.opacity(variant == .v03 && isExpanded ? 0.16 : 0.03),
+            radius: variant == .v03 && isExpanded ? 14 : 4,
+            y: variant == .v03 && isExpanded ? 6 : 1
+        )
+        .scaleEffect(variant == .v03 && isExpanded ? 1.01 : 1.0)
+        .onAppear {
+            draftTitle = todo.title
+            draftDescription = todo.description
+        }
+        .onChange(of: todo.title) { _, updated in
+            draftTitle = updated
+        }
+        .onChange(of: todo.description) { _, updated in
+            draftDescription = updated
+        }
+    }
 
-            row2UnifiedMetadataCapsules
+    // MARK: - v01: Single-Line Pill Rail (~52pt Collapsed -> Rich Unfold)
+    @ViewBuilder
+    private var v01CardContent: some View {
+        if !isExpanded {
+            // Collapsed (~52pt): Single horizontal rail! Status circle + short title (15pt, 1 line) + P0 + #Tag + 1/3 + 17:31
+            HStack(spacing: 7) {
+                compactStatusCapsule(showLabel: false)
+                    .matchedGeometryEffect(id: "status-\(todo.id)", in: morphNamespace)
 
-            row3PersistentTagsAndPlus
+                Button(action: onToggleExpand) {
+                    Text(todo.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isDone ? .secondary : .primary)
+                        .strikethrough(isDone, color: .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .matchedGeometryEffect(id: "title-\(todo.id)", in: morphNamespace)
+
+                compactPriorityCapsule
+                    .matchedGeometryEffect(id: "priority-\(todo.id)", in: morphNamespace)
+
+                compactTagChip(primaryTag)
+                    .matchedGeometryEffect(id: "tag-\(primaryTag)-\(todo.id)", in: morphNamespace)
+
+                compactProgressBadge
+                    .matchedGeometryEffect(id: "progress-\(todo.id)", in: morphNamespace)
+            }
+            .frame(minHeight: 28)
+        } else {
+            // Expanded: Title scales to 17.5pt bold; description unfolds below; Row 3 shows Status · Priority · 今天 17:31 · 🔔 09:00 · Linear; Row 4 shows #Tags [+]; Row 5 shows subtasks
+            HStack(alignment: .center, spacing: 8) {
+                Button(action: onToggleExpand) {
+                    Text(todo.title)
+                        .font(.system(size: 17.5, weight: .bold))
+                        .foregroundStyle(isDone ? .secondary : .primary)
+                        .strikethrough(isDone, color: .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .matchedGeometryEffect(id: "title-\(todo.id)", in: morphNamespace)
+
+                compactProgressBadge
+                    .matchedGeometryEffect(id: "progress-\(todo.id)", in: morphNamespace)
+            }
+
+            if !todo.description.isEmpty {
+                expandedDescriptionEditorBlock
+                    .opacity(expandFraction)
+            }
+
+            HStack(spacing: 6) {
+                compactStatusCapsule(showLabel: true)
+                    .matchedGeometryEffect(id: "status-\(todo.id)", in: morphNamespace)
+
+                compactPriorityCapsule
+                    .matchedGeometryEffect(id: "priority-\(todo.id)", in: morphNamespace)
+
+                timestampLabel
+
+                if todo.scheduledAt != nil {
+                    reminderMicroBadge
+                }
+
+                Spacer(minLength: 4)
+
+                linearActionCapsule
+            }
+            .opacity(expandFraction)
+
+            expandedTagsAndPlusRow(matchedPrimaryTag: primaryTag)
+                .opacity(expandFraction)
 
             if isTagTrayOpen {
                 inlineTagTrayView
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            if isExpanded && expandFraction > 0.01 {
-                Divider()
-                    .opacity(expandFraction)
+            Divider().opacity(expandFraction)
 
-                subtaskDrawerBody
-                    .opacity(min(1.0, expandFraction * 1.15))
-            }
-        }
-        .padding(variant == .v03 && isExpanded ? 18 : AppTheme.Space.lg)
-        .background(
-            AppTheme.surfaceCard,
-            in: RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                .strokeBorder(
-                    isExpanded
-                        ? Color.accentColor.opacity(variant == .v03 ? 0.52 : 0.34)
-                        : Color.primary.opacity(0.06),
-                    lineWidth: isExpanded ? (variant == .v03 ? 1.5 : 1.2) : 0.8
-                )
-        }
-        .shadow(
-            color: Color.black.opacity(variant == .v03 && isExpanded ? 0.16 : 0.04),
-            radius: variant == .v03 && isExpanded ? 16 : 6,
-            y: variant == .v03 && isExpanded ? 8 : 2
-        )
-        .scaleEffect(variant == .v03 && isExpanded ? 1.012 : 1.0)
-        .onAppear {
-            draftTitle = todo.title
-        }
-        .onChange(of: todo.title) { _, updated in
-            draftTitle = updated
+            v01ContinuousSubtaskTree
+                .opacity(min(1.0, expandFraction * 1.15))
         }
     }
 
-    // MARK: Row 1 — Full-Width Title + Progress Ring + Optional Chevron
-    private var row1TitleAndProgress: some View {
-        HStack(alignment: .top, spacing: AppTheme.Space.sm) {
+    // MARK: - v02: Compact Two-Line Micro-Card (Zero Header Shift · ~62pt Collapsed)
+    @ViewBuilder
+    private var v02CardContent: some View {
+        // Line 1 (Locked at 0px vertical shift between collapsed & expanded): Short title (15.5pt) + 1/3 + 今天 17:31
+        HStack(alignment: .center, spacing: 8) {
             Button(action: onToggleExpand) {
                 Text(todo.title)
-                    .font(.system(size: titleFontSize, weight: isExpanded && variant != .v02 ? .bold : .semibold))
+                    .font(.system(size: 15.5, weight: .semibold))
                     .foregroundStyle(isDone ? .secondary : .primary)
                     .strikethrough(isDone, color: .secondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            HStack(spacing: 6) {
-                progressBadge
+            compactProgressBadge
 
-                if variant == .v02 {
-                    // v02 keeps the chevron slot permanently mounted so Row 1 width never shifts on expand
-                    Button(action: onToggleExpand) {
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 26, height: 26)
-                            .background(AppTheme.surfaceElevated, in: Circle())
-                    }
-                    .buttonStyle(AppPressableButtonStyle())
-                } else if isExpanded {
-                    Button(action: onToggleExpand) {
-                        Image(systemName: "chevron.up")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 26, height: 26)
-                            .background(AppTheme.surfaceElevated, in: Circle())
-                    }
-                    .buttonStyle(AppPressableButtonStyle())
-                    .transition(.scale.combined(with: .opacity))
-                }
+            timestampLabel
+        }
+        .frame(height: 20)
+
+        // Line 2 (22pt micro-rail, 0px vertical shift): [○ 待处理] [P0] · #VoxPocket #iOS (+ and Linear smoothly appear at end on expand)
+        HStack(spacing: 5) {
+            compactStatusCapsule(showLabel: true)
+
+            compactPriorityCapsule
+
+            ForEach(todo.tags.prefix(isExpanded ? 3 : 2), id: \.self) { tag in
+                compactTagChip(tag)
             }
+
+            if isExpanded {
+                plusTagTriggerButton
+                    .transition(.scale.combined(with: .opacity))
+            }
+
+            Spacer(minLength: 2)
+
+            if isExpanded {
+                linearActionCapsule
+                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            }
+        }
+        .frame(minHeight: 22)
+
+        if isExpanded && isTagTrayOpen {
+            inlineTagTrayView
+                .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+
+        if isExpanded && expandFraction > 0.01 {
+            VStack(alignment: .leading, spacing: 7) {
+                Divider()
+
+                if !todo.description.isEmpty {
+                    expandedDescriptionEditorBlock
+                }
+
+                v02ZeroHeaderShiftDrawer
+            }
+            .opacity(expandFraction)
         }
     }
 
-    private var progressBadge: some View {
-        HStack(spacing: 5) {
+    // MARK: - v03: Description Peek & Spatial Unfold (~66pt Collapsed -> Spatial Hero Unfold)
+    @ViewBuilder
+    private var v03CardContent: some View {
+        if !isExpanded {
+            // Line 1: Status capsule + short title (15.5pt) + P0 + #VoxPocket + 17:31
+            HStack(spacing: 6) {
+                compactStatusCapsule(showLabel: false)
+                    .matchedGeometryEffect(id: "status-\(todo.id)", in: morphNamespace)
+
+                Button(action: onToggleExpand) {
+                    Text(todo.title)
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .foregroundStyle(isDone ? .secondary : .primary)
+                        .strikethrough(isDone, color: .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .matchedGeometryEffect(id: "title-\(todo.id)", in: morphNamespace)
+
+                compactPriorityCapsule
+                    .matchedGeometryEffect(id: "priority-\(todo.id)", in: morphNamespace)
+
+                compactTagChip(primaryTag)
+                    .matchedGeometryEffect(id: "tag-\(primaryTag)-\(todo.id)", in: morphNamespace)
+
+                timestampLabel
+                    .matchedGeometryEffect(id: "time-\(todo.id)", in: morphNamespace)
+            }
+            .frame(height: 22)
+
+            // Line 2: 12pt single-line muted preview of todo.description
+            if !todo.description.isEmpty {
+                Button(action: onToggleExpand) {
+                    Text(todo.description)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .matchedGeometryEffect(id: "desc-\(todo.id)", in: morphNamespace)
+            }
+        } else {
+            // Expanded Spatial Hero: Title + progress, then full multi-line editable description (matchedGeometryEffect from 1-line peek)
+            HStack(alignment: .center, spacing: 8) {
+                Button(action: onToggleExpand) {
+                    Text(todo.title)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(isDone ? .secondary : .primary)
+                        .strikethrough(isDone, color: .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .matchedGeometryEffect(id: "title-\(todo.id)", in: morphNamespace)
+
+                compactProgressBadge
+            }
+
+            if !todo.description.isEmpty {
+                expandedDescriptionEditorBlock
+                    .matchedGeometryEffect(id: "desc-\(todo.id)", in: morphNamespace)
+            }
+
+            HStack(spacing: 6) {
+                compactStatusCapsule(showLabel: true)
+                    .matchedGeometryEffect(id: "status-\(todo.id)", in: morphNamespace)
+
+                compactPriorityCapsule
+                    .matchedGeometryEffect(id: "priority-\(todo.id)", in: morphNamespace)
+
+                timestampLabel
+                    .matchedGeometryEffect(id: "time-\(todo.id)", in: morphNamespace)
+
+                if todo.scheduledAt != nil {
+                    reminderMicroBadge
+                }
+
+                Spacer(minLength: 4)
+
+                linearActionCapsule
+            }
+
+            expandedTagsAndPlusRow(matchedPrimaryTag: primaryTag)
+
+            if isTagTrayOpen {
+                inlineTagTrayView
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Divider().opacity(expandFraction)
+
+            v03SpatialHeroSubtaskCards
+                .opacity(min(1.0, expandFraction * 1.15))
+        }
+    }
+
+    // MARK: - v04: Staggered Minimal Strip (~54pt Collapsed -> Two-Stage Cascade Unfold)
+    @ViewBuilder
+    private var v04CardContent: some View {
+        if !isExpanded {
+            // Collapsed (~54pt): High-density strip: [○] 液态玻璃交互走查   #VoxPocket  P0  今天 17:31
+            HStack(spacing: 7) {
+                compactStatusCapsule(showLabel: false)
+                    .matchedGeometryEffect(id: "status-\(todo.id)", in: morphNamespace)
+
+                Button(action: onToggleExpand) {
+                    Text(todo.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isDone ? .secondary : .primary)
+                        .strikethrough(isDone, color: .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .matchedGeometryEffect(id: "title-\(todo.id)", in: morphNamespace)
+
+                compactTagChip(primaryTag)
+                    .matchedGeometryEffect(id: "tag-\(primaryTag)-\(todo.id)", in: morphNamespace)
+
+                compactPriorityCapsule
+                    .matchedGeometryEffect(id: "priority-\(todo.id)", in: morphNamespace)
+
+                timestampLabel
+                    .matchedGeometryEffect(id: "time-\(todo.id)", in: morphNamespace)
+            }
+            .frame(minHeight: 28)
+        } else {
+            // Stage 1 (0–130ms): Container expands and morphs Status, Priority, #Tag, and 17:31 into expanded header rows
+            HStack(alignment: .center, spacing: 8) {
+                Button(action: onToggleExpand) {
+                    Text(todo.title)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(isDone ? .secondary : .primary)
+                        .strikethrough(isDone, color: .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .matchedGeometryEffect(id: "title-\(todo.id)", in: morphNamespace)
+
+                compactProgressBadge
+            }
+
+            HStack(spacing: 6) {
+                compactStatusCapsule(showLabel: true)
+                    .matchedGeometryEffect(id: "status-\(todo.id)", in: morphNamespace)
+
+                compactPriorityCapsule
+                    .matchedGeometryEffect(id: "priority-\(todo.id)", in: morphNamespace)
+
+                timestampLabel
+                    .matchedGeometryEffect(id: "time-\(todo.id)", in: morphNamespace)
+
+                Spacer(minLength: 4)
+
+                linearActionCapsule
+            }
+
+            // Stage 2 (50–230ms): Cascades description block, + tag trigger, and staggered subtask rows
+            if !todo.description.isEmpty {
+                expandedDescriptionEditorBlock
+                    .opacity(cascadeStageTwoVisible ? 1.0 : 0.0)
+                    .offset(y: cascadeStageTwoVisible ? 0 : -5)
+            }
+
+            expandedTagsAndPlusRow(matchedPrimaryTag: primaryTag)
+                .opacity(cascadeStageTwoVisible ? 1.0 : 0.25)
+
+            if isTagTrayOpen {
+                inlineTagTrayView
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Divider()
+                .opacity(cascadeStageTwoVisible ? 1.0 : 0.0)
+
+            v04TwoStageStaggeredCascade
+        }
+    }
+
+    // MARK: - Shared Persistent Micro-Components (Zero Shape Jump)
+
+    private func compactStatusCapsule(showLabel: Bool) -> some View {
+        Button(action: onCycleStatus) {
+            HStack(spacing: showLabel ? 4 : 0) {
+                Image(systemName: statusSymbol)
+                    .font(.caption2.weight(.bold))
+                if showLabel {
+                    Text(statusTitle)
+                        .font(.caption2.weight(.semibold))
+                }
+            }
+            .foregroundStyle(statusColor)
+            .padding(.horizontal, showLabel ? 8 : 6)
+            .padding(.vertical, 4)
+            .frame(minHeight: 22)
+            .background(statusColor.opacity(0.15), in: Capsule())
+        }
+        .buttonStyle(AppPressableButtonStyle())
+    }
+
+    private var compactPriorityCapsule: some View {
+        Button(action: onCyclePriority) {
+            Text(todo.priority.rawValue)
+                .font(.caption2.weight(.bold).monospacedDigit())
+                .foregroundStyle(priorityColor)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .frame(minHeight: 22)
+                .background(priorityColor.opacity(0.15), in: Capsule())
+        }
+        .buttonStyle(AppPressableButtonStyle())
+    }
+
+    private func compactTagChip(_ tag: String) -> some View {
+        Button(action: { onToggleTag(tag) }) {
+            Text(tag)
+                .font(.caption2.weight(.medium).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .frame(minHeight: 22)
+                .background(
+                    AppTheme.surfaceElevated,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.20), lineWidth: 0.7)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func expandedTagsAndPlusRow(matchedPrimaryTag: String) -> some View {
+        TodoUnfoldWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+            ForEach(todo.tags.prefix(3), id: \.self) { tag in
+                if tag == matchedPrimaryTag {
+                    compactTagChip(tag)
+                        .matchedGeometryEffect(id: "tag-\(tag)-\(todo.id)", in: morphNamespace)
+                } else {
+                    compactTagChip(tag)
+                }
+            }
+            plusTagTriggerButton
+        }
+    }
+
+    private var plusTagTriggerButton: some View {
+        Button(action: onToggleTagTray) {
+            Image(systemName: isTagTrayOpen ? "chevron.up" : "plus")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 22, height: 22)
+                .background(
+                    AppTheme.surfaceElevated,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.7)
+                }
+        }
+        .buttonStyle(AppPressableButtonStyle())
+    }
+
+    private var compactProgressBadge: some View {
+        HStack(spacing: 4) {
             ZStack {
                 Circle()
-                    .stroke(Color.secondary.opacity(0.22), lineWidth: 2.4)
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 2.0)
                 Circle()
                     .trim(from: 0, to: progressFraction)
                     .stroke(
                         Color.accentColor,
-                        style: StrokeStyle(lineWidth: 2.4, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 2.0, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
             }
-            .frame(width: 14, height: 14)
+            .frame(width: 12, height: 12)
 
             Text("\(completedSubtaskCount)/\(totalSubtaskCount)")
                 .font(.caption2.weight(.bold).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .frame(minHeight: 22)
         .background(AppTheme.surfaceElevated, in: Capsule())
     }
 
-    // MARK: Row 2 — Persistent Status · Priority · Timestamp (`今天 17:31`) · Linear
-    private var row2UnifiedMetadataCapsules: some View {
-        HStack(spacing: 6) {
-            Button(action: onCycleStatus) {
-                HStack(spacing: 4) {
-                    Image(systemName: statusSymbol)
-                        .font(.caption2.weight(.bold))
-                    Text(statusTitle)
-                        .font(.caption.weight(.semibold))
-                }
-                .foregroundStyle(statusColor)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .frame(minHeight: 28)
-                .background(statusColor.opacity(0.15), in: Capsule())
-            }
-            .buttonStyle(AppPressableButtonStyle())
+    private var timestampLabel: some View {
+        Text("今天 17:31")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+    }
 
-            Button(action: onCyclePriority) {
-                Text(todo.priority.rawValue)
-                    .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(priorityColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .frame(minHeight: 28)
-                    .background(priorityColor.opacity(0.15), in: Capsule())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-
-            Text("今天 17:31")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 4)
-
-            if isExpanded && variant != .v02 {
-                linearActionCapsule
-                    .opacity(expandFraction)
-                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
-            }
+    private var reminderMicroBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "bell.fill")
+                .font(.caption2.weight(.bold))
+            Text("明早 09:00")
+                .font(.caption2.weight(.semibold).monospacedDigit())
         }
+        .foregroundStyle(Color.accentColor)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .frame(minHeight: 22)
+        .background(Color.accentColor.opacity(0.13), in: Capsule())
+    }
+
+    private var expandedDescriptionEditorBlock: some View {
+        TextField("补充背景说明或语音上下文…", text: $draftDescription, axis: .vertical)
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+            .textFieldStyle(.plain)
+            .lineLimit(1...4)
+            .onSubmit {
+                onUpdateDescription(draftDescription)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                AppTheme.surfacePrimary.opacity(0.55),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.7)
+            }
     }
 
     private var linearActionCapsule: some View {
@@ -701,51 +1202,10 @@ public struct TodoUnfoldVariantCardView: View {
                 .font(.caption2.weight(.semibold).monospacedDigit())
         }
         .foregroundStyle(Color.accentColor)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .frame(minHeight: 28)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .frame(minHeight: 22)
         .background(Color.accentColor.opacity(0.12), in: Capsule())
-    }
-
-    // MARK: Row 3 — Persistent Rounded-Rect `#Tag` Chips + Always-Present `+` Button
-    private var row3PersistentTagsAndPlus: some View {
-        TodoUnfoldWrappingFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
-            ForEach(todo.tags.prefix(3), id: \.self) { tag in
-                Button(action: { onToggleTag(tag) }) {
-                    Text(tag)
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .frame(minHeight: 26)
-                        .background(
-                            AppTheme.surfaceElevated,
-                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-
-            Button(action: onToggleTagTray) {
-                Image(systemName: isTagTrayOpen ? "chevron.up" : "plus")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 26, height: 26)
-                    .background(
-                        AppTheme.surfaceElevated,
-                        in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 0.8)
-                    }
-            }
-            .buttonStyle(AppPressableButtonStyle())
-        }
     }
 
     // MARK: Inline Single-Box Tag Tray
@@ -851,24 +1311,17 @@ public struct TodoUnfoldVariantCardView: View {
     }
 
     private var v02ZeroHeaderShiftDrawer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Spacer()
-                linearActionCapsule
-            }
+        HStack(alignment: .top, spacing: 10) {
+            Capsule()
+                .fill(Color.accentColor.opacity(0.28))
+                .padding(.vertical, 4)
+                .frame(width: 2)
 
-            HStack(alignment: .top, spacing: 10) {
-                Capsule()
-                    .fill(Color.accentColor.opacity(0.28))
-                    .padding(.vertical, 4)
-                    .frame(width: 2)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(todo.subtasks) { subtask in
-                        subtaskBranchRow(subtask: subtask)
-                    }
-                    addSubtaskInputRow
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(todo.subtasks) { subtask in
+                    subtaskBranchRow(subtask: subtask)
                 }
+                addSubtaskInputRow
             }
         }
         .scaleEffect(x: 1.0, y: max(0.01, expandFraction), anchor: .top)

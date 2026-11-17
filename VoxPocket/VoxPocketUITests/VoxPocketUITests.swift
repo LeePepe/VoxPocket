@@ -139,7 +139,7 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertEqual(XCTWaiter.wait(for: [filterAllHittable], timeout: 5), .completed)
             XCTAssertTrue(app.buttons["vox.ios.filter.done"].exists)
             XCTAssertFalse(app.staticTexts["点击任务置顶聚焦 · 标题与属性展示处直接点按修改"].exists)
-            let todoPredicate = NSPredicate(format: "label CONTAINS %@", "整理下周设计评审")
+            let todoPredicate = NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "液态玻璃", "整理下周设计评审")
             let todoButton = app.buttons.matching(todoPredicate).firstMatch
             let todoStatic = app.staticTexts.matching(todoPredicate).firstMatch
             XCTAssertTrue(todoButton.waitForExistence(timeout: 5) || todoStatic.waitForExistence(timeout: 2))
@@ -187,7 +187,7 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
             collapseBtn.tap()
             app.buttons["vox.ios.filter.done"].tap()
-            let donePredicate = NSPredicate(format: "label CONTAINS %@", "把早间散步录下的播客大纲")
+            let donePredicate = NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "播客大纲", "把早间散步录下的播客大纲")
             let doneButton = app.buttons.matching(donePredicate).firstMatch
             let doneStatic = app.staticTexts.matching(donePredicate).firstMatch
             XCTAssertTrue(doneButton.waitForExistence(timeout: 5) || doneStatic.waitForExistence(timeout: 2))
