@@ -179,7 +179,7 @@ final class PreviewHostAppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "VoxPocket · Todo 卡片原地展开 4 套真 SwiftUI 交互预览窗 (v01–v04 · 120Hz Pure Local Native)"
+        window.title = "VoxPocket · 120Hz 原生 SwiftUI 预览窗 (Todo 竖向筛选 · 录音 5 阶段 · 灵动岛 DI-v01..v04 · Tab 4 macOS 桌面工作台)"
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)
