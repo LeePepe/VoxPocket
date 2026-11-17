@@ -558,10 +558,31 @@ final class VoxWorkspaceContractTests: XCTestCase {
         boardController.setAllRecorderStages(.refining)
         XCTAssertEqual(boardController.recorderStagesByBezel[0], .refining)
         boardController.setAllRecorderStages(.idle)
-        XCTAssertEqual(PreviewHostTopTab.allCases.count, 3)
+        XCTAssertEqual(PreviewHostTopTab.allCases.count, 4)
+        XCTAssertTrue(PreviewHostTopTab.allCases.contains(.macOSDesktopWorkspace))
+        XCTAssertEqual(PreviewHostTopTab.macOSDesktopWorkspace.label, "Tab 4 · macOS 桌面工作台预览")
         XCTAssertEqual(boardController.activeTab, .dynamicIslandFourVariants)
         XCTAssertEqual(DynamicIslandPreviewVariantKind.allCases.count, 4)
         XCTAssertEqual(DynamicIslandDataPreset.allCases.count, 4)
+
+        // Verify Tab 4 macOS Desktop Workspace Preview & 4 destinations render cleanly
+        boardController.activeTab = .macOSDesktopWorkspace
+        XCTAssertEqual(MacOSWorkspaceDestination.allCases.count, 4)
+        for dest in MacOSWorkspaceDestination.allCases {
+            boardController.macWorkspaceDestination = dest
+            let macHost = NSHostingView(
+                rootView: MacOSCleanSlateWorkspaceView(
+                    viewModel: boardController.macPreviewViewModel,
+                    initialDestination: dest
+                )
+                .environment(\.colorScheme, .dark)
+                .frame(width: 1280, height: 760)
+            )
+            macHost.frame = NSRect(x: 0, y: 0, width: 1280, height: 760)
+            macHost.layoutSubtreeIfNeeded()
+            XCTAssertEqual(macHost.bounds.size, NSSize(width: 1280, height: 760))
+        }
+        boardController.activeTab = .dynamicIslandFourVariants
 
         // Verify Dynamic Island conditional description + horizontal subtasks + voice/AI actions across all 4 presets
         boardController.islandDataPreset = .fullWithSubtasksAndDescription

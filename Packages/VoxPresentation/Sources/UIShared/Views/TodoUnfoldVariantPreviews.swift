@@ -1716,6 +1716,7 @@ public enum PreviewHostTopTab: String, CaseIterable, Identifiable, Sendable {
     case todoAndVerticalFilter = "todo"
     case recorderFiveStageAtmosphere = "recorder"
     case dynamicIslandFourVariants = "dynamic-island"
+    case macOSDesktopWorkspace = "macos-workspace"
 
     public var id: String { rawValue }
 
@@ -1727,6 +1728,8 @@ public enum PreviewHostTopTab: String, CaseIterable, Identifiable, Sendable {
             "Tab 2 · 录音页 5 阶段色彩流转"
         case .dynamicIslandFourVariants:
             "Tab 3 · 灵动岛 4 套方案 (DI-v01..v04)"
+        case .macOSDesktopWorkspace:
+            "Tab 4 · macOS 桌面工作台预览"
         }
     }
 
@@ -1735,6 +1738,7 @@ public enum PreviewHostTopTab: String, CaseIterable, Identifiable, Sendable {
         case .todoAndVerticalFilter: "checklist"
         case .recorderFiveStageAtmosphere: "waveform.circle.fill"
         case .dynamicIslandFourVariants: "capsule.inset.filled"
+        case .macOSDesktopWorkspace: "macwindow.badge.plus"
         }
     }
 }
@@ -1921,6 +1925,14 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
     @Published public var colorScheme: ColorScheme = .dark
     @Published public var allExpanded: Bool = true
     @Published public var allTagTraysOpen: Bool = false
+    #if os(macOS)
+    @Published public var macWorkspaceDestination: MacOSWorkspaceDestination = .todos
+    public let macPreviewViewModel: VoxWorkspaceViewModel = {
+        let vm = IOSCleanSlatePreviewFactory.makePreviewViewModel(activePage: .todo, expandFirstTodo: true)
+        Task { await vm.seedDemoDataIfEmptyForPreview() }
+        return vm
+    }()
+    #endif
 
     public let stores: [TodoUnfoldVariantKind: TodoUnfoldVariantPreviewStore]
 
@@ -2103,6 +2115,9 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                 case .dynamicIslandFourVariants:
                     dynamicIslandFourUpComparisonGrid
                         .padding(22)
+                case .macOSDesktopWorkspace:
+                    macOSDesktopWorkspacePreviewCanvas
+                        .padding(22)
                 }
             }
             .background(controller.colorScheme == .dark ? Color(white: 0.07) : Color(white: 0.94))
@@ -2114,9 +2129,9 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("VoxPocket · 120Hz 原生 SwiftUI 预览窗 (Todo 竖向筛选 · 录音 5 阶段色彩 · 灵动岛 DI-v01..v04)")
+                    Text("VoxPocket · 120Hz 原生 SwiftUI 预览窗 (Todo 竖向筛选 · 录音 5 阶段色彩 · 灵动岛 DI-v01..v04 · macOS 桌面工作台)")
                         .font(.headline.bold())
-                    Text("100% Native SwiftUI · 4 × 390×844 · Zero-Jump Scale & Continuous 5-Blob RGB Morph")
+                    Text("100% Native SwiftUI · iOS 4 × 390×844 & macOS 1280×760 · Zero-Jump Scale & Continuous 5-Blob RGB Morph")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -2187,6 +2202,35 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                     .padding(4)
                     .background(Color.primary.opacity(0.06), in: Capsule())
                 }
+
+                #if os(macOS)
+                if controller.activeTab == .macOSDesktopWorkspace {
+                    HStack(spacing: 4) {
+                        Text("macOS 导航模式")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 4)
+                        ForEach(MacOSWorkspaceDestination.allCases) { dest in
+                            let selected = controller.macWorkspaceDestination == dest
+                            Button(action: {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                                    controller.macWorkspaceDestination = dest
+                                }
+                            }) {
+                                Text(dest.title)
+                                    .font(.caption.weight(selected ? .bold : .medium))
+                                    .foregroundStyle(selected ? .white : .primary)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(selected ? Color.accentColor : Color.clear, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(4)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+                }
+                #endif
 
                 HStack(spacing: 6) {
                     Text("慢放倍率")
@@ -3005,6 +3049,46 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                 .environment(\.colorScheme, controller.colorScheme)
         }
         .frame(width: 390)
+    }
+
+    // MARK: - Tab 4: macOS Native Liquid Glass Desktop Workspace 120Hz Interactive Preview Canvas
+
+    @ViewBuilder
+    private var macOSDesktopWorkspacePreviewCanvas: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("MAC-WS")
+                    .font(.caption.weight(.black).monospaced())
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.14), in: Capsule())
+
+                Text("macOS 原生液态玻璃桌面工作台 (移除旧版 .sheet 与底部 148pt RecorderDock 灰遮罩 · 100% iOS 能力对齐 + AI 自动接单监控台)")
+                    .font(.subheadline.bold())
+
+                Spacer()
+            }
+
+            MacOSCleanSlateWorkspaceView(
+                viewModel: controller.macPreviewViewModel,
+                initialDestination: controller.macWorkspaceDestination,
+                isPreviewDemoMode: true
+            )
+            .id(controller.macWorkspaceDestination)
+            .environment(\.colorScheme, controller.colorScheme)
+            .frame(width: 1280, height: 760)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.16), lineWidth: 1.2)
+            }
+            .shadow(color: Color.black.opacity(0.24), radius: 18, y: 8)
+        }
+        #else
+        EmptyView()
+        #endif
     }
 }
 
