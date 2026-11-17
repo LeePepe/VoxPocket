@@ -131,6 +131,8 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertFalse(app.otherElements["vox.recording.indicator"].exists)
             XCTAssertFalse(app.otherElements["r3-feedback"].exists)
             XCTAssertFalse(app.staticTexts["r3-feedback"].exists)
+            // On Recorder Page (activePage == .recorder), bottom-left Todo Filter bar MUST be completely hidden
+            XCTAssertFalse(app.buttons["vox.ios.filter.all"].exists)
             switchBtn.tap()
 
             let filterAll = app.buttons["vox.ios.filter.all"]
@@ -138,11 +140,16 @@ final class VoxPocketUITests: XCTestCase {
             let filterAllHittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: filterAll)
             XCTAssertEqual(XCTWaiter.wait(for: [filterAllHittable], timeout: 5), .completed)
             XCTAssertTrue(app.buttons["vox.ios.filter.done"].exists)
+            // Verify Filter sits right above the bottom-left switch button
+            XCTAssertLessThan(filterAll.frame.maxY, switchBtn.frame.minY + 4)
             XCTAssertFalse(app.staticTexts["点击任务置顶聚焦 · 标题与属性展示处直接点按修改"].exists)
             let todoPredicate = NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "液态玻璃", "整理下周设计评审")
             let todoButton = app.buttons.matching(todoPredicate).firstMatch
             let todoStatic = app.staticTexts.matching(todoPredicate).firstMatch
             XCTAssertTrue(todoButton.waitForExistence(timeout: 5) || todoStatic.waitForExistence(timeout: 2))
+            // Persistent Row 2 chevron.down button is ALWAYS visible even when collapsed
+            let collapseBtn = app.buttons["vox.todo.collapse.button"].firstMatch
+            XCTAssertTrue(collapseBtn.exists)
             saveScreenshot(app, name: "todo-\(appearance)", directory: evidence)
 
             let todoRow = todoButton.exists ? todoButton : todoStatic
@@ -151,7 +158,6 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertEqual(XCTWaiter.wait(for: [todoRowHittable], timeout: 5), .completed)
             todoRow.tap()
 
-            let collapseBtn = app.buttons["vox.todo.collapse.button"]
             XCTAssertTrue(collapseBtn.waitForExistence(timeout: 5))
             XCTAssertFalse(app.staticTexts["此刻，专注这一件。"].exists)
             XCTAssertFalse(app.staticTexts["其余待办"].exists)
@@ -173,9 +179,10 @@ final class VoxPocketUITests: XCTestCase {
             XCTAssertTrue(tagsTrigger.exists)
             XCTAssertTrue(tagsTrigger.isHittable)
             XCTAssertTrue(app.frame.contains(tagsTrigger.frame))
-            // Verify Row 3 (Dedicated Tag Row) sits vertically below Row 2 (Status / Priority / Timestamp / Linear)
+            // Verify Tag Shelf and Dedicated Linear Row sit vertically below Row 2 (Status / Priority / Subtask Progress / Timestamp / Chevron)
             XCTAssertGreaterThan(tagsTrigger.frame.minY, statusPill.frame.maxY - 2)
             XCTAssertGreaterThan(tagsTrigger.frame.minY, priorityPill.frame.maxY - 2)
+            XCTAssertGreaterThan(linearBtn.frame.minY, statusPill.frame.maxY - 2)
             saveScreenshot(app, name: "todo-expanded-\(appearance)", directory: evidence)
 
             // Open inline tag tray attached to + tag trigger inside the card
@@ -201,6 +208,7 @@ final class VoxPocketUITests: XCTestCase {
             // Switch back to Recorder Page via bottom-left switch button
             switchBtn.tap()
             assertSentence(app, contains: "好的工具应当像空气一样安静")
+            XCTAssertFalse(app.buttons["vox.ios.filter.all"].exists)
             app.terminate()
 
             let recordingApp = makeVoxPocketUIApplication()
