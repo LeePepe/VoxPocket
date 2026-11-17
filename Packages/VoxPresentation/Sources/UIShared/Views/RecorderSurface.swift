@@ -4,12 +4,21 @@ struct RecorderBackdrop: View {
     let status: RecorderStatus
     let audioLevel: Float
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static func atmosphereOpacity(for status: RecorderStatus, colorScheme: ColorScheme) -> Double {
+        if status == .idle {
+            return colorScheme == .light ? 0.28 : 0.10
+        }
+        return colorScheme == .light ? 0.46 : 0.62
+    }
 
     var body: some View {
         ZStack {
             AppTheme.surfacePrimary
             BackgroundAtmosphere(status: status, audioLevel: Double(audioLevel))
-                .opacity(colorScheme == .light ? 0.28 : 0.10)
+                .opacity(Self.atmosphereOpacity(for: status, colorScheme: colorScheme))
+                .animation(reduceMotion ? nil : .easeInOut(duration: AtmosphereGlass.transitionDuration), value: status)
         }
         .ignoresSafeArea()
     }
