@@ -77,6 +77,12 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             await self?.loadPreferredCaptureDestination(defaultMode: defaultCaptureMode)
             await self?.reload()
         }
+        let reportsStream = useCase.aiOrderStatusReports
+        Task { [weak self] in
+            for await report in reportsStream {
+                await self?.applyAIExecutionStatusReport(report)
+            }
+        }
     }
 
     public var filteredTodos: [VoiceTodo] { todos.filter { todo in matches(todo) }.sorted { ordered($0.updatedAt, $1.updatedAt) } }
@@ -696,6 +702,33 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         aiOrdersByTodoID[todoID]
     }
 
+    public func applyAIExecutionStatusReport(_ report: AIExecutionStatusReport) async {
+        let existing = aiOrdersByTodoID[report.todoID]
+            ?? ICloudAIExecutionOrder(
+                orderID: report.orderID,
+                todoID: report.todoID,
+                state: report.state,
+                progressStage: report.progressStage,
+                progressFraction: report.progressFraction,
+                outputSummary: report.outputSummary,
+                assignedRunnerName: report.assignedRunnerName,
+                updatedAt: report.updatedAt
+            )
+        let updatedOrder = existing.applying(report)
+        aiOrdersByTodoID[report.todoID] = updatedOrder
+        await reload()
+        switch report.state {
+        case .queued:
+            lastCopiedBannerText = "已上传 iCloud · 等待 Mac 接单"
+        case .claimedByMac, .running:
+            lastCopiedBannerText = "Mac 已接单 · \(report.progressStage)"
+        case .completed:
+            lastCopiedBannerText = "AI 已完成 · \(report.outputSummary ?? report.progressStage)"
+        case .failed:
+            lastCopiedBannerText = "AI 执行失败 · \(report.outputSummary ?? report.progressStage)"
+        }
+    }
+
     public func dispatchTodoToICloudAI(_ todoID: UUID) {
         guard let todo = todos.first(where: { $0.id == todoID }) else { return }
         aiOrderProgressTasks[todoID]?.cancel()
@@ -706,50 +739,15 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
                 self.aiOrdersByTodoID[todoID] = queued
                 await self.reload()
                 self.lastCopiedBannerText = "已上传 iCloud · 等待 Mac 接单 (\(todo.title))"
-
-                try? await Task.sleep(for: .milliseconds(350))
-                guard !Task.isCancelled else { return }
-                let claimed = queued.withState(
-                    .claimedByMac,
-                    progressStage: "已认领订单 · 准备启动 AI",
-                    progressFraction: 0.25,
-                    assignedRunnerName: "Mac AI Agent"
-                )
-                self.aiOrdersByTodoID[todoID] = claimed
-
-                try? await Task.sleep(for: .milliseconds(450))
-                guard !Task.isCancelled else { return }
-                let stepCount = max(1, todo.subtasks.count)
-                let running = claimed.withState(
-                    .running,
-                    progressStage: "正在分析与执行 \(stepCount) 项子任务…",
-                    progressFraction: 0.68,
-                    assignedRunnerName: "Mac AI Agent"
-                )
-                self.aiOrdersByTodoID[todoID] = running
-
-                try? await Task.sleep(for: .milliseconds(550))
-                guard !Task.isCancelled else { return }
-                let summary = "完成 \(stepCount) 项步骤"
-                let completed = running.withState(
-                    .completed,
-                    progressStage: "执行完成",
-                    progressFraction: 1.0,
-                    outputSummary: summary,
-                    assignedRunnerName: "Mac AI Agent"
-                )
-                self.aiOrdersByTodoID[todoID] = completed
-                _ = try? await self.useCase.markTodoDone(todoID: todoID)
-                await self.reload()
-                self.lastCopiedBannerText = "AI 已完成 · \(todo.title)"
             } catch {
-                let failed = ICloudAIExecutionOrder(from: todo).withState(
+                let failed = ICloudAIExecutionOrder(from: todo).sanitizedForCloudSync().withState(
                     .failed,
                     progressStage: "执行失败",
                     progressFraction: 1.0,
                     outputSummary: error.localizedDescription
                 )
                 self.aiOrdersByTodoID[todoID] = failed
+                self.lastCopiedBannerText = "AI 派单失败 · \(error.localizedDescription)"
             }
         }
     }

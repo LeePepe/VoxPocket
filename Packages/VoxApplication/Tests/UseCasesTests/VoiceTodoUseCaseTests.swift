@@ -511,4 +511,100 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         XCTAssertEqual(savedTodos.first?.sourceCaptureID, orphan.id)
         XCTAssertEqual(savedTodos.first?.deviceSource, .appleWatch)
     }
+
+    func testDispatchTodoToICloudAIAndStatusReportTransitions() async throws {
+        let captures = DefaultVoiceCaptureRepository()
+        let todos = DefaultVoiceTodoRepository()
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usecase-icloud-orders-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let icloudSync = ICloudAIOrderSyncService(
+            ordersDirectoryURL: tempDir,
+            kvStore: InMemoryUbiquitousAIOrderKVStore()
+        )
+        let sandboxDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let useCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(),
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            icloudOrderSync: icloudSync
+        )
+
+        // Dispatching a missing todo throws todoNotFound
+        do {
+            _ = try await useCase.dispatchTodoToICloudAI(todoID: UUID())
+            XCTFail("Expected todoNotFound error")
+        } catch let error as VoiceTodoUseCaseError {
+            XCTAssertEqual(error, .todoNotFound)
+        }
+
+        // Create a real todo and dispatch it to iCloud AI
+        let todo = VoiceTodo(
+            title: "验证跨端 AI 接单",
+            description: "测试状态回流",
+            priority: .p0,
+            subtasks: [VoiceTodoSubtask(title: "子步骤 1"), VoiceTodoSubtask(title: "子步骤 2")]
+        )
+        try await todos.save(todo)
+
+        let order = try await useCase.dispatchTodoToICloudAI(todoID: todo.id)
+        XCTAssertEqual(order.todoID, todo.id)
+        XCTAssertEqual(order.state, .queued)
+        XCTAssertEqual(order.title, "")
+        XCTAssertEqual(order.subtaskCount, 2)
+
+        let afterDispatch = try await todos.fetch(by: todo.id)
+        XCTAssertEqual(afterDispatch?.executionState, .running)
+
+        // Publish claimed/running status report and verify repository updates
+        _ = try await icloudSync.publishStatusReport(
+            AIExecutionStatusReport(
+                orderID: order.orderID,
+                todoID: todo.id,
+                state: .running,
+                progressStage: "正在运行步骤 1",
+                progressFraction: 0.5,
+                assignedRunnerName: "Mac Agent"
+            )
+        )
+        try await Task.sleep(for: .milliseconds(50))
+        let duringRun = try await todos.fetch(by: todo.id)
+        XCTAssertEqual(duringRun?.executionState, .running)
+        XCTAssertEqual(duringRun?.lastExecutionSummary, "正在运行步骤 1")
+
+        // Publish completed status report and verify todo transitions to .done
+        _ = try await icloudSync.publishStatusReport(
+            AIExecutionStatusReport(
+                orderID: order.orderID,
+                todoID: todo.id,
+                state: .completed,
+                progressStage: "执行完成",
+                progressFraction: 1.0,
+                outputSummary: "全部 2 步完成",
+                assignedRunnerName: "Mac Agent"
+            )
+        )
+        try await Task.sleep(for: .milliseconds(50))
+        let afterCompleted = try await todos.fetch(by: todo.id)
+        XCTAssertEqual(afterCompleted?.executionState, .done)
+        XCTAssertEqual(afterCompleted?.lastExecutionSummary, "全部 2 步完成")
+
+        // Publish failed status report and verify todo transitions to .failed
+        _ = try await icloudSync.publishStatusReport(
+            AIExecutionStatusReport(
+                orderID: order.orderID,
+                todoID: todo.id,
+                state: .failed,
+                progressStage: "执行失败",
+                progressFraction: 1.0,
+                outputSummary: "Runner exited 1",
+                assignedRunnerName: "Mac Agent"
+            )
+        )
+        try await Task.sleep(for: .milliseconds(50))
+        let afterFailed = try await todos.fetch(by: todo.id)
+        XCTAssertEqual(afterFailed?.executionState, .failed)
+        XCTAssertEqual(afterFailed?.lastExecutionSummary, "Runner exited 1")
+    }
 }

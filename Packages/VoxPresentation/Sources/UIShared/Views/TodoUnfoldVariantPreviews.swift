@@ -94,7 +94,7 @@ public enum TodoUnfoldVariantKind: String, CaseIterable, Identifiable, Sendable 
         case .v01:
             "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击展开竖向玻璃浮层栈；✨ AI do it 实时派单。"
         case .v02:
-            "【Owner 选定方案】Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击弹出竖向玻璃 Popover；✨ AI do it 实时派单。"
+            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击弹出竖向玻璃 Popover；✨ AI do it 实时派单。"
         case .v03:
             "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下常驻紧凑竖向 4 胶囊柱；✨ AI do it 实时派单。"
         case .v04:

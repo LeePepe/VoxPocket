@@ -1538,9 +1538,64 @@ public enum IOSCleanSlatePreviewFactory {
 private actor PreviewCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase {
     private var captures: [VoiceCapture] = []
     private var todos: [VoiceTodo]
+    private var reportContinuation: AsyncStream<AIExecutionStatusReport>.Continuation?
+    nonisolated let aiOrderStatusReports: AsyncStream<AIExecutionStatusReport>
 
     init(initialTodos: [VoiceTodo] = []) {
         self.todos = initialTodos
+        var continuationBox: AsyncStream<AIExecutionStatusReport>.Continuation?
+        self.aiOrderStatusReports = AsyncStream { continuation in
+            continuationBox = continuation
+        }
+        self.reportContinuation = continuationBox
+    }
+
+    func dispatchTodoToICloudAI(todoID: UUID) async throws -> ICloudAIExecutionOrder {
+        guard let index = todos.firstIndex(where: { $0.id == todoID }) else {
+            throw NSError(domain: "PreviewCaptureAndTodoUseCase", code: 404)
+        }
+        let todo = todos[index]
+        let order = ICloudAIExecutionOrder(from: todo).sanitizedForCloudSync()
+        todos[index] = todo.withExecutionState(.running, summary: order.progressStage, startedAt: Date())
+        let continuation = reportContinuation
+        let stepCount = max(1, todo.subtasks.count)
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            continuation?.yield(
+                AIExecutionStatusReport(
+                    orderID: order.orderID,
+                    todoID: todoID,
+                    state: .claimedByMac,
+                    progressStage: "已认领订单 · 准备启动 AI",
+                    progressFraction: 0.25,
+                    assignedRunnerName: "Preview AI Agent"
+                )
+            )
+            try? await Task.sleep(for: .milliseconds(450))
+            continuation?.yield(
+                AIExecutionStatusReport(
+                    orderID: order.orderID,
+                    todoID: todoID,
+                    state: .running,
+                    progressStage: "正在分析与执行 \(stepCount) 项子任务…",
+                    progressFraction: 0.68,
+                    assignedRunnerName: "Preview AI Agent"
+                )
+            )
+            try? await Task.sleep(for: .milliseconds(550))
+            continuation?.yield(
+                AIExecutionStatusReport(
+                    orderID: order.orderID,
+                    todoID: todoID,
+                    state: .completed,
+                    progressStage: "执行完成",
+                    progressFraction: 1.0,
+                    outputSummary: "完成 \(stepCount) 项步骤",
+                    assignedRunnerName: "Preview AI Agent"
+                )
+            )
+        }
+        return order
     }
 
     func recordCompletedCapture(

@@ -97,6 +97,7 @@ public protocol VoiceCaptureAndTodoUseCase: AnyObject, Sendable {
     func rescheduleTodoReminder(todoID: UUID, newDate: Date, timeSlot: String?) async throws -> VoiceTodo
     func runTodoWithAI(todoID: UUID, project: ProjectBinding, template: AIRunnerTemplate) async throws -> VoiceTodo
     func dispatchTodoToICloudAI(todoID: UUID) async throws -> ICloudAIExecutionOrder
+    var aiOrderStatusReports: AsyncStream<AIExecutionStatusReport> { get }
     func markTodoDone(todoID: UUID) async throws -> VoiceTodo
     func syncTodoToExternal(todoID: UUID) async throws -> VoiceTodo
     func refreshExternalTodos() async throws -> [VoiceTodo]
@@ -140,7 +141,13 @@ public extension VoiceCaptureAndTodoUseCase {
         guard let existing = try await fetchTodos().first(where: { $0.id == todoID }) else {
             throw NSError(domain: "VoiceTodoUseCase", code: 404)
         }
-        return ICloudAIExecutionOrder(from: existing)
+        return ICloudAIExecutionOrder(from: existing).sanitizedForCloudSync()
+    }
+
+    var aiOrderStatusReports: AsyncStream<AIExecutionStatusReport> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
     }
 
     func refreshExternalTodos() async throws -> [VoiceTodo] {

@@ -430,6 +430,10 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         icloudOrderSync
     }
 
+    public var aiOrderStatusReports: AsyncStream<AIExecutionStatusReport> {
+        icloudOrderSync.statusReports
+    }
+
     public var localNotificationScheduler: any VoxNotificationScheduling {
         notificationScheduler
     }

@@ -102,16 +102,12 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
     }
 
     public static func resolveDefaultOrdersDirectory() -> URL {
-        if let ubiquityURL = FileManager.default.url(forUbiquityContainerIdentifier: nil) {
-            return ubiquityURL
-                .appendingPathComponent("Documents/VoxPocket/AIOrders", isDirectory: true)
-        }
         if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             return appSupport
-                .appendingPathComponent("VoxPocket/ICloudAIOrders", isDirectory: true)
+                .appendingPathComponent("VoxPocket/AIOrders", isDirectory: true)
         }
         return URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("VoxPocket-ICloudAIOrders", isDirectory: true)
+            .appendingPathComponent("VoxPocket-AIOrders", isDirectory: true)
     }
 
     public var statusReports: AsyncStream<AIExecutionStatusReport> {
@@ -126,7 +122,7 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
 
     @discardableResult
     public func submitOrderToICloud(todo: VoiceTodo, now: Date = Date()) async throws -> ICloudAIExecutionOrder {
-        let order = ICloudAIExecutionOrder(from: todo, now: now)
+        let order = ICloudAIExecutionOrder(from: todo, now: now).sanitizedForCloudSync()
         try await saveOrder(order)
         let queuedReport = AIExecutionStatusReport(
             orderID: order.orderID,
@@ -143,17 +139,22 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
     }
 
     public func saveOrder(_ order: ICloudAIExecutionOrder) async throws {
+        let sanitized = order.sanitizedForCloudSync()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(order)
+        let data = try encoder.encode(sanitized)
 
         try fileMutex.withLock { _ in
             try FileManager.default.createDirectory(at: ordersDirectoryURL, withIntermediateDirectories: true)
-            let fileURL = orderFileURL(for: order.orderID)
+            var fileURL = orderFileURL(for: sanitized.orderID)
             try data.write(to: fileURL, options: .atomic)
+            var resourceValues = URLResourceValues()
+            resourceValues.isExcludedFromBackup = true
+            try? fileURL.setResourceValues(resourceValues)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         }
 
-        kvStore.setData(data, forKey: Self.kvsKeyPrefix + order.orderID.uuidString)
+        kvStore.setData(data, forKey: Self.kvsKeyPrefix + sanitized.orderID.uuidString)
         _ = kvStore.synchronize()
     }
 
@@ -519,22 +520,15 @@ public final class MacAIOrderAutoPickupService: Sendable {
                     .split(whereSeparator: \.isNewline)
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.hasPrefix("VOX_STATUS:") && !$0.hasPrefix("VOX_PROGRESS:") && !$0.isEmpty }
-                summary = cleanedLines.last ?? "已完成 \(order.subtasks.count) 个子步骤"
+                summary = cleanedLines.last ?? "已完成 \(order.subtaskCount) 个子步骤"
             } else {
-                // Built-in local intelligent simulation when no external process runner is injected
-                _ = try await reporter.reportProgress(
-                    stage: "分析任务语义与 \(max(1, order.subtasks.count)) 个子步骤",
-                    fraction: 0.55,
-                    state: .running,
-                    now: now
+                throw NSError(
+                    domain: "MacAIOrderAutoPickupService",
+                    code: -1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "External CLI execution is disabled by the sandbox privacy boundary; configure an in-sandbox runner handler."
+                    ]
                 )
-                _ = try await reporter.reportProgress(
-                    stage: "生成执行回执与同步结果",
-                    fraction: 0.85,
-                    state: .running,
-                    now: now
-                )
-                summary = "已完成 · 共处理 \(max(1, order.subtasks.count)) 项子任务"
             }
 
             let completedReport = AIExecutionStatusReport(

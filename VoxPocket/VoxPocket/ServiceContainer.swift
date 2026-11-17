@@ -859,12 +859,13 @@ public final class ServiceContainer: ObservableObject {
         #if canImport(ActivityKit)
         guard #available(iOS 16.2, *) else { return }
         let modeTitle = modeRaw == CaptureMode.todo.rawValue ? "存入待办" : "复制文字"
+        let hasInteractiveTodo = (todoID != nil && !(todoID?.isEmpty ?? true))
         let finalContent = ActivityContent(
             state: VoxCaptureActivityAttributes.ContentState(
                 mode: modeTitle,
                 elapsedSeconds: 0,
                 isRecording: false,
-                phase: .completedReceipt,
+                phase: hasInteractiveTodo ? .todoFocusPinned : .completedReceipt,
                 todoID: todoID,
                 title: title,
                 priorityBadge: priority,
@@ -872,12 +873,15 @@ public final class ServiceContainer: ObservableObject {
                 totalSubtasks: totalSubtasks,
                 statusReceiptText: "✓ 已入库"
             ),
-            staleDate: nil
+            staleDate: Date().addingTimeInterval(hasInteractiveTodo ? 8 * 3600 : 15)
         )
         Task {
             for activity in Activity<VoxCaptureActivityAttributes>.activities {
                 await activity.update(finalContent)
-                await activity.end(finalContent, dismissalPolicy: .after(.now.addingTimeInterval(4.0)))
+                if !hasInteractiveTodo {
+                    try? await Task.sleep(for: .seconds(4))
+                    await activity.end(finalContent, dismissalPolicy: .default)
+                }
             }
         }
         #endif
@@ -890,13 +894,77 @@ public final class ServiceContainer: ObservableObject {
             if let todo = workspaceViewModel.todos.first(where: { $0.id == todoID }),
                let firstIncomplete = todo.subtasks.first(where: { !$0.isCompleted }) {
                 workspaceViewModel.toggleTodoSubtask(todoID: todoID, subtaskID: firstIncomplete.id)
+                let newCompleted = todo.subtasks.filter(\.isCompleted).count + 1
+                let total = max(1, todo.subtasks.count)
+                #if canImport(ActivityKit)
+                if #available(iOS 16.2, *) {
+                    let updatedContent = ActivityContent(
+                        state: VoxCaptureActivityAttributes.ContentState(
+                            mode: "存入待办",
+                            elapsedSeconds: 0,
+                            isRecording: false,
+                            phase: newCompleted >= total ? .completedReceipt : .todoFocusPinned,
+                            todoID: todoIDString,
+                            title: todo.title,
+                            priorityBadge: todo.priority.rawValue,
+                            completedSubtasks: newCompleted,
+                            totalSubtasks: total,
+                            statusReceiptText: "进度 \(newCompleted)/\(total)"
+                        ),
+                        staleDate: nil
+                    )
+                    for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                        await activity.update(updatedContent)
+                    }
+                }
+                #endif
             }
         case "done":
             workspaceViewModel.toggleTodoDone(todoID)
+            #if canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                let doneContent = ActivityContent(
+                    state: VoxCaptureActivityAttributes.ContentState(
+                        mode: "存入待办",
+                        elapsedSeconds: 0,
+                        isRecording: false,
+                        phase: .completedReceipt,
+                        todoID: todoIDString,
+                        title: workspaceViewModel.todos.first(where: { $0.id == todoID })?.title ?? "已完成",
+                        statusReceiptText: "✓ 已完成"
+                    ),
+                    staleDate: nil
+                )
+                for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                    await activity.update(doneContent)
+                    await activity.end(doneContent, dismissalPolicy: .after(.now.addingTimeInterval(2.0)))
+                }
+            }
+            #endif
         case "snooze15m":
             workspaceViewModel.shiftTodoReminderByMinutes(todoID: todoID, deltaMinutes: 15)
+            #if canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                    var nextState = activity.content.state
+                    nextState.statusReceiptText = "⏰ +15m"
+                    await activity.update(ActivityContent(state: nextState, staleDate: Date().addingTimeInterval(15 * 60)))
+                }
+            }
+            #endif
         case "deferMorning":
             workspaceViewModel.assignTodoHabitSlot(todoID: todoID, slotRawValue: "morning")
+            #if canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                    var nextState = activity.content.state
+                    nextState.statusReceiptText = "🌙 明早 08:35"
+                    let content = ActivityContent(state: nextState, staleDate: nil)
+                    await activity.update(content)
+                    await activity.end(content, dismissalPolicy: .after(.now.addingTimeInterval(2.5)))
+                }
+            }
+            #endif
         default:
             break
         }

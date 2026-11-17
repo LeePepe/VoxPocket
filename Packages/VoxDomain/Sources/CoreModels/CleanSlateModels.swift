@@ -432,6 +432,7 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
     public let title: String
     public let description: String
     public let subtasks: [String]
+    public let subtaskCount: Int
     public let tags: [String]
     public let priority: String
     public let projectKey: String?
@@ -446,9 +447,10 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
     public init(
         orderID: UUID = UUID(),
         todoID: UUID,
-        title: String,
+        title: String = "",
         description: String = "",
         subtasks: [String] = [],
+        subtaskCount: Int? = nil,
         tags: [String] = [],
         priority: String = "P1",
         projectKey: String? = nil,
@@ -465,6 +467,7 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
         self.title = title
         self.description = description
         self.subtasks = subtasks
+        self.subtaskCount = subtaskCount ?? subtasks.count
         self.tags = tags
         self.priority = priority
         self.projectKey = projectKey
@@ -484,6 +487,7 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
             title: todo.title,
             description: todo.description.isEmpty ? todo.taskPrompt : todo.description,
             subtasks: todo.subtasks.map(\.title),
+            subtaskCount: todo.subtasks.count,
             tags: todo.tags,
             priority: todo.priority.rawValue,
             projectKey: todo.projectKey,
@@ -504,6 +508,7 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
             title: title,
             description: description,
             subtasks: subtasks,
+            subtaskCount: subtaskCount,
             tags: tags,
             priority: priority,
             projectKey: projectKey,
@@ -531,6 +536,7 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
             title: title,
             description: description,
             subtasks: subtasks,
+            subtaskCount: subtaskCount,
             tags: tags,
             priority: priority,
             projectKey: projectKey,
@@ -539,6 +545,29 @@ public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable
             progressFraction: progressFraction,
             outputSummary: outputSummary ?? self.outputSummary,
             assignedRunnerName: assignedRunnerName ?? self.assignedRunnerName,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    /// Strips transcription-derived text (`title`, `description`, `subtasks`, `tags`) before persisting
+    /// to any cloud/KVS or disk metadata channel so sensitive voice/text never leaves the sandbox (Constitution IV).
+    public func sanitizedForCloudSync() -> ICloudAIExecutionOrder {
+        ICloudAIExecutionOrder(
+            orderID: orderID,
+            todoID: todoID,
+            title: "",
+            description: "",
+            subtasks: [],
+            subtaskCount: subtaskCount,
+            tags: [],
+            priority: priority,
+            projectKey: projectKey,
+            state: state,
+            progressStage: progressStage,
+            progressFraction: progressFraction,
+            outputSummary: outputSummary,
+            assignedRunnerName: assignedRunnerName,
             createdAt: createdAt,
             updatedAt: updatedAt
         )

@@ -388,13 +388,27 @@ final class CleanSlateInfrastructureTests: XCTestCase {
             ]
         )
 
-        // 1. iPhone submits order to iCloud
+        // 1. iPhone submits order to iCloud (sanitized on disk/KVS so no transcription-derived text leaves sandbox)
         let submitted = try await syncService.submitOrderToICloud(todo: todo)
         XCTAssertEqual(submitted.state, .queued)
+        XCTAssertEqual(submitted.subtaskCount, 2)
         let loadedFromDisk = try await syncService.loadOrder(orderID: submitted.orderID)
-        XCTAssertEqual(loadedFromDisk?.title, "液态玻璃交互走查")
+        XCTAssertEqual(loadedFromDisk?.title, "")
+        XCTAssertEqual(loadedFromDisk?.description, "")
+        XCTAssertEqual(loadedFromDisk?.subtasks, [])
+        XCTAssertEqual(loadedFromDisk?.subtaskCount, 2)
 
-        // 2. Mac auto-pickup service claims queued order, streams VOX_STATUS/VOX_PROGRESS lines, and completes
+        // 2. Unconfigured Mac pickup service fails explicitly instead of fabricating completion
+        let unconfiguredPickup = MacAIOrderAutoPickupService(
+            syncService: syncService,
+            configStore: configStore
+        )
+        let unconfiguredResult = try await unconfiguredPickup.claimAndExecuteOrder(submitted)
+        XCTAssertEqual(unconfiguredResult.state, .failed)
+        XCTAssertTrue(unconfiguredResult.outputSummary?.contains("disabled by the sandbox privacy boundary") == true)
+
+        // 3. Re-submit and verify Mac auto-pickup service with injected shellExecutor claims queued order, streams VOX_STATUS/VOX_PROGRESS lines, and completes
+        let secondSubmitted = try await syncService.submitOrderToICloud(todo: todo)
         let observedStatesMutex = Mutex<[AIOrderExecutionState]>([])
         let pickupService = MacAIOrderAutoPickupService(
             syncService: syncService,
@@ -402,7 +416,7 @@ final class CleanSlateInfrastructureTests: XCTestCase {
             shellExecutor: { command, env, cwd, reporter in
                 XCTAssertTrue(command.contains("custom-runner"))
                 XCTAssertEqual(env["VOX_TODO_ID"], todo.id.uuidString)
-                if let claimed = try await syncService.loadOrder(orderID: submitted.orderID) {
+                if let claimed = try await syncService.loadOrder(orderID: secondSubmitted.orderID) {
                     observedStatesMutex.withLock { $0.append(claimed.state) }
                 }
                 let stdout = """
@@ -421,20 +435,20 @@ final class CleanSlateInfrastructureTests: XCTestCase {
         let observedStates = observedStatesMutex.withLock { $0 }
         XCTAssertTrue(observedStates.contains(.claimedByMac) || observedStates.contains(.running))
 
-        let loadedFinalOrder = try await syncService.loadLatestOrder(forTodoID: todo.id)
+        let loadedFinalOrder = try await syncService.loadOrder(orderID: secondSubmitted.orderID)
         let finalOrder = try XCTUnwrap(loadedFinalOrder)
         XCTAssertEqual(finalOrder.state, .completed)
         XCTAssertEqual(finalOrder.outputSummary, "已完成 2 项液态玻璃走查子步骤")
         XCTAssertEqual(finalOrder.assignedRunnerName, "Mac Test Agent")
 
-        // 3. Verify programmatic custom code handler registration
+        // 4. Verify programmatic custom code handler registration
         pickupService.registerCustomCodeHandler { order, reporter in
             _ = try await reporter.reportProgress(stage: "Swift 闭包处理器执行中", fraction: 0.7)
-            return "Swift 闭包完成: \(order.title)"
+            return "Swift 闭包完成: \(order.subtaskCount) 步"
         }
-        let secondOrder = try await syncService.submitOrderToICloud(todo: todo)
-        let processedSecond = try await pickupService.claimAndExecuteOrder(secondOrder)
-        XCTAssertEqual(processedSecond.state, .completed)
-        XCTAssertEqual(processedSecond.outputSummary, "Swift 闭包完成: 液态玻璃交互走查")
+        let thirdOrder = try await syncService.submitOrderToICloud(todo: todo)
+        let processedThird = try await pickupService.claimAndExecuteOrder(thirdOrder)
+        XCTAssertEqual(processedThird.state, .completed)
+        XCTAssertEqual(processedThird.outputSummary, "Swift 闭包完成: 2 步")
     }
 }
