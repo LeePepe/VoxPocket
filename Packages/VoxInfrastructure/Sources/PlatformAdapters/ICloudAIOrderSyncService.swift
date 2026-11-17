@@ -187,7 +187,6 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
     /// and broadcasts only fresh `AIExecutionStatusReport` events (rejecting stale or duplicate reports).
     public func reconcileExternalKVSOrders() async {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         var newestOrderByTodo: [UUID: ICloudAIExecutionOrder] = [:]
 
         for (key, value) in kvStore.dictionaryRepresentation() where key.hasPrefix(Self.kvsKeyPrefix) {
@@ -204,7 +203,7 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
             }
         }
 
-        let sortedOrders = newestOrderByTodo.values.sorted { $0.updatedAt < $1.updatedAt }
+        let sortedOrders = newestOrderByTodo.values.sorted { Self.isNewerOrder($1, than: $0) }
         for remoteOrder in sortedOrders {
             let report = AIExecutionStatusReport(
                 orderID: remoteOrder.orderID,
@@ -276,7 +275,6 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
 
     public func saveOrder(_ order: ICloudAIExecutionOrder) async throws {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
 
         // 1. Local sandbox file keeps local execution summary/stage inside Application Support/VoxPocket/AIOrders (0600, excluded from backups),
         //    while stripping raw voice/todo text (title/description/subtasks/tags).
@@ -319,7 +317,6 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
 
     public func loadOrder(orderID: UUID) async throws -> ICloudAIExecutionOrder? {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
 
         let fileData: Data? = fileMutex.withLock { _ in
             let fileURL = orderFileURL(for: orderID)
@@ -340,13 +337,12 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
         let all = try await listOrders(matchingState: nil)
         return all
             .filter { $0.todoID == todoID }
-            .sorted { $0.updatedAt > $1.updatedAt }
+            .sorted { Self.isNewerOrder($0, than: $1) }
             .first
     }
 
     public func listOrders(matchingState state: AIOrderExecutionState? = nil) async throws -> [ICloudAIExecutionOrder] {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         var byID: [UUID: ICloudAIExecutionOrder] = [:]
 
         fileMutex.withLock { _ in
@@ -366,7 +362,7 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
             if let data = value as? Data,
                let order = try? decoder.decode(ICloudAIExecutionOrder.self, from: data) {
                 if let existing = byID[order.orderID] {
-                    if order.updatedAt > existing.updatedAt {
+                    if Self.isNewerOrder(order, than: existing) {
                         byID[order.orderID] = order
                     }
                 } else {
@@ -376,7 +372,7 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
         }
 
         let filtered = byID.values.filter { state == nil || $0.state == state }
-        return filtered.sorted { $0.createdAt < $1.createdAt }
+        return filtered.sorted { Self.isNewerOrder($1, than: $0) }
     }
 
     @discardableResult
@@ -422,7 +418,8 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
                 return true
             }
             if previous.orderID == report.orderID {
-                // Same order: ignore exact duplicates or older timestamps, and never regress a terminal order back to non-terminal
+                // Same order: ignore exact duplicates or older timestamps, and never regress a terminal order back to non-terminal.
+                // Preserve `previous.orderCreatedAt` verbatim so same-order updates never alter the original creation timestamp.
                 if previous.latestReport.state.isTerminal && !report.state.isTerminal {
                     return false
                 }
@@ -434,13 +431,13 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
                 }
                 map[report.todoID] = TrackedTodoOrderState(
                     orderID: report.orderID,
-                    orderCreatedAt: orderCreatedAt ?? previous.orderCreatedAt,
+                    orderCreatedAt: previous.orderCreatedAt,
                     latestReport: report
                 )
                 return true
             } else {
-                // Different order for the same todoID: ONLY accept if the candidate order's creation time is strictly newer
-                // than the currently tracked order's creation time (or equal creation time with newer orderID).
+                // Different order for the same todoID: ONLY accept if the candidate order's creation time is newer
+                // than the currently tracked order's creation time (or equal creation time with newer orderID, matching `isNewerOrder`).
                 // A delayed report from an older order (orderCreatedAt < previous.orderCreatedAt, or unknown nil orderCreatedAt)
                 // must never overwrite a newer retry order!
                 guard let candidateCreatedAt = orderCreatedAt else {
@@ -449,7 +446,7 @@ public final class ICloudAIOrderSyncService: ICloudAIOrderSyncing, Sendable {
                 if candidateCreatedAt < previous.orderCreatedAt {
                     return false
                 }
-                if candidateCreatedAt == previous.orderCreatedAt && report.orderID.uuidString < previous.orderID.uuidString {
+                if candidateCreatedAt == previous.orderCreatedAt && report.orderID.uuidString <= previous.orderID.uuidString {
                     return false
                 }
                 map[report.todoID] = TrackedTodoOrderState(

@@ -423,9 +423,7 @@ final class CleanSlateInfrastructureTests: XCTestCase {
 
         // Verify cloud KVS payload strips outputSummary, progressStage, and assignedRunnerName completely
         let kvsData = try XCTUnwrap(kvStore.data(forKey: ICloudAIOrderSyncService.kvsKeyPrefix + submitted.orderID.uuidString))
-        let kvsDecoder = JSONDecoder()
-        kvsDecoder.dateDecodingStrategy = .iso8601
-        let kvsOrder = try kvsDecoder.decode(ICloudAIExecutionOrder.self, from: kvsData)
+        let kvsOrder = try JSONDecoder().decode(ICloudAIExecutionOrder.self, from: kvsData)
         XCTAssertNil(kvsOrder.outputSummary)
         XCTAssertNil(kvsOrder.assignedRunnerName)
         XCTAssertEqual(kvsOrder.progressStage, "failed")
@@ -491,37 +489,63 @@ final class CleanSlateInfrastructureTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 100)
         ).sanitizedForCloudSync()
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        kvStore.setData(try encoder.encode(staleOrder), forKey: ICloudAIOrderSyncService.kvsKeyPrefix + staleOrder.orderID.uuidString)
+        kvStore.setData(try JSONEncoder().encode(staleOrder), forKey: ICloudAIOrderSyncService.kvsKeyPrefix + staleOrder.orderID.uuidString)
         kvStore.simulateExternalSyncNotification()
         try await Task.sleep(for: .milliseconds(40))
 
         let replayed = receivedReportsMutex.withLock { $0 }
         XCTAssertFalse(replayed.contains(where: { $0.orderID == staleOrder.orderID }), "Stale historical order must never be broadcast over a newer order")
 
-        // 6. Verify a delayed report from an older order (even with a newer report updatedAt) cannot overwrite a newer retry order B
-        let retryOrderB = try await syncService.submitOrderToICloud(todo: todo, now: Date().addingTimeInterval(10))
+        // 6. Verify sub-second precision: two orders created within the SAME second (e.g. .100s and .450s)
+        //    must preserve sub-second `createdAt` across JSON persistence so a delayed report from older order A
+        //    is rejected even after retry order B publishes its first status report!
+        let sameSecondWhole = floor(Date().timeIntervalSince1970) + 100.0
+        let sameSecondBase = Date(timeIntervalSince1970: sameSecondWhole + 0.100)
+        let subSecondOrderA = ICloudAIExecutionOrder(
+            orderID: UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!, // Artificially highest UUID
+            todoID: todo.id,
+            state: .queued,
+            createdAt: sameSecondBase,
+            updatedAt: sameSecondBase
+        ).sanitizedForCloudSync()
+        try await syncService.saveOrder(subSecondOrderA)
+
+        let retryOrderB = try await syncService.submitOrderToICloud(
+            todo: todo,
+            now: Date(timeIntervalSince1970: sameSecondWhole + 0.450) // Within the exact same whole second (.450s vs .100s)!
+        )
+        // Publish a first progress report for retryOrderB (which reloads retryOrderB from disk)
+        _ = try await syncService.publishStatusReport(
+            AIExecutionStatusReport(
+                orderID: retryOrderB.orderID,
+                todoID: todo.id,
+                state: .running,
+                progressStage: "Retry B running",
+                progressFraction: 0.4,
+                updatedAt: sameSecondBase.addingTimeInterval(0.500)
+            )
+        )
         try await Task.sleep(for: .milliseconds(20))
         receivedReportsMutex.withLock { $0.removeAll() }
 
         let delayedReportFromOlderOrderA = AIExecutionStatusReport(
-            orderID: secondSubmitted.orderID,
+            orderID: subSecondOrderA.orderID,
             todoID: todo.id,
             state: .failed,
             progressStage: "Delayed failure from older order A",
             progressFraction: 1.0,
             outputSummary: "Older order A timed out",
-            updatedAt: Date().addingTimeInterval(500) // Later updatedAt than retryOrderB, but older orderCreatedAt!
+            updatedAt: sameSecondBase.addingTimeInterval(5.0)
         )
         _ = try await syncService.publishStatusReport(delayedReportFromOlderOrderA)
         try await Task.sleep(for: .milliseconds(30))
 
         let afterDelayedFromA = receivedReportsMutex.withLock { $0 }
         XCTAssertFalse(
-            afterDelayedFromA.contains(where: { $0.orderID == secondSubmitted.orderID }),
-            "Delayed report from older order A must be rejected after retry order B is active"
+            afterDelayedFromA.contains(where: { $0.orderID == subSecondOrderA.orderID }),
+            "Delayed report from older order A created in the same second must be rejected after retry order B is active"
         )
-        XCTAssertEqual(retryOrderB.state, .queued)
+        let latestPersistedForTodo = try await syncService.loadLatestOrder(forTodoID: todo.id)
+        XCTAssertEqual(latestPersistedForTodo?.orderID, retryOrderB.orderID)
     }
 }
