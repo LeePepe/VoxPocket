@@ -542,6 +542,20 @@ final class VoxWorkspaceContractTests: XCTestCase {
         recorderHost.layoutSubtreeIfNeeded()
         XCTAssertEqual(recorderHost.bounds.size, NSSize(width: 390, height: 844))
         XCTAssertEqual(boardController.store(for: .v02).variant.badgeCode, "V02")
+
+        // Verify RecorderBackdrop active stage atmosphere opacity contract (T6)
+        XCTAssertEqual(RecorderBackdrop.atmosphereOpacity(for: .idle, colorScheme: .dark), 0.10, accuracy: 0.001)
+        XCTAssertEqual(RecorderBackdrop.atmosphereOpacity(for: .idle, colorScheme: .light), 0.28, accuracy: 0.001)
+        for activeStage: RecorderStatus in [.listening, .transcribing, .refining, .done, .error] {
+            XCTAssertEqual(RecorderBackdrop.atmosphereOpacity(for: activeStage, colorScheme: .dark), 0.62, accuracy: 0.001)
+            XCTAssertEqual(RecorderBackdrop.atmosphereOpacity(for: activeStage, colorScheme: .light), 0.46, accuracy: 0.001)
+        }
+        boardController.stageOption = .listening
+        XCTAssertEqual(boardController.store(for: .v02).recorderStatus, .listening)
+        XCTAssertEqual(boardController.store(for: .v02).audioLevel, 0.68, accuracy: 0.01)
+        boardController.stageOption = .refining
+        XCTAssertEqual(boardController.store(for: .v02).recorderStatus, .refining)
+        boardController.stageOption = .idle
     }
 
     @MainActor

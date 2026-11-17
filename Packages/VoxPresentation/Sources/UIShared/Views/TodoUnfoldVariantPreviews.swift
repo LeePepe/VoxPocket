@@ -126,6 +126,8 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
     @Published public var selectedFilter: String = "全部"
     @Published public var speedMultiplier: Double = 1.0
     @Published public var cascadeStageTwoVisible: Bool = false
+    @Published public var recorderStatus: RecorderStatus = .idle
+    @Published public var audioLevel: Float = 0.0
 
     public let historicalTags: [String] = ["#VoxPocket", "#iOS", "#Glass", "#AI", "#Podcast", "#SwiftUI"]
 
@@ -440,7 +442,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            RecorderBackdrop(status: .idle, audioLevel: 0)
+            RecorderBackdrop(status: store.recorderStatus, audioLevel: store.audioLevel)
 
             VStack(alignment: .leading, spacing: 0) {
                 phoneStatusBar
@@ -1399,12 +1401,57 @@ struct TodoUnfoldWrappingFlowLayout: Layout {
 
 // MARK: - 4-Up Interactive Comparison Board (`v01..v04` Side-by-Side)
 
+public enum PreviewAtmosphereStageOption: String, CaseIterable, Identifiable, Sendable {
+    case idle
+    case listening
+    case transcribing
+    case refining
+    case error
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .idle: "Idle"
+        case .listening: "录音"
+        case .transcribing: "转译"
+        case .refining: "润色"
+        case .error: "错误"
+        }
+    }
+
+    public var recorderStatus: RecorderStatus {
+        switch self {
+        case .idle: .idle
+        case .listening: .listening
+        case .transcribing: .transcribing
+        case .refining: .refining
+        case .error: .error
+        }
+    }
+
+    public var simulatedAudioLevel: Float {
+        switch self {
+        case .listening: 0.68
+        default: 0.0
+        }
+    }
+}
+
 @MainActor
 public final class TodoUnfoldFourUpBoardController: ObservableObject {
     @Published public var speedMultiplier: Double = 1.0 {
         didSet {
             for store in stores.values {
                 store.speedMultiplier = speedMultiplier
+            }
+        }
+    }
+    @Published public var stageOption: PreviewAtmosphereStageOption = .idle {
+        didSet {
+            for store in stores.values {
+                store.recorderStatus = stageOption.recorderStatus
+                store.audioLevel = stageOption.simulatedAudioLevel
             }
         }
     }
@@ -1482,14 +1529,25 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
 
             Spacer()
 
+            HStack(spacing: 4) {
+                Text("阶段氛围")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 4)
+                ForEach(PreviewAtmosphereStageOption.allCases) { option in
+                    stageOptionButton(option)
+                }
+            }
+            .padding(4)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+
             HStack(spacing: 6) {
                 Text("慢放倍率")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                speedButton(label: "1.0x 正常", rate: 1.0)
-                speedButton(label: "0.5x 慢放", rate: 0.5)
-                speedButton(label: "0.35x 慢放", rate: 0.35)
-                speedButton(label: "0.25x 逐帧", rate: 0.25)
+                speedButton(label: "1.0x", rate: 1.0)
+                speedButton(label: "0.5x", rate: 0.5)
+                speedButton(label: "0.25x", rate: 0.25)
             }
             .padding(4)
             .background(Color.primary.opacity(0.06), in: Capsule())
@@ -1523,6 +1581,23 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func stageOptionButton(_ option: PreviewAtmosphereStageOption) -> some View {
+        let selected = controller.stageOption == option
+        return Button(action: {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                controller.stageOption = option
+            }
+        }) {
+            Text(option.label)
+                .font(.caption.weight(selected ? .bold : .medium))
+                .foregroundStyle(selected ? .white : .primary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(selected ? Color.accentColor : Color.clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func speedButton(label: String, rate: Double) -> some View {
