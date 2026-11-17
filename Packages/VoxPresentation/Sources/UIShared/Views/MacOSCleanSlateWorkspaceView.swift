@@ -49,6 +49,7 @@ public struct MacOSCleanSlateWorkspaceView: View {
     private let isPreviewDemoMode: Bool
     @State private var aiRunnerConfig: UserAIRunnerConfig = UserAIRunnerConfig()
     @State private var consoleLogLines: [String]
+    @State private var previewDemoOrders: [ICloudAIExecutionOrder] = []
     @State private var isSimulatingPickup: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -607,8 +608,10 @@ public struct MacOSCleanSlateWorkspaceView: View {
 
                     Button(action: triggerSimulatedAutoPickupPass) {
                         Label(
-                            isSimulatingPickup ? "正在执行接单…" : "⚡ 立即轮询并模拟接单",
-                            systemImage: "bolt.horizontal.circle.fill"
+                            isSimulatingPickup
+                                ? "正在同步状态…"
+                                : (isPreviewDemoMode ? "⚡ Preview 模拟接单演示" : "🔄 刷新 iCloud 队列状态"),
+                            systemImage: isPreviewDemoMode ? "bolt.horizontal.circle.fill" : "arrow.clockwise.circle.fill"
                         )
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.white)
@@ -762,6 +765,9 @@ public struct MacOSCleanSlateWorkspaceView: View {
         guard isPreviewDemoMode else {
             return []
         }
+        if !previewDemoOrders.isEmpty {
+            return previewDemoOrders
+        }
         return viewModel.todos.prefix(3).enumerated().map { idx, todo in
             let state: AIOrderExecutionState = idx == 0 ? .running : (todo.executionState == .done ? .completed : .queued)
             let fraction: Double = idx == 0 ? 0.68 : (todo.executionState == .done ? 1.0 : 0.12)
@@ -877,15 +883,32 @@ public struct MacOSCleanSlateWorkspaceView: View {
     }
 
     private func triggerSimulatedAutoPickupPass() {
-        guard let targetTodo = viewModel.todos.first(where: { $0.executionState != .done }) ?? viewModel.todos.first else {
-            return
-        }
+        guard !isSimulatingPickup else { return }
+        isSimulatingPickup = true
         if isPreviewDemoMode {
-            consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] [Preview Demo] 触发 iCloud AIOrders 轮询与接单演示 (todoID=\(targetTodo.id.uuidString.prefix(8)))")
+            consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] [Preview Demo] VOX_PROGRESS: 1.00 · VOX_STATUS: Preview 演示订单已完成")
+            if let first = displayedAIOrders.first {
+                previewDemoOrders = [
+                    first.withState(
+                        .completed,
+                        progressStage: "执行完成 (Preview Demo)",
+                        progressFraction: 1.0,
+                        outputSummary: "完成 \(max(1, first.subtaskCount)) 项步骤",
+                        assignedRunnerName: aiRunnerConfig.runnerDisplayName
+                    )
+                ] + Array(displayedAIOrders.dropFirst())
+            }
+            isSimulatingPickup = false
         } else {
-            consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] 触发 iCloud AIOrders 派单与状态同步 (todoID=\(targetTodo.id.uuidString.prefix(8)))")
+            Task { @MainActor in
+                defer { isSimulatingPickup = false }
+                if let loaded: UserAIRunnerConfig = await UserDefaultsPreferencesStore.shared.getValue(for: .userAIRunnerConfig) {
+                    aiRunnerConfig = loaded
+                }
+                await viewModel.reload()
+                consoleLogLines.append("[\(Self.logTimeFormatter.string(from: Date()))] 已刷新 iCloud AIOrders 队列状态 (活跃订单: \(viewModel.aiOrdersByTodoID.count))")
+            }
         }
-        viewModel.dispatchTodoToICloudAI(targetTodo.id)
     }
 
     private func filterTitle(for filter: TodoStatusFilter) -> String {
