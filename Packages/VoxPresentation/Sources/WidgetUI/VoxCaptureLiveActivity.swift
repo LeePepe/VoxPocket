@@ -214,32 +214,48 @@ public struct VoxCaptureLiveActivity: Widget {
                                 .buttonStyle(.borderedProminent)
                                 .tint(accent)
                             }
-                        } else if let todoID = context.state.todoID, !todoID.isEmpty {
-                            HStack(spacing: 8) {
-                                Button(intent: TodoIslandActionIntent(actionKind: "done", todoID: todoID)) {
-                                    Image(systemName: context.state.phase == .completedReceipt ? "checkmark.circle.fill" : "circle")
-                                        .font(.caption.weight(.bold))
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(accent)
+                        } else {
+                            if let desc = context.state.subtitle, !desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text(desc)
+                                    .font(.caption2)
+                                    .foregroundStyle(.white.opacity(0.75))
+                                    .lineLimit(1)
+                            }
 
-                                Button(intent: TodoIslandActionIntent(actionKind: "subtask", todoID: todoID)) {
-                                    Text("○ \(context.state.completedSubtasks)/\(max(1, context.state.totalSubtasks))")
-                                        .font(.caption2.weight(.bold).monospacedDigit())
+                            if !context.state.subtasks.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(context.state.subtasks) { sub in
+                                            Button(intent: TodoIslandActionIntent(actionKind: "subtask", todoID: context.state.todoID ?? "")) {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
+                                                        .font(.caption2.weight(.bold))
+                                                    Text(sub.title)
+                                                        .font(.caption2.weight(.medium))
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            .buttonStyle(.bordered)
+                                        }
+                                    }
                                 }
-                                .buttonStyle(.bordered)
+                            }
 
-                                Button(intent: TodoIslandActionIntent(actionKind: "snooze15m", todoID: todoID)) {
-                                    Text("⏰ +15m")
-                                        .font(.caption2.weight(.semibold))
-                                }
-                                .buttonStyle(.bordered)
+                            if let todoID = context.state.todoID, !todoID.isEmpty {
+                                HStack(spacing: 8) {
+                                    Button(intent: ToggleQuickCaptureIntent()) {
+                                        Text("🎙️ 语音补录")
+                                            .font(.caption2.weight(.semibold))
+                                    }
+                                    .buttonStyle(.bordered)
 
-                                Button(intent: TodoIslandActionIntent(actionKind: "deferMorning", todoID: todoID)) {
-                                    Text("🌙 明早 08:35")
-                                        .font(.caption2.weight(.semibold))
+                                    Button(intent: TodoIslandActionIntent(actionKind: "aiDoIt", todoID: todoID)) {
+                                        Text("✨ AI 直接做")
+                                            .font(.caption2.weight(.bold))
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(accent)
                                 }
-                                .buttonStyle(.bordered)
                             }
                         }
                     }

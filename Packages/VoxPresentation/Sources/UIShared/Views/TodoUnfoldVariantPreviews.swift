@@ -1124,8 +1124,6 @@ public struct TodoUnfoldVariantCardView: View {
             aiDoItActionCapsule
 
             Spacer(minLength: 4)
-
-            reminderMicroBadge
         }
         .padding(.top, 2)
     }
@@ -1741,6 +1739,28 @@ public enum PreviewHostTopTab: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+public enum DynamicIslandDataPreset: String, CaseIterable, Identifiable, Sendable {
+    case fullWithSubtasksAndDescription = "full"
+    case subtasksOnlyNoDescription = "subtasks-only"
+    case descriptionOnlyNoSubtasks = "desc-only"
+    case minimalTitleOnly = "title-only"
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .fullWithSubtasksAndDescription:
+            "有拆分 + 有 Description"
+        case .subtasksOnlyNoDescription:
+            "仅拆分 (无 Description)"
+        case .descriptionOnlyNoSubtasks:
+            "仅 Description (无拆分)"
+        case .minimalTitleOnly:
+            "无拆分 + 无 Description"
+        }
+    }
+}
+
 public enum DynamicIslandPreviewVariantKind: String, CaseIterable, Identifiable, Sendable {
     case diV01 = "di-v01"
     case diV02 = "di-v02"
@@ -1752,33 +1772,52 @@ public enum DynamicIslandPreviewVariantKind: String, CaseIterable, Identifiable,
 
     public var title: String {
         switch self {
-        case .diV01: "极简左勾选 + 双顺延胶囊岛 (高 112pt)"
-        case .diV02: "左右分栏 · 双列子步骤快勾岛 (高 148pt)"
-        case .diV03: "四阶段声波流光 + AI 提炼舞台岛 (高 156pt)"
-        case .diV04: "水平 4 节点作息习惯时间轴轨道岛 (高 138pt)"
+        case .diV01: "经典三段层叠岛 (横滑拆分 + 按需 Description + 双核动作)"
+        case .diV02: "上层左右 Bento + 下层大号横滑步骤卡岛"
+        case .diV03: "流光竖线引言 Description + 编号横滑步骤轨岛"
+        case .diV04: "极简顶栏内联动作 + 按需自收缩横滑岛"
         }
     }
 
     public var summary: String {
         switch self {
         case .diV01:
-            "极简上下两层 (112pt)：上层左侧直接点按 [○/✓] 圆环触发完成 + P0 + 标题 + ⏳14:59；下层仅平铺 [⏰ +15m] 与 [🌙 明早 08:35 (习惯)] 双顺延胶囊，无子任务列表、无多余完成按钮。"
+            "第 1 行 [○/✓] + P0 + 标题 + 进度；第 2 行只读 Description (空则隐藏 0pt)；第 3 行 ScrollView(.horizontal) 横滑展示全部拆分步骤 (空则隐藏)；底栏固定 [🎙️ 语音补录] 与 [✨ AI 直接做]。"
         case .diV02:
-            "HStack 左右分栏 (148pt)：左栏 (118pt) 放环形进度圈 1/3 + 短标题 + [+15m] 芯片；右栏 (224pt) 上下并列 2 张圆角子任务微卡，原位点满 3/3 自动完成，零多余完成按钮。"
+            "上层 HStack 左右 Bento（左侧 P0+标题+按需只读 Description，右侧紧凑上下叠放 [🎙️ 语音补录] 与 [✨ AI 直接做]）；下层 ScrollView(.horizontal) 横滑大号圆角步骤微卡。"
         case .diV03:
-            "四阶段声波流光舞台 (156pt)：顶栏可点按切换『录音/转译/润色/入库』阶段胶囊，中央 20 根高低起伏 AtmosphereGlass 彩色声波柱 + #VoxPocket #iOS 标签气泡，底栏 [🎙️ 语音追补] 与 [✨ AI do it]。"
+            "顶栏流光圆点 + 标题 + 进度；中上层带左侧彩色竖线的磨砂引言框展示只读 Description (空则不展示)；中下层编号胶囊 ScrollView(.horizontal) 横滑全部子步骤；底栏 [🎙️ 语音补录] + [✨ AI 直接做]。"
         case .diV04:
-            "水平作息时间轴轨道 (138pt)：顶栏 [○/✓] 勾选环 + 标题 + 当前锚点，中间横跨 4 节点作息轨道『🌅 08:35 ━━●━━ ☀️ 12:30 ━━ 🌆 18:30 ━━ 🌙 21:00』，点节点直接切换提醒时段。"
+            "顶栏右侧直接内联 [🎙️ 补录] 与 [✨ AI 直接做] 紧凑胶囊（省去底栏）；下方按需展示 1 行 Description 与紧凑横滑步骤条；当两者皆空时自动收缩为 64pt 极简窄岛！"
+        }
+    }
+
+    public func expandedHeight(hasDescription: Bool, hasSubtasks: Bool) -> CGFloat {
+        switch self {
+        case .diV01:
+            var h: CGFloat = 86 // Header + Bottom action bar
+            if hasDescription { h += 24 }
+            if hasSubtasks { h += 38 }
+            return h
+        case .diV02:
+            var h: CGFloat = hasDescription ? 92 : 74 // Top Bento with right actions
+            if hasSubtasks { h += 54 }
+            return h
+        case .diV03:
+            var h: CGFloat = 88 // Header + Bottom action bar
+            if hasDescription { h += 32 }
+            if hasSubtasks { h += 38 }
+            return h
+        case .diV04:
+            var h: CGFloat = 58 // Single top bar with inline actions
+            if hasDescription { h += 22 }
+            if hasSubtasks { h += 38 }
+            return h
         }
     }
 
     public var expandedHeight: CGFloat {
-        switch self {
-        case .diV01: 112
-        case .diV02: 148
-        case .diV03: 156
-        case .diV04: 138
-        }
+        expandedHeight(hasDescription: true, hasSubtasks: true)
     }
 }
 
@@ -1819,7 +1858,7 @@ public enum DynamicIslandSurfaceBezelMode: String, CaseIterable, Identifiable, S
 
 @MainActor
 public final class TodoUnfoldFourUpBoardController: ObservableObject {
-    @Published public var activeTab: PreviewHostTopTab = .todoAndVerticalFilter
+    @Published public var activeTab: PreviewHostTopTab = .dynamicIslandFourVariants
     @Published public var speedMultiplier: Double = 1.0 {
         didSet {
             for store in stores.values {
@@ -1851,6 +1890,13 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
         .diV03: .refining,
         .diV04: .idle
     ]
+    @Published public var islandDataPreset: DynamicIslandDataPreset = .fullWithSubtasksAndDescription {
+        didSet {
+            applyIslandDataPreset(islandDataPreset)
+        }
+    }
+    @Published public var islandSubtasksByVariant: [DynamicIslandPreviewVariantKind: [VoiceTodoSubtask]] = [:]
+    @Published public var islandDescriptionByVariant: [DynamicIslandPreviewVariantKind: String] = [:]
     @Published public var islandCompletedSubtasksByVariant: [DynamicIslandPreviewVariantKind: Int] = [
         .diV01: 1,
         .diV02: 1,
@@ -1870,6 +1916,8 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
         .diV04: "08:35"
     ]
     @Published public var islandReceiptByVariant: [DynamicIslandPreviewVariantKind: String] = [:]
+    @Published public var islandAIStatusByVariant: [DynamicIslandPreviewVariantKind: String] = [:]
+    private var islandAITasks: [DynamicIslandPreviewVariantKind: Task<Void, Never>] = [:]
     @Published public var colorScheme: ColorScheme = .dark
     @Published public var allExpanded: Bool = true
     @Published public var allTagTraysOpen: Bool = false
@@ -1886,6 +1934,79 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
             map[kind] = s
         }
         self.stores = map
+        applyIslandDataPreset(.fullWithSubtasksAndDescription)
+    }
+
+    public func applyIslandDataPreset(_ preset: DynamicIslandDataPreset) {
+        let defaultDesc = "整理下周设计评审要展示的 iOS 26 液态玻璃底栏与灵动岛横滑走查清单"
+        let defaultSteps: [VoiceTodoSubtask] = [
+            VoiceTodoSubtask(title: "录制默认空态与声波走查", isCompleted: true),
+            VoiceTodoSubtask(title: "验证左下竖向玻璃筛选", isCompleted: false),
+            VoiceTodoSubtask(title: "核对提醒时间与零跳变", isCompleted: false),
+            VoiceTodoSubtask(title: "检查 iCloud 自动接单回执", isCompleted: false)
+        ]
+        for kind in DynamicIslandPreviewVariantKind.allCases {
+            switch preset {
+            case .fullWithSubtasksAndDescription:
+                islandDescriptionByVariant[kind] = defaultDesc
+                islandSubtasksByVariant[kind] = defaultSteps
+            case .subtasksOnlyNoDescription:
+                islandDescriptionByVariant[kind] = ""
+                islandSubtasksByVariant[kind] = defaultSteps
+            case .descriptionOnlyNoSubtasks:
+                islandDescriptionByVariant[kind] = defaultDesc
+                islandSubtasksByVariant[kind] = []
+            case .minimalTitleOnly:
+                islandDescriptionByVariant[kind] = ""
+                islandSubtasksByVariant[kind] = []
+            }
+            let subs = islandSubtasksByVariant[kind] ?? []
+            islandCompletedSubtasksByVariant[kind] = subs.filter(\.isCompleted).count
+            islandIsDoneByVariant[kind] = false
+            islandReceiptByVariant[kind] = nil
+        }
+    }
+
+    public func toggleIslandSubtask(for kind: DynamicIslandPreviewVariantKind, subtaskID: UUID) {
+        guard var subs = islandSubtasksByVariant[kind],
+              let idx = subs.firstIndex(where: { $0.id == subtaskID }) else { return }
+        subs[idx] = subs[idx].withCompleted(!subs[idx].isCompleted)
+        islandSubtasksByVariant[kind] = subs
+        let completed = subs.filter(\.isCompleted).count
+        islandCompletedSubtasksByVariant[kind] = completed
+        islandIsDoneByVariant[kind] = (!subs.isEmpty && completed == subs.count)
+        islandReceiptByVariant[kind] = "\(completed)/\(subs.count)"
+    }
+
+    public func appendVoiceSubtaskOnIsland(for kind: DynamicIslandPreviewVariantKind) {
+        var subs = islandSubtasksByVariant[kind] ?? []
+        let nextIndex = subs.count + 1
+        subs.append(VoiceTodoSubtask(title: "🎙️ 语音补录步骤 #\(nextIndex)", isCompleted: false))
+        islandSubtasksByVariant[kind] = subs
+        let completed = subs.filter(\.isCompleted).count
+        islandCompletedSubtasksByVariant[kind] = completed
+        islandReceiptByVariant[kind] = "已补录 (\(completed)/\(subs.count))"
+    }
+
+    public func triggerAIDirectlyOnIsland(for kind: DynamicIslandPreviewVariantKind) {
+        islandAITasks[kind]?.cancel()
+        islandAIStatusByVariant[kind] = "☁️ 已上传 iCloud…"
+        let scale = max(0.2, 1.0 / max(0.2, speedMultiplier))
+        islandAITasks[kind] = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: .milliseconds(Int(350 * scale)))
+            guard !Task.isCancelled else { return }
+            self.islandAIStatusByVariant[kind] = "⚡ Mac 执行中…"
+            try? await Task.sleep(for: .milliseconds(Int(500 * scale)))
+            guard !Task.isCancelled else { return }
+            self.islandAIStatusByVariant[kind] = "✅ AI 已完成"
+            if var subs = self.islandSubtasksByVariant[kind], !subs.isEmpty {
+                for i in subs.indices { subs[i] = subs[i].withCompleted(true) }
+                self.islandSubtasksByVariant[kind] = subs
+                self.islandCompletedSubtasksByVariant[kind] = subs.count
+            }
+            self.islandIsDoneByVariant[kind] = true
+        }
     }
 
     public func store(for kind: TodoUnfoldVariantKind) -> TodoUnfoldVariantPreviewStore {
@@ -2025,6 +2146,34 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
             }
 
             HStack(spacing: 14) {
+                if controller.activeTab == .dynamicIslandFourVariants {
+                    HStack(spacing: 4) {
+                        Text("灵动岛要素预设")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 4)
+                        ForEach(DynamicIslandDataPreset.allCases) { preset in
+                            let selected = controller.islandDataPreset == preset
+                            Button(action: {
+                                let scale = max(0.15, 1.0 / max(0.15, controller.speedMultiplier))
+                                withAnimation(.spring(response: 0.30 * scale, dampingFraction: 0.86)) {
+                                    controller.islandDataPreset = preset
+                                }
+                            }) {
+                                Text(preset.label)
+                                    .font(.caption.weight(selected ? .bold : .medium))
+                                    .foregroundStyle(selected ? .white : .primary)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(selected ? Color.accentColor : Color.clear, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(4)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+                }
+
                 if controller.activeTab == .recorderFiveStageAtmosphere {
                     HStack(spacing: 4) {
                         Text("录音页 5 阶段色彩流转")
@@ -2267,8 +2416,13 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
 
     private func dynamicIslandPhoneViewport(for kind: DynamicIslandPreviewVariantKind) -> some View {
         let mode = controller.islandModeByVariant[kind] ?? .expanded
-        let completedCount = controller.islandCompletedSubtasksByVariant[kind] ?? 1
+        let subtasks = controller.islandSubtasksByVariant[kind] ?? []
+        let descriptionText = (controller.islandDescriptionByVariant[kind] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasDescription = !descriptionText.isEmpty
+        let hasSubtasks = !subtasks.isEmpty
+        let completedCount = subtasks.filter(\.isCompleted).count
         let receipt = controller.islandReceiptByVariant[kind]
+        let aiStatus = controller.islandAIStatusByVariant[kind]
         let stage = controller.islandPhaseByVariant[kind] ?? .listening
         let accent: Color = {
             switch stage {
@@ -2301,9 +2455,9 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                     .padding(.horizontal, 24)
                     .frame(height: 37)
 
-                    // Single continuous morphing #000000 Dynamic Island container with per-variant expanded height
+                    // Single continuous morphing #000000 Dynamic Island container with conditional height shrinkage
                     let effectiveHeight: CGFloat = (mode == .expanded || mode == .lockScreenBanner)
-                        ? kind.expandedHeight
+                        ? kind.expandedHeight(hasDescription: hasDescription, hasSubtasks: hasSubtasks)
                         : mode.targetSize.height
                     ZStack {
                         RoundedRectangle(cornerRadius: mode.cornerRadius, style: .continuous)
@@ -2324,9 +2478,11 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                             mode: mode,
                             accent: accent,
                             stage: stage,
+                            descriptionText: descriptionText,
+                            subtasks: subtasks,
                             completedCount: completedCount,
                             isDone: controller.islandIsDoneByVariant[kind] ?? false,
-                            activeAnchor: controller.islandAnchorByVariant[kind] ?? "08:35",
+                            aiStatus: aiStatus,
                             receipt: receipt,
                             spring: spring
                         )
@@ -2364,37 +2520,6 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                 .padding(3)
                 .background(.ultraThinMaterial, in: Capsule())
 
-                TodoUnfoldVariantCardView(
-                    variant: .v02,
-                    todo: controller.store(for: .v02).todos[0],
-                    aiOrder: controller.store(for: .v02).aiOrdersByTodoID[controller.store(for: .v02).todos[0].id],
-                    isExpanded: true,
-                    expandFraction: 1.0,
-                    isTagTrayOpen: false,
-                    cascadeStageTwoVisible: true,
-                    historicalTags: controller.store(for: .v02).historicalTags,
-                    speedMultiplier: controller.speedMultiplier,
-                    onToggleExpand: {},
-                    onToggleTagTray: {},
-                    onCycleStatus: {},
-                    onCyclePriority: {},
-                    onToggleTag: { _ in },
-                    onAddTag: { _ in },
-                    onToggleSubtask: { _ in
-                        withAnimation(spring) {
-                            controller.advanceIslandSubtask(for: kind)
-                        }
-                    },
-                    onUpdateTitle: { _ in },
-                    onUpdateSubtaskTitle: { _, _ in },
-                    onAppendSubtask: { _ in },
-                    onDispatchAI: {
-                        controller.store(for: .v02).dispatchTodoToICloudAI(todoID: controller.store(for: .v02).todos[0].id)
-                    }
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
                 Spacer()
             }
         }
@@ -2412,9 +2537,11 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
         mode: DynamicIslandSurfaceBezelMode,
         accent: Color,
         stage: PreviewAtmosphereStageOption,
+        descriptionText: String,
+        subtasks: [VoiceTodoSubtask],
         completedCount: Int,
         isDone: Bool,
-        activeAnchor: String,
+        aiStatus: String?,
         receipt: String?,
         spring: Animation
     ) -> some View {
@@ -2427,13 +2554,13 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
             HStack {
                 HStack(spacing: 4) {
                     Circle().fill(accent).frame(width: 7, height: 7)
-                    Text(kind == .diV03 ? stage.label : "P0 走查")
+                    Text("P0 走查")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.white)
                 }
                 .padding(.leading, 12)
                 Spacer()
-                Text(receipt ?? "\(completedCount)/3")
+                Text(aiStatus ?? receipt ?? (subtasks.isEmpty ? "就绪" : "\(completedCount)/\(subtasks.count)"))
                     .font(.system(size: 11, weight: .bold).monospacedDigit())
                     .foregroundStyle(accent)
                     .padding(.trailing, 12)
@@ -2441,267 +2568,24 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
         case .expanded, .lockScreenBanner:
             switch kind {
             case .diV01:
-                // ① DI-v01: Height 112pt Minimal 2-Row Layout (Left [○/✓] Check Circle + P0 + Title + ⏳14:59 | Bottom ONLY [⏰ +15m] & [🌙 明早 08:35 (习惯)], ZERO subtask list & ZERO Done button)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
+                // ① DI-v01: 经典三段层叠岛 (Classic Stacked 3-Tier: Header + Conditional Read-Only Description + Conditional Horizontal ScrollView of ALL Subtasks + Bottom [🎙️ 语音补录] & [✨ AI 直接做])
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
                         Button(action: {
                             withAnimation(spring) { controller.toggleIslandDone(for: kind) }
                         }) {
                             Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(isDone ? Color.green : accent)
                         }
                         .buttonStyle(.plain)
 
                         Text("P0")
-                            .font(.system(size: 10, weight: .black).monospacedDigit())
+                            .font(.system(size: 9.5, weight: .black).monospacedDigit())
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
+                            .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(Color.red.opacity(0.85), in: Capsule())
-
-                        Text("液态玻璃交互走查")
-                            .font(.system(size: 13.5, weight: .bold))
-                            .foregroundStyle(isDone ? .white.opacity(0.55) : .white)
-                            .strikethrough(isDone, color: .white.opacity(0.45))
-                            .lineLimit(1)
-
-                        Spacer(minLength: 4)
-
-                        Text(receipt ?? "⏳ 14:59")
-                            .font(.system(size: 12, weight: .bold).monospacedDigit())
-                            .foregroundStyle(isDone ? Color.green : accent)
-                    }
-
-                    HStack(spacing: 8) {
-                        Button(action: {
-                            withAnimation(spring) { controller.snoozeIsland15m(for: kind) }
-                        }) {
-                            Text("⏰ +15m")
-                                .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                                .background(Color.white.opacity(0.13), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(action: {
-                            withAnimation(spring) { controller.deferIslandMorning(for: kind) }
-                        }) {
-                            Text("🌙 明早 08:35 (习惯)")
-                                .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(accent)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                                .background(accent.opacity(0.16), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
-            case .diV02:
-                // ② DI-v02: Height 148pt Left-Right Split HStack Layout (Left 118pt: Progress Ring 1/3 + Short Title + [+15m] Chip | Right 224pt: 2 Stacked Subtask Mini-Cards, 3/3 Auto-Completes, ZERO Done button)
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.white.opacity(0.18), lineWidth: 3)
-                                Circle()
-                                    .trim(from: 0, to: CGFloat(completedCount) / 3.0)
-                                    .stroke(completedCount >= 3 ? Color.green : accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                                    .rotationEffect(.degrees(-90))
-                                Text("\(completedCount)/3")
-                                    .font(.system(size: 9.5, weight: .black).monospacedDigit())
-                                    .foregroundStyle(.white)
-                            }
-                            .frame(width: 30, height: 30)
-
-                            Text("P0")
-                                .font(.system(size: 9.5, weight: .black).monospacedDigit())
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Color.red.opacity(0.85), in: Capsule())
-                        }
-
-                        Text("液态玻璃走查")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(completedCount >= 3 ? .white.opacity(0.55) : .white)
-                            .strikethrough(completedCount >= 3, color: .white.opacity(0.45))
-                            .lineLimit(1)
-
-                        Button(action: {
-                            withAnimation(spring) { controller.snoozeIsland15m(for: kind) }
-                        }) {
-                            Text(receipt ?? "⏰ +15m")
-                                .font(.system(size: 10.5, weight: .bold).monospacedDigit())
-                                .foregroundStyle(accent)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(accent.opacity(0.16), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .frame(width: 118, alignment: .leading)
-
-                    VStack(spacing: 6) {
-                        ForEach(0..<2, id: \.self) { rowIdx in
-                            let stepChecked = completedCount > (rowIdx + 1) || (rowIdx == 0 && completedCount >= 2)
-                            let stepTitle = rowIdx == 0 ? "验证双按钮底栏手势" : "核对状态与创建时间"
-                            Button(action: {
-                                withAnimation(spring) { controller.advanceIslandSubtask(for: kind) }
-                            }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: stepChecked ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(stepChecked ? Color.green : accent)
-                                    Text(stepTitle)
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundStyle(stepChecked ? .white.opacity(0.55) : .white)
-                                        .strikethrough(stepChecked, color: .white.opacity(0.45))
-                                        .lineLimit(1)
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 10)
-                                .frame(width: 224, alignment: .leading)
-                                .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .frame(width: 224)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-
-            case .diV03:
-                // ③ DI-v03: Height 156pt 4-Stage Waveform Aura + Live AI Extraction Stage (Top: 录音/转译/润色/入库 Stage Switcher | Center: 20 AtmosphereGlass Waveform Bars + #VoxPocket #iOS Bubbles | Bottom: [🎙️ 语音追补] & [✨ AI do it])
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(accent)
-                        Text("四阶段流光")
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundStyle(.white)
-
-                        Spacer(minLength: 4)
-
-                        ForEach(
-                            [
-                                (PreviewAtmosphereStageOption.listening, "录音"),
-                                (.transcribing, "转译"),
-                                (.refining, "润色"),
-                                (.idle, "入库")
-                            ],
-                            id: \.0
-                        ) { opt, label in
-                            let isCurrent = stage == opt
-                            Button(action: {
-                                withAnimation(spring) {
-                                    controller.islandPhaseByVariant[kind] = opt
-                                }
-                            }) {
-                                Text(label)
-                                    .font(.system(size: 9.5, weight: isCurrent ? .bold : .medium))
-                                    .foregroundStyle(isCurrent ? .black : .white.opacity(0.75))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(isCurrent ? accent : Color.white.opacity(0.10), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        HStack(alignment: .center, spacing: 3) {
-                            ForEach(0..<20, id: \.self) { barIdx in
-                                let heights: [CGFloat] = [8, 14, 22, 16, 26, 12, 20, 28, 15, 24, 18, 10, 22, 27, 14, 19, 25, 13, 17, 9]
-                                Capsule()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [accent, Color.purple.opacity(0.85)],
-                                            startPoint: .bottom,
-                                            endPoint: .top
-                                        )
-                                    )
-                                    .frame(width: 3.5, height: heights[barIdx % heights.count])
-                            }
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                        Spacer(minLength: 4)
-
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("#VoxPocket")
-                                .font(.system(size: 9.5, weight: .bold).monospacedDigit())
-                                .foregroundStyle(accent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(accent.opacity(0.16), in: Capsule())
-                            Text("#iOS · 09:00")
-                                .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.white.opacity(0.82))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.10), in: Capsule())
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Button(action: {
-                            withAnimation(spring) {
-                                controller.islandPhaseByVariant[kind] = .listening
-                                controller.islandReceiptByVariant[kind] = "🎙️ 正在语音追补…"
-                            }
-                        }) {
-                            Text("🎙️ 语音追补")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.13), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(action: {
-                            withAnimation(spring) {
-                                controller.store(for: .v02).dispatchTodoToICloudAI(todoID: controller.store(for: .v02).todos[0].id)
-                                controller.islandReceiptByVariant[kind] = "✨ AI 已接单"
-                            }
-                        }) {
-                            Text(receipt ?? "✨ AI do it")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(accent, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-
-            case .diV04:
-                // ④ DI-v04: Height 138pt Horizontal 4-Node Habit Timeline Track Layout (Top: [○/✓] Check Ring + Title + Active Anchor | Middle/Bottom: 🌅 08:35 ━━●━━ ☀️ 12:30 ━━ 🌆 18:30 ━━ 🌙 21:00 Interactive Track)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
-                        Button(action: {
-                            withAnimation(spring) { controller.toggleIslandDone(for: kind) }
-                        }) {
-                            Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(isDone ? Color.green : accent)
-                        }
-                        .buttonStyle(.plain)
 
                         Text("液态玻璃交互走查")
                             .font(.system(size: 13, weight: .bold))
@@ -2711,70 +2595,348 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
 
                         Spacer(minLength: 4)
 
-                        Text(receipt ?? "锚点 \(activeAnchor)")
-                            .font(.system(size: 11, weight: .bold).monospacedDigit())
-                            .foregroundStyle(accent)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(accent.opacity(0.16), in: Capsule())
+                        if !subtasks.isEmpty {
+                            Text(receipt ?? "\(completedCount)/\(subtasks.count)")
+                                .font(.system(size: 11, weight: .bold).monospacedDigit())
+                                .foregroundStyle(accent)
+                        }
                     }
 
-                    // 4-Node Horizontal Habit Timeline Track
-                    VStack(spacing: 6) {
-                        HStack(spacing: 0) {
-                            let anchors: [(icon: String, time: String, label: String)] = [
-                                ("🌅", "08:35", "早间"),
-                                ("☀️", "12:30", "午间"),
-                                ("🌆", "18:30", "傍晚"),
-                                ("🌙", "21:00", "夜间")
-                            ]
-                            ForEach(Array(anchors.enumerated()), id: \.offset) { idx, item in
-                                let selected = activeAnchor == item.time
-                                Button(action: {
-                                    withAnimation(spring) {
-                                        controller.selectIslandHabitAnchor(item.time, for: kind)
-                                    }
-                                }) {
-                                    VStack(spacing: 4) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(selected ? accent : Color.white.opacity(0.18))
-                                                .frame(width: selected ? 14 : 9, height: selected ? 14 : 9)
-                                            if selected {
-                                                Circle()
-                                                    .strokeBorder(Color.white, lineWidth: 2)
-                                                    .frame(width: 14, height: 14)
-                                            }
-                                        }
-                                        Text("\(item.icon) \(item.time)")
-                                            .font(.system(size: 10, weight: selected ? .bold : .medium).monospacedDigit())
-                                            .foregroundStyle(selected ? accent : .white.opacity(0.72))
-                                    }
-                                }
-                                .buttonStyle(.plain)
+                    if !descriptionText.isEmpty {
+                        Text(descriptionText)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.74))
+                            .lineLimit(1)
+                    }
 
-                                if idx < anchors.count - 1 {
-                                    Rectangle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [accent.opacity(0.55), Color.white.opacity(0.18)],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .frame(height: 2)
-                                        .padding(.bottom, 14)
+                    if !subtasks.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(subtasks) { sub in
+                                    Button(action: {
+                                        withAnimation(spring) {
+                                            controller.toggleIslandSubtask(for: kind, subtaskID: sub.id)
+                                        }
+                                    }) {
+                                        HStack(spacing: 5) {
+                                            Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundStyle(sub.isCompleted ? Color.green : accent)
+                                            Text(sub.title)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundStyle(sub.isCompleted ? .white.opacity(0.55) : .white)
+                                                .strikethrough(sub.isCompleted, color: .white.opacity(0.45))
+                                                .lineLimit(1)
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color.white.opacity(0.10), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+
+                    islandVoiceAndAIDualActionBar(for: kind, accent: accent, aiStatus: aiStatus, spring: spring)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+            case .diV02:
+                // ② DI-v02: 上层左右 Bento + 下层大号横滑步骤卡岛 (Top Split Bento with Right Actions + Bottom Full-Width Horizontal Subtask Cards)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 5) {
+                                Button(action: {
+                                    withAnimation(spring) { controller.toggleIslandDone(for: kind) }
+                                }) {
+                                    Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 13.5, weight: .bold))
+                                        .foregroundStyle(isDone ? Color.green : accent)
+                                }
+                                .buttonStyle(.plain)
+
+                                Text("P0")
+                                    .font(.system(size: 9, weight: .black).monospacedDigit())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1.5)
+                                    .background(Color.red.opacity(0.85), in: Capsule())
+
+                                Text("液态玻璃交互走查")
+                                    .font(.system(size: 12.5, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                            }
+
+                            if !descriptionText.isEmpty {
+                                Text(descriptionText)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.white.opacity(0.72))
+                                    .lineLimit(2)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        VStack(spacing: 5) {
+                            Button(action: {
+                                withAnimation(spring) { controller.appendVoiceSubtaskOnIsland(for: kind) }
+                            }) {
+                                Text("🎙️ 语音补录")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(Color.white.opacity(0.14), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(action: {
+                                withAnimation(spring) { controller.triggerAIDirectlyOnIsland(for: kind) }
+                            }) {
+                                Text(aiStatus ?? "✨ AI 直接做")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(accent, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    if !subtasks.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(subtasks) { sub in
+                                    Button(action: {
+                                        withAnimation(spring) {
+                                            controller.toggleIslandSubtask(for: kind, subtaskID: sub.id)
+                                        }
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(sub.isCompleted ? Color.green : accent)
+                                            Text(sub.title)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundStyle(sub.isCompleted ? .white.opacity(0.55) : .white)
+                                                .strikethrough(sub.isCompleted, color: .white.opacity(0.45))
+                                                .lineLimit(1)
+                                        }
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 9)
+                                        .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+            case .diV03:
+                // ③ DI-v03: 流光竖线引言槽 + 编号横滑步骤轨 + 底部双核动作岛 (Atmosphere Quote Description + Numbered Horizontal Rail)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(accent)
+                            .frame(width: 8, height: 8)
+
+                        Text("液态玻璃交互走查")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 4)
+
+                        if !subtasks.isEmpty {
+                            Text("\(completedCount)/\(subtasks.count) 步")
+                                .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                                .foregroundStyle(accent)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(accent.opacity(0.16), in: Capsule())
+                        }
+                    }
+
+                    if !descriptionText.isEmpty {
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(accent)
+                                .frame(width: 2.5, height: 16)
+                            Text(descriptionText)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.white.opacity(0.80))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    }
+
+                    if !subtasks.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(Array(subtasks.enumerated()), id: \.element.id) { idx, sub in
+                                    Button(action: {
+                                        withAnimation(spring) {
+                                            controller.toggleIslandSubtask(for: kind, subtaskID: sub.id)
+                                        }
+                                    }) {
+                                        HStack(spacing: 5) {
+                                            Text("\(idx + 1)")
+                                                .font(.system(size: 9.5, weight: .black).monospacedDigit())
+                                                .foregroundStyle(sub.isCompleted ? .black : accent)
+                                                .frame(width: 15, height: 15)
+                                                .background(sub.isCompleted ? Color.green : accent.opacity(0.20), in: Circle())
+                                            Text(sub.title)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundStyle(sub.isCompleted ? .white.opacity(0.55) : .white)
+                                                .strikethrough(sub.isCompleted, color: .white.opacity(0.45))
+                                                .lineLimit(1)
+                                        }
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 6)
+                                        .background(Color.white.opacity(0.09), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+
+                    islandVoiceAndAIDualActionBar(for: kind, accent: accent, aiStatus: aiStatus, spring: spring)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+            case .diV04:
+                // ④ DI-v04: 极简顶栏内联动作 + 按需自收缩横滑岛 (Ultra-Compact Header-Inline [🎙️ 补录] & [✨ AI 直接做] + Auto-Shrinking Description & Subtask Rail)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Button(action: {
+                            withAnimation(spring) { controller.toggleIslandDone(for: kind) }
+                        }) {
+                            Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(isDone ? Color.green : accent)
+                        }
+                        .buttonStyle(.plain)
+
+                        Text("液态玻璃交互走查")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 4)
+
+                        Button(action: {
+                            withAnimation(spring) { controller.appendVoiceSubtaskOnIsland(for: kind) }
+                        }) {
+                            Text("🎙️ 补录")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.14), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: {
+                            withAnimation(spring) { controller.triggerAIDirectlyOnIsland(for: kind) }
+                        }) {
+                            Text(aiStatus ?? "✨ AI 直接做")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(accent, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if !descriptionText.isEmpty {
+                        Text(descriptionText)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineLimit(1)
+                    }
+
+                    if !subtasks.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(subtasks) { sub in
+                                    Button(action: {
+                                        withAnimation(spring) {
+                                            controller.toggleIslandSubtask(for: kind, subtaskID: sub.id)
+                                        }
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
+                                                .font(.system(size: 10.5, weight: .bold))
+                                                .foregroundStyle(sub.isCompleted ? Color.green : accent)
+                                            Text(sub.title)
+                                                .font(.system(size: 10.5, weight: .medium))
+                                                .foregroundStyle(sub.isCompleted ? .white.opacity(0.55) : .white)
+                                                .strikethrough(sub.isCompleted, color: .white.opacity(0.45))
+                                                .lineLimit(1)
+                                        }
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 5)
+                                        .background(Color.white.opacity(0.10), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             }
+        }
+    }
+
+    private func islandVoiceAndAIDualActionBar(
+        for kind: DynamicIslandPreviewVariantKind,
+        accent: Color,
+        aiStatus: String?,
+        spring: Animation
+    ) -> some View {
+        HStack(spacing: 8) {
+            Button(action: {
+                withAnimation(spring) {
+                    controller.appendVoiceSubtaskOnIsland(for: kind)
+                }
+            }) {
+                Text("🎙️ 语音补录")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.13), in: Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: {
+                withAnimation(spring) {
+                    controller.triggerAIDirectlyOnIsland(for: kind)
+                }
+            }) {
+                Text(aiStatus ?? "✨ AI 直接做")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
         }
     }
 

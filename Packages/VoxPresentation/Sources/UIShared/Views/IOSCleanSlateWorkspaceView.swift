@@ -811,23 +811,41 @@ private struct IOSTodoExpandableCard: View {
             .accessibilityLabel("优先级：" + todo.priority.rawValue)
             .accessibilityIdentifier("vox.todo.priority.pill")
 
-            if let scheduledAt = todo.scheduledAt {
+            if todo.scheduledAt != nil || isExpanded {
                 Button(action: { onShiftReminderMinutes(30) }) {
                     HStack(spacing: 3) {
-                        Image(systemName: "bell.fill")
+                        Image(systemName: todo.scheduledAt == nil ? "bell" : "bell.fill")
                             .font(.system(size: 10, weight: .bold))
-                        Text(reminderPillText(for: scheduledAt))
+                        Text(todo.scheduledAt.map(reminderPillText(for:)) ?? "设置提醒")
                             .font(.system(size: 11, weight: .semibold).monospacedDigit())
                     }
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(todo.scheduledAt == nil ? Color.secondary : Color.accentColor)
                     .padding(.horizontal, 7)
                     .frame(height: 24)
-                    .background(Color.accentColor.opacity(0.14), in: Capsule())
+                    .background(
+                        (todo.scheduledAt == nil ? Color.secondary : Color.accentColor).opacity(0.14),
+                        in: Capsule()
+                    )
                 }
                 .buttonStyle(AppPressableButtonStyle())
                 .allowsHitTesting(isExpanded)
-                .accessibilityLabel("提醒时间：" + reminderPillText(for: scheduledAt))
-                .accessibilityIdentifier("vox.todo.header.reminder.pill")
+                .contextMenu {
+                    Button("早上 09:00") { onAssignReminderSlot("morning") }
+                    Button("上午 10:00") { onAssignReminderSlot("forenoon") }
+                    Button("中午 12:30") { onAssignReminderSlot("noon") }
+                    Button("下午 15:00") { onAssignReminderSlot("afternoon") }
+                    Button("傍晚 18:30") { onAssignReminderSlot("evening") }
+                    Button("晚上 20:30") { onAssignReminderSlot("night") }
+                    if todo.scheduledAt != nil {
+                        Divider()
+                        Button("提前 15 分钟") { onShiftReminderMinutes(-15) }
+                        Button("延后 15 分钟") { onShiftReminderMinutes(15) }
+                        Button("延后 1 小时") { onShiftReminderMinutes(60) }
+                        Button("取消提醒", role: .destructive) { onClearReminder() }
+                    }
+                }
+                .accessibilityLabel("提醒时间：" + (todo.scheduledAt.map(reminderPillText(for:)) ?? "未设置"))
+                .accessibilityIdentifier("vox.todo.reminder.pill")
             }
 
             if totalSubtaskCount >= 2 {
@@ -840,7 +858,7 @@ private struct IOSTodoExpandableCard: View {
         .frame(height: 24)
     }
 
-    // Dedicated row inside expanded drawer for `✨ AI do it` action + live iCloud/Mac execution status + reminder pill
+    // Dedicated row inside expanded drawer for `✨ AI do it` action + live iCloud/Mac execution status (ZERO duplicate reminder pill!)
     private var dedicatedLinearAndReminderRow: some View {
         HStack(spacing: 8) {
             Button(action: onDispatchAI) {
@@ -861,40 +879,6 @@ private struct IOSTodoExpandableCard: View {
             .accessibilityIdentifier("vox.todo.action.aiDoIt")
 
             Spacer(minLength: 4)
-
-            Button(action: { onShiftReminderMinutes(30) }) {
-                HStack(spacing: 4) {
-                    Image(systemName: todo.scheduledAt == nil ? "bell" : "bell.fill")
-                        .font(.caption2.weight(.bold))
-                    Text(todo.scheduledAt.map(reminderPillText(for:)) ?? "设置提醒")
-                        .font(.caption2.weight(.semibold).monospacedDigit())
-                }
-                .foregroundStyle(todo.scheduledAt == nil ? Color.secondary : Color.accentColor)
-                .padding(.horizontal, 9)
-                .frame(height: 28)
-                .background(
-                    (todo.scheduledAt == nil ? Color.secondary : Color.accentColor).opacity(0.14),
-                    in: Capsule()
-                )
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .contextMenu {
-                Button("早上 09:00") { onAssignReminderSlot("morning") }
-                Button("上午 10:00") { onAssignReminderSlot("forenoon") }
-                Button("中午 12:30") { onAssignReminderSlot("noon") }
-                Button("下午 15:00") { onAssignReminderSlot("afternoon") }
-                Button("傍晚 18:30") { onAssignReminderSlot("evening") }
-                Button("晚上 20:30") { onAssignReminderSlot("night") }
-                if todo.scheduledAt != nil {
-                    Divider()
-                    Button("提前 15 分钟") { onShiftReminderMinutes(-15) }
-                    Button("延后 15 分钟") { onShiftReminderMinutes(15) }
-                    Button("延后 1 小时") { onShiftReminderMinutes(60) }
-                    Button("取消提醒", role: .destructive) { onClearReminder() }
-                }
-            }
-            .accessibilityLabel("提醒时间：" + (todo.scheduledAt.map(reminderPillText(for:)) ?? "未设置"))
-            .accessibilityIdentifier("vox.todo.reminder.pill")
         }
         .padding(.top, 2)
     }

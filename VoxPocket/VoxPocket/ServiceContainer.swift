@@ -965,6 +965,17 @@ public final class ServiceContainer: ObservableObject {
                 }
             }
             #endif
+        case "aiDoIt":
+            workspaceViewModel.dispatchTodoToICloudAI(todoID)
+            #if canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                    var nextState = activity.content.state
+                    nextState.statusReceiptText = "☁️ 已上传 iCloud"
+                    await activity.update(ActivityContent(state: nextState, staleDate: nil))
+                }
+            }
+            #endif
         default:
             break
         }
