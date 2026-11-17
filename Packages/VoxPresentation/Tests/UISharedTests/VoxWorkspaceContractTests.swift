@@ -499,6 +499,9 @@ final class VoxWorkspaceContractTests: XCTestCase {
             let store = boardController.store(for: kind)
             XCTAssertNotNil(store.expandedTodoID)
             XCTAssertGreaterThanOrEqual(store.todos.count, 6)
+            // Verify conditional subtask progress rule: items with >= 2 subtasks vs <= 1 subtask both exist in preview dataset
+            XCTAssertTrue(store.todos.contains(where: { $0.subtasks.count >= 2 }))
+            XCTAssertTrue(store.todos.contains(where: { $0.subtasks.count <= 1 }))
             for item in store.todos {
                 XCTAssertLessThanOrEqual(item.title.count, 14)
                 XCTAssertFalse(item.description.isEmpty)
@@ -523,6 +526,21 @@ final class VoxWorkspaceContractTests: XCTestCase {
         XCTAssertTrue(boardController.allTagTraysOpen)
         boardController.toggleAllExpanded()
         XCTAssertFalse(boardController.allExpanded)
+
+        // Also verify Recorder Page hides bottom-left Filter while Todo Page shows it
+        let recorderPreviewVM = IOSCleanSlatePreviewFactory.makePreviewViewModel(
+            activePage: .recorder,
+            expandFirstTodo: false
+        )
+        XCTAssertEqual(recorderPreviewVM.activePage, .recorder)
+        let recorderHost = NSHostingView(
+            rootView: IOSCleanSlateWorkspaceView(viewModel: recorderPreviewVM)
+                .environment(\.colorScheme, .dark)
+                .frame(width: 390, height: 844)
+        )
+        recorderHost.frame = NSRect(x: 0, y: 0, width: 390, height: 844)
+        recorderHost.layoutSubtreeIfNeeded()
+        XCTAssertEqual(recorderHost.bounds.size, NSSize(width: 390, height: 844))
     }
 
     @MainActor

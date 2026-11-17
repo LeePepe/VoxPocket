@@ -92,13 +92,13 @@ public enum TodoUnfoldVariantKind: String, CaseIterable, Identifiable, Sendable 
     public var summary: String {
         switch self {
         case .v01:
-            "收起态锁定 v02 两行四要素（短标题 + 今天 17:31；固定 24pt 图标+文字状态胶囊 + P0，收起仅状态可点、其余全域展开）；展开经 TodoExpandRevealLayout 连续揭示 v03 圆角子任务卡与「单行水平滚动内联标签轨」，零二级弹窗、零重叠。"
+            "第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；Filter 移至左下返回按钮正上方 Liquid Glass 胶囊；展开抽屉内 Linear 独占一行 + 单轨内联标签条。"
         case .v02:
-            "收起态锁定 v02 两行四要素（零 Tag、零 1/3 分进度，状态文字永不跳变）；展开态采用「一体式同框卷轴标签架」，点 + 标签在同一圆角边框内经 TodoExpandRevealLayout + .clipped() 原地向下卷开候选标签与输入框，彻底杜绝穿模重叠。"
+            "【Owner 终局选定方案】第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；左下返回按钮正上方 Liquid Glass Filter；展开抽屉采用同框裁剪标签架 + v03 子任务微卡 + Linear 独立行。"
         case .v03:
-            "收起态锁定 v02 两行四要素 + 展开态锁定 v03 独立圆角子任务卡；Tag 区采用「原位胶囊横向伸展编辑器」，点击 + 在当前行内经 TodoHorizontalRevealLayout 横向平滑伸展候选芯片与输入框，单层等高零纵向重叠。"
+            "第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；左下返回按钮正上方 Liquid Glass Filter；展开抽屉含原位胶囊横向伸展标签编辑 + Linear 独立行。"
         case .v04:
-            "收起态锁定 v02 两行四要素 + 展开态锁定 v03 独立圆角子任务卡；Tag 区采用「平铺一键切换芯片槽」，已选标签（实心高亮）与常用候选标签（浅描边）及末尾内联 #新标签 同层平铺，无需展开二级面板，一步点选零重叠。"
+            "第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；左下返回按钮正上方 Liquid Glass Filter；展开抽屉含平铺一键切换标签芯片槽 + Linear 独立行。"
         }
     }
 
@@ -419,6 +419,7 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
 public struct TodoUnfoldVariantPhoneViewport: View {
     @ObservedObject private var store: TodoUnfoldVariantPreviewStore
     private let interpolationProgress: Double?
+    @Namespace private var glass
 
     public init(
         store: TodoUnfoldVariantPreviewStore,
@@ -454,8 +455,6 @@ public struct TodoUnfoldVariantPhoneViewport: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 10) {
-                        filterPillRow
-
                         VStack(spacing: listCardSpacing) {
                             ForEach(Array(store.todos.enumerated()), id: \.element.id) { index, todo in
                                 let isExpanded = store.expandedTodoID == todo.id
@@ -495,7 +494,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                     }
                     .padding(.horizontal, AppTheme.Space.lg)
                     .padding(.top, AppTheme.Space.xs)
-                    .padding(.bottom, 92)
+                    .padding(.bottom, 136)
                 }
             }
 
@@ -548,65 +547,80 @@ public struct TodoUnfoldVariantPhoneViewport: View {
         }
     }
 
-    private var filterPillRow: some View {
-        HStack(spacing: AppTheme.Space.sm) {
-            filterChip(title: "全部", count: store.todos.count, isSelected: true)
-            filterChip(title: "待处理", count: store.todos.filter { $0.executionState == .inbox }.count, isSelected: false)
-            filterChip(title: "AI 执行中", count: store.todos.filter { $0.executionState == .running }.count, isSelected: false)
-            filterChip(title: "已完成", count: store.todos.filter { $0.executionState == .done }.count, isSelected: false)
+    private var bottomLeadingFilterGlassStrip: some View {
+        HStack(spacing: 4) {
+            filterChip(title: "全部", count: store.todos.count, isSelected: store.selectedFilter == "全部")
+            filterChip(title: "待处理", count: store.todos.filter { $0.executionState == .inbox }.count, isSelected: store.selectedFilter == "待处理")
+            filterChip(title: "AI 执行中", count: store.todos.filter { $0.executionState == .running }.count, isSelected: store.selectedFilter == "AI 执行中")
+            filterChip(title: "已完成", count: store.todos.filter { $0.executionState == .done }.count, isSelected: store.selectedFilter == "已完成")
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .modifier(RecorderGlassModifier())
     }
 
     private func filterChip(title: String, count: Int, isSelected: Bool) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
-                .font(.caption.weight(isSelected ? .semibold : .regular))
-            Text(String(count))
-                .font(.caption2.weight(.semibold).monospacedDigit())
-                .foregroundStyle(isSelected ? .primary : .secondary)
+        Button(action: { store.selectedFilter = title }) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.caption.weight(isSelected ? .semibold : .regular))
+                Text(String(count))
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(minHeight: 30)
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.18))
+                }
+            }
+            .foregroundStyle(isSelected ? Color.accentColor : .primary)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(
-            isSelected ? Color.accentColor.opacity(0.16) : AppTheme.surfaceCard,
-            in: Capsule()
-        )
-        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+        .buttonStyle(.plain)
     }
 
     private var bottomDualGlassBar: some View {
-        HStack {
-            Image(systemName: "waveform")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 48, height: 48)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay {
-                    Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.8)
+        GlassEffectContainer(spacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
+                bottomLeadingFilterGlassStrip
+                    .glassEffectID("previewFilterBar", in: glass)
+
+                HStack {
+                    Image(systemName: "waveform")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 48, height: 48)
+                        .modifier(RecorderGlassModifier())
+                        .glassEffectID("previewSwitch", in: glass)
+
+                    Spacer()
+
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.accentColor, Color.cyan],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 54, height: 54)
+                            .shadow(color: Color.accentColor.opacity(0.28), radius: 10, y: 4)
+
+                        Image(systemName: "mic.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .glassEffectID("previewRecord", in: glass)
                 }
-
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.accentColor, Color.cyan],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 54, height: 54)
-                    .shadow(color: Color.accentColor.opacity(0.28), radius: 10, y: 4)
-
-                Image(systemName: "mic.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
             }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 14)
+            .padding(.top, 4)
         }
-        .padding(.horizontal, 22)
-        .padding(.bottom, 14)
-        .padding(.top, 4)
     }
 }
 
@@ -717,7 +731,7 @@ public struct TodoUnfoldVariantCardView: View {
             }
 
             // Expand-only drawer: continuously revealed from 0pt height via TodoExpandRevealLayout + .clipped()
-            // so expand-only views (description, 4 zero-overlap tag designs, and v03 subtask mini-cards) never pop in or overlap!
+            // so expand-only views (description, 4 zero-overlap tag designs, v03 subtask mini-cards, and dedicated Linear row) never pop in or overlap!
             TodoExpandRevealLayout(progress: expandFraction) {
                 VStack(alignment: .leading, spacing: 8) {
                     Divider()
@@ -730,6 +744,8 @@ public struct TodoUnfoldVariantCardView: View {
                     zeroOverlapTagSectionForVariant
 
                     v03SpatialHeroSubtaskCards
+
+                    dedicatedLinearAndReminderRow
                 }
             }
             .clipped()
@@ -776,13 +792,13 @@ public struct TodoUnfoldVariantCardView: View {
         }
     }
 
-    // MARK: - Persistent v02 Header (Row 1: Title + Time | Row 2: Fixed-Label Status + Priority + Expanded Right Badges)
+    // MARK: - Persistent v02 Header (Row 1: Full-Width Title ONLY with Smooth v03 Font-Size Scaling | Row 2: Status + Priority + Conditional Subtask Count (>=2) + Timestamp + Spacer + Persistent Rotating Chevron)
 
     private var v02HeaderRow1TitleAndTime: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 0) {
             if isExpanded {
                 TextField("待办短标题", text: $draftTitle)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .modifier(AnimatableTitleFontModifier(progress: expandFraction))
                     .foregroundStyle(isDone ? .secondary : .primary)
                     .textFieldStyle(.plain)
                     .lineLimit(1)
@@ -792,56 +808,62 @@ public struct TodoUnfoldVariantCardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text(todo.title)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .modifier(AnimatableTitleFontModifier(progress: expandFraction))
                     .foregroundStyle(isDone ? .secondary : .primary)
                     .strikethrough(isDone, color: .secondary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            timestampLabel
         }
-        .frame(height: 20)
+        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
         .contentShape(Rectangle())
     }
 
     private var v02HeaderRow2StatusAndPriority: some View {
         HStack(spacing: 6) {
-            // Status capsule: ALWAYS displays icon + text label at fixed 24pt height in both collapsed and expanded states!
-            // Zero showLabel toggle, zero width/height jump!
+            // 1. Status capsule: ALWAYS displays icon + text label at fixed 24pt height in both collapsed and expanded states!
             fixedStatusCapsule
 
-            // Priority capsule: fixed 24pt height in both states; when collapsed, hit-testing is disabled so tapping priority expands the card!
+            // 2. Priority capsule: fixed 24pt height in both states; when collapsed, hit-testing is disabled so tapping priority expands the card!
             fixedPriorityCapsule
                 .allowsHitTesting(isExpanded)
 
+            // 3. Conditional Subtask Progress: ONLY shown when todo.subtasks.count >= 2, placed to the LEFT of timestamp!
+            if totalSubtaskCount >= 2 {
+                compactProgressBadge
+                    .allowsHitTesting(false)
+            }
+
+            // 4. Timestamp ('今天 17:31')
+            timestampLabel
+                .allowsHitTesting(false)
+
+            // 5. Spacer
             Spacer(minLength: 4)
 
-            if expandFraction > 0.01 {
-                HStack(spacing: 6) {
-                    if todo.scheduledAt != nil {
-                        reminderMicroBadge
-                    }
-
-                    compactProgressBadge
-
-                    linearActionCapsule
-
-                    Button(action: onToggleExpand) {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 24, height: 24)
-                            .background(AppTheme.surfaceElevated, in: Circle())
-                    }
-                    .buttonStyle(AppPressableButtonStyle())
-                }
-                .opacity(expandFraction)
-                .scaleEffect(0.92 + 0.08 * expandFraction, anchor: .trailing)
-                .allowsHitTesting(isExpanded)
+            // 6. Persistent trailing chevron.down (ALWAYS visible in both collapsed and expanded states, rotating 180 deg on expand)
+            Button(action: onToggleExpand) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(expandFraction * 180.0))
+                    .frame(width: 24, height: 24)
+                    .background(AppTheme.surfaceElevated, in: Circle())
             }
+            .buttonStyle(AppPressableButtonStyle())
         }
         .frame(height: 24)
+    }
+
+    private var dedicatedLinearAndReminderRow: some View {
+        HStack(spacing: 8) {
+            linearActionCapsule
+
+            Spacer(minLength: 4)
+
+            reminderMicroBadge
+        }
+        .padding(.top, 2)
     }
 
     // MARK: - Shared Fixed-Size Header Micro-Components (Zero Shape / Text Jump)
