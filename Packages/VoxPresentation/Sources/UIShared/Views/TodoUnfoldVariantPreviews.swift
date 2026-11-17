@@ -82,23 +82,23 @@ public enum TodoUnfoldVariantKind: String, CaseIterable, Identifiable, Sendable 
 
     public var title: String {
         switch self {
-        case .v01: "Inline Horizontal Tag Rail · 单轨内联标签条 (v02收起 + v03子任务)"
-        case .v02: "Unified Clipped Tag Shelf · 同框卷轴标签架 (v02收起 + v03子任务)"
-        case .v03: "Inline Morphing Pill Editor · 原位胶囊伸展编辑 (v02收起 + v03子任务)"
-        case .v04: "Flat Toggle Tag Matrix · 一目了然平铺芯片槽 (v02收起 + v03子任务)"
+        case .v01: "Upward Vertical Glass Stack · 竖向玻璃浮层栈 (锁定 v02 Tag)"
+        case .v02: "Native Liquid Glass Popover · 竖向玻璃弹出菜单 (锁定 v02 Tag)"
+        case .v03: "Persistent Vertical Icon Column · 常驻竖向胶囊柱 (锁定 v02 Tag)"
+        case .v04: "Slide-Up Vertical Glass Drawer · 上滑竖向玻璃抽屉 (锁定 v02 Tag)"
         }
     }
 
     public var summary: String {
         switch self {
         case .v01:
-            "第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；Filter 移至左下返回按钮正上方 Liquid Glass 胶囊；展开抽屉内 Linear 独占一行 + 单轨内联标签条。"
+            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击展开竖向玻璃浮层栈；✨ AI do it 实时派单。"
         case .v02:
-            "【Owner 终局选定方案】第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；左下返回按钮正上方 Liquid Glass Filter；展开抽屉采用同框裁剪标签架 + v03 子任务微卡 + Linear 独立行。"
+            "【Owner 选定方案】Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击弹出竖向玻璃 Popover；✨ AI do it 实时派单。"
         case .v03:
-            "第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；左下返回按钮正上方 Liquid Glass Filter；展开抽屉含原位胶囊横向伸展标签编辑 + Linear 独立行。"
+            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下常驻紧凑竖向 4 胶囊柱；✨ AI do it 实时派单。"
         case .v04:
-            "第 1 行独占标题（15.5pt<->18pt 平滑缩放）；第 2 行固定 [状态] [P0] [>=2子步进度] [今天 17:31] + 末尾常驻翻转箭头；左下返回按钮正上方 Liquid Glass Filter；展开抽屉含平铺一键切换标签芯片槽 + Linear 独立行。"
+            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击上滑竖向玻璃抽屉；✨ AI do it 实时派单。"
         }
     }
 
@@ -123,11 +123,14 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
     @Published public var todos: [VoiceTodo]
     @Published public var expandedTodoID: UUID?
     @Published public var isTagTrayOpen: Bool = false
+    @Published public var isFilterPanelOpen: Bool = true
     @Published public var selectedFilter: String = "全部"
     @Published public var speedMultiplier: Double = 1.0
     @Published public var cascadeStageTwoVisible: Bool = false
     @Published public var recorderStatus: RecorderStatus = .idle
     @Published public var audioLevel: Float = 0.0
+    @Published public var aiOrdersByTodoID: [UUID: ICloudAIExecutionOrder] = [:]
+    private var aiSimulationTasks: [UUID: Task<Void, Never>] = [:]
 
     public let historicalTags: [String] = ["#VoxPocket", "#iOS", "#Glass", "#AI", "#Podcast", "#SwiftUI"]
 
@@ -414,6 +417,77 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
             todos[idx] = todos[idx].withAppendedSubtask(trimmed)
         }
     }
+
+    public func toggleFilterPanel() {
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            isFilterPanelOpen.toggle()
+        }
+    }
+
+    public func selectFilterOption(_ title: String) {
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            selectedFilter = title
+            if variant != .v03 {
+                isFilterPanelOpen = false
+            }
+        }
+    }
+
+    public func dispatchTodoToICloudAI(todoID: UUID) {
+        guard let idx = todos.firstIndex(where: { $0.id == todoID }) else { return }
+        let todo = todos[idx]
+        aiSimulationTasks[todoID]?.cancel()
+        let queued = ICloudAIExecutionOrder(from: todo)
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            aiOrdersByTodoID[todoID] = queued
+            todos[idx] = todos[idx].withExecutionState(.running, summary: queued.progressStage)
+        }
+        aiSimulationTasks[todoID] = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let scale = max(0.2, 1.0 / max(0.2, self.speedMultiplier))
+            try? await Task.sleep(for: .milliseconds(Int(350 * scale)))
+            guard !Task.isCancelled else { return }
+            let claimed = queued.withState(
+                .claimedByMac,
+                progressStage: "已认领 · 准备启动 Mac AI",
+                progressFraction: 0.25,
+                assignedRunnerName: "Mac AI Agent"
+            )
+            withAnimation(self.variant.spring(speedMultiplier: self.speedMultiplier)) {
+                self.aiOrdersByTodoID[todoID] = claimed
+            }
+
+            try? await Task.sleep(for: .milliseconds(Int(450 * scale)))
+            guard !Task.isCancelled else { return }
+            let stepCount = max(1, todo.subtasks.count)
+            let running = claimed.withState(
+                .running,
+                progressStage: "正在执行 \(stepCount) 项子步骤…",
+                progressFraction: 0.68,
+                assignedRunnerName: "Mac AI Agent"
+            )
+            withAnimation(self.variant.spring(speedMultiplier: self.speedMultiplier)) {
+                self.aiOrdersByTodoID[todoID] = running
+            }
+
+            try? await Task.sleep(for: .milliseconds(Int(550 * scale)))
+            guard !Task.isCancelled else { return }
+            let summary = "完成 \(stepCount) 项步骤"
+            let completed = running.withState(
+                .completed,
+                progressStage: "执行完成",
+                progressFraction: 1.0,
+                outputSummary: summary,
+                assignedRunnerName: "Mac AI Agent"
+            )
+            withAnimation(self.variant.spring(speedMultiplier: self.speedMultiplier)) {
+                self.aiOrdersByTodoID[todoID] = completed
+                if let currentIdx = self.todos.firstIndex(where: { $0.id == todoID }) {
+                    self.todos[currentIdx] = self.todos[currentIdx].withExecutionState(.done, summary: summary)
+                }
+            }
+        }
+    }
 }
 
 /// Complete 390×844 iPhone viewport rendering a single SwiftUI unfold variant (`v01..v04`).
@@ -442,7 +516,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            RecorderBackdrop(status: store.recorderStatus, audioLevel: store.audioLevel)
+            RecorderBackdrop(status: .idle, audioLevel: 0.0)
 
             VStack(alignment: .leading, spacing: 0) {
                 phoneStatusBar
@@ -471,6 +545,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                                 TodoUnfoldVariantCardView(
                                     variant: store.variant,
                                     todo: todo,
+                                    aiOrder: store.aiOrdersByTodoID[todo.id],
                                     isExpanded: expandFraction > 0.01,
                                     expandFraction: expandFraction,
                                     isTagTrayOpen: index == 0 && store.isTagTrayOpen,
@@ -487,7 +562,8 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                                     onUpdateTitle: { title in store.updateTitle(todoID: todo.id, title: title) },
                                     onUpdateDescription: { desc in store.updateDescription(todoID: todo.id, description: desc) },
                                     onUpdateSubtaskTitle: { subID, title in store.updateSubtaskTitle(todoID: todo.id, subtaskID: subID, title: title) },
-                                    onAppendSubtask: { title in store.appendSubtask(todoID: todo.id, title: title) }
+                                    onAppendSubtask: { title in store.appendSubtask(todoID: todo.id, title: title) },
+                                    onDispatchAI: { store.dispatchTodoToICloudAI(todoID: todo.id) }
                                 )
                                 .opacity(siblingDimmed ? 0.82 : 1.0)
                                 .scaleEffect(siblingDimmed ? 0.99 : 1.0)
@@ -549,33 +625,190 @@ public struct TodoUnfoldVariantPhoneViewport: View {
         }
     }
 
-    private var bottomLeadingFilterGlassStrip: some View {
-        HStack(spacing: 4) {
-            filterChip(title: "全部", count: store.todos.count, isSelected: store.selectedFilter == "全部")
-            filterChip(title: "待处理", count: store.todos.filter { $0.executionState == .inbox }.count, isSelected: store.selectedFilter == "待处理")
-            filterChip(title: "AI 执行中", count: store.todos.filter { $0.executionState == .running }.count, isSelected: store.selectedFilter == "AI 执行中")
-            filterChip(title: "已完成", count: store.todos.filter { $0.executionState == .done }.count, isSelected: store.selectedFilter == "已完成")
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .modifier(RecorderGlassModifier())
+    private var filterOptionsWithCounts: [(title: String, count: Int)] {
+        [
+            ("全部", store.todos.count),
+            ("待处理", store.todos.filter { $0.executionState == .inbox }.count),
+            ("AI 执行中", store.todos.filter { $0.executionState == .running }.count),
+            ("已完成", store.todos.filter { $0.executionState == .done }.count)
+        ]
     }
 
-    private func filterChip(title: String, count: Int, isSelected: Bool) -> some View {
-        Button(action: { store.selectedFilter = title }) {
-            HStack(spacing: 4) {
+    private var activeFilterCount: Int {
+        filterOptionsWithCounts.first(where: { $0.title == store.selectedFilter })?.count ?? store.todos.count
+    }
+
+    @ViewBuilder
+    private var bottomLeadingVerticalFilterControl: some View {
+        switch store.variant {
+        case .v01:
+            // v01: Upward Vertical Liquid Glass Floating Stack
+            VStack(alignment: .leading, spacing: 6) {
+                TodoExpandRevealLayout(progress: store.isFilterPanelOpen ? 1.0 : 0.0) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(filterOptionsWithCounts, id: \.title) { item in
+                            verticalFilterRow(title: item.title, count: item.count, isSelected: store.selectedFilter == item.title)
+                        }
+                    }
+                    .padding(6)
+                    .frame(width: 156, alignment: .leading)
+                    .modifier(RecorderGlassModifier())
+                    .padding(.bottom, 2)
+                }
+                .clipped()
+                .opacity(store.isFilterPanelOpen ? 1.0 : 0.0)
+                .allowsHitTesting(store.isFilterPanelOpen)
+
+                compactFilterTriggerCapsule
+            }
+
+        case .v02:
+            // v02: Native-Style Liquid Glass Popover Menu above bottom-left capsule
+            VStack(alignment: .leading, spacing: 4) {
+                if store.isFilterPanelOpen {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("状态筛选")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.top, 4)
+
+                        Divider()
+
+                        ForEach(filterOptionsWithCounts, id: \.title) { item in
+                            verticalFilterRow(title: item.title, count: item.count, isSelected: store.selectedFilter == item.title)
+                        }
+                    }
+                    .padding(6)
+                    .frame(width: 164, alignment: .leading)
+                    .modifier(RecorderGlassModifier())
+                    .shadow(color: Color.black.opacity(0.22), radius: 14, y: 6)
+                }
+
+                compactFilterTriggerCapsule
+            }
+
+        case .v03:
+            // v03: Persistent Compact Vertical Icon/Label Capsule Column
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(filterOptionsWithCounts, id: \.title) { item in
+                    let isSelected = store.selectedFilter == item.title
+                    Button(action: { store.selectFilterOption(item.title) }) {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.4))
+                                .frame(width: 6, height: 6)
+                            Text(item.title)
+                                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                            Spacer(minLength: 4)
+                            Text("\(item.count)")
+                                .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .frame(width: 122, alignment: .leading)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(Color.accentColor.opacity(0.18))
+                            }
+                        }
+                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(5)
+            .modifier(RecorderGlassModifier())
+
+        case .v04:
+            // v04: Slide-Up Vertical Glass Drawer Card
+            VStack(alignment: .leading, spacing: 6) {
+                TodoExpandRevealLayout(progress: store.isFilterPanelOpen ? 1.0 : 0.0) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Label("筛选清单", systemImage: "line.3.horizontal.decrease.circle.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.accentColor)
+                            Spacer()
+                            Button(action: { store.toggleFilterPanel() }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.top, 4)
+
+                        ForEach(filterOptionsWithCounts, id: \.title) { item in
+                            verticalFilterRow(title: item.title, count: item.count, isSelected: store.selectedFilter == item.title)
+                        }
+                    }
+                    .padding(7)
+                    .frame(width: 172, alignment: .leading)
+                    .modifier(RecorderGlassModifier())
+                }
+                .clipped()
+                .opacity(store.isFilterPanelOpen ? 1.0 : 0.0)
+                .allowsHitTesting(store.isFilterPanelOpen)
+
+                compactFilterTriggerCapsule
+            }
+        }
+    }
+
+    private var compactFilterTriggerCapsule: some View {
+        Button(action: { store.toggleFilterPanel() }) {
+            HStack(spacing: 5) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
+                Text(store.selectedFilter)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("\(activeFilterCount)")
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(store.isFilterPanelOpen ? 180 : 0))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .frame(minHeight: 34)
+            .modifier(RecorderGlassModifier())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func verticalFilterRow(title: String, count: Int, isSelected: Bool) -> some View {
+        Button(action: { store.selectFilterOption(title) }) {
+            HStack(spacing: 6) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
                 Text(title)
                     .font(.caption.weight(isSelected ? .semibold : .regular))
+                Spacer(minLength: 6)
                 Text(String(count))
                     .font(.caption2.weight(.semibold).monospacedDigit())
                     .foregroundStyle(isSelected ? .primary : .secondary)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 9)
             .padding(.vertical, 6)
-            .frame(minHeight: 30)
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .background {
                 if isSelected {
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.accentColor.opacity(0.18))
                 }
             }
@@ -587,7 +820,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
     private var bottomDualGlassBar: some View {
         GlassEffectContainer(spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
-                bottomLeadingFilterGlassStrip
+                bottomLeadingVerticalFilterControl
                     .glassEffectID("previewFilterBar", in: glass)
 
                 HStack {
@@ -632,6 +865,7 @@ public struct TodoUnfoldVariantPhoneViewport: View {
 public struct TodoUnfoldVariantCardView: View {
     public let variant: TodoUnfoldVariantKind
     public let todo: VoiceTodo
+    public let aiOrder: ICloudAIExecutionOrder?
     public let isExpanded: Bool
     public let expandFraction: Double
     public let isTagTrayOpen: Bool
@@ -649,16 +883,19 @@ public struct TodoUnfoldVariantCardView: View {
     public let onUpdateDescription: (String) -> Void
     public let onUpdateSubtaskTitle: (UUID, String) -> Void
     public let onAppendSubtask: (String) -> Void
+    public let onDispatchAI: () -> Void
 
     @Namespace private var morphNamespace
     @State private var draftTitle: String = ""
     @State private var draftDescription: String = ""
+    @State private var isEditingTitle: Bool = false
     @State private var newTagText: String = ""
     @State private var newSubtaskText: String = ""
 
     public init(
         variant: TodoUnfoldVariantKind,
         todo: VoiceTodo,
+        aiOrder: ICloudAIExecutionOrder? = nil,
         isExpanded: Bool,
         expandFraction: Double,
         isTagTrayOpen: Bool,
@@ -675,10 +912,12 @@ public struct TodoUnfoldVariantCardView: View {
         onUpdateTitle: @escaping (String) -> Void,
         onUpdateDescription: @escaping (String) -> Void = { _ in },
         onUpdateSubtaskTitle: @escaping (UUID, String) -> Void,
-        onAppendSubtask: @escaping (String) -> Void
+        onAppendSubtask: @escaping (String) -> Void,
+        onDispatchAI: @escaping () -> Void = {}
     ) {
         self.variant = variant
         self.todo = todo
+        self.aiOrder = aiOrder
         self.isExpanded = isExpanded
         self.expandFraction = expandFraction
         self.isTagTrayOpen = isTagTrayOpen
@@ -696,6 +935,7 @@ public struct TodoUnfoldVariantCardView: View {
         self.onUpdateDescription = onUpdateDescription
         self.onUpdateSubtaskTitle = onUpdateSubtaskTitle
         self.onAppendSubtask = onAppendSubtask
+        self.onDispatchAI = onDispatchAI
     }
 
     private var isDone: Bool { todo.executionState == .done }
@@ -792,58 +1032,53 @@ public struct TodoUnfoldVariantCardView: View {
         .onChange(of: todo.description) { _, updated in
             draftDescription = updated
         }
+        .onChange(of: isExpanded) { _, expanded in
+            if !expanded {
+                isEditingTitle = false
+            }
+        }
     }
 
-    // MARK: - Persistent v02 Header (Row 1: Full-Width Title ONLY with Smooth v03 Font-Size Scaling | Row 2: Status + Priority + Conditional Subtask Count (>=2) + Timestamp + Spacer + Persistent Rotating Chevron)
+    // MARK: - Persistent 2-Row Header (Row 1: Left Title with Constant Font + GPU scaleEffect, Right Creation Time + Persistent Rotating Chevron | Row 2: Status + Priority + Reminder Time + Conditional Subtask Progress (>=2))
 
     private var v02HeaderRow1TitleAndTime: some View {
-        HStack(alignment: .center, spacing: 0) {
-            if isExpanded {
+        HStack(alignment: .center, spacing: 6) {
+            if isExpanded && isEditingTitle {
                 TextField("待办短标题", text: $draftTitle)
-                    .modifier(AnimatableTitleFontModifier(progress: expandFraction))
+                    .font(.system(size: 16, weight: .semibold))
+                    .scaleEffect(1.0 + expandFraction * 0.06, anchor: .leading)
                     .foregroundStyle(isDone ? .secondary : .primary)
                     .textFieldStyle(.plain)
                     .lineLimit(1)
                     .onSubmit {
                         onUpdateTitle(draftTitle)
+                        isEditingTitle = false
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text(todo.title)
-                    .modifier(AnimatableTitleFontModifier(progress: expandFraction))
+                    .font(.system(size: 16, weight: .semibold))
+                    .scaleEffect(1.0 + expandFraction * 0.06, anchor: .leading)
                     .foregroundStyle(isDone ? .secondary : .primary)
                     .strikethrough(isDone, color: .secondary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    private var v02HeaderRow2StatusAndPriority: some View {
-        HStack(spacing: 6) {
-            // 1. Status capsule: ALWAYS displays icon + text label at fixed 24pt height in both collapsed and expanded states!
-            fixedStatusCapsule
-
-            // 2. Priority capsule: fixed 24pt height in both states; when collapsed, hit-testing is disabled so tapping priority expands the card!
-            fixedPriorityCapsule
-                .allowsHitTesting(isExpanded)
-
-            // 3. Conditional Subtask Progress: ONLY shown when todo.subtasks.count >= 2, placed to the LEFT of timestamp!
-            if totalSubtaskCount >= 2 {
-                compactProgressBadge
-                    .allowsHitTesting(false)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if isExpanded {
+                            draftTitle = todo.title
+                            isEditingTitle = true
+                        } else {
+                            onToggleExpand()
+                        }
+                    }
             }
 
-            // 4. Timestamp ('今天 17:31')
+            Spacer(minLength: 6)
+
             timestampLabel
                 .allowsHitTesting(false)
 
-            // 5. Spacer
-            Spacer(minLength: 4)
-
-            // 6. Persistent trailing chevron.down (ALWAYS visible in both collapsed and expanded states, rotating 180 deg on expand)
             Button(action: onToggleExpand) {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
@@ -854,12 +1089,39 @@ public struct TodoUnfoldVariantCardView: View {
             }
             .buttonStyle(AppPressableButtonStyle())
         }
+        .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var v02HeaderRow2StatusAndPriority: some View {
+        HStack(spacing: 6) {
+            // 1. Status capsule: ALWAYS displays icon + text label at fixed 24pt height
+            fixedStatusCapsule
+
+            // 2. Priority capsule: fixed 24pt height; when collapsed, hit-testing is disabled so tapping priority expands the card
+            fixedPriorityCapsule
+                .allowsHitTesting(isExpanded)
+
+            // 3. Reminder time (scheduledAt): placed right after Pri on Row 2
+            if todo.scheduledAt != nil {
+                reminderMicroBadge
+                    .allowsHitTesting(false)
+            }
+
+            // 4. Conditional Subtask Progress: ONLY shown when todo.subtasks.count >= 2, placed AFTER reminder time on Row 2!
+            if totalSubtaskCount >= 2 {
+                compactProgressBadge
+                    .allowsHitTesting(false)
+            }
+
+            Spacer(minLength: 4)
+        }
         .frame(height: 24)
     }
 
     private var dedicatedLinearAndReminderRow: some View {
         HStack(spacing: 8) {
-            linearActionCapsule
+            aiDoItActionCapsule
 
             Spacer(minLength: 4)
 
@@ -963,33 +1225,47 @@ public struct TodoUnfoldVariantCardView: View {
             }
     }
 
-    private var linearActionCapsule: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "arrow.up.right.circle")
-                .font(.system(size: 11, weight: .bold))
-            Text(todo.externalSync?.externalID ?? "Linear")
-                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+    private var aiDoItActionCapsule: some View {
+        let label = aiOrder?.formattedButtonLabel ?? "✨ AI do it"
+        let tint: Color = {
+            guard let aiOrder else { return Color.accentColor }
+            switch aiOrder.state {
+            case .queued: return Color.cyan
+            case .claimedByMac, .running: return Color.orange
+            case .completed: return Color.green
+            case .failed: return Color.red
+            }
+        }()
+        let symbol: String = {
+            guard let aiOrder else { return "sparkles" }
+            switch aiOrder.state {
+            case .queued: return "icloud.and.arrow.up.fill"
+            case .claimedByMac, .running: return "bolt.horizontal.circle.fill"
+            case .completed: return "checkmark.seal.fill"
+            case .failed: return "exclamationmark.triangle.fill"
+            }
+        }()
+        return Button(action: onDispatchAI) {
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .bold))
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .lineLimit(1)
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 9)
+            .frame(height: 26)
+            .background(tint.opacity(0.14), in: Capsule())
         }
-        .foregroundStyle(Color.accentColor)
-        .padding(.horizontal, 8)
-        .frame(height: 24)
-        .background(Color.accentColor.opacity(0.12), in: Capsule())
+        .buttonStyle(AppPressableButtonStyle())
     }
 
-    // MARK: - 4 Distinct Zero-Overlap Tag Designs Across `v01..v04` (No `.move(edge: .top)` Overlap!)
+    // MARK: - Locked `v02` Unified Clipped Tag Shelf Across All Cards (`v01..v04`)
 
     @ViewBuilder
     private var zeroOverlapTagSectionForVariant: some View {
-        switch variant {
-        case .v01:
-            v01InlineHorizontalTagRail
-        case .v02:
-            v02UnifiedClippedTagShelf
-        case .v03:
-            v03InlineMorphingPillEditor
-        case .v04:
-            v04FlatToggleTagMatrix
-        }
+        v02UnifiedClippedTagShelf
     }
 
     /// `v01` — Single-row Inline Horizontal Tag Rail: active tags + unselected quick chips + inline `#新标签` input on one horizontal track.
@@ -1438,8 +1714,103 @@ public enum PreviewAtmosphereStageOption: String, CaseIterable, Identifiable, Se
     }
 }
 
+public enum PreviewHostTopTab: String, CaseIterable, Identifiable, Sendable {
+    case todoAndVerticalFilter = "todo"
+    case recorderFiveStageAtmosphere = "recorder"
+    case dynamicIslandFourVariants = "dynamic-island"
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .todoAndVerticalFilter:
+            "Tab 1 · Todo 列表与竖向 Filter"
+        case .recorderFiveStageAtmosphere:
+            "Tab 2 · 录音页 5 阶段色彩流转"
+        case .dynamicIslandFourVariants:
+            "Tab 3 · 灵动岛 4 套方案 (DI-v01..v04)"
+        }
+    }
+
+    public var symbolName: String {
+        switch self {
+        case .todoAndVerticalFilter: "checklist"
+        case .recorderFiveStageAtmosphere: "waveform.circle.fill"
+        case .dynamicIslandFourVariants: "capsule.inset.filled"
+        }
+    }
+}
+
+public enum DynamicIslandPreviewVariantKind: String, CaseIterable, Identifiable, Sendable {
+    case diV01 = "di-v01"
+    case diV02 = "di-v02"
+    case diV03 = "di-v03"
+    case diV04 = "di-v04"
+
+    public var id: String { rawValue }
+    public var badgeCode: String { rawValue.uppercased() }
+
+    public var title: String {
+        switch self {
+        case .diV01: "瑞士精密计时 + 3 动作岛"
+        case .diV02: "双列子步骤推进清单岛"
+        case .diV03: "四阶段流光声波 + 待办一体变形岛"
+        case .diV04: "极简作息时间轴伴侣岛"
+        }
+    }
+
+    public var summary: String {
+        switch self {
+        case .diV01:
+            "P0 焦点倒计时 + 首条未完成子任务原位打勾 (1/3 -> 2/3) + 底部 3 个等宽圆角胶囊 [✓ 完成] · [+15m] · [🌙 明早 08:35]。"
+        case .diV02:
+            "环形进度 1/3 + 中层双列圆角子任务微卡（支持原位逐项点击打勾推进）+ 底栏 [✓ 完成] 与 [+15m / 🌙 明早 08:35] 胶囊。"
+        case .diV03:
+            "同岛四阶段连续流光变形：从青绿声波 (#52BDB8) -> 蔚蓝转译 (#578FE6) -> 薰衣草紫提炼 (#9480E6) -> 翡翠绿待办回执 (#57BD99)。"
+        case .diV04:
+            "顶部展示自适应作息时段微缩时间轴（🌅 早 08:35 · ☀️ 午 12:30 · 🌙 晚 20:30），中层原位打勾，底栏一键顺延至习惯时段。"
+        }
+    }
+}
+
+public enum DynamicIslandSurfaceBezelMode: String, CaseIterable, Identifiable, Sendable {
+    case minimal
+    case compact
+    case expanded
+    case lockScreenBanner
+
+    public var id: String { rawValue }
+
+    public var shortLabel: String {
+        switch self {
+        case .minimal: "Minimal"
+        case .compact: "Compact"
+        case .expanded: "Expanded"
+        case .lockScreenBanner: "Lock"
+        }
+    }
+
+    public var targetSize: CGSize {
+        switch self {
+        case .minimal: CGSize(width: 37, height: 37)
+        case .compact: CGSize(width: 216, height: 37)
+        case .expanded: CGSize(width: 370, height: 156)
+        case .lockScreenBanner: CGSize(width: 366, height: 116)
+        }
+    }
+
+    public var cornerRadius: CGFloat {
+        switch self {
+        case .minimal, .compact: 18.5
+        case .expanded: 38.0
+        case .lockScreenBanner: 28.0
+        }
+    }
+}
+
 @MainActor
 public final class TodoUnfoldFourUpBoardController: ObservableObject {
+    @Published public var activeTab: PreviewHostTopTab = .todoAndVerticalFilter
     @Published public var speedMultiplier: Double = 1.0 {
         didSet {
             for store in stores.values {
@@ -1447,14 +1818,37 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
             }
         }
     }
-    @Published public var stageOption: PreviewAtmosphereStageOption = .idle {
+    /// Recorder page 5-stage atmosphere switcher (Tab 2). Todo page (Tab 1) stays constantly at `.idle`.
+    @Published public var stageOption: PreviewAtmosphereStageOption = .listening {
         didSet {
-            for store in stores.values {
-                store.recorderStatus = stageOption.recorderStatus
-                store.audioLevel = stageOption.simulatedAudioLevel
-            }
+            recorderStagesByBezel[0] = stageOption
         }
     }
+    @Published public var recorderStagesByBezel: [Int: PreviewAtmosphereStageOption] = [
+        0: .listening,
+        1: .transcribing,
+        2: .refining,
+        3: .error
+    ]
+    @Published public var islandModeByVariant: [DynamicIslandPreviewVariantKind: DynamicIslandSurfaceBezelMode] = [
+        .diV01: .expanded,
+        .diV02: .expanded,
+        .diV03: .expanded,
+        .diV04: .expanded
+    ]
+    @Published public var islandPhaseByVariant: [DynamicIslandPreviewVariantKind: PreviewAtmosphereStageOption] = [
+        .diV01: .listening,
+        .diV02: .transcribing,
+        .diV03: .refining,
+        .diV04: .idle
+    ]
+    @Published public var islandCompletedSubtasksByVariant: [DynamicIslandPreviewVariantKind: Int] = [
+        .diV01: 1,
+        .diV02: 1,
+        .diV03: 1,
+        .diV04: 1
+    ]
+    @Published public var islandReceiptByVariant: [DynamicIslandPreviewVariantKind: String] = [:]
     @Published public var colorScheme: ColorScheme = .dark
     @Published public var allExpanded: Bool = true
     @Published public var allTagTraysOpen: Bool = false
@@ -1465,7 +1859,10 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
         self.allExpanded = initiallyExpanded
         var map: [TodoUnfoldVariantKind: TodoUnfoldVariantPreviewStore] = [:]
         for kind in TodoUnfoldVariantKind.allCases {
-            map[kind] = TodoUnfoldVariantPreviewStore(variant: kind, initiallyExpanded: initiallyExpanded)
+            let s = TodoUnfoldVariantPreviewStore(variant: kind, initiallyExpanded: initiallyExpanded)
+            s.recorderStatus = .idle
+            s.audioLevel = 0.0
+            map[kind] = s
         }
         self.stores = map
     }
@@ -1474,10 +1871,21 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
         stores[kind]!
     }
 
+    public func setAllRecorderStages(_ stage: PreviewAtmosphereStageOption) {
+        stageOption = stage
+        for idx in 0..<4 {
+            recorderStagesByBezel[idx] = stage
+        }
+    }
+
     public func toggleAllExpanded() {
         allExpanded.toggle()
         for kind in TodoUnfoldVariantKind.allCases {
             stores[kind]?.setExpanded(allExpanded, tagTrayOpen: allTagTraysOpen, animated: true)
+        }
+        let targetIslandMode: DynamicIslandSurfaceBezelMode = allExpanded ? .expanded : .compact
+        for kind in DynamicIslandPreviewVariantKind.allCases {
+            islandModeByVariant[kind] = targetIslandMode
         }
     }
 
@@ -1486,6 +1894,26 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
         for kind in TodoUnfoldVariantKind.allCases {
             stores[kind]?.toggleTagTray()
         }
+    }
+
+    public func advanceIslandSubtask(for kind: DynamicIslandPreviewVariantKind) {
+        let current = islandCompletedSubtasksByVariant[kind] ?? 1
+        let next = current >= 3 ? 1 : (current + 1)
+        islandCompletedSubtasksByVariant[kind] = next
+        islandReceiptByVariant[kind] = "进度 \(next)/3"
+    }
+
+    public func markIslandDone(for kind: DynamicIslandPreviewVariantKind) {
+        islandCompletedSubtasksByVariant[kind] = 3
+        islandReceiptByVariant[kind] = "✓ 已完成"
+    }
+
+    public func snoozeIsland15m(for kind: DynamicIslandPreviewVariantKind) {
+        islandReceiptByVariant[kind] = "⏰ +15m"
+    }
+
+    public func deferIslandMorning(for kind: DynamicIslandPreviewVariantKind) {
+        islandReceiptByVariant[kind] = "🌙 明早 08:35"
     }
 }
 
@@ -1505,12 +1933,21 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
             Divider()
 
             ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                HStack(alignment: .top, spacing: 20) {
-                    ForEach(TodoUnfoldVariantKind.allCases) { kind in
-                        variantColumn(for: kind)
+                switch controller.activeTab {
+                case .todoAndVerticalFilter:
+                    HStack(alignment: .top, spacing: 20) {
+                        ForEach(TodoUnfoldVariantKind.allCases) { kind in
+                            variantColumn(for: kind)
+                        }
                     }
+                    .padding(22)
+                case .recorderFiveStageAtmosphere:
+                    recorderFiveStageComparisonGrid
+                        .padding(22)
+                case .dynamicIslandFourVariants:
+                    dynamicIslandFourUpComparisonGrid
+                        .padding(22)
                 }
-                .padding(22)
             }
             .background(controller.colorScheme == .dark ? Color(white: 0.07) : Color(white: 0.94))
         }
@@ -1518,76 +1955,108 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
     }
 
     private var topControlToolbar: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("VoxPocket · Todo 原地展开 4 套真 SwiftUI 动效预览台 (v01–v04)")
-                    .font(.headline.bold())
-                Text("100% Native SwiftUI · 4 × 390×844 · 120Hz Interactive Host")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                Text("阶段氛围")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 4)
-                ForEach(PreviewAtmosphereStageOption.allCases) { option in
-                    stageOptionButton(option)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("VoxPocket · 120Hz 原生 SwiftUI 预览窗 (Todo 竖向筛选 · 录音 5 阶段色彩 · 灵动岛 DI-v01..v04)")
+                        .font(.headline.bold())
+                    Text("100% Native SwiftUI · 4 × 390×844 · Zero-Jump Scale & Continuous 5-Blob RGB Morph")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            }
-            .padding(4)
-            .background(Color.primary.opacity(0.06), in: Capsule())
 
-            HStack(spacing: 6) {
-                Text("慢放倍率")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                speedButton(label: "1.0x", rate: 1.0)
-                speedButton(label: "0.5x", rate: 0.5)
-                speedButton(label: "0.25x", rate: 0.25)
-            }
-            .padding(4)
-            .background(Color.primary.opacity(0.06), in: Capsule())
+                Spacer()
 
-            HStack(spacing: 6) {
-                appearanceButton(label: "Dark", scheme: .dark, icon: "moon.fill")
-                appearanceButton(label: "Light", scheme: .light, icon: "sun.max.fill")
+                HStack(spacing: 6) {
+                    ForEach(PreviewHostTopTab.allCases) { tab in
+                        let isSelected = controller.activeTab == tab
+                        Button(action: {
+                            withAnimation(.spring(response: 0.30, dampingFraction: 0.88)) {
+                                controller.activeTab = tab
+                            }
+                        }) {
+                            Label(tab.label, systemImage: tab.symbolName)
+                                .font(.caption.weight(isSelected ? .bold : .semibold))
+                                .foregroundStyle(isSelected ? .white : .primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(isSelected ? Color.accentColor : Color.clear, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(4)
+                .background(Color.primary.opacity(0.07), in: Capsule())
             }
-            .padding(4)
-            .background(Color.primary.opacity(0.06), in: Capsule())
 
-            Button(action: { controller.toggleAllTagTrays() }) {
-                Label(controller.allTagTraysOpen ? "收起 #Tag 托盘" : "展开 #Tag 托盘", systemImage: "tag.fill")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.primary.opacity(0.08), in: Capsule())
-            }
-            .buttonStyle(.plain)
+            HStack(spacing: 14) {
+                if controller.activeTab == .recorderFiveStageAtmosphere {
+                    HStack(spacing: 4) {
+                        Text("录音页 5 阶段色彩流转")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 4)
+                        ForEach(PreviewAtmosphereStageOption.allCases) { option in
+                            stageOptionButton(option)
+                        }
+                    }
+                    .padding(4)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+                }
 
-            Button(action: { controller.toggleAllExpanded() }) {
-                Label(
-                    controller.allExpanded ? "一键全收起 (Collapse All)" : "一键全展开 (Expand All)",
-                    systemImage: controller.allExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"
-                )
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.accentColor, in: Capsule())
+                HStack(spacing: 6) {
+                    Text("慢放倍率")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    speedButton(label: "1.0x", rate: 1.0)
+                    speedButton(label: "0.5x", rate: 0.5)
+                    speedButton(label: "0.25x", rate: 0.25)
+                }
+                .padding(4)
+                .background(Color.primary.opacity(0.06), in: Capsule())
+
+                HStack(spacing: 6) {
+                    appearanceButton(label: "Dark", scheme: .dark, icon: "moon.fill")
+                    appearanceButton(label: "Light", scheme: .light, icon: "sun.max.fill")
+                }
+                .padding(4)
+                .background(Color.primary.opacity(0.06), in: Capsule())
+
+                Spacer()
+
+                if controller.activeTab == .todoAndVerticalFilter {
+                    Button(action: { controller.toggleAllTagTrays() }) {
+                        Label(controller.allTagTraysOpen ? "收起 #Tag 托盘" : "展开 #Tag 托盘", systemImage: "tag.fill")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color.primary.opacity(0.08), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button(action: { controller.toggleAllExpanded() }) {
+                    Label(
+                        controller.allExpanded ? "一键全收起 (Collapse All)" : "一键全展开 (Expand All)",
+                        systemImage: controller.allExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical"
+                    )
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor, in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
     private func stageOptionButton(_ option: PreviewAtmosphereStageOption) -> some View {
         let selected = controller.stageOption == option
         return Button(action: {
-            withAnimation(.easeInOut(duration: 0.35)) {
-                controller.stageOption = option
+            let scale = max(0.2, 1.0 / max(0.2, controller.speedMultiplier))
+            withAnimation(.easeInOut(duration: AtmosphereGlass.transitionDuration * scale)) {
+                controller.setAllRecorderStages(option)
             }
         }) {
             Text(option.label)
@@ -1598,6 +2067,436 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                 .background(selected ? Color.accentColor : Color.clear, in: Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Tab 2: Recorder Page 5-Stage Continuous Atmosphere Preview Board
+
+    private var recorderFiveStageComparisonGrid: some View {
+        HStack(alignment: .top, spacing: 20) {
+            ForEach(0..<4, id: \.self) { bezelIndex in
+                let stage = controller.recorderStagesByBezel[bezelIndex] ?? .idle
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text("REC-0\(bezelIndex + 1)")
+                            .font(.caption.weight(.black).monospaced())
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.14), in: Capsule())
+
+                        Text("录音页阶段：\(stage.label)")
+                            .font(.subheadline.bold())
+
+                        Spacer()
+
+                        HStack(spacing: 3) {
+                            ForEach(PreviewAtmosphereStageOption.allCases) { opt in
+                                Button(action: {
+                                    let scale = max(0.2, 1.0 / max(0.2, controller.speedMultiplier))
+                                    withAnimation(.easeInOut(duration: AtmosphereGlass.transitionDuration * scale)) {
+                                        controller.recorderStagesByBezel[bezelIndex] = opt
+                                    }
+                                }) {
+                                    Text(opt.label)
+                                        .font(.system(size: 10, weight: stage == opt ? .bold : .regular))
+                                        .foregroundStyle(stage == opt ? .white : .secondary)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(stage == opt ? Color.accentColor : Color.primary.opacity(0.07), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    Text("移除 .id(status)，5 个 RadialGradient 光团常驻并经 AnimatableRGBVector 连续插值，点击任意阶段零闪断零跳变。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 390, alignment: .leading)
+
+                    recorderPhoneViewport(stage: stage)
+                        .environment(\.colorScheme, controller.colorScheme)
+                }
+                .frame(width: 390)
+            }
+        }
+    }
+
+    private func recorderPhoneViewport(stage: PreviewAtmosphereStageOption) -> some View {
+        let sentence: String = {
+            switch stage {
+            case .idle: "按住底部玻璃说话，松手即刻生成润色笔记。"
+            case .listening: "正在聆听你的灵感，松手立即润色…"
+            case .transcribing: "把早间散步录下的播客大纲润色后发给搭档确认…"
+            case .refining: "正在提炼短标题、标签与习惯提醒时间槽…"
+            case .error: "未检测到语音，按住底部麦克风重新说话。"
+            }
+        }()
+
+        return ZStack(alignment: .bottom) {
+            RecorderBackdrop(status: stage.recorderStatus, audioLevel: stage.simulatedAudioLevel)
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("9:41")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                    Spacer()
+                    Capsule()
+                        .fill(Color.black.opacity(0.86))
+                        .frame(width: 126, height: 32)
+                    Spacer()
+                    HStack(spacing: 5) {
+                        Image(systemName: "cellularbars")
+                        Image(systemName: "wifi")
+                        Image(systemName: "battery.100")
+                    }
+                    .font(.caption2.weight(.semibold))
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+
+                Spacer()
+
+                RecorderSentenceStage(sentence: sentence, copy: {})
+                    .frame(height: 360)
+
+                Spacer()
+            }
+
+            HStack {
+                Image(systemName: "checklist")
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 52, height: 52)
+                    .modifier(RecorderGlassModifier())
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.accentColor, Color.cyan],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                    Image(systemName: stage == .listening ? "stop.fill" : "mic.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 16)
+        }
+        .frame(width: 390, height: 844)
+        .clipShape(RoundedRectangle(cornerRadius: 44, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 44, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 1.2)
+        }
+    }
+
+    // MARK: - Tab 3: Dynamic Island & Live Activity 4-Variant 120Hz Interactive Preview Board (DI-v01..v04)
+
+    private var dynamicIslandFourUpComparisonGrid: some View {
+        HStack(alignment: .top, spacing: 20) {
+            ForEach(DynamicIslandPreviewVariantKind.allCases) { kind in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text(kind.badgeCode)
+                            .font(.caption.weight(.black).monospaced())
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.14), in: Capsule())
+
+                        Text(kind.title)
+                            .font(.subheadline.bold())
+                            .lineLimit(1)
+                    }
+
+                    Text(kind.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 390, alignment: .leading)
+
+                    dynamicIslandPhoneViewport(for: kind)
+                        .environment(\.colorScheme, controller.colorScheme)
+                }
+                .frame(width: 390)
+            }
+        }
+    }
+
+    private func dynamicIslandPhoneViewport(for kind: DynamicIslandPreviewVariantKind) -> some View {
+        let mode = controller.islandModeByVariant[kind] ?? .expanded
+        let completedCount = controller.islandCompletedSubtasksByVariant[kind] ?? 1
+        let receipt = controller.islandReceiptByVariant[kind]
+        let stage = controller.islandPhaseByVariant[kind] ?? .listening
+        let accent: Color = {
+            switch stage {
+            case .listening: Color(.sRGB, red: 0.32, green: 0.74, blue: 0.72, opacity: 1.0)
+            case .transcribing: Color(.sRGB, red: 0.34, green: 0.56, blue: 0.90, opacity: 1.0)
+            case .refining: Color(.sRGB, red: 0.58, green: 0.50, blue: 0.90, opacity: 1.0)
+            case .idle: Color(.sRGB, red: 0.22, green: 0.74, blue: 0.97, opacity: 1.0)
+            case .error: Color(.sRGB, red: 0.90, green: 0.46, blue: 0.50, opacity: 1.0)
+            }
+        }()
+        let scale = max(0.15, 1.0 / max(0.15, controller.speedMultiplier))
+        let spring = Animation.spring(response: 0.32 * scale, dampingFraction: 0.84)
+
+        return ZStack(alignment: .top) {
+            RecorderBackdrop(status: .idle, audioLevel: 0.0)
+
+            VStack(spacing: 12) {
+                ZStack(alignment: .top) {
+                    HStack {
+                        Text("9:41")
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                        Spacer()
+                        HStack(spacing: 5) {
+                            Image(systemName: "cellularbars")
+                            Image(systemName: "wifi")
+                            Image(systemName: "battery.100")
+                        }
+                        .font(.caption2.weight(.semibold))
+                    }
+                    .padding(.horizontal, 24)
+                    .frame(height: 37)
+
+                    // Single continuous morphing #000000 Dynamic Island container
+                    ZStack {
+                        RoundedRectangle(cornerRadius: mode.cornerRadius, style: .continuous)
+                            .fill(Color.black)
+
+                        RoundedRectangle(cornerRadius: mode.cornerRadius, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [accent.opacity(0.65), Color.white.opacity(0.14)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: mode == .expanded ? 1.2 : 0.85
+                            )
+
+                        dynamicIslandInterior(
+                            kind: kind,
+                            mode: mode,
+                            accent: accent,
+                            stage: stage,
+                            completedCount: completedCount,
+                            receipt: receipt,
+                            spring: spring
+                        )
+                    }
+                    .frame(width: mode.targetSize.width, height: mode.targetSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: mode.cornerRadius, style: .continuous))
+                    .shadow(color: accent.opacity(mode == .expanded ? 0.26 : 0.10), radius: 14, y: 6)
+                    .onTapGesture {
+                        withAnimation(spring) {
+                            controller.islandModeByVariant[kind] = (mode == .expanded) ? .compact : .expanded
+                        }
+                    }
+                }
+                .padding(.top, 11)
+
+                // Interactive mode switcher bar for 120Hz inspection
+                HStack(spacing: 4) {
+                    ForEach(DynamicIslandSurfaceBezelMode.allCases) { candidate in
+                        let selected = mode == candidate
+                        Button(action: {
+                            withAnimation(spring) {
+                                controller.islandModeByVariant[kind] = candidate
+                            }
+                        }) {
+                            Text(candidate.shortLabel)
+                                .font(.system(size: 10, weight: selected ? .bold : .medium).monospaced())
+                                .foregroundStyle(selected ? .white : .secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(selected ? accent.opacity(0.85) : Color.primary.opacity(0.08), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(3)
+                .background(.ultraThinMaterial, in: Capsule())
+
+                TodoUnfoldVariantCardView(
+                    variant: .v02,
+                    todo: controller.store(for: .v02).todos[0],
+                    aiOrder: controller.store(for: .v02).aiOrdersByTodoID[controller.store(for: .v02).todos[0].id],
+                    isExpanded: true,
+                    expandFraction: 1.0,
+                    isTagTrayOpen: false,
+                    cascadeStageTwoVisible: true,
+                    historicalTags: controller.store(for: .v02).historicalTags,
+                    speedMultiplier: controller.speedMultiplier,
+                    onToggleExpand: {},
+                    onToggleTagTray: {},
+                    onCycleStatus: {},
+                    onCyclePriority: {},
+                    onToggleTag: { _ in },
+                    onAddTag: { _ in },
+                    onToggleSubtask: { _ in
+                        withAnimation(spring) {
+                            controller.advanceIslandSubtask(for: kind)
+                        }
+                    },
+                    onUpdateTitle: { _ in },
+                    onUpdateSubtaskTitle: { _, _ in },
+                    onAppendSubtask: { _ in },
+                    onDispatchAI: {
+                        controller.store(for: .v02).dispatchTodoToICloudAI(todoID: controller.store(for: .v02).todos[0].id)
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                Spacer()
+            }
+        }
+        .frame(width: 390, height: 844)
+        .clipShape(RoundedRectangle(cornerRadius: 44, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 44, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 1.2)
+        }
+    }
+
+    @ViewBuilder
+    private func dynamicIslandInterior(
+        kind: DynamicIslandPreviewVariantKind,
+        mode: DynamicIslandSurfaceBezelMode,
+        accent: Color,
+        stage: PreviewAtmosphereStageOption,
+        completedCount: Int,
+        receipt: String?,
+        spring: Animation
+    ) -> some View {
+        switch mode {
+        case .minimal:
+            Image(systemName: "waveform")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(accent)
+        case .compact:
+            HStack {
+                HStack(spacing: 4) {
+                    Circle().fill(accent).frame(width: 7, height: 7)
+                    Text("P0 走查")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.leading, 12)
+                Spacer()
+                Text(receipt ?? "\(completedCount)/3")
+                    .font(.system(size: 11, weight: .bold).monospacedDigit())
+                    .foregroundStyle(accent)
+                    .padding(.trailing, 12)
+            }
+        case .expanded, .lockScreenBanner:
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text("P0")
+                        .font(.system(size: 10, weight: .black).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.red.opacity(0.85), in: Capsule())
+
+                    Text("液态玻璃交互走查")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+
+                    if kind == .diV03 {
+                        HStack(spacing: 4) {
+                            ForEach([PreviewAtmosphereStageOption.listening, .transcribing, .refining, .idle], id: \.self) { opt in
+                                Button(action: {
+                                    withAnimation(spring) {
+                                        controller.islandPhaseByVariant[kind] = opt
+                                    }
+                                }) {
+                                    Circle()
+                                        .fill(opt == stage ? accent : Color.white.opacity(0.3))
+                                        .frame(width: 7, height: 7)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } else {
+                        Text(receipt ?? "⏳ 14:59")
+                            .font(.system(size: 11.5, weight: .bold).monospacedDigit())
+                            .foregroundStyle(accent)
+                    }
+                }
+
+                Button(action: {
+                    withAnimation(spring) {
+                        controller.advanceIslandSubtask(for: kind)
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: completedCount >= 3 ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(completedCount >= 3 ? Color.green : accent)
+                        Text("[\(completedCount)/3] 验证左下竖向玻璃筛选与原地展开")
+                            .font(.system(size: 11, weight: .medium).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                HStack(spacing: 6) {
+                    Button(action: {
+                        withAnimation(spring) { controller.markIslandDone(for: kind) }
+                    }) {
+                        Text("✓ 完成")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(accent, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {
+                        withAnimation(spring) { controller.snoozeIsland15m(for: kind) }
+                    }) {
+                        Text("+15m")
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {
+                        withAnimation(spring) { controller.deferIslandMorning(for: kind) }
+                    }) {
+                        Text("🌙 明早 08:35")
+                            .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
     }
 
     private func speedButton(label: String, rate: Double) -> some View {

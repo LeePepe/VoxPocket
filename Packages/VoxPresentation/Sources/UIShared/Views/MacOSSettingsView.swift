@@ -2,6 +2,7 @@
 import AppKit
 import Carbon
 import SwiftUI
+import CoreModels
 import Preferences
 
 /// 原生设置复用「我的」的偏好模型，不创建编辑器、会话或录音服务。
@@ -16,8 +17,10 @@ public struct MacOSSettingsView: View {
     @State private var providerSettingsLoaded = false
     @State private var shortcutsLoaded = false
     @State private var selection: Section = .shortcuts
+    @State private var aiRunnerConfig: UserAIRunnerConfig = UserAIRunnerConfig()
+    @State private var aiRunnerConfigSavedMessage: String?
     let localModelLoadingStatus: LocalModelLoadingStatus?
-    enum Section: Hashable { case shortcuts, text, privacy }
+    enum Section: Hashable { case shortcuts, text, aiRunner, privacy }
 
     public init(
         providerSettings: LLMProviderSettingsViewModel = LLMProviderSettingsViewModel(),
@@ -103,9 +106,57 @@ public struct MacOSSettingsView: View {
             }
                 .tag(Section.text)
                 .tabItem { Label("语音与文本", systemImage: "waveform") }
+            aiRunnerSettingsPane
+                .tag(Section.aiRunner)
+                .tabItem { Label("AI 自动接单", systemImage: "sparkles") }
             productTelemetrySettings
                 .tag(Section.privacy)
                 .tabItem { Label("隐私", systemImage: "hand.raised") }
+        }
+    }
+
+    private var aiRunnerSettingsPane: some View {
+        Form {
+            SwiftUI.Section {
+                Toggle("开启 Mac 自动接单 (iCloud AIOrders)", isOn: $aiRunnerConfig.isAutoPickupEnabled)
+                    .accessibilityIdentifier("vox.settings.aiRunner.autoPickup")
+                TextField("执行器显示名称", text: $aiRunnerConfig.runnerDisplayName)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("vox.settings.aiRunner.displayName")
+                TextField("默认工作目录 ({{cwd}})", text: $aiRunnerConfig.defaultWorkingDirectory)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("vox.settings.aiRunner.cwd")
+                TextField("自定义脚本或命令模板", text: $aiRunnerConfig.scriptPathOrCommand)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("vox.settings.aiRunner.commandTemplate")
+                Text("支持占位符：{{order_file}}、{{status_file}}、{{title}}、{{description}}、{{subtasks_json}}、{{cwd}}，以及环境变量 VOX_ORDER_FILE 与 VOX_STATUS_FILE。脚本输出 VOX_STATUS: <阶段> 或 VOX_PROGRESS: <0..1> 将实时回传 iCloud。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("保存 AI 接单配置") {
+                        Task {
+                            await UserDefaultsPreferencesStore.shared.setValue(aiRunnerConfig, for: .userAIRunnerConfig)
+                            NotificationCenter.default.post(name: PreferencesNotification.userAIRunnerConfigDidChange, object: nil)
+                            aiRunnerConfigSavedMessage = "已保存 AI 自动接单配置"
+                        }
+                    }
+                    .accessibilityIdentifier("vox.settings.aiRunner.save")
+
+                    if let msg = aiRunnerConfigSavedMessage {
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
+            } header: {
+                Text("AI 自动接单与自定义脚本配置")
+            }
+        }
+        .formStyle(.grouped)
+        .task {
+            if let loaded: UserAIRunnerConfig = await UserDefaultsPreferencesStore.shared.getValue(for: .userAIRunnerConfig) {
+                aiRunnerConfig = loaded
+            }
         }
     }
 

@@ -717,6 +717,57 @@ public final class ServiceContainer: ObservableObject {
             }
         }
         notificationCenter.addObserver(
+            forName: Notification.Name("vox.liveActivity.phaseUpdated"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let phaseRaw = (note.userInfo?["phase"] as? String) ?? "transcribing"
+            let modeRaw = (note.userInfo?["mode"] as? String) ?? CaptureMode.todo.rawValue
+            let title = (note.userInfo?["title"] as? String) ?? "处理中…"
+            let subtitle = note.userInfo?["subtitle"] as? String
+            Task { @MainActor in
+                self?.transitionIOSCaptureLiveActivityPhase(
+                    phaseRaw: phaseRaw,
+                    modeRaw: modeRaw,
+                    title: title,
+                    subtitle: subtitle
+                )
+            }
+        }
+        notificationCenter.addObserver(
+            forName: Notification.Name("vox.liveActivity.completedReceipt"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let modeRaw = (note.userInfo?["mode"] as? String) ?? CaptureMode.todo.rawValue
+            let todoID = note.userInfo?["todoID"] as? String
+            let title = (note.userInfo?["title"] as? String) ?? "已存入待办"
+            let priority = (note.userInfo?["priority"] as? String) ?? "P0"
+            let completedSubtasks = (note.userInfo?["completedSubtasks"] as? Int) ?? 0
+            let totalSubtasks = (note.userInfo?["totalSubtasks"] as? Int) ?? 0
+            Task { @MainActor in
+                self?.completeIOSCaptureLiveActivityWithReceipt(
+                    modeRaw: modeRaw,
+                    todoID: todoID,
+                    title: title,
+                    priority: priority,
+                    completedSubtasks: completedSubtasks,
+                    totalSubtasks: totalSubtasks
+                )
+            }
+        }
+        notificationCenter.addObserver(
+            forName: TodoIslandActionIntent.didRequestActionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let actionKind = (note.userInfo?["actionKind"] as? String) ?? "done"
+            let todoIDStr = (note.userInfo?["todoID"] as? String) ?? ""
+            Task { @MainActor in
+                await self?.handleTodoIslandAction(actionKind: actionKind, todoIDString: todoIDStr)
+            }
+        }
+        notificationCenter.addObserver(
             forName: Notification.Name("vox.liveActivity.recordingEnded"),
             object: nil,
             queue: .main
@@ -736,7 +787,9 @@ public final class ServiceContainer: ObservableObject {
             state: VoxCaptureActivityAttributes.ContentState(
                 mode: modeTitle,
                 elapsedSeconds: 0,
-                isRecording: true
+                isRecording: true,
+                phase: .listening,
+                title: "正在聆听…"
             ),
             staleDate: nil
         )
@@ -752,7 +805,9 @@ public final class ServiceContainer: ObservableObject {
             state: VoxCaptureActivityAttributes.ContentState(
                 mode: modeTitle,
                 elapsedSeconds: seconds,
-                isRecording: true
+                isRecording: true,
+                phase: .listening,
+                title: "正在聆听…"
             ),
             staleDate: nil
         )
@@ -762,6 +817,89 @@ public final class ServiceContainer: ObservableObject {
             }
         }
         #endif
+    }
+
+    private func transitionIOSCaptureLiveActivityPhase(
+        phaseRaw: String,
+        modeRaw: String,
+        title: String,
+        subtitle: String?
+    ) {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.2, *) else { return }
+        let modeTitle = modeRaw == CaptureMode.todo.rawValue ? "存入待办" : "复制文字"
+        let phase = VoxCaptureIslandPhase(rawValue: phaseRaw) ?? .transcribing
+        let updated = ActivityContent(
+            state: VoxCaptureActivityAttributes.ContentState(
+                mode: modeTitle,
+                elapsedSeconds: 0,
+                isRecording: false,
+                phase: phase,
+                title: title,
+                subtitle: subtitle
+            ),
+            staleDate: nil
+        )
+        Task {
+            for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                await activity.update(updated)
+            }
+        }
+        #endif
+    }
+
+    private func completeIOSCaptureLiveActivityWithReceipt(
+        modeRaw: String,
+        todoID: String?,
+        title: String,
+        priority: String,
+        completedSubtasks: Int,
+        totalSubtasks: Int
+    ) {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.2, *) else { return }
+        let modeTitle = modeRaw == CaptureMode.todo.rawValue ? "存入待办" : "复制文字"
+        let finalContent = ActivityContent(
+            state: VoxCaptureActivityAttributes.ContentState(
+                mode: modeTitle,
+                elapsedSeconds: 0,
+                isRecording: false,
+                phase: .completedReceipt,
+                todoID: todoID,
+                title: title,
+                priorityBadge: priority,
+                completedSubtasks: completedSubtasks,
+                totalSubtasks: totalSubtasks,
+                statusReceiptText: "✓ 已入库"
+            ),
+            staleDate: nil
+        )
+        Task {
+            for activity in Activity<VoxCaptureActivityAttributes>.activities {
+                await activity.update(finalContent)
+                await activity.end(finalContent, dismissalPolicy: .after(.now.addingTimeInterval(4.0)))
+            }
+        }
+        #endif
+    }
+
+    private func handleTodoIslandAction(actionKind: String, todoIDString: String) async {
+        guard let todoID = UUID(uuidString: todoIDString) else { return }
+        switch actionKind {
+        case "subtask":
+            if let todo = workspaceViewModel.todos.first(where: { $0.id == todoID }),
+               let firstIncomplete = todo.subtasks.first(where: { !$0.isCompleted }) {
+                workspaceViewModel.toggleTodoSubtask(todoID: todoID, subtaskID: firstIncomplete.id)
+            }
+        case "done":
+            workspaceViewModel.toggleTodoDone(todoID)
+        case "snooze15m":
+            workspaceViewModel.shiftTodoReminderByMinutes(todoID: todoID, deltaMinutes: 15)
+        case "deferMorning":
+            workspaceViewModel.assignTodoHabitSlot(todoID: todoID, slotRawValue: "morning")
+        default:
+            break
+        }
     }
 
     private func endIOSCaptureLiveActivities() {

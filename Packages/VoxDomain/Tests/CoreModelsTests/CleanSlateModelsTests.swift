@@ -168,4 +168,57 @@ final class CleanSlateModelsTests: XCTestCase {
         XCTAssertNil(sanitized.externalSync?.projectName)
         XCTAssertNil(sanitized.externalSync?.lastError)
     }
+
+    func testICloudAIExecutionOrderAndUserAIRunnerConfigInterpolation() throws {
+        let todo = VoiceTodo(
+            title: "液态玻璃交互走查",
+            description: "核对双按钮极简底栏对比度",
+            projectKey: "VP",
+            priority: .p0,
+            tags: ["#VoxPocket", "#iOS"],
+            subtasks: [
+                VoiceTodoSubtask(title: "导出亮暗双外观截图"),
+                VoiceTodoSubtask(title: "核对左下竖向玻璃筛选")
+            ]
+        )
+        let order = ICloudAIExecutionOrder(from: todo)
+        XCTAssertEqual(order.todoID, todo.id)
+        XCTAssertEqual(order.state, .queued)
+        XCTAssertEqual(order.formattedButtonLabel, "☁️ 已上传 iCloud · 等待 Mac 接单")
+
+        let runningReport = AIExecutionStatusReport(
+            orderID: order.orderID,
+            todoID: todo.id,
+            state: .running,
+            progressStage: "正在分析 2 个子步骤",
+            progressFraction: 0.6,
+            assignedRunnerName: "Claude Code"
+        )
+        let runningOrder = order.applying(runningReport)
+        XCTAssertEqual(runningOrder.state, .running)
+        XCTAssertEqual(runningOrder.formattedButtonLabel, "⚡ Mac 已接单 · AI 执行中: 正在分析 2 个子步骤")
+
+        let completedOrder = runningOrder.withState(
+            .completed,
+            progressStage: "执行完成",
+            progressFraction: 1.0,
+            outputSummary: "2 项检查通过"
+        )
+        XCTAssertEqual(completedOrder.formattedButtonLabel, "✅ AI 已完成 · 2 项检查通过")
+
+        let config = UserAIRunnerConfig(
+            isAutoPickupEnabled: true,
+            runnerDisplayName: "Custom Agent",
+            scriptPathOrCommand: "run-agent --cwd {{cwd}} --order {{order_file}} --status {{status_file}} --title {{title}}",
+            defaultWorkingDirectory: "/tmp/workspace"
+        )
+        let cmd = config.interpolateCommand(
+            order: order,
+            orderFilePath: "/tmp/order.json",
+            statusFilePath: "/tmp/status.json"
+        )
+        XCTAssertTrue(cmd.contains("'/tmp/order.json'"))
+        XCTAssertTrue(cmd.contains("'/tmp/status.json'"))
+        XCTAssertTrue(cmd.contains("'液态玻璃交互走查'"))
+    }
 }

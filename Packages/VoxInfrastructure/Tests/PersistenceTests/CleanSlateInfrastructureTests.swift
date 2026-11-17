@@ -1,4 +1,5 @@
 import XCTest
+import Synchronization
 import CoreModels
 @testable import Persistence
 @testable import PlatformAdapters
@@ -352,5 +353,88 @@ final class CleanSlateInfrastructureTests: XCTestCase {
 
         let legacyMask = HotkeyDefinition(keyCode: 98, modifiers: (1 << 0) | (1 << 3), identifier: HotkeyIdentifier.showPopover)
         XCTAssertEqual(legacyMask.displayString, "⌃⌘F7")
+    }
+
+    func testICloudAIOrderSyncAndMacAutoPickupClosedLoop() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("icloud-ai-orders-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let kvStore = InMemoryUbiquitousAIOrderKVStore()
+        let syncService = ICloudAIOrderSyncService(
+            ordersDirectoryURL: tempDir.appendingPathComponent("AIOrders", isDirectory: true),
+            kvStore: kvStore
+        )
+        let configStore = UserAIRunnerConfigStore(
+            configFileURL: tempDir.appendingPathComponent("ai-runner-config.json")
+        )
+        try configStore.saveConfig(
+            UserAIRunnerConfig(
+                isAutoPickupEnabled: true,
+                runnerDisplayName: "Mac Test Agent",
+                scriptPathOrCommand: "custom-runner --order {{order_file}} --status {{status_file}}",
+                defaultWorkingDirectory: tempDir.path
+            )
+        )
+
+        let todo = VoiceTodo(
+            title: "液态玻璃交互走查",
+            description: "核对双按钮极简底栏对比度",
+            priority: .p0,
+            tags: ["#VoxPocket", "#iOS"],
+            subtasks: [
+                VoiceTodoSubtask(title: "步骤 1"),
+                VoiceTodoSubtask(title: "步骤 2")
+            ]
+        )
+
+        // 1. iPhone submits order to iCloud
+        let submitted = try await syncService.submitOrderToICloud(todo: todo)
+        XCTAssertEqual(submitted.state, .queued)
+        let loadedFromDisk = try await syncService.loadOrder(orderID: submitted.orderID)
+        XCTAssertEqual(loadedFromDisk?.title, "液态玻璃交互走查")
+
+        // 2. Mac auto-pickup service claims queued order, streams VOX_STATUS/VOX_PROGRESS lines, and completes
+        let observedStatesMutex = Mutex<[AIOrderExecutionState]>([])
+        let pickupService = MacAIOrderAutoPickupService(
+            syncService: syncService,
+            configStore: configStore,
+            shellExecutor: { command, env, cwd, reporter in
+                XCTAssertTrue(command.contains("custom-runner"))
+                XCTAssertEqual(env["VOX_TODO_ID"], todo.id.uuidString)
+                if let claimed = try await syncService.loadOrder(orderID: submitted.orderID) {
+                    observedStatesMutex.withLock { $0.append(claimed.state) }
+                }
+                let stdout = """
+                VOX_PROGRESS: 0.45
+                VOX_STATUS: 正在执行步骤 1 与步骤 2
+                VOX_PROGRESS: 0.85
+                VOX_STATUS: 正在汇总检查结果
+                已完成 2 项液态玻璃走查子步骤
+                """
+                return (0, stdout)
+            }
+        )
+
+        let processed = try await pickupService.pollAndProcessQueuedOrders()
+        XCTAssertEqual(processed.count, 1)
+        let observedStates = observedStatesMutex.withLock { $0 }
+        XCTAssertTrue(observedStates.contains(.claimedByMac) || observedStates.contains(.running))
+
+        let loadedFinalOrder = try await syncService.loadLatestOrder(forTodoID: todo.id)
+        let finalOrder = try XCTUnwrap(loadedFinalOrder)
+        XCTAssertEqual(finalOrder.state, .completed)
+        XCTAssertEqual(finalOrder.outputSummary, "已完成 2 项液态玻璃走查子步骤")
+        XCTAssertEqual(finalOrder.assignedRunnerName, "Mac Test Agent")
+
+        // 3. Verify programmatic custom code handler registration
+        pickupService.registerCustomCodeHandler { order, reporter in
+            _ = try await reporter.reportProgress(stage: "Swift 闭包处理器执行中", fraction: 0.7)
+            return "Swift 闭包完成: \(order.title)"
+        }
+        let secondOrder = try await syncService.submitOrderToICloud(todo: todo)
+        let processedSecond = try await pickupService.claimAndExecuteOrder(secondOrder)
+        XCTAssertEqual(processedSecond.state, .completed)
+        XCTAssertEqual(processedSecond.outputSummary, "Swift 闭包完成: 液态玻璃交互走查")
     }
 }

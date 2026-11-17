@@ -369,3 +369,243 @@ public struct VoiceTodo: Identifiable, Codable, Equatable, Hashable, Sendable {
         VoiceTodo(id: id, title: "", description: "", taskPrompt: "", rawTranscript: "", projectKey: projectKey, assignedRunnerKind: assignedRunnerKind, executionState: executionState, priority: priority, tags: [], subtasks: subtasks.map { $0.sanitizedForCloudSync() }, scheduledAt: scheduledAt, timeSlot: timeSlot, lastExecutionSummary: nil, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: nil, durationSeconds: durationSeconds, deviceSource: deviceSource, externalSync: externalSync?.sanitizedForCloudSync(), createdAt: createdAt, updatedAt: updatedAt)
     }
 }
+
+// MARK: - iCloud AI Execution Order & Live Status Reporting (`✨ AI do it` Cross-Device Engine)
+
+public enum AIOrderExecutionState: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
+    case queued
+    case claimedByMac
+    case running
+    case completed
+    case failed
+
+    public var isTerminal: Bool {
+        self == .completed || self == .failed
+    }
+
+    public var localizedBadgeLabel: String {
+        switch self {
+        case .queued: "☁️ 已上传 iCloud · 等待 Mac 接单"
+        case .claimedByMac: "⚡ Mac 已接单 · 准备启动 AI"
+        case .running: "⚡ Mac 已接单 · AI 执行中"
+        case .completed: "✅ AI 已完成"
+        case .failed: "⚠️ AI 执行失败 · 点击重试"
+        }
+    }
+}
+
+public struct AIExecutionStatusReport: Codable, Equatable, Hashable, Sendable {
+    public let orderID: UUID
+    public let todoID: UUID
+    public let state: AIOrderExecutionState
+    public let progressStage: String
+    public let progressFraction: Double
+    public let outputSummary: String?
+    public let assignedRunnerName: String?
+    public let updatedAt: Date
+
+    public init(
+        orderID: UUID,
+        todoID: UUID,
+        state: AIOrderExecutionState,
+        progressStage: String,
+        progressFraction: Double = 0.0,
+        outputSummary: String? = nil,
+        assignedRunnerName: String? = nil,
+        updatedAt: Date = Date()
+    ) {
+        self.orderID = orderID
+        self.todoID = todoID
+        self.state = state
+        self.progressStage = progressStage
+        self.progressFraction = min(1.0, max(0.0, progressFraction))
+        self.outputSummary = outputSummary
+        self.assignedRunnerName = assignedRunnerName
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct ICloudAIExecutionOrder: Identifiable, Codable, Equatable, Hashable, Sendable {
+    public var id: UUID { orderID }
+    public let orderID: UUID
+    public let todoID: UUID
+    public let title: String
+    public let description: String
+    public let subtasks: [String]
+    public let tags: [String]
+    public let priority: String
+    public let projectKey: String?
+    public let state: AIOrderExecutionState
+    public let progressStage: String
+    public let progressFraction: Double
+    public let outputSummary: String?
+    public let assignedRunnerName: String?
+    public let createdAt: Date
+    public let updatedAt: Date
+
+    public init(
+        orderID: UUID = UUID(),
+        todoID: UUID,
+        title: String,
+        description: String = "",
+        subtasks: [String] = [],
+        tags: [String] = [],
+        priority: String = "P1",
+        projectKey: String? = nil,
+        state: AIOrderExecutionState = .queued,
+        progressStage: String = "已上传 iCloud · 等待 Mac 接单",
+        progressFraction: Double = 0.05,
+        outputSummary: String? = nil,
+        assignedRunnerName: String? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.orderID = orderID
+        self.todoID = todoID
+        self.title = title
+        self.description = description
+        self.subtasks = subtasks
+        self.tags = tags
+        self.priority = priority
+        self.projectKey = projectKey
+        self.state = state
+        self.progressStage = progressStage
+        self.progressFraction = min(1.0, max(0.0, progressFraction))
+        self.outputSummary = outputSummary
+        self.assignedRunnerName = assignedRunnerName
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    public init(from todo: VoiceTodo, orderID: UUID = UUID(), now: Date = Date()) {
+        self.init(
+            orderID: orderID,
+            todoID: todo.id,
+            title: todo.title,
+            description: todo.description.isEmpty ? todo.taskPrompt : todo.description,
+            subtasks: todo.subtasks.map(\.title),
+            tags: todo.tags,
+            priority: todo.priority.rawValue,
+            projectKey: todo.projectKey,
+            state: .queued,
+            progressStage: "已上传 iCloud · 等待 Mac 接单",
+            progressFraction: 0.08,
+            outputSummary: nil,
+            assignedRunnerName: nil,
+            createdAt: now,
+            updatedAt: now
+        )
+    }
+
+    public func applying(_ report: AIExecutionStatusReport) -> ICloudAIExecutionOrder {
+        ICloudAIExecutionOrder(
+            orderID: orderID,
+            todoID: todoID,
+            title: title,
+            description: description,
+            subtasks: subtasks,
+            tags: tags,
+            priority: priority,
+            projectKey: projectKey,
+            state: report.state,
+            progressStage: report.progressStage,
+            progressFraction: report.progressFraction,
+            outputSummary: report.outputSummary ?? outputSummary,
+            assignedRunnerName: report.assignedRunnerName ?? assignedRunnerName,
+            createdAt: createdAt,
+            updatedAt: report.updatedAt
+        )
+    }
+
+    public func withState(
+        _ state: AIOrderExecutionState,
+        progressStage: String,
+        progressFraction: Double,
+        outputSummary: String? = nil,
+        assignedRunnerName: String? = nil,
+        updatedAt: Date = Date()
+    ) -> ICloudAIExecutionOrder {
+        ICloudAIExecutionOrder(
+            orderID: orderID,
+            todoID: todoID,
+            title: title,
+            description: description,
+            subtasks: subtasks,
+            tags: tags,
+            priority: priority,
+            projectKey: projectKey,
+            state: state,
+            progressStage: progressStage,
+            progressFraction: progressFraction,
+            outputSummary: outputSummary ?? self.outputSummary,
+            assignedRunnerName: assignedRunnerName ?? self.assignedRunnerName,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    public var formattedButtonLabel: String {
+        switch state {
+        case .queued:
+            return "☁️ 已上传 iCloud · 等待 Mac 接单"
+        case .claimedByMac:
+            return "⚡ Mac 已接单 · \(progressStage)"
+        case .running:
+            return "⚡ Mac 已接单 · AI 执行中: \(progressStage)"
+        case .completed:
+            let summary = (outputSummary ?? progressStage).trimmingCharacters(in: .whitespacesAndNewlines)
+            return summary.isEmpty ? "✅ AI 已完成" : "✅ AI 已完成 · \(summary)"
+        case .failed:
+            let reason = (outputSummary ?? progressStage).trimmingCharacters(in: .whitespacesAndNewlines)
+            return reason.isEmpty ? "⚠️ AI 执行失败 · 点击重试" : "⚠️ AI 执行失败 · \(reason)"
+        }
+    }
+}
+
+public struct UserAIRunnerConfig: Codable, Equatable, Hashable, Sendable {
+    public var isAutoPickupEnabled: Bool
+    public var runnerDisplayName: String
+    public var scriptPathOrCommand: String
+    public var defaultWorkingDirectory: String
+    public var pollIntervalSeconds: Double
+
+    public init(
+        isAutoPickupEnabled: Bool = true,
+        runnerDisplayName: String = "Mac AI Agent",
+        scriptPathOrCommand: String = "herdr run --cwd {{cwd}} --title {{title}} --order-file {{order_file}} --status-file {{status_file}}",
+        defaultWorkingDirectory: String = ".",
+        pollIntervalSeconds: Double = 2.0
+    ) {
+        self.isAutoPickupEnabled = isAutoPickupEnabled
+        self.runnerDisplayName = runnerDisplayName
+        self.scriptPathOrCommand = scriptPathOrCommand
+        self.defaultWorkingDirectory = defaultWorkingDirectory
+        self.pollIntervalSeconds = max(0.2, pollIntervalSeconds)
+    }
+
+    public func interpolateCommand(
+        order: ICloudAIExecutionOrder,
+        orderFilePath: String,
+        statusFilePath: String
+    ) -> String {
+        let subtasksJSON: String = {
+            guard let data = try? JSONEncoder().encode(order.subtasks),
+                  let str = String(data: data, encoding: .utf8) else {
+                return "[]"
+            }
+            return str
+        }()
+        let resolvedCwd = defaultWorkingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "."
+            : defaultWorkingDirectory
+
+        return scriptPathOrCommand
+            .replacingOccurrences(of: "{{order_file}}", with: AIRunnerTemplate.shellEscape(orderFilePath))
+            .replacingOccurrences(of: "{{status_file}}", with: AIRunnerTemplate.shellEscape(statusFilePath))
+            .replacingOccurrences(of: "{{title}}", with: AIRunnerTemplate.shellEscape(order.title))
+            .replacingOccurrences(of: "{{description}}", with: AIRunnerTemplate.shellEscape(order.description))
+            .replacingOccurrences(of: "{{subtasks_json}}", with: AIRunnerTemplate.shellEscape(subtasksJSON))
+            .replacingOccurrences(of: "{{cwd}}", with: AIRunnerTemplate.shellEscape(resolvedCwd))
+    }
+}
+
