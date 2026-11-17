@@ -176,7 +176,7 @@ public struct VoxCaptureLiveActivity: Widget {
             .activityBackgroundTint(.black.opacity(0.88))
         } dynamicIsland: { context in
             let accent = context.state.phase.accentColor
-            DynamicIsland {
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label(context.state.phase.localizedPhaseTitle, systemImage: context.state.phase.symbolName)
                         .font(.caption.weight(.bold))
