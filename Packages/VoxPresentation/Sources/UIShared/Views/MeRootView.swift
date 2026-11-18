@@ -154,6 +154,40 @@ struct LLMProviderCard: View {
             Divider().overlay(Color.primary.opacity(0.12))
 
             HStack {
+                Text("语音识别 (Stage 1)")
+                    .font(.system(.subheadline, design: .rounded).weight(.medium))
+                    .foregroundColor(Color.primary)
+                Spacer()
+                Picker("", selection: speechModelBinding) {
+                    Text("流式云端转写").tag(SpeechModelSelection.realtime)
+                    Text("本地 SFSpeechRecognizer 流式").tag(SpeechModelSelection.appleSpeech)
+                    Text("整段云端转写").tag(SpeechModelSelection.batch)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(Color.accentColor)
+                .accessibilityIdentifier("vox.me.speechModel")
+            }
+
+            if viewModel.speechModel == .realtime {
+                HStack(spacing: 8) {
+                    TextField("自配实时流式部署名", text: $viewModel.realtimeDeploymentDraft)
+                        .font(.system(.caption, design: .rounded))
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityIdentifier("vox.me.realtimeDeployment")
+                    Button("保存") {
+                        Task { await viewModel.saveRealtimeDeployment() }
+                    }
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("vox.me.saveRealtimeDeployment")
+                }
+            }
+
+            Divider().overlay(Color.primary.opacity(0.12))
+
+            #if os(macOS)
+            HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Skip intent analysis")
                         .font(.system(.subheadline, design: .rounded).weight(.medium))
@@ -167,11 +201,32 @@ struct LLMProviderCard: View {
                     .labelsHidden()
                     .tint(Color.accentColor)
             }
+            #else
+            HStack {
+                Text("前置分析 (Stage 2)")
+                    .font(.system(.subheadline, design: .rounded).weight(.medium))
+                    .foregroundColor(Color.primary)
+                Spacer()
+                Text("已默认跳过（仅 macOS 启用）")
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundColor(Color.secondary)
+                    .accessibilityIdentifier("vox.me.stage2SkippedBadge")
+            }
+            #endif
         }
         .modifier(CardStyle())
         .onAppear {
             Task { await viewModel.load() }
         }
+    }
+
+    private var speechModelBinding: Binding<SpeechModelSelection> {
+        Binding(
+            get: { viewModel.speechModel },
+            set: { newValue in
+                Task { await viewModel.updateSpeechModel(newValue) }
+            }
+        )
     }
 
     private var providerBinding: Binding<LLMProviderSelection> {

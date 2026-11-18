@@ -64,59 +64,79 @@ public struct StagePresetMapping: Sendable {
 
 public struct IOSPresetMapping: Sendable {
     public let batchConfigured: Bool
+    public let realtimeConfigured: Bool
     public let azureTextConfigured: Bool
+    public let speech: SpeechModelSelection
     public let provider: LLMProviderType
     public let skipContentAnalysis: Bool
 
     public init(
         batchConfigured: Bool,
+        realtimeConfigured: Bool = false,
         azureTextConfigured: Bool,
+        speech: SpeechModelSelection = .batch,
         provider: LLMProviderType = .azureFoundry,
-        skipContentAnalysis: Bool = false
+        skipContentAnalysis: Bool = true
     ) {
         self.batchConfigured = batchConfigured
+        self.realtimeConfigured = realtimeConfigured
         self.azureTextConfigured = azureTextConfigured
+        self.speech = speech
         self.provider = provider
-        self.skipContentAnalysis = skipContentAnalysis
+        self.skipContentAnalysis = true
     }
 
     public var preset: Preset {
-        Self.preset(batchConfigured: batchConfigured, azureTextConfigured: azureTextConfigured,
-                    provider: provider, skipContentAnalysis: skipContentAnalysis)
+        Self.preset(batchConfigured: batchConfigured, realtimeConfigured: realtimeConfigured,
+                    azureTextConfigured: azureTextConfigured, speech: speech,
+                    provider: provider, skipContentAnalysis: true)
     }
 
     public static func preset(
         batchConfigured: Bool,
+        realtimeConfigured: Bool = false,
         azureTextConfigured: Bool,
+        speech: SpeechModelSelection = .batch,
         provider: LLMProviderType = .azureFoundry,
-        skipContentAnalysis: Bool = false
+        skipContentAnalysis: Bool = true
     ) -> Preset {
-        let base = batchConfigured ? Preset.hybridAzure : Preset.appleSpeech
+        let resolvedSpeech: String
+        if speech == .appleSpeech || !batchConfigured {
+            resolvedSpeech = "appleSpeech"
+        } else if speech == .realtime && realtimeConfigured {
+            resolvedSpeech = "realtime"
+        } else {
+            resolvedSpeech = "batch"
+        }
+        let base = (resolvedSpeech == "appleSpeech") ? Preset.appleSpeech : Preset.hybridAzure
         return base.overriding([
-            "speech": batchConfigured ? "batch" : "appleSpeech",
+            "speech": resolvedSpeech,
             "speech.merger": "false",
             "analysis.intent": LLMProviderType.appleIntelligence.rawValue,
             "analysis.entities": provider.rawValue,
             "analysis.tags": provider.rawValue,
             "analysis.params": provider.rawValue,
             "analysis.tone": LLMProviderType.appleIntelligence.rawValue,
-            "analysis.skip": skipContentAnalysis ? "true" : "false",
+            "analysis.skip": "true",
             "refine.provider": provider.rawValue
         ])
     }
 
     public static func makePreset(
         batchConfigured: Bool,
+        realtimeConfigured: Bool = false,
         azureTextConfigured: Bool,
+        speech: SpeechModelSelection = .batch,
         provider: LLMProviderType = .azureFoundry,
-        skipContentAnalysis: Bool = false
+        skipContentAnalysis: Bool = true
     ) -> Preset {
-        preset(batchConfigured: batchConfigured, azureTextConfigured: azureTextConfigured,
-               provider: provider, skipContentAnalysis: skipContentAnalysis)
+        preset(batchConfigured: batchConfigured, realtimeConfigured: realtimeConfigured,
+               azureTextConfigured: azureTextConfigured, speech: speech,
+               provider: provider, skipContentAnalysis: true)
     }
 
     public func exportedPipeline() -> WorkflowPipelineSnapshot {
-        preset.exportedPipeline(batchConfigured: batchConfigured, realtimeConfigured: false,
+        preset.exportedPipeline(batchConfigured: batchConfigured, realtimeConfigured: realtimeConfigured,
                                 azureTextConfigured: azureTextConfigured)
     }
 
@@ -125,10 +145,12 @@ public struct IOSPresetMapping: Sendable {
 @MainActor
 public final class IOSPresetPreferenceBinding {
     public private(set) var currentProvider: LLMProviderType
+    public private(set) var currentSpeech: SpeechModelSelection
     public private(set) var preset: Preset
     public var activePreset: Preset { preset }
 
     private let batchConfigured: Bool
+    private let realtimeConfigured: Bool
     private let azureTextConfigured: Bool
     private let preferences: any PreferencesStore
     private let notificationCenter: NotificationCenter
@@ -140,6 +162,7 @@ public final class IOSPresetPreferenceBinding {
 
     public init(
         batchConfigured: Bool,
+        realtimeConfigured: Bool = false,
         azureTextConfigured: Bool,
         preferences: any PreferencesStore,
         notificationCenter: NotificationCenter = .default,
@@ -147,15 +170,25 @@ public final class IOSPresetPreferenceBinding {
         onPresetChange: (@MainActor @Sendable (Preset) -> Void)? = nil
     ) {
         self.batchConfigured = batchConfigured
+        self.realtimeConfigured = realtimeConfigured
         self.azureTextConfigured = azureTextConfigured
         self.preferences = preferences
         self.notificationCenter = notificationCenter
         self.logger = logger
         self.onPresetChange = onPresetChange
         currentProvider = .azureFoundry
-        preset = IOSPresetMapping.preset(batchConfigured: batchConfigured, azureTextConfigured: azureTextConfigured)
+        currentSpeech = .batch
+        preset = IOSPresetMapping.preset(
+            batchConfigured: batchConfigured,
+            realtimeConfigured: realtimeConfigured,
+            azureTextConfigured: azureTextConfigured,
+            speech: currentSpeech,
+            provider: currentProvider,
+            skipContentAnalysis: true
+        )
         for name in [PreferencesNotification.llmProviderDidChange,
-                     PreferencesNotification.llmAnalysisSettingsDidChange] {
+                     PreferencesNotification.llmAnalysisSettingsDidChange,
+                     PreferencesNotification.stageModelsDidChange] {
             observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.scheduleApplyPreferences() }
             })
@@ -178,18 +211,24 @@ public final class IOSPresetPreferenceBinding {
         let preferences = self.preferences
         pendingUpdate = Task { [weak self] in
             let storedProvider: String? = await preferences.getValue(for: .llmProvider)
-            let skip: Bool = await preferences.getValue(for: .llmSkipContentAnalysis, default: false)
+            let storedSpeech: String? = await preferences.getValue(for: .speechModel)
+            _ = await preferences.getValue(for: .llmSkipContentAnalysis, default: true)
             guard let self else { return }
             await MainActor.run {
                 guard !Task.isCancelled, self.refreshGeneration == generation else { return }
                 if let storedProvider, let provider = LLMProviderType(rawValue: storedProvider) {
                     self.currentProvider = provider
                 }
+                if let storedSpeech, let speech = SpeechModelSelection(rawValue: storedSpeech) {
+                    self.currentSpeech = speech
+                }
                 self.preset = IOSPresetMapping.preset(
                     batchConfigured: self.batchConfigured,
+                    realtimeConfigured: self.realtimeConfigured,
                     azureTextConfigured: self.azureTextConfigured,
+                    speech: self.currentSpeech,
                     provider: self.currentProvider,
-                    skipContentAnalysis: skip
+                    skipContentAnalysis: true
                 )
                 self.onPresetChange?(self.preset)
                 if !self.batchConfigured {

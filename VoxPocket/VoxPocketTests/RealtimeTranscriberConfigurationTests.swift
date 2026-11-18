@@ -23,13 +23,10 @@ struct RealtimeTranscriberConfigurationTests {
 
     @MainActor @Test func realtimeIsOptInAndMacOSOnly() {
         #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: environment) == nil)
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: environment, deploymentOverride: "fixture-live-override") != nil)
         var values = environment
         values["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "fixture-live"
-        #if os(macOS)
         #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values) != nil)
-        #else
-        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values) == nil)
-        #endif
     }
 
     @MainActor @Test func invalidRealtimeConfigurationKeepsBatchAvailable() {
@@ -73,11 +70,8 @@ struct RealtimeTranscriberConfigurationTests {
         let settings = StageModelSettings(realtimeDeployment: "fixture-live-override")
         let availability = StageModelRouting.availability(environment: environment)
         #expect(availability.batchConfigured)
-        #if os(macOS)
         #expect(availability.realtimeCredentialsConfigured)
-        #else
-        #expect(!availability.realtimeCredentialsConfigured)
-        #endif
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: environment, deploymentOverride: settings.realtimeDeployment) != nil)
         #expect(availability.realtimeDeployment.isEmpty)
         #expect(availability.textModelName == "默认文本模型")
     }

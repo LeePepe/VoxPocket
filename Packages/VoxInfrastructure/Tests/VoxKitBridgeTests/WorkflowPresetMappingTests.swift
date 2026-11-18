@@ -62,7 +62,7 @@ final class WorkflowPresetMappingTests: XCTestCase {
             binding.refresh()
             await binding.waitForPendingChanges()
             XCTAssertEqual(binding.currentProvider, .azureFoundry)
-            XCTAssertFalse(runner.isContentAnalysisSkipped)
+            XCTAssertTrue(runner.isContentAnalysisSkipped)
             await store.releaseStaleRead()
         }
         await binding.waitForPendingChanges()
@@ -70,7 +70,7 @@ final class WorkflowPresetMappingTests: XCTestCase {
         XCTAssertEqual(updates, 1)
         XCTAssertEqual(binding.currentProvider, .azureFoundry)
         XCTAssertEqual(runner.currentProviderType, .azureFoundry)
-        XCTAssertFalse(runner.isContentAnalysisSkipped)
+        XCTAssertTrue(runner.isContentAnalysisSkipped)
         XCTAssertEqual(binding.preset, runner.activePreset)
     }
 
@@ -116,9 +116,24 @@ final class WorkflowPresetMappingTests: XCTestCase {
         XCTAssertEqual(pipeline.speech, ["capture.microphone", "speech.apple", "speech.azure.batch"])
         XCTAssertEqual(pipeline.refine, LLMProviderType.azureFoundry.rawValue)
         XCTAssertEqual(pipeline.configFailure, "textModelUnavailable")
-        XCTAssertEqual(pipeline.analysis["intent"], LLMProviderType.appleIntelligence.rawValue)
-        XCTAssertEqual(pipeline.analysis["tone"], LLMProviderType.appleIntelligence.rawValue)
-        XCTAssertEqual(pipeline.analysis["entities"], LLMProviderType.azureFoundry.rawValue)
+        XCTAssertEqual(pipeline.analysis["intent"], "skipped")
+        XCTAssertEqual(pipeline.analysis["tone"], "skipped")
+        XCTAssertEqual(pipeline.analysis["entities"], "skipped")
+        let realtimePipeline = IOSPresetMapping(
+            batchConfigured: true,
+            realtimeConfigured: true,
+            azureTextConfigured: true,
+            speech: .realtime
+        ).exportedPipeline()
+        XCTAssertEqual(realtimePipeline.speech, ["capture.microphone", "speech.apple", "speech.azure.realtime", "speech.azure.batch"])
+        XCTAssertTrue(realtimePipeline.realtime)
+        let localPipeline = IOSPresetMapping(
+            batchConfigured: true,
+            realtimeConfigured: true,
+            azureTextConfigured: true,
+            speech: .appleSpeech
+        ).exportedPipeline()
+        XCTAssertEqual(localPipeline.speech, ["capture.microphone", "speech.apple"])
     }
 
     @MainActor
@@ -130,7 +145,7 @@ final class WorkflowPresetMappingTests: XCTestCase {
         let center = NotificationCenter()
         let runner = RefineWorkflowRunner(preset: .hybridAzure,
             configuration: WorkflowExecutionConfiguration(), azureTextConfigured: true)
-        let binding = IOSPresetPreferenceBinding(batchConfigured: true, azureTextConfigured: true,
+        let binding = IOSPresetPreferenceBinding(batchConfigured: true, realtimeConfigured: true, azureTextConfigured: true,
             preferences: store, notificationCenter: center,
             onPresetChange: { preset in
                 runner.configure(preset: preset, configuration: WorkflowExecutionConfiguration(), azureTextConfigured: true)
@@ -138,14 +153,19 @@ final class WorkflowPresetMappingTests: XCTestCase {
 
         await binding.waitForPendingChanges()
         XCTAssertEqual(binding.currentProvider, .azureFoundry)
+        XCTAssertTrue(runner.isContentAnalysisSkipped)
         await store.setValue(LLMProviderType.appleIntelligence.rawValue, for: .llmProvider)
+        await store.setValue(SpeechModelSelection.realtime.rawValue, for: .speechModel)
         await store.setValue(true, for: .llmSkipContentAnalysis)
         center.post(name: PreferencesNotification.llmAnalysisSettingsDidChange, object: nil)
         await binding.waitForPendingChanges()
         XCTAssertEqual(binding.currentProvider, .appleIntelligence)
+        XCTAssertEqual(binding.currentSpeech, .realtime)
         XCTAssertEqual(runner.currentProviderType, .appleIntelligence)
-        let pipeline = binding.preset.exportedPipeline(batchConfigured: true, realtimeConfigured: false,
+        XCTAssertTrue(runner.isContentAnalysisSkipped)
+        let pipeline = binding.preset.exportedPipeline(batchConfigured: true, realtimeConfigured: true,
             azureTextConfigured: true)
+        XCTAssertEqual(pipeline.speech, ["capture.microphone", "speech.apple", "speech.azure.realtime", "speech.azure.batch"])
         XCTAssertEqual(pipeline.analysis["entities"], "skipped")
         XCTAssertEqual(pipeline.analysis["intent"], "skipped")
         XCTAssertEqual(pipeline.analysis["tone"], "skipped")

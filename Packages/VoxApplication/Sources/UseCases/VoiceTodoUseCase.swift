@@ -89,6 +89,7 @@ public struct ExtractedTodoDraft: Equatable, Sendable {
 
 public protocol VoiceCaptureAndTodoUseCase: AnyObject, Sendable {
     func recordCompletedCapture(mode: CaptureMode, rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> (capture: VoiceCapture, todo: VoiceTodo?)
+    func appendVoiceToTodo(todoID: UUID, rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> (todo: VoiceTodo, addedSubtaskIDs: [UUID])
     func reconcileWatchTodoCapture(rawTranscript: String, refinedText: String, localAudioFileName: String, durationSeconds: TimeInterval) async throws -> VoiceTodo
     func recordFailedCapture(mode: CaptureMode, stage: FailureStage, reason: String, rawTranscript: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> VoiceCapture
     func retryCapture(id: UUID, targetMode: CaptureMode?) async throws -> (capture: VoiceCapture, todo: VoiceTodo?)
@@ -108,6 +109,39 @@ public protocol VoiceCaptureAndTodoUseCase: AnyObject, Sendable {
 }
 
 public extension VoiceCaptureAndTodoUseCase {
+    func appendVoiceToTodo(todoID: UUID, rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval, deviceSource: DeviceSource) async throws -> (todo: VoiceTodo, addedSubtaskIDs: [UUID]) {
+        let cleaned = (refinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? rawTranscript : refinedText)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveRaw = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleaned : rawTranscript
+        _ = try await recordCompletedCapture(
+            mode: .text,
+            rawTranscript: effectiveRaw,
+            refinedText: cleaned,
+            localAudioFileName: localAudioFileName,
+            durationSeconds: durationSeconds,
+            deviceSource: deviceSource
+        )
+        guard let current = try await fetchTodos().first(where: { $0.id == todoID }) else {
+            throw NSError(domain: "VoiceTodoUseCase", code: 404)
+        }
+        let decomposition = DefaultOnDeviceAITodoDecomposer.fallbackSentenceSplit(from: cleaned)
+        let subtaskTitles = decomposition.subtasks.count >= 2 ? decomposition.subtasks : [cleaned]
+        let existingIDs = Set(current.subtasks.map(\.id))
+        var updated = current
+        for title in subtaskTitles where !title.isEmpty {
+            updated = updated.withAppendedSubtask(title)
+        }
+        if !decomposition.tags.isEmpty {
+            updated = updated.withTags(VoiceTodo.normalizeTags(updated.tags + decomposition.tags))
+        }
+        if decomposition.priority == .p0 && updated.priority != .p0 {
+            updated = updated.withPriority(.p0)
+        }
+        let saved = try await updateTodo(updated)
+        let addedIDs = saved.subtasks.map(\.id).filter { !existingIDs.contains($0) }
+        return (saved, addedIDs)
+    }
+
     func rescheduleTodoReminder(todoID: UUID, newDate: Date, timeSlot: String?) async throws -> VoiceTodo {
         guard let existing = try await fetchTodos().first(where: { $0.id == todoID }) else {
             throw NSError(domain: "VoiceTodoUseCase", code: 404)

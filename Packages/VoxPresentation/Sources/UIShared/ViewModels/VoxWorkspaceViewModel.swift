@@ -232,6 +232,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         if isDemoRecordingEnabled {
             if appendingTargetTodoID != nil {
                 liveTranscription = "补充子任务：核对双按钮极简底栏在降低透明度模式下的对比度"
+            } else if effectiveMode == .todo {
+                liveTranscription = "提醒我明天早上整理下周设计评审要展示的液态玻璃交互走查清单，先录制声波走查，再验证双按钮侧滑手势 #VoxPocket"
             } else {
                 liveTranscription = "把刚才散步想到的播客开场白记一下，先从一个深夜收到听众来信的故事切入"
             }
@@ -345,6 +347,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
             if isDemoRecordingEnabled && refined.isEmpty {
                 if appendingTargetTodoID != nil {
                     refined = "核对双按钮极简底栏在降低透明度模式下的对比度"
+                } else if mode == .todo {
+                    refined = "提醒我明天早上整理下周设计评审要展示的液态玻璃交互走查清单，先录制声波走查，再验证双按钮侧滑手势 #VoxPocket"
                 } else {
                     refined = "播客开场灵感：从一封深夜收到的听众来信切入，顺势引出本期关于「慢下来思考」的核心主题。"
                 }
@@ -450,44 +454,27 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     ) async throws -> VoiceTodo {
         let cleaned = subtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let effectiveRaw = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleaned : rawTranscript
-        _ = try await useCase.recordCompletedCapture(
-            mode: .text,
+        let outcome = try await useCase.appendVoiceToTodo(
+            todoID: todoID,
             rawTranscript: effectiveRaw,
             refinedText: cleaned,
             localAudioFileName: localAudioFileName,
             durationSeconds: durationSeconds,
             deviceSource: deviceSource
         )
-        guard let current = todos.first(where: { $0.id == todoID }) else {
-            await reload()
-            guard let reloaded = todos.first(where: { $0.id == todoID }) else {
-                throw VoiceTodoUseCaseError.todoNotFound
-            }
-            let updated = reloaded.withAppendedSubtask(cleaned)
-            let saved = try await useCase.updateTodo(updated)
-            if let newestSubtaskID = saved.subtasks.last?.id {
-                var existing = voiceAppendedSubtaskIDs[todoID] ?? []
-                if !existing.contains(newestSubtaskID) {
-                    existing.append(newestSubtaskID)
-                    voiceAppendedSubtaskIDs[todoID] = existing
-                }
-            }
-            await reload()
-            lastCopiedBannerText = "已补充至待办 · \(saved.title)"
-            return saved
+        var existing = voiceAppendedSubtaskIDs[todoID] ?? []
+        for id in outcome.addedSubtaskIDs where !existing.contains(id) {
+            existing.append(id)
         }
-        let updated = current.withAppendedSubtask(cleaned)
-        let saved = try await useCase.updateTodo(updated)
-        if let newestSubtaskID = saved.subtasks.last?.id {
-            var existing = voiceAppendedSubtaskIDs[todoID] ?? []
-            if !existing.contains(newestSubtaskID) {
-                existing.append(newestSubtaskID)
-                voiceAppendedSubtaskIDs[todoID] = existing
-            }
+        if existing.isEmpty, let newestSubtaskID = outcome.todo.subtasks.last?.id, !existing.contains(newestSubtaskID) {
+            existing.append(newestSubtaskID)
+        }
+        if !existing.isEmpty {
+            voiceAppendedSubtaskIDs[todoID] = existing
         }
         await reload()
-        lastCopiedBannerText = "已补充至待办 · \(saved.title)"
-        return saved
+        lastCopiedBannerText = "已补充至待办 · \(outcome.todo.title)"
+        return outcome.todo
     }
 
     public func updateTodoTitle(todoID: UUID, title: String) {

@@ -1,6 +1,8 @@
 import XCTest
 import Combine
 import CoreModels
+import Persistence
+import PlatformAdapters
 import Preferences
 import UseCases
 @testable import UIShared
@@ -241,6 +243,36 @@ final class VoxWorkspaceContractTests: XCTestCase {
         XCTAssertEqual(vm.captures.count, 1)
         XCTAssertEqual(vm.latestCompletedText, "Paused-start synthetic sentence")
         XCTAssertEqual(vm.captureState, .idle)
+    }
+
+    @MainActor func testWorkspaceStage4VoiceAppendAndDemoTodoRecording() async throws {
+        let captures = DefaultVoiceCaptureRepository()
+        let todos = DefaultVoiceTodoRepository()
+        let sandboxDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let realUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(),
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir)
+        )
+        let vm = VoxWorkspaceViewModel(useCase: realUseCase)
+        vm.isDemoRecordingEnabled = true
+        vm.startCapture(mode: .todo)
+        await vm.completeCapture(deviceSource: .iPhone)
+        XCTAssertEqual(vm.todos.count, 1)
+        let demoTodo = try XCTUnwrap(vm.todos.first)
+        XCTAssertLessThanOrEqual(demoTodo.title.count, 14)
+        XCTAssertGreaterThanOrEqual(demoTodo.subtasks.count, 2)
+        XCTAssertTrue(demoTodo.tags.contains("#VoxPocket"))
+
+        let appended = try await vm.appendVoiceCaptureToTodo(
+            demoTodo.id,
+            subtaskTitle: "先补充降低透明度对比度检查，再导出双外观对比图 #Design",
+            rawTranscript: "先补充降低透明度对比度检查，再导出双外观对比图 #Design",
+            deviceSource: .iPhone
+        )
+        XCTAssertGreaterThanOrEqual(appended.subtasks.count, 4)
+        XCTAssertGreaterThanOrEqual(vm.voiceAppendedSubtasks(for: demoTodo.id).count, 2)
     }
 
     @MainActor

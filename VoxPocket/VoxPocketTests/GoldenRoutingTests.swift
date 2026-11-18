@@ -141,7 +141,7 @@ final class GoldenRoutingTests: XCTestCase {
                     azureTextConfigured: azure)
                 if providerChange {
                     XCTAssertEqual(runner.currentProviderType, mutation == "valid" ? .appleIntelligence : previousProvider)
-                } else { XCTAssertEqual(runner.isContentAnalysisSkipped, mutation == "valid" ? !skip : false) }
+                } else { XCTAssertEqual(runner.isContentAnalysisSkipped, true) }
                 rows.append(preferenceRow(runner, batch: batch, azureTextConfigured: azure, initial: initial,
                                           event: "\(providerChange ? "provider" : "analysis").\(mutation)"))
             }
