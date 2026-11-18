@@ -519,6 +519,13 @@ public struct MacOSCleanSlateWorkspaceView: View {
 
                     Spacer()
 
+                    if viewModel.selectedTodoFilter == .done && viewModel.doneCount > 0 {
+                        Button("清除已完成", action: viewModel.clearCompletedTodos)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("vox.todo.clearCompleted.button")
+                    }
+
                     TextField("搜索待办、标签或子步骤…", text: $viewModel.searchQuery)
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 210)
@@ -630,6 +637,9 @@ public struct MacOSCleanSlateWorkspaceView: View {
                                 onToggleTag: { tag in viewModel.toggleTodoTag(todoID: todo.id, tag: tag) },
                                 onAddTag: { tag in viewModel.addTodoTag(todoID: todo.id, tag: tag) },
                                 onToggleSubtask: { subID in viewModel.toggleTodoSubtask(todoID: todo.id, subtaskID: subID) },
+                                onCopyTodo: { viewModel.copyTodoContent(todo) },
+                                onDeleteTodo: { viewModel.deleteTodo(todo.id) },
+                                onDeleteSubtask: { subID in viewModel.deleteTodoSubtask(todoID: todo.id, subtaskID: subID) },
                                 onUpdateSubtaskTitle: { subID, title in
                                     viewModel.updateTodoSubtaskTitle(todoID: todo.id, subtaskID: subID, title: title)
                                 },
@@ -1038,6 +1048,9 @@ private struct MacOSParityTodoCardView: View {
     let onToggleTag: (String) -> Void
     let onAddTag: (String) -> Void
     let onToggleSubtask: (UUID) -> Void
+    let onCopyTodo: () -> Void
+    let onDeleteTodo: () -> Void
+    let onDeleteSubtask: (UUID) -> Void
     let onUpdateSubtaskTitle: (UUID, String) -> Void
     let onAppendSubtask: (String) -> Void
     let onShiftReminderMinutes: (Int) -> Void
@@ -1222,12 +1235,31 @@ private struct MacOSParityTodoCardView: View {
                         }
 
                         Spacer()
+
+                        Button(action: onDeleteTodo) {
+                            Label("删除", systemImage: "trash")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.red.opacity(0.88))
+                                .padding(.horizontal, 9)
+                                .frame(height: 27)
+                                .background(Color.red.opacity(0.12), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("vox.todo.delete.button")
                     }
                 }
             }
             .clipped()
             .opacity(isExpanded ? 1.0 : 0.0)
             .allowsHitTesting(isExpanded)
+        }
+        .contextMenu {
+            Button("复制待办内容", action: onCopyTodo)
+            Button(isDone ? "标记为待处理" : "标记为已完成") {
+                onSelectStatus(isDone ? .inbox : .done)
+            }
+            Divider()
+            Button("删除待办", role: .destructive, action: onDeleteTodo)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -1395,6 +1427,13 @@ private struct MacOSParityTodoCardView: View {
                     .font(.caption)
                     .textFieldStyle(.plain)
                     .strikethrough(subtask.isCompleted, color: .secondary)
+
+                    Button(action: { onDeleteSubtask(subtask.id) }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("vox.todo.subtask.delete." + subtask.id.uuidString)
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 6)

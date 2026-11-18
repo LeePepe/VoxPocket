@@ -365,6 +365,12 @@ public struct VoiceTodo: Identifiable, Codable, Equatable, Hashable, Sendable {
         return withEdits(subtasks: updatedSubtasks, updatedAt: updatedAt)
     }
 
+    public func withRemovedSubtask(_ subtaskID: UUID, updatedAt: Date = Date()) -> VoiceTodo {
+        guard subtasks.contains(where: { $0.id == subtaskID }) else { return self }
+        let updatedSubtasks = subtasks.filter { $0.id != subtaskID }
+        return withEdits(subtasks: updatedSubtasks, updatedAt: updatedAt)
+    }
+
     public func sanitizedForCloudSync() -> VoiceTodo {
         VoiceTodo(id: id, title: "", description: "", taskPrompt: "", rawTranscript: "", projectKey: projectKey, assignedRunnerKind: assignedRunnerKind, executionState: executionState, priority: priority, tags: [], subtasks: subtasks.map { $0.sanitizedForCloudSync() }, scheduledAt: scheduledAt, timeSlot: timeSlot, lastExecutionSummary: nil, lastStartedAt: lastStartedAt, lastCompletedAt: lastCompletedAt, sourceCaptureID: sourceCaptureID, localAudioFileName: nil, durationSeconds: durationSeconds, deviceSource: deviceSource, externalSync: externalSync?.sanitizedForCloudSync(), createdAt: createdAt, updatedAt: updatedAt)
     }

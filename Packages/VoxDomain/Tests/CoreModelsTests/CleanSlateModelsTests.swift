@@ -99,6 +99,15 @@ final class CleanSlateModelsTests: XCTestCase {
         XCTAssertEqual(scheduledDecoded.description, scheduled.description)
         XCTAssertEqual(scheduledDecoded.scheduledAt, reminderDate)
         XCTAssertEqual(scheduledDecoded.timeSlot, "morning")
+
+        let withSecondSubtask = scheduled.withAppendedSubtask("Second subtask to remove")
+        XCTAssertEqual(withSecondSubtask.subtasks.count, 2)
+        let secondSubtaskID = withSecondSubtask.subtasks[1].id
+        let afterRemove = withSecondSubtask.withRemovedSubtask(secondSubtaskID)
+        XCTAssertEqual(afterRemove.subtasks.count, 1)
+        XCTAssertEqual(afterRemove.subtasks.first?.id, subtaskID)
+        let afterNoOpRemove = afterRemove.withRemovedSubtask(UUID())
+        XCTAssertEqual(afterNoOpRemove, afterRemove)
     }
 
     func testRunnerEscapingAndArguments() {

@@ -271,6 +271,13 @@ private struct IOSTodoSlidePageView: View {
 
             Spacer(minLength: AppTheme.Space.sm)
 
+            if viewModel.selectedTodoFilter == .done && viewModel.doneCount > 0 {
+                Button("清除已完成", action: viewModel.clearCompletedTodos)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("vox.todo.clearCompleted.button")
+            }
+
             Button(action: {
                 withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
                     if viewModel.hasActiveTodoFilters {
@@ -477,6 +484,9 @@ private struct IOSTodoSlidePageView: View {
                         onToggleSubtask: { subtaskID in
                             viewModel.toggleTodoSubtask(todoID: todo.id, subtaskID: subtaskID)
                         },
+                        onCopyTodo: { viewModel.copyTodoContent(todo) },
+                        onDeleteTodo: { viewModel.deleteTodo(todo.id) },
+                        onDeleteSubtask: { subtaskID in viewModel.deleteTodoSubtask(todoID: todo.id, subtaskID: subtaskID) },
                         onUpdateSubtaskTitle: { subtaskID, newTitle in
                             viewModel.updateTodoSubtaskTitle(todoID: todo.id, subtaskID: subtaskID, title: newTitle)
                         },
@@ -561,6 +571,9 @@ private struct IOSTodoExpandableCard: View {
     let onToggleTag: (String) -> Void
     let onAddTag: (String) -> Void
     let onToggleSubtask: (UUID) -> Void
+    let onCopyTodo: () -> Void
+    let onDeleteTodo: () -> Void
+    let onDeleteSubtask: (UUID) -> Void
     let onUpdateSubtaskTitle: (UUID, String) -> Void
     let onAppendSubtask: (String) -> Void
     let onDispatchAI: () -> Void
@@ -649,6 +662,12 @@ private struct IOSTodoExpandableCard: View {
             if !isExpanded {
                 onToggleExpand()
             }
+        }
+        .contextMenu {
+            Button("复制待办内容", action: onCopyTodo)
+            Button(isDone ? "标记为待处理" : "标记为已完成", action: onToggleDone)
+            Divider()
+            Button("删除待办", role: .destructive, action: onDeleteTodo)
         }
         .background(
             AppTheme.surfaceCard,
@@ -925,6 +944,17 @@ private struct IOSTodoExpandableCard: View {
             .accessibilityIdentifier("vox.todo.action.aiDoIt")
 
             Spacer(minLength: 4)
+
+            Button(action: onDeleteTodo) {
+                Label("删除", systemImage: "trash")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red.opacity(0.88))
+                    .padding(.horizontal, 9)
+                    .frame(height: 28)
+                    .background(Color.red.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("vox.todo.delete.button")
         }
         .padding(.top, 2)
     }
@@ -1133,6 +1163,7 @@ private struct IOSTodoExpandableCard: View {
                 IOSInPlaceSubtaskBranchRow(
                     subtask: subtask,
                     onToggle: { onToggleSubtask(subtask.id) },
+                    onDelete: { onDeleteSubtask(subtask.id) },
                     onCommitTitle: { updatedTitle in
                         onUpdateSubtaskTitle(subtask.id, updatedTitle)
                     }
@@ -1277,6 +1308,7 @@ private struct IOSTodoExpandableCard: View {
 private struct IOSInPlaceSubtaskBranchRow: View {
     let subtask: VoiceTodoSubtask
     let onToggle: () -> Void
+    let onDelete: () -> Void
     let onCommitTitle: (String) -> Void
 
     @State private var draftSubtaskTitle: String = ""
@@ -1308,6 +1340,14 @@ private struct IOSInPlaceSubtaskBranchRow: View {
                 .padding(.vertical, 6)
                 .accessibilityLabel("子步骤内容：" + subtask.title)
                 .accessibilityIdentifier("vox.todo.subtask.editor." + subtask.id.uuidString)
+
+            Button(action: onDelete) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("删除子步骤")
+            .accessibilityIdentifier("vox.todo.subtask.delete." + subtask.id.uuidString)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)

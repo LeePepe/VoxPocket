@@ -88,6 +88,58 @@ final class VoxWorkspaceContractTests: XCTestCase {
         XCTAssertEqual(workspaceVM.todos.count, 1)
     }
 
+    @MainActor
+    func testTodoDeletionAndCompletedCleanupContracts() async throws {
+        let useCase = FakeCaptureAndTodoUseCase()
+        let vm = VoxWorkspaceViewModel(useCase: useCase)
+        let created = try await useCase.recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: "删除测试待办",
+            refinedText: "删除测试待办",
+            localAudioFileName: nil,
+            durationSeconds: 1,
+            deviceSource: .iPhone
+        )
+        let todo = try XCTUnwrap(created.todo)
+        let subtask = VoiceTodoSubtask(title: "测试子步骤")
+        _ = try await useCase.updateTodo(todo.withAppendedSubtask(subtask.title))
+        await vm.reload()
+        let saved = try XCTUnwrap(vm.todos.first)
+        vm.expandedTodoID = saved.id
+        vm.selectedTodoID = saved.id
+        vm.deleteTodoSubtask(todoID: saved.id, subtaskID: try XCTUnwrap(saved.subtasks.first).id)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(vm.todos.first?.subtasks.count, 0)
+
+        vm.deleteTodo(saved.id)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(vm.todos.isEmpty)
+        XCTAssertNil(vm.expandedTodoID)
+        XCTAssertNil(vm.selectedTodoID)
+        XCTAssertEqual(vm.lastCopiedBannerText, "已删除待办 · 删除测试待办")
+
+        let done = try await useCase.recordCompletedCapture(mode: .todo, rawTranscript: "完成项", refinedText: "完成项", localAudioFileName: nil, durationSeconds: 1, deviceSource: .iPhone)
+        _ = try await useCase.markTodoDone(todoID: try XCTUnwrap(done.todo).id)
+        await vm.reload()
+        vm.clearCompletedTodos()
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(vm.doneCount, 0)
+        XCTAssertEqual(vm.lastCopiedBannerText, "已清理 1 项已完成待办")
+    }
+
+    @MainActor
+    func testPreviewStoreDeletionContracts() {
+        let store = TodoUnfoldVariantPreviewStore(variant: .v03, initiallyExpanded: true)
+        let todo = store.todos[0]
+        let subtaskID = todo.subtasks[0].id
+        store.deleteSubtask(todoID: todo.id, subtaskID: subtaskID)
+        XCTAssertFalse(store.todos[0].subtasks.contains { $0.id == subtaskID })
+        store.deleteTodo(todoID: todo.id)
+        XCTAssertFalse(store.todos.contains { $0.id == todo.id })
+        store.clearCompletedTodos()
+        XCTAssertTrue(store.todos.allSatisfy { $0.executionState != .done })
+    }
+
     private actor FakeCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase {
         var storedCaptures: [VoiceCapture]
         var storedTodos: [VoiceTodo] = []
@@ -122,7 +174,9 @@ final class VoxWorkspaceContractTests: XCTestCase {
             return updated
         }
         func deleteCapture(id: UUID) async throws {}
-        func deleteTodo(id: UUID) async throws {}
+        func deleteTodo(id: UUID) async throws {
+            storedTodos.removeAll { $0.id == id }
+        }
         func fetchCaptures() async throws -> [VoiceCapture] { storedCaptures }
         func fetchTodos() async throws -> [VoiceTodo] { storedTodos }
     }
