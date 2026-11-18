@@ -5,6 +5,7 @@ struct MeRootView: View {
     let status: RecorderStatus
     var onDeleteAllHistory: (() -> Void)?
     var localModelLoadingStatus: LocalModelLoadingStatus?
+    @StateObject private var providerSettings: LLMProviderSettingsViewModel
     @StateObject private var productTelemetry: ProductTelemetrySettingsViewModel
     private let observeProductTelemetryControl: (@MainActor (ProductTelemetrySettingsViewModel) -> Void)?
 
@@ -12,12 +13,14 @@ struct MeRootView: View {
         status: RecorderStatus = .idle,
         onDeleteAllHistory: (() -> Void)? = nil,
         localModelLoadingStatus: LocalModelLoadingStatus? = nil,
+        providerSettings: LLMProviderSettingsViewModel = LLMProviderSettingsViewModel(),
         productTelemetry: ProductTelemetrySettingsViewModel = ProductTelemetrySettingsViewModel(),
         observeProductTelemetryControl: (@MainActor (ProductTelemetrySettingsViewModel) -> Void)? = nil
     ) {
         self.status = status
         self.onDeleteAllHistory = onDeleteAllHistory
         self.localModelLoadingStatus = localModelLoadingStatus
+        _providerSettings = StateObject(wrappedValue: providerSettings)
         _productTelemetry = StateObject(wrappedValue: productTelemetry)
         self.observeProductTelemetryControl = observeProductTelemetryControl
     }
@@ -27,7 +30,7 @@ struct MeRootView: View {
             VStack(spacing: 18) {
                 ProfileCard()
                 BehaviorCard()
-                LLMProviderCard()
+                LLMProviderCard(viewModel: providerSettings)
                 if let loadingStatus = localModelLoadingStatus, loadingStatus.state != .idle {
                     LocalModelLoadingCard(status: loadingStatus)
                 }
@@ -128,7 +131,11 @@ struct BehaviorCard: View {
 }
 
 struct LLMProviderCard: View {
-    @StateObject private var viewModel = LLMProviderSettingsViewModel()
+    @ObservedObject var viewModel: LLMProviderSettingsViewModel
+
+    init(viewModel: LLMProviderSettingsViewModel = LLMProviderSettingsViewModel()) {
+        self.viewModel = viewModel
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

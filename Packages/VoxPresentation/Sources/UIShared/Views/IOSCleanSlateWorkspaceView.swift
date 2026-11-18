@@ -1352,8 +1352,16 @@ private struct IOSTodoWrappingFlowLayout: Layout {
 private struct IOSWorkspaceSettingsSheet: View {
     @ObservedObject var viewModel: VoxWorkspaceViewModel
     let localModelLoadingStatus: LocalModelLoadingStatus?
-    @StateObject private var providerSettings = LLMProviderSettingsViewModel()
+    @StateObject private var providerSettings: LLMProviderSettingsViewModel
     @Environment(\.dismiss) private var dismiss
+
+    init(viewModel: VoxWorkspaceViewModel, localModelLoadingStatus: LocalModelLoadingStatus?) {
+        self.viewModel = viewModel
+        self.localModelLoadingStatus = localModelLoadingStatus
+        _providerSettings = StateObject(
+            wrappedValue: LLMProviderSettingsViewModel(availability: viewModel.modelSettingsAvailability)
+        )
+    }
 
     var body: some View {
         NavigationStack {

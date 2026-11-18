@@ -176,6 +176,37 @@ final class WorkflowPresetMappingTests: XCTestCase {
         center.post(name: PreferencesNotification.llmProviderDidChange, object: nil)
         await binding.waitForPendingChanges()
         XCTAssertEqual(binding.currentProvider, .appleIntelligence)
+
+        let dynamicRunner = RefineWorkflowRunner(
+            preset: .hybridAzure,
+            configuration: WorkflowExecutionConfiguration(),
+            azureTextConfigured: true
+        )
+        let dynamicBinding = IOSPresetPreferenceBinding(
+            batchConfigured: true,
+            realtimeCredentialsConfigured: true,
+            azureTextConfigured: true,
+            preferences: store,
+            notificationCenter: center,
+            onPresetChange: { preset in
+                dynamicRunner.configure(preset: preset, configuration: WorkflowExecutionConfiguration(), azureTextConfigured: true)
+            }
+        )
+        await dynamicBinding.waitForPendingChanges()
+        await store.setValue("realtime", for: .speechModel)
+        await store.setValue("custom-live", for: .realtimeDeployment)
+        center.post(name: PreferencesNotification.stageModelsDidChange, object: nil)
+        await dynamicBinding.waitForPendingChanges()
+        XCTAssertEqual(dynamicBinding.currentRealtimeDeployment, "custom-live")
+        XCTAssertEqual(
+            dynamicBinding.preset.exportedPipeline(
+                batchConfigured: true,
+                realtimeConfigured: true,
+                azureTextConfigured: true
+            ).speech,
+            ["capture.microphone", "speech.apple", "speech.azure.realtime", "speech.azure.batch"]
+        )
+        XCTAssertTrue(dynamicRunner.isContentAnalysisSkipped)
     }
 
     func testRunnerReportsUnavailableAzureConfigurationAndOwnsRuntimeState() async throws {

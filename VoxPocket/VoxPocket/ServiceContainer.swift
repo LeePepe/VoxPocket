@@ -170,7 +170,11 @@ public final class ServiceContainer: ObservableObject {
             skipContentAnalysis: true
         )
         #endif
-        let workflowConfiguration = Self.makeWorkflowConfiguration(environment: environment, sdk: sdk)
+        let workflowConfiguration = Self.makeWorkflowConfiguration(
+            environment: environment,
+            deploymentOverride: LLMAppConfig.initialStageModelSettings.realtimeDeployment,
+            sdk: sdk
+        )
         let primaryRefinementRunner = RefineWorkflowRunner(preset: initialPreset, configuration: workflowConfiguration,
                                                            azureTextConfigured: availability.textConfigured)
         refinementRunner = primaryRefinementRunner
@@ -180,10 +184,29 @@ public final class ServiceContainer: ObservableObject {
         #endif
         (transcriber, localModelLoadingObservable) = Self.makePrimaryTranscriber(environment: environment, preferences: preferencesStore,
             presetID: LLMAppConfig.defaultPresetID, sdk: sdk) { [weak refinementRunner] settings in
+                let realtimeReady = LLMAppConfig.realtimeTranscriptionConfig(
+                    environment: environment,
+                    deploymentOverride: settings.realtimeDeployment
+                ) != nil
+                #if os(macOS)
                 let selected = StagePresetMapping.preset(settings: settings, batchConfigured: availability.batchConfigured,
-                    realtimeConfigured: LLMAppConfig.realtimeTranscriptionConfig(environment: environment,
-                        deploymentOverride: settings.realtimeDeployment) != nil, azureTextConfigured: availability.textConfigured)
-                refinementRunner?.configure(preset: selected, configuration: workflowConfiguration,
+                    realtimeConfigured: realtimeReady, azureTextConfigured: availability.textConfigured)
+                #else
+                let selected = IOSPresetMapping.preset(
+                    batchConfigured: availability.batchConfigured,
+                    realtimeConfigured: realtimeReady,
+                    azureTextConfigured: availability.textConfigured,
+                    speech: settings.speech,
+                    provider: LLMProviderType(rawValue: settings.refinement.rawValue) ?? .azureFoundry,
+                    skipContentAnalysis: true
+                )
+                #endif
+                let sessionConfig = Self.makeWorkflowConfiguration(
+                    environment: environment,
+                    deploymentOverride: settings.realtimeDeployment,
+                    sdk: sdk
+                )
+                refinementRunner?.configure(preset: selected, configuration: sessionConfig,
                                             azureTextConfigured: availability.textConfigured)
             }
 #if os(macOS)
@@ -278,16 +301,25 @@ public final class ServiceContainer: ObservableObject {
             environment: environment,
             deploymentOverride: LLMAppConfig.initialStageModelSettings.realtimeDeployment
         ) != nil
-        let workflowConfiguration = Self.makeWorkflowConfiguration(environment: environment, sdk: sdk)
+        let sdk = self.sdk
         let runner = refinementRunner
+        var bindingRef: IOSPresetPreferenceBinding?
         let binding = IOSPresetPreferenceBinding(batchConfigured: availability.batchConfigured,
             realtimeConfigured: realtimeConfigured,
+            realtimeCredentialsConfigured: availability.realtimeCredentialsConfigured,
+            defaultRealtimeDeployment: availability.realtimeDeployment,
             azureTextConfigured: availability.textConfigured, preferences: preferencesStore,
             notificationCenter: notificationCenter, logger: sdk.logger,
             onPresetChange: { preset in
-                runner.configure(preset: preset, configuration: workflowConfiguration,
+                let config = Self.makeWorkflowConfiguration(
+                    environment: environment,
+                    deploymentOverride: bindingRef?.currentRealtimeDeployment ?? "",
+                    sdk: sdk
+                )
+                runner.configure(preset: preset, configuration: config,
                                  azureTextConfigured: availability.textConfigured)
             })
+        bindingRef = binding
         iosPresetPreferenceBinding = binding
         setupIOSLiveActivityAndIntentObservers(notificationCenter: notificationCenter)
         watchCaptureAssembly?.start { [weak self] in
@@ -317,7 +349,24 @@ public final class ServiceContainer: ObservableObject {
         presetID: String, sdk: SDKHostConfiguration,
         beforeSession: (@MainActor @Sendable (StageModelSettings) -> Void)? = nil
     ) -> (any TranscriptionCoordinator, (any ModelLoadingObservable)?) {
+        #if os(macOS)
         let wrapped = makeTranscriber(environment: environment, preferences: preferences, presetID: presetID, sdk: sdk, beforeSession: beforeSession)
+        #else
+        let wrapped: WorkflowTranscriptionCoordinator
+        if presetID == "hybrid.azure" {
+            let availability = StageModelRouting.availability(environment: environment)
+            let preset = Self.preset(for: presetID, availability: availability, environment: environment)
+            let core = StageModelRouting.makeTranscriber(
+                environment: environment,
+                preferences: preferences,
+                sdk: sdk,
+                beforeSession: beforeSession
+            )
+            wrapped = WorkflowTranscriptionCoordinator(source: core, preset: preset)
+        } else {
+            wrapped = makeTranscriber(environment: environment, preferences: preferences, presetID: presetID, sdk: sdk, beforeSession: beforeSession)
+        }
+        #endif
         if let source = (wrapped.core as? any ModelLoadingStateProviding)
             ?? (wrapped.core as? LoadingFallbackTranscriptionCoordinator)?.primaryModelLoadingSource {
             return (wrapped, CombineModelLoadingObservable(source: source))
@@ -434,10 +483,17 @@ public final class ServiceContainer: ObservableObject {
         }
     }
 
-    private static func makeWorkflowConfiguration(environment: [String: String], sdk: SDKHostConfiguration) -> WorkflowExecutionConfiguration {
+    private static func makeWorkflowConfiguration(
+        environment: [String: String],
+        deploymentOverride: String = "",
+        sdk: SDKHostConfiguration
+    ) -> WorkflowExecutionConfiguration {
         WorkflowExecutionConfiguration(azureFoundryConfig: makeAzureFoundryConfig(environment: environment),
             whisperConfig: LLMAppConfig.transcriptionConfig(environment: environment),
-            realtimeConfig: LLMAppConfig.realtimeTranscriptionConfig(environment: environment),
+            realtimeConfig: LLMAppConfig.realtimeTranscriptionConfig(
+                environment: environment,
+                deploymentOverride: deploymentOverride
+            ),
             logger: sdk.logger, telemetry: sdk.telemetry, storageLocations: sdk.storageLocations)
     }
 
@@ -1071,6 +1127,7 @@ public final class ServiceContainer: ObservableObject {
             useCase: voiceCaptureAndTodoUseCase,
             preferencesStore: preferencesStore,
             defaultCaptureMode: defaultMode,
+            modelSettingsAvailability: StageModelRouting.availability(environment: LLMAppConfig.runtimeEnvironment),
             onCopyTextToClipboard: copyHandler,
             recordingUseCase: recordingUseCase,
             transcriptionUseCase: transcriptionUseCase,

@@ -14,6 +14,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     private let transcriptionUseCase: (any TranscriptionUseCase)?
     private let editingUseCase: (any EditingUseCase)?
     private let refinementUseCase: (any RefinementUseCase)?
+    public let modelSettingsAvailability: ModelSettingsAvailability
     private var reloadTask: Task<Void, Never>?
     private var captureStartTask: Task<Bool, Never>?
     private var captureGeneration = UUID()
@@ -54,6 +55,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         runnerTemplates: [AIRunnerTemplate] = AIRunnerTemplate.defaultPresets,
         preferencesStore: any PreferencesStore = UserDefaultsPreferencesStore.shared,
         defaultCaptureMode: CaptureMode = .text,
+        modelSettingsAvailability: ModelSettingsAvailability = .init(),
         onCopyTextToClipboard: (@MainActor @Sendable (String) -> Void)? = nil,
         captureRecorder: (@Sendable (_ mode: CaptureMode) async throws -> (rawTranscript: String, refinedText: String, localAudioFileName: String?, durationSeconds: TimeInterval))? = nil,
         recordingUseCase: (any RecordingUseCase)? = nil,
@@ -66,6 +68,7 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
         self.runnerTemplates = runnerTemplates
         self.preferencesStore = preferencesStore
         self.selectedCaptureMode = defaultCaptureMode
+        self.modelSettingsAvailability = modelSettingsAvailability
         self.onCopyTextToClipboard = onCopyTextToClipboard
         self.captureRecorder = captureRecorder
         self.recordingUseCase = recordingUseCase
