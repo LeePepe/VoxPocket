@@ -10,14 +10,22 @@ import LokiKit
 import FoundationModels
 #endif
 
-/// 基于 iPhone / Mac 端侧 Apple Intelligence (`FoundationModels.LanguageModelSession`) 的纯 AI 语音待办语义拆解器
+/// 基于 iPhone / Mac 端侧 Apple Intelligence (`FoundationModels.LanguageModelSession`) 与可选云端 LLM 兜底的 AI 语音待办语义拆解器
 public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
     public typealias ModelCompletionHandler = @Sendable (_ instructions: String, _ prompt: String) async throws -> String
 
     private let customCompletion: ModelCompletionHandler?
+    private let onDeviceCompletion: ModelCompletionHandler?
+    private let fallbackCompletion: ModelCompletionHandler?
 
-    public init(customCompletion: ModelCompletionHandler? = nil) {
+    public init(
+        customCompletion: ModelCompletionHandler? = nil,
+        onDeviceCompletion: ModelCompletionHandler? = nil,
+        fallbackCompletion: ModelCompletionHandler? = nil
+    ) {
         self.customCompletion = customCompletion
+        self.onDeviceCompletion = onDeviceCompletion
+        self.fallbackCompletion = fallbackCompletion
     }
 
     public func decompose(
@@ -46,17 +54,26 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
         User transcript: \(trimmed)
         """
 
-        let rawJSON: String
+        let rawJSON: String?
         if let customCompletion {
-            rawJSON = try await customCompletion(instructions, "Return JSON only.")
+            rawJSON = try? await customCompletion(instructions, "Return JSON only.")
         } else {
-            rawJSON = try await Self.invokeFoundationModels(instructions: instructions)
+            let onDeviceRunner = onDeviceCompletion ?? { instructions, _ in
+                try await Self.invokeFoundationModels(instructions: instructions)
+            }
+            if let onDeviceJSON = try? await onDeviceRunner(instructions, "Output compact JSON only.") {
+                rawJSON = onDeviceJSON
+            } else if let fallbackCompletion {
+                rawJSON = try? await fallbackCompletion(instructions, "Return JSON only.")
+            } else {
+                rawJSON = nil
+            }
         }
 
-        if let parsed = Self.parseJSONResponse(rawJSON, fallbackTranscript: trimmed) {
+        if let rawJSON, let parsed = Self.parseJSONResponse(rawJSON, fallbackTranscript: trimmed) {
             return parsed
         }
-        return Self.fallbackSentenceSplit(from: trimmed)
+        return Self.fallbackSentenceSplit(from: trimmed, knownProjectNames: knownProjectNames)
     }
 
     private static func invokeFoundationModels(instructions: String) async throws -> String {
@@ -109,12 +126,15 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
         let priority = TodoPriority(rawValue: rawPriority) ?? .p1
 
         let rawTags = (dict["tags"] as? [String]) ?? []
-        let tags = VoiceTodo.normalizeTags(rawTags)
+        let tags = VoiceTodo.normalizeTags(rawTags.isEmpty ? inferTags(from: fallbackTranscript) : rawTags)
 
         let rawSubtasks = (dict["subtasks"] as? [String]) ?? []
-        let subtasks = rawSubtasks
+        var subtasks = rawSubtasks
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+        if subtasks.isEmpty {
+            subtasks = inferSubtasks(from: fallbackTranscript, cleanTitle: cleanTitle)
+        }
 
         return AITodoDecompositionResult(
             cleanTitle: cleanTitle.isEmpty ? "Untitled task" : cleanTitle,
@@ -130,15 +150,157 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
         )
     }
 
-    internal static func fallbackSentenceSplit(from source: String) -> AITodoDecompositionResult {
+    internal static func fallbackSentenceSplit(from source: String, knownProjectNames: [String] = []) -> AITodoDecompositionResult {
         let normalizedSource = source.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let sentence = normalizedSource.split(whereSeparator: { ".!?。！？\n".contains($0) }).first.map(String.init) ?? normalizedSource
         let (shortTitle, extractedDescription) = compactActionTitle(from: sentence, fallbackContext: normalizedSource)
+        let priority = inferPriority(from: normalizedSource)
+        let tags = inferTags(from: normalizedSource, knownProjectNames: knownProjectNames)
+        let schedule = inferSchedule(from: normalizedSource)
+        let subtasks = inferSubtasks(from: normalizedSource, cleanTitle: shortTitle)
         return AITodoDecompositionResult(
             cleanTitle: shortTitle.isEmpty ? "Untitled task" : shortTitle,
-            description: extractedDescription
+            description: extractedDescription,
+            timeSlot: schedule.timeSlot,
+            dayOffset: schedule.dayOffset,
+            explicitHour: schedule.explicitHour,
+            explicitMinute: schedule.explicitMinute,
+            relativeMinutes: schedule.relativeMinutes,
+            priority: priority,
+            tags: tags,
+            subtasks: subtasks
         )
+    }
+
+    internal static func inferPriority(from source: String) -> TodoPriority {
+        let highKeywords = ["紧急", "高优", "立刻", "马上", "尽快", "最重要", "今天必须", "今晚必须", "P0", "p0"]
+        if highKeywords.contains(where: { source.contains($0) }) {
+            return .p0
+        }
+        let lowKeywords = ["低优", "不急", "有空", "回头", "以后再", "P2", "p2"]
+        if lowKeywords.contains(where: { source.contains($0) }) {
+            return .p2
+        }
+        return .p1
+    }
+
+    internal static func inferTags(from source: String, knownProjectNames: [String] = []) -> [String] {
+        var collected: [String] = []
+        if let regex = try? NSRegularExpression(pattern: "#([A-Za-z0-9_\\u4E00-\\u9FA5-]+)") {
+            let nsRange = NSRange(source.startIndex..<source.endIndex, in: source)
+            for match in regex.matches(in: source, range: nsRange) {
+                if let range = Range(match.range(at: 1), in: source) {
+                    collected.append("#\(source[range])")
+                }
+            }
+        }
+        for project in knownProjectNames where !project.isEmpty && source.localizedCaseInsensitiveContains(project) {
+            collected.append("#\(project)")
+        }
+        return VoiceTodo.normalizeTags(collected)
+    }
+
+    internal static func inferSchedule(from source: String) -> (timeSlot: String?, dayOffset: Int, explicitHour: Int?, explicitMinute: Int?, relativeMinutes: Int?) {
+        var relativeMinutes: Int?
+        if source.contains("半小时后") {
+            relativeMinutes = 30
+        } else if let regex = try? NSRegularExpression(pattern: "(\\d{1,3})\\s*分钟后"),
+                  let match = regex.firstMatch(in: source, range: NSRange(source.startIndex..<source.endIndex, in: source)),
+                  let range = Range(match.range(at: 1), in: source),
+                  let mins = Int(source[range]), mins > 0 {
+            relativeMinutes = mins
+        } else if let regex = try? NSRegularExpression(pattern: "(\\d{1,2})\\s*小时后"),
+                  let match = regex.firstMatch(in: source, range: NSRange(source.startIndex..<source.endIndex, in: source)),
+                  let range = Range(match.range(at: 1), in: source),
+                  let hours = Int(source[range]), hours > 0 {
+            relativeMinutes = hours * 60
+        }
+
+        let dayOffset: Int
+        if source.contains("后天") {
+            dayOffset = 2
+        } else if source.contains("明天") || source.contains("明早") || source.contains("明晚") {
+            dayOffset = 1
+        } else {
+            dayOffset = 0
+        }
+
+        let slotMappings: [(keywords: [String], slot: String)] = [
+            (["早上", "明早", "今早"], "morning"),
+            (["上午"], "forenoon"),
+            (["中午"], "noon"),
+            (["下午"], "afternoon"),
+            (["傍晚"], "evening"),
+            (["晚上", "今晚", "明晚"], "night")
+        ]
+        let timeSlot = slotMappings.first(where: { $0.keywords.contains(where: { source.contains($0) }) })?.slot
+
+        var explicitHour: Int?
+        var explicitMinute: Int?
+        if let regex = try? NSRegularExpression(pattern: "(?:(早上|上午|中午|下午|傍晚|晚上|今晚|明早|明晚)\\s*)?(\\d{1,2})\\s*(?:点|:|：)\\s*(?:(半)|(\\d{1,2})\\s*分?)?"),
+           let match = regex.firstMatch(in: source, range: NSRange(source.startIndex..<source.endIndex, in: source)),
+           let hourRange = Range(match.range(at: 2), in: source),
+           var hour = Int(source[hourRange]), (0...23).contains(hour) {
+            let period = Range(match.range(at: 1), in: source).map { String(source[$0]) } ?? timeSlot ?? ""
+            let isPM = ["下午", "傍晚", "晚上", "今晚", "明晚", "afternoon", "evening", "night"].contains(where: { period.contains($0) })
+            if isPM && hour < 12 {
+                hour += 12
+            }
+            explicitHour = hour
+            if Range(match.range(at: 3), in: source) != nil {
+                explicitMinute = 30
+            } else if let minRange = Range(match.range(at: 4), in: source), let minVal = Int(source[minRange]), (0...59).contains(minVal) {
+                explicitMinute = minVal
+            } else {
+                explicitMinute = 0
+            }
+        }
+
+        return (timeSlot, dayOffset, explicitHour, explicitMinute, relativeMinutes)
+    }
+
+    internal static func inferSubtasks(from source: String, cleanTitle: String) -> [String] {
+        var cleaned = source
+            .replacingOccurrences(of: "#([A-Za-z0-9_\\u4E00-\\u9FA5-]+)", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "^(?:紧急|高优|低优|不急)?[，,、：:\\s]*(?:请提醒我|麻烦提醒我|帮我提醒一下|提醒我一下|提醒我|帮我记一下|帮我记录一下|帮我记个待办|记一下|记得|补充子任务|紧急补充)[，,、：:\\s]*", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "^(?:今天|明天|后天)?(?:早上|上午|中午|下午|傍晚|晚上|今晚|明早|明晚)?(?:\\s*\\d{1,2}\\s*(?:点|:|：)(?:半|\\d{1,2}\\s*分?)?(?:前)?)?\\s*", with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "。！？.!?\n "))
+
+        let connectorPattern = "(?:；|;|\\s*(?:1\\.|2\\.|3\\.|①|②|③|第一[，,、]?|第二[，,、]?|第三[，,、]?|首先[，,、]?|其次[，,、]?|然后[，,、]?|接着[，,、]?|另外[，,、]?|还有[，,、]?|还要[，,、]?|顺便[，,、]?|并且[，,、]?|同时[，,、]?|再)\\s*)"
+        if let xianRange = cleaned.range(of: "先"),
+           (cleaned[xianRange.upperBound...].contains("再") || cleaned[xianRange.upperBound...].contains("然后") || cleaned[xianRange.upperBound...].contains("并且")) {
+            let stepRegion = String(cleaned[xianRange.lowerBound...])
+            let parts = stepRegion
+                .replacingOccurrences(of: "[，,；;]\\s*(?=先|再|然后|最后|顺便|并且|还要)", with: "；", options: .regularExpression)
+                .components(separatedBy: "；")
+                .map {
+                    $0.replacingOccurrences(of: "^(?:先|再|然后|最后|顺便|并且|还要)\\s*", with: "", options: .regularExpression)
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "，,。！？.!? "))
+                }
+                .filter { $0.count >= 2 && $0 != cleanTitle }
+            if parts.count >= 2 {
+                return parts
+            }
+        }
+
+        if let regex = try? NSRegularExpression(pattern: connectorPattern) {
+            let nsRange = NSRange(cleaned.startIndex..<cleaned.endIndex, in: cleaned)
+            if regex.firstMatch(in: cleaned, range: nsRange) != nil {
+                cleaned = regex.stringByReplacingMatches(in: cleaned, range: nsRange, withTemplate: "；")
+                let parts = cleaned
+                    .components(separatedBy: "；")
+                    .map {
+                        $0.replacingOccurrences(of: "^[，,、]\\s*", with: "", options: .regularExpression)
+                            .trimmingCharacters(in: CharacterSet(charactersIn: "，,。！？.!? "))
+                    }
+                    .filter { $0.count >= 2 && $0 != cleanTitle }
+                if parts.count >= 2 {
+                    return parts
+                }
+            }
+        }
+        return []
     }
 
     internal static func compactActionTitle(from value: String, fallbackContext: String = "") -> (title: String, description: String) {
@@ -255,7 +417,10 @@ public struct DefaultVoiceTodoExtractor: VoiceTodoExtractionRunning {
         ) {
             decomposition = aiResult
         } else {
-            decomposition = DefaultOnDeviceAITodoDecomposer.fallbackSentenceSplit(from: source)
+            decomposition = DefaultOnDeviceAITodoDecomposer.fallbackSentenceSplit(
+                from: source,
+                knownProjectNames: availableProjects.map(\.displayName)
+            )
         }
 
         let (scheduledAt, resolvedSlot) = resolveSchedule(from: decomposition, now: now)
@@ -470,6 +635,86 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         } else { todo = nil }
         telemetry.track(name: "capture.completed", properties: ["duration_ms": String(Int(durationSeconds * 1000)), "mode": mode.rawValue, "source": deviceSource.rawValue])
         return (todo == nil ? capture : capture.withLinkedTodo(todo!.id), todo)
+    }
+
+    public func appendVoiceToTodo(
+        todoID: UUID,
+        rawTranscript: String,
+        refinedText: String,
+        localAudioFileName: String?,
+        durationSeconds: TimeInterval,
+        deviceSource: DeviceSource
+    ) async throws -> (todo: VoiceTodo, addedSubtaskIDs: [UUID]) {
+        guard (try await todos.fetch(by: todoID)) != nil else {
+            throw VoiceTodoUseCaseError.todoNotFound
+        }
+        let cleaned = (refinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? rawTranscript : refinedText)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveRaw = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleaned : rawTranscript
+        let capture = VoiceCapture(
+            mode: .text,
+            rawTranscript: effectiveRaw,
+            refinedText: cleaned,
+            localAudioFileName: localAudioFileName,
+            durationSeconds: durationSeconds,
+            deviceSource: deviceSource,
+            state: .completed,
+            linkedTodoID: todoID
+        )
+        try await captures.save(capture)
+        let draft = try await extractor.extractTodo(
+            from: effectiveRaw,
+            refinedText: cleaned,
+            availableProjects: projects()
+        )
+        let strippedFallback = cleaned
+            .replacingOccurrences(of: "^(?:补充子任务：|补充子任务:|请提醒我|提醒我)\\s*", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let subtaskTitles: [String]
+        if draft.subtasks.count >= 2 {
+            subtaskTitles = draft.subtasks
+        } else if let single = draft.subtasks.first, !single.isEmpty {
+            subtaskTitles = [single]
+        } else {
+            subtaskTitles = [strippedFallback.isEmpty ? draft.title : strippedFallback]
+        }
+        let newSubtasks = subtaskTitles
+            .filter { !$0.isEmpty }
+            .map { VoiceTodoSubtask(title: $0) }
+        let addedIDs = newSubtasks.map(\.id)
+        guard let merged = try await todos.update(id: todoID, transform: { current in
+            var updated = current.withEdits(subtasks: current.subtasks + newSubtasks)
+            if updated.description.isEmpty && !draft.description.isEmpty && draft.subtasks.count >= 2 {
+                updated = updated.withDescription(draft.description)
+            }
+            if !draft.tags.isEmpty {
+                updated = updated.withTags(VoiceTodo.normalizeTags(updated.tags + draft.tags))
+            }
+            if draft.priority == .p0 && updated.priority != .p0 {
+                updated = updated.withPriority(.p0)
+            }
+            if let scheduledAt = draft.scheduledAt {
+                updated = updated.withReminder(scheduledAt: scheduledAt, timeSlot: draft.timeSlot ?? updated.timeSlot)
+            }
+            return updated
+        }) else {
+            throw VoiceTodoUseCaseError.todoNotFound
+        }
+        await syncNotificationSchedule(for: merged)
+        let saved: VoiceTodo
+        if merged.externalSync != nil {
+            let queued = try await todos.update(id: merged.id) { current in
+                current.withExternalSync(self.pendingMetadata(for: current), updatedAt: current.updatedAt)
+            } ?? merged.withExternalSync(pendingMetadata(for: merged), updatedAt: merged.updatedAt)
+            saved = externalSync.isEnabled ? await pushBestEffort(queued, fallbackStateOnFailure: .pendingPush) : queued
+        } else {
+            saved = merged
+        }
+        telemetry.track(
+            name: "capture.completed",
+            properties: ["duration_ms": String(Int(durationSeconds * 1000)), "mode": CaptureMode.todo.rawValue, "source": deviceSource.rawValue]
+        )
+        return (saved, addedIDs)
     }
 
     public func reconcileWatchTodoCapture(rawTranscript: String, refinedText: String, localAudioFileName: String, durationSeconds: TimeInterval) async throws -> VoiceTodo {

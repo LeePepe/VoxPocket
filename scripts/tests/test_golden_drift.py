@@ -29,7 +29,7 @@ APP_GOLDENS = (
     (ROOT / "scripts/tests/golden/golden_b_macos.json", 192,
      "edf27b458c5bc410565c200d4bd4b2a91af4d65c04caf1039e84a51a28564b16"),
     (ROOT / "scripts/tests/golden/golden_b_ios.json", 232,
-     "13d336020efd97526ef7358b8f512e88901db330a2755efaadfdf6a93316e95f"),
+     "5c9e99ff2563dfcef98b048b86f115bbb4159f3762196764d9c94d38edcea2c4"),
 )
 FIXTURE_DIGESTS = {
     "golden_a_llm.json": (35, "aac4d42dd13d2f4b85c6419b970d2f2fd2cec07feb09c2ca2b7917c18f89006c"),

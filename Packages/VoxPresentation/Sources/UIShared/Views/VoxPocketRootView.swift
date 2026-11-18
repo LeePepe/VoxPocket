@@ -224,7 +224,12 @@ public struct VoxPocketRootView<VM: RootViewState>: View {
             EditorSecondaryControls(viewModel: viewModel.editorState, llmSettings: llmSettings) {
                 viewModel.showRawSheet = true
             }
-            MeRootView(status: viewModel.recorderStatus, onDeleteAllHistory: { viewModel.deleteAllSessions() }, localModelLoadingStatus: localModelLoadingStatus)
+            MeRootView(
+                status: viewModel.recorderStatus,
+                onDeleteAllHistory: { viewModel.deleteAllSessions() },
+                localModelLoadingStatus: localModelLoadingStatus,
+                providerSettings: llmSettings
+            )
         }
         .navigationTitle("设置")
     }

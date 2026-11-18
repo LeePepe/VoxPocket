@@ -607,4 +607,166 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         XCTAssertEqual(afterFailed?.executionState, .failed)
         XCTAssertEqual(afterFailed?.lastExecutionSummary, "Runner exited 1")
     }
+
+    func testStage4CloudFallbackDecomposerAndDeterministicMultiStepAppend() async throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        let fixedNow = cal.date(from: DateComponents(timeZone: cal.timeZone, year: 2026, month: 11, day: 18, hour: 10, minute: 0))!
+
+        // 1. Verify cloud fallbackCompletion is used when on-device FoundationModels fails
+        let cloudDecomposer = DefaultOnDeviceAITodoDecomposer(
+            onDeviceCompletion: { _, _ in
+                throw NSError(domain: "TestOnDeviceUnavailable", code: 1)
+            },
+            fallbackCompletion: { instructions, _ in
+                XCTAssertTrue(instructions.contains("紧急提醒我今晚8点半整理代码重构清单"))
+                return """
+                {
+                  "cleanTitle": "整理代码重构清单",
+                  "description": "今晚 20:30 紧急整理代码重构与单测回归清单",
+                  "timeSlot": "night",
+                  "dayOffset": 0,
+                  "explicitHour": 20,
+                  "explicitMinute": 30,
+                  "relativeMinutes": null,
+                  "priority": "P0",
+                  "tags": ["#Dev", "#VoxPocket"],
+                  "subtasks": ["跑通所有单测", "提交代码审查"]
+                }
+                """
+            }
+        )
+        let cloudResult = try await cloudDecomposer.decompose(
+            transcript: "紧急提醒我今晚8点半整理代码重构清单，先跑通所有单测，再提交代码审查",
+            referenceDate: fixedNow,
+            knownProjectNames: ["VoxPocket"]
+        )
+        XCTAssertEqual(cloudResult.cleanTitle, "整理代码重构清单")
+        XCTAssertEqual(cloudResult.priority, .p0)
+        XCTAssertEqual(cloudResult.explicitHour, 20)
+        XCTAssertEqual(cloudResult.explicitMinute, 30)
+        XCTAssertEqual(cloudResult.subtasks, ["跑通所有单测", "提交代码审查"])
+
+        // 2. Verify deterministic fallbackSentenceSplit extracts subtasks, priority, tags, and schedule offline
+        let offlineResult = DefaultOnDeviceAITodoDecomposer.fallbackSentenceSplit(
+            from: "紧急提醒我明天早上8点半整理下周设计评审要展示的液态玻璃交互走查清单，先录制声波走查，再验证双按钮侧滑手势 #VoxPocket",
+            knownProjectNames: ["VoxPocket"]
+        )
+        XCTAssertLessThanOrEqual(offlineResult.cleanTitle.count, 14)
+        XCTAssertEqual(offlineResult.priority, .p0)
+        XCTAssertEqual(offlineResult.dayOffset, 1)
+        XCTAssertEqual(offlineResult.timeSlot, "morning")
+        XCTAssertEqual(offlineResult.explicitHour, 8)
+        XCTAssertEqual(offlineResult.explicitMinute, 30)
+        XCTAssertTrue(offlineResult.tags.contains("#VoxPocket"))
+        XCTAssertEqual(offlineResult.subtasks, ["录制声波走查", "验证双按钮侧滑手势"])
+
+        let lowPriRelative = DefaultOnDeviceAITodoDecomposer.fallbackSentenceSplit(
+            from: "不急，30分钟后取顺丰快递；带上取件码；顺便寄退货 #快递"
+        )
+        XCTAssertEqual(lowPriRelative.priority, .p2)
+        XCTAssertEqual(lowPriRelative.relativeMinutes, 30)
+        XCTAssertTrue(lowPriRelative.tags.contains("#快递"))
+        XCTAssertGreaterThanOrEqual(lowPriRelative.subtasks.count, 2)
+
+        // 3. Verify appendVoiceToTodo runs Stage 4 decomposition and appends multiple subtasks + schedule + tags
+        let tempHabitURL = FileManager.default.temporaryDirectory.appendingPathComponent("todo-append-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tempHabitURL) }
+        let learner = AdaptiveTimeAnchorLearner(store: FileHabitTimeAnchorStore(fileURL: tempHabitURL), calendar: cal)
+        let center = InMemoryVoxNotificationCenter()
+        let scheduler = VoxNotificationScheduler(timeAnchorLearner: learner, center: center, calendar: cal)
+        let extractor = DefaultVoiceTodoExtractor(
+            aiDecomposer: DefaultOnDeviceAITodoDecomposer(),
+            timeAnchorLearner: learner,
+            calendar: cal,
+            nowProvider: { fixedNow }
+        )
+        let captures = DefaultVoiceCaptureRepository()
+        let todos = DefaultVoiceTodoRepository()
+        let sandboxDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let useCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: extractor,
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            notificationScheduler: scheduler
+        )
+        let created = try await useCase.recordCompletedCapture(
+            mode: .todo,
+            rawTranscript: "准备设计评审",
+            refinedText: "准备设计评审",
+            localAudioFileName: nil,
+            durationSeconds: 2,
+            deviceSource: .iPhone
+        )
+        let baseTodo = try XCTUnwrap(created.todo)
+        XCTAssertTrue(baseTodo.subtasks.isEmpty)
+
+        let appended = try await useCase.appendVoiceToTodo(
+            todoID: baseTodo.id,
+            rawTranscript: "紧急补充：今晚8点半前先核对降低透明度模式对比度，再导出明暗双态截图 #Glass",
+            refinedText: "紧急补充：今晚8点半前先核对降低透明度模式对比度，再导出明暗双态截图 #Glass",
+            localAudioFileName: nil,
+            durationSeconds: 4,
+            deviceSource: .iPhone
+        )
+        XCTAssertEqual(appended.addedSubtaskIDs.count, 2)
+        XCTAssertEqual(appended.todo.subtasks.count, 2)
+        XCTAssertEqual(appended.todo.priority, .p0)
+        XCTAssertTrue(appended.todo.tags.contains("#Glass"))
+        XCTAssertNotNil(appended.todo.scheduledAt)
+        XCTAssertEqual(scheduler.pendingItems().count, 1)
+
+        // 4. Verify concurrent edits while appendVoiceToTodo awaits AI decomposition are preserved
+        let targetTodoID = baseTodo.id
+        let interleavingDecomposer = DefaultOnDeviceAITodoDecomposer(customCompletion: { _, _ in
+            _ = try await todos.update(id: targetTodoID) { latest in
+                latest
+                    .withTitle("准备设计评审（并发改名）")
+                    .withAppendedSubtask("并发新增子任务")
+            }
+            return """
+            {
+              "cleanTitle": "补充复盘",
+              "description": "",
+              "timeSlot": null,
+              "dayOffset": 0,
+              "explicitHour": null,
+              "explicitMinute": null,
+              "relativeMinutes": null,
+              "priority": "P1",
+              "tags": ["#Sync"],
+              "subtasks": ["语音追补步骤 A", "语音追补步骤 B"]
+            }
+            """
+        })
+        let interleavingUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(
+                aiDecomposer: interleavingDecomposer,
+                timeAnchorLearner: learner,
+                calendar: cal,
+                nowProvider: { fixedNow }
+            ),
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            notificationScheduler: scheduler
+        )
+        let interleaved = try await interleavingUseCase.appendVoiceToTodo(
+            todoID: targetTodoID,
+            rawTranscript: "再补两条：语音追补步骤 A，语音追补步骤 B",
+            refinedText: "再补两条：语音追补步骤 A，语音追补步骤 B",
+            localAudioFileName: nil,
+            durationSeconds: 3,
+            deviceSource: .iPhone
+        )
+        XCTAssertEqual(interleaved.todo.title, "准备设计评审（并发改名）")
+        XCTAssertEqual(interleaved.addedSubtaskIDs.count, 2)
+        XCTAssertEqual(
+            interleaved.todo.subtasks.map(\.title),
+            ["核对降低透明度模式对比度", "导出明暗双态截图", "并发新增子任务", "语音追补步骤 A", "语音追补步骤 B"]
+        )
+        XCTAssertTrue(interleaved.todo.tags.contains("#Glass"))
+        XCTAssertTrue(interleaved.todo.tags.contains("#Sync"))
+    }
 }

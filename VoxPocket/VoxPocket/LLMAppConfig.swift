@@ -21,9 +21,7 @@ enum LLMAppConfig {
     static func loadRuntimeConfiguration() async throws {
         let configuration = try await configurationTask.value
         runtimeEnvironment = configuration.environmentValues
-        #if os(macOS)
         initialStageModelSettings = await StageModelSettings.load(from: UserDefaultsPreferencesStore.shared)
-        #endif
         let source = configuration.loadedPrivateFile ? "private_file" : "environment"
         let speechReady = transcriptionConfig(environment: runtimeEnvironment) != nil
         let textReady = refinementAPIKey(environment: runtimeEnvironment) != nil && azureEndpoint != nil
@@ -79,16 +77,12 @@ enum LLMAppConfig {
         return AzureWhisperConfig(endpoint: url, apiKey: Credential(rawValue: key))
     }
 
-    /// 独立实时部署显式启用；旧配置及 iOS 保持原 ASR 路径。
+    /// 独立实时部署显式启用（支持用户自定义 deploymentOverride 或环境变量配置）。
     static func realtimeTranscriptionConfig(environment: [String: String], deploymentOverride: String = "") -> AzureRealtimeTranscriptionConfig? {
-        #if os(macOS)
         guard let deployment = nonempty(deploymentOverride) ?? nonempty(environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"]),
               let endpoint = secureURL(environment["AZURE_OPENAI_ENDPOINT"]),
               let key = nonempty(environment["AZURE_API_KEY"]) ?? nonempty(environment["whisperkey"]) else { return nil }
         return try? AzureRealtimeTranscriptionConfig(endpoint: endpoint, apiKey: Credential(rawValue: key), deployment: deployment)
-        #else
-        return nil
-        #endif
     }
 
     private static func nonempty(_ value: String?) -> String? {

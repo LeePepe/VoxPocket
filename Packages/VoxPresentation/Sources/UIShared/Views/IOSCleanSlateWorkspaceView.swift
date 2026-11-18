@@ -269,7 +269,7 @@ private struct IOSDualButtonSlideDock: View {
                         .contentTransition(.numericText())
                         .foregroundStyle(.secondary)
                     Image(systemName: "chevron.up")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isFilterMenuOpen ? 180 : 0))
                 }
@@ -815,9 +815,9 @@ private struct IOSTodoExpandableCard: View {
                 Button(action: { onShiftReminderMinutes(30) }) {
                     HStack(spacing: 3) {
                         Image(systemName: todo.scheduledAt == nil ? "bell" : "bell.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.caption2.weight(.bold))
                         Text(todo.scheduledAt.map(reminderPillText(for:)) ?? "设置提醒")
-                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                            .font(.caption2.weight(.semibold).monospacedDigit())
                     }
                     .foregroundStyle(todo.scheduledAt == nil ? Color.secondary : Color.accentColor)
                     .padding(.horizontal, 7)
@@ -1352,7 +1352,16 @@ private struct IOSTodoWrappingFlowLayout: Layout {
 private struct IOSWorkspaceSettingsSheet: View {
     @ObservedObject var viewModel: VoxWorkspaceViewModel
     let localModelLoadingStatus: LocalModelLoadingStatus?
+    @StateObject private var providerSettings: LLMProviderSettingsViewModel
     @Environment(\.dismiss) private var dismiss
+
+    init(viewModel: VoxWorkspaceViewModel, localModelLoadingStatus: LocalModelLoadingStatus?) {
+        self.viewModel = viewModel
+        self.localModelLoadingStatus = localModelLoadingStatus
+        _providerSettings = StateObject(
+            wrappedValue: LLMProviderSettingsViewModel(availability: viewModel.modelSettingsAvailability)
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -1392,6 +1401,75 @@ private struct IOSWorkspaceSettingsSheet: View {
                 }
 
                 Section {
+                    Picker("识别模式", selection: Binding(
+                        get: { providerSettings.speechModel },
+                        set: { model in Task { await providerSettings.updateSpeechModel(model) } }
+                    )) {
+                        Text("流式云端转写（默认）").tag(SpeechModelSelection.realtime)
+                        Text("本地 SFSpeechRecognizer 流式识别").tag(SpeechModelSelection.appleSpeech)
+                        Text("整段云端转写").tag(SpeechModelSelection.batch)
+                    }
+                    .accessibilityIdentifier("vox.ios.settings.speechModel")
+
+                    Label(providerSettings.speechStatus, systemImage: "waveform")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("vox.ios.settings.speechStatus")
+
+                    if providerSettings.speechModel == .realtime {
+                        HStack(spacing: AppTheme.Space.sm) {
+                            TextField("自配实时流式部署名", text: $providerSettings.realtimeDeploymentDraft)
+                                .font(.footnote)
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityIdentifier("vox.ios.settings.realtimeDeployment")
+                            Button("保存") {
+                                Task { await providerSettings.saveRealtimeDeployment() }
+                            }
+                            .font(.footnote.weight(.semibold))
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("vox.ios.settings.saveRealtimeDeployment")
+                        }
+                        if let message = providerSettings.deploymentMessage {
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .accessibilityIdentifier("vox.ios.settings.deploymentMessage")
+                        }
+                    }
+                } header: {
+                    Text("1 · 语音识别")
+                }
+
+                Section {
+                    HStack {
+                        Text("意图与语调分析")
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text("iOS 已默认跳过（仅 macOS 启用）")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("vox.ios.settings.stage2Skipped")
+                    }
+                } header: {
+                    Text("2 · 前置内容分析")
+                }
+
+                Section {
+                    Picker("精炼与拆解模型", selection: Binding(
+                        get: { providerSettings.selectedProvider },
+                        set: { provider in Task { await providerSettings.updateProvider(provider) } }
+                    )) {
+                        ForEach(LLMProviderSelection.allCases, id: \.self) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
+                    }
+                    .accessibilityIdentifier("vox.ios.settings.llmProvider")
+                } header: {
+                    Text("3 · 文本精炼与 Stage 4 待办拆解")
+                }
+
+                Section {
                     VStack(alignment: .leading, spacing: AppTheme.Space.sm) {
                         Label("不进 App · 后台一键启停录音", systemImage: "button.vertical.left.press")
                             .font(.subheadline.weight(.semibold))
@@ -1419,6 +1497,9 @@ private struct IOSWorkspaceSettingsSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
                 }
+            }
+            .task {
+                await providerSettings.load()
             }
         }
         .presentationDetents([.medium, .large])

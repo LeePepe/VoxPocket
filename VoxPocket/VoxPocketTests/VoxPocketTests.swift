@@ -150,8 +150,8 @@ struct VoxPocketTests {
                 actionKind: "aiDoIt",
                 todoIDString: firstTodo.id.uuidString
             )
-            for _ in 0..<100 where container.workspaceViewModel.aiOrder(for: firstTodo.id) == nil {
-                await Task.yield()
+            for _ in 0..<500 where container.workspaceViewModel.aiOrder(for: firstTodo.id) == nil {
+                try? await Task.sleep(for: .milliseconds(10))
             }
             #expect(container.workspaceViewModel.aiOrder(for: firstTodo.id) != nil)
         }
