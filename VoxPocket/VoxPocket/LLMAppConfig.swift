@@ -77,12 +77,52 @@ enum LLMAppConfig {
         return AzureWhisperConfig(endpoint: url, apiKey: Credential(rawValue: key))
     }
 
-    /// 独立实时部署显式启用（支持用户自定义 deploymentOverride 或环境变量配置）。
-    static func realtimeTranscriptionConfig(environment: [String: String], deploymentOverride: String = "") -> AzureRealtimeTranscriptionConfig? {
-        guard let deployment = nonempty(deploymentOverride) ?? nonempty(environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"]),
+    /// 独立实时部署显式启用（支持 GPT / MAI 双部署及旧部署名兼容）。
+    static func realtimeTranscriptionConfig(
+        environment: [String: String],
+        deploymentOverride: String = "",
+        streamModel: RealtimeStreamModelKind? = nil,
+        gptDeploymentOverride: String = "",
+        maiDeploymentOverride: String = ""
+    ) -> AzureRealtimeTranscriptionConfig? {
+        let deployment: String?
+        if let streamModel {
+            switch streamModel {
+            case .gptRealtime:
+                deployment = nonempty(gptDeploymentOverride)
+                    ?? nonempty(environment["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+                    ?? nonempty(deploymentOverride)
+                    ?? nonempty(environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+            case .maiTranscribe2:
+                deployment = nonempty(maiDeploymentOverride)
+                    ?? nonempty(environment["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+                    ?? nonempty(deploymentOverride)
+                    ?? nonempty(environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+            }
+        } else if let explicit = nonempty(deploymentOverride) {
+            deployment = explicit
+        } else {
+            deployment = nonempty(environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+                ?? nonempty(environment["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+                ?? nonempty(environment["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"])
+        }
+        guard let deployment,
+              StageModelSettings.validDeploymentOverride(deployment),
               let endpoint = secureURL(environment["AZURE_OPENAI_ENDPOINT"]),
               let key = nonempty(environment["AZURE_API_KEY"]) ?? nonempty(environment["whisperkey"]) else { return nil }
         return try? AzureRealtimeTranscriptionConfig(endpoint: endpoint, apiKey: Credential(rawValue: key), deployment: deployment)
+    }
+
+    static func realtimeTranscriptionConfig(
+        environment: [String: String], settings: StageModelSettings
+    ) -> AzureRealtimeTranscriptionConfig? {
+        realtimeTranscriptionConfig(
+            environment: environment,
+            deploymentOverride: settings.realtimeDeployment,
+            streamModel: settings.realtimeStreamModel,
+            gptDeploymentOverride: settings.gptRealtimeDeployment,
+            maiDeploymentOverride: settings.maiRealtimeDeployment
+        )
     }
 
     private static func nonempty(_ value: String?) -> String? {

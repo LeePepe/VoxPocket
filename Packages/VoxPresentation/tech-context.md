@@ -28,7 +28,7 @@ targets: [UIShared, PlatformUI, WidgetUI, VoxTodoPreviewHost]
 
 ## 依赖
 - **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/平台适配/偏好) + `VoxApplication`(UseCases)。
-- **外部**:`LokiKit`(遥测) + `VoxKit`(`LeePepe/VoxKit`, exact `0.1.0`)。
+- **外部**:`LokiKit`(遥测) + `VoxKit`(`LeePepe/VoxKit`, exact `0.1.1`)。
 
 ## 约束 / 红线投影
 - **@MainActor**:全部 ViewModel 与 UI。

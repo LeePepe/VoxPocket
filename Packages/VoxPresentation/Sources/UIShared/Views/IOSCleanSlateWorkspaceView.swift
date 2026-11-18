@@ -1503,18 +1503,35 @@ private struct IOSWorkspaceSettingsSheet: View {
                         .accessibilityIdentifier("vox.ios.settings.speechStatus")
 
                     if providerSettings.speechModel == .realtime {
-                        HStack(spacing: AppTheme.Space.sm) {
-                            TextField("自配实时流式部署名", text: $providerSettings.realtimeDeploymentDraft)
-                                .font(.footnote)
-                                .textFieldStyle(.roundedBorder)
-                                .accessibilityIdentifier("vox.ios.settings.realtimeDeployment")
-                            Button("保存") {
-                                Task { await providerSettings.saveRealtimeDeployment() }
+                        Picker("流式远端模型", selection: Binding(
+                            get: { providerSettings.realtimeStreamModel },
+                            set: { kind in Task { await providerSettings.updateRealtimeStreamModel(kind) } }
+                        )) {
+                            ForEach(RealtimeStreamModelKind.allCases, id: \.self) { kind in
+                                Text(kind.displayName).tag(kind)
                             }
-                            .font(.footnote.weight(.semibold))
-                            .buttonStyle(.borderedProminent)
-                            .accessibilityIdentifier("vox.ios.settings.saveRealtimeDeployment")
                         }
+                        .accessibilityIdentifier("vox.ios.settings.realtimeStreamModel")
+                        TextField("GPT 流式部署名", text: $providerSettings.gptRealtimeDeploymentDraft,
+                                  prompt: Text(providerSettings.availability.gptRealtimeDeployment.isEmpty
+                                               ? "GPT 流式部署名（留空用默认配置）"
+                                               : providerSettings.availability.gptRealtimeDeployment))
+                            .font(.footnote)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("vox.ios.settings.gptRealtimeDeployment")
+                        TextField("MAI-Transcribe-2 部署名", text: $providerSettings.maiRealtimeDeploymentDraft,
+                                  prompt: Text(providerSettings.availability.maiRealtimeDeployment.isEmpty
+                                               ? "MAI-Transcribe-2 部署名（留空用默认配置）"
+                                               : providerSettings.availability.maiRealtimeDeployment))
+                            .font(.footnote)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("vox.ios.settings.maiRealtimeDeployment")
+                        Button("保存部署配置") {
+                            Task { await providerSettings.saveStreamDeployments() }
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("vox.ios.settings.saveRealtimeDeployment")
                         if let message = providerSettings.deploymentMessage {
                             Text(message)
                                 .font(.caption)

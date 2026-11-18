@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify app golden traces against the pinned VoxKit 0.1.0 trace contract."""
+"""Verify app golden traces against the pinned VoxKit 0.1.1 trace contract."""
 from __future__ import annotations
 
 import copy
@@ -13,8 +13,8 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-VOXKIT_VERSION = "0.1.0"
-VOXKIT_SHA = "5190fe56ece8a56ecb2bfb08885b1f2c544cecbc"
+VOXKIT_VERSION = "0.1.1"
+VOXKIT_SHA = "49ac814412c47ab2c7f46cd736e8fa4640369a0d"
 FIXTURES = (
     "Tests/GoldenTraceTests/Fixtures/golden_a_llm.json",
     "Tests/GoldenTraceTests/Fixtures/golden_c_speech.json",
@@ -173,7 +173,7 @@ def main() -> int:
     except (OSError, ValueError, AssertionError, KeyError, TypeError, urllib.error.URLError) as error:
         print(f"❌ golden drift: {error}")
         return 1
-    print("✅ golden traces match pinned VoxKit 0.1.0 payloads, hashes, rows, and pipeline graphs")
+    print("✅ golden traces match pinned VoxKit 0.1.1 payloads, hashes, rows, and pipeline graphs")
     return 0
 
 

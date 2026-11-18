@@ -23,7 +23,7 @@ Last-Reviewed: 2026-11-15
 - `LokiKit`: 独立日志与遥测包
 - `VoxDomain`: `CoreModels`, `TextHistory`
 - `VoxPocketKit`: Watch capture, transport, receipt and iPhone ingest seams
-- `VoxKit`: remote standalone SDK (`LeePepe/VoxKit`, exact `0.1.0`; `VoxCore`, `VoxSpeech`, `VoxSpeechWhisperKit`, `VoxRefine`, `VoxLLM`, `VoxWorkflow`)
+- `VoxKit`: remote standalone SDK (`LeePepe/VoxKit`, exact `0.1.1`; `VoxCore`, `VoxSpeech`, `VoxSpeechWhisperKit`, `VoxRefine`, `VoxLLM`, `VoxWorkflow`)
 
 ## Common Paths
 

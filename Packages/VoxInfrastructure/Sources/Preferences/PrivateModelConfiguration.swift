@@ -22,6 +22,8 @@ struct PrivateModelConfiguration: Decodable, Sendable {
         let transcriptionDeployment: String
         let refinementDeployment: String
         let realtimeTranscriptionDeployment: String?
+        let gptRealtimeTranscriptionDeployment: String?
+        let maiRealtimeTranscriptionDeployment: String?
     }
     let azure: Azure
 
@@ -51,6 +53,14 @@ struct PrivateModelConfiguration: Decodable, Sendable {
         if let realtime = azure.realtimeTranscriptionDeployment {
             guard validDeployment(realtime) else { throw PrivateModelConfigurationError.invalidFields }
             defaults["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = realtime
+        }
+        if let gptRealtime = azure.gptRealtimeTranscriptionDeployment {
+            guard validDeployment(gptRealtime) else { throw PrivateModelConfigurationError.invalidFields }
+            defaults["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = gptRealtime
+        }
+        if let maiRealtime = azure.maiRealtimeTranscriptionDeployment {
+            guard validDeployment(maiRealtime) else { throw PrivateModelConfigurationError.invalidFields }
+            defaults["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = maiRealtime
         }
         return defaults
     }

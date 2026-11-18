@@ -177,13 +177,26 @@ struct LLMProviderCard: View {
             }
 
             if viewModel.speechModel == .realtime {
+                Picker("流式模型", selection: Binding(
+                    get: { viewModel.realtimeStreamModel },
+                    set: { kind in Task { await viewModel.updateRealtimeStreamModel(kind) } }
+                )) {
+                    ForEach(RealtimeStreamModelKind.allCases, id: \.self) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
+                }
+                .accessibilityIdentifier("vox.me.realtimeStreamModel")
                 HStack(spacing: 8) {
-                    TextField("自配实时流式部署名", text: $viewModel.realtimeDeploymentDraft)
+                    TextField("GPT 流式部署名", text: $viewModel.gptRealtimeDeploymentDraft)
                         .font(.system(.caption, design: .rounded))
                         .textFieldStyle(.roundedBorder)
-                        .accessibilityIdentifier("vox.me.realtimeDeployment")
-                    Button("保存") {
-                        Task { await viewModel.saveRealtimeDeployment() }
+                        .accessibilityIdentifier("vox.me.gptRealtimeDeployment")
+                    TextField("MAI-Transcribe-2 部署名", text: $viewModel.maiRealtimeDeploymentDraft)
+                        .font(.system(.caption, design: .rounded))
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityIdentifier("vox.me.maiRealtimeDeployment")
+                    Button("保存部署配置") {
+                        Task { await viewModel.saveStreamDeployments() }
                     }
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                     .buttonStyle(.borderedProminent)

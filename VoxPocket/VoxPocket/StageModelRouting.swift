@@ -24,7 +24,7 @@ enum StageModelRouting {
         beforeSession?(settings)
         let availability = availability(environment: environment)
         let realtimeConfigured = LLMAppConfig.realtimeTranscriptionConfig(
-            environment: environment, deploymentOverride: settings.realtimeDeployment) != nil
+            environment: environment, settings: settings) != nil
         let preset = StagePresetMapping.preset(settings: settings,
             batchConfigured: availability.batchConfigured,
             realtimeConfigured: realtimeConfigured,
@@ -34,7 +34,7 @@ enum StageModelRouting {
             return AppleSpeechTranscriber(logger: sdk.logger, storageLocations: sdk.storageLocations)
         }
         let realtime = preset.speech.nodes.contains(where: { $0.kind == .speechAzureRealtime })
-            ? LLMAppConfig.realtimeTranscriptionConfig(environment: environment, deploymentOverride: settings.realtimeDeployment)
+            ? LLMAppConfig.realtimeTranscriptionConfig(environment: environment, settings: settings)
             : nil
         return HybridWhisperTranscriber(whisperConfig: batch, realtimeConfig: realtime,
             logger: sdk.logger, storageLocations: sdk.storageLocations)
@@ -50,7 +50,7 @@ enum StageModelRouting {
         guard settings.speech != .appleSpeech,
               LLMAppConfig.transcriptionConfig(environment: environment) != nil else { return .appleSpeech }
         if settings.speech == .realtime,
-           LLMAppConfig.realtimeTranscriptionConfig(environment: environment, deploymentOverride: settings.realtimeDeployment) != nil {
+           LLMAppConfig.realtimeTranscriptionConfig(environment: environment, settings: settings) != nil {
             return .realtime
         }
         return .batch
@@ -66,7 +66,9 @@ enum StageModelRouting {
             realtimeCredentialsConfigured: hasRealtimeCredentials,
             realtimeDeployment: environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] ?? "",
             textConfigured: textConfigured,
-            textModelName: textConfigured ? environment["AZURE_FOUNDRY_MODEL"] ?? "默认文本模型" : ""
+            textModelName: textConfigured ? environment["AZURE_FOUNDRY_MODEL"] ?? "默认文本模型" : "",
+            gptRealtimeDeployment: environment["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"] ?? "",
+            maiRealtimeDeployment: environment["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"] ?? ""
         )
     }
 }
