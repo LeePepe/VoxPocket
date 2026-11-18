@@ -147,7 +147,7 @@ public struct MacOSCleanSlateWorkspaceView: View {
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
                     Text("macOS Liquid Glass")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
 
@@ -210,7 +210,7 @@ public struct MacOSCleanSlateWorkspaceView: View {
                         .foregroundStyle(isSelected ? .primary : .secondary)
                         .lineLimit(1)
                     Text(destination.subtitle)
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary.opacity(0.85))
                         .lineLimit(1)
                 }
@@ -219,7 +219,7 @@ public struct MacOSCleanSlateWorkspaceView: View {
 
                 if let badgeCount, badgeCount > 0 {
                     Text("\(badgeCount)")
-                        .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
                         .foregroundStyle(isSelected ? Color.accentColor : .secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -251,7 +251,7 @@ public struct MacOSCleanSlateWorkspaceView: View {
     private var todoSidebarQuickFilters: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("状态筛选")
-                .font(.system(size: 10.5, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 6)
 
@@ -272,7 +272,7 @@ public struct MacOSCleanSlateWorkspaceView: View {
                                 .foregroundStyle(isSelected ? .primary : .secondary)
                             Spacer(minLength: 4)
                             Text("\(filterCount(for: filter))")
-                                .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                                .font(.system(size: 11, weight: .bold).monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 8)
@@ -301,12 +301,12 @@ public struct MacOSCleanSlateWorkspaceView: View {
                         .fill(aiRunnerConfig.isAutoPickupEnabled ? Color.green : Color.orange)
                         .frame(width: 7, height: 7)
                     Text(aiRunnerConfig.isAutoPickupEnabled ? "监听中 · iCloud AIOrders" : "已暂停自动接单")
-                        .font(.system(size: 10.5, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                 }
                 Text("Runner: \(aiRunnerConfig.runnerDisplayName)")
-                    .font(.system(size: 10).monospaced())
+                    .font(.system(size: 11).monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -393,14 +393,14 @@ public struct MacOSCleanSlateWorkspaceView: View {
                             Button("转待办") {
                                 viewModel.convertCaptureToTodo(capture.id)
                             }
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .buttonStyle(.bordered)
                             .controlSize(.mini)
 
                             Button("复制") {
                                 viewModel.copyCaptureText(capture)
                             }
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .buttonStyle(.borderless)
                         }
                         .padding(.horizontal, 10)
@@ -486,42 +486,112 @@ public struct MacOSCleanSlateWorkspaceView: View {
 
     private var macosTodoParityWorkspaceStage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Text("待办清单")
-                    .font(.title3.bold())
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    Text("待办清单")
+                        .font(.title3.bold())
 
-                HStack(spacing: 5) {
-                    ForEach([TodoStatusFilter.all, .inbox, .running, .done, .failed], id: \.self) { filter in
-                        if filter != .failed || viewModel.failedCount > 0 || viewModel.selectedTodoFilter == .failed {
-                            let isSelected = viewModel.selectedTodoFilter == filter
+                    HStack(spacing: 5) {
+                        ForEach([TodoStatusFilter.all, .inbox, .running, .done, .failed], id: \.self) { filter in
+                            if filter != .failed || viewModel.failedCount > 0 || viewModel.selectedTodoFilter == .failed {
+                                let isSelected = viewModel.selectedTodoFilter == filter
+                                Button(action: {
+                                    withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                        viewModel.selectedTodoFilter = filter
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Text(filterTitle(for: filter))
+                                            .font(.caption.weight(isSelected ? .bold : .medium))
+                                        Text("\(filterCount(for: filter))")
+                                            .font(.caption2.weight(.bold).monospacedDigit())
+                                            .opacity(0.8)
+                                    }
+                                    .foregroundStyle(isSelected ? .white : .primary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(isSelected ? Color.accentColor : Color.primary.opacity(0.07), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    Spacer()
+
+                    TextField("搜索待办、标签或子步骤…", text: $viewModel.searchQuery)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 210)
+                        .accessibilityIdentifier("vox.macos.todo.search")
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(TodoPriority.allCases, id: \.self) { pri in
+                            let isSelected = viewModel.selectedPriorityFilter == pri
+                            let priColor: Color = pri == .p0 ? .red : (pri == .p1 ? .orange : .blue)
                             Button(action: {
                                 withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
-                                    viewModel.selectedTodoFilter = filter
+                                    viewModel.togglePriorityFilter(pri)
                                 }
                             }) {
-                                HStack(spacing: 4) {
-                                    Text(filterTitle(for: filter))
-                                        .font(.caption.weight(isSelected ? .bold : .medium))
-                                    Text("\(filterCount(for: filter))")
-                                        .font(.caption2.weight(.bold).monospacedDigit())
-                                        .opacity(0.8)
-                                }
-                                .foregroundStyle(isSelected ? .white : .primary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(isSelected ? Color.accentColor : Color.primary.opacity(0.07), in: Capsule())
+                                Text(pri.rawValue)
+                                    .font(.caption.weight(isSelected ? .bold : .semibold).monospacedDigit())
+                                    .foregroundStyle(isSelected ? .white : priColor)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .background(isSelected ? priColor : priColor.opacity(0.13), in: Capsule())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("vox.macos.todo.filter.priority." + pri.rawValue)
+                        }
+
+                        Divider()
+                            .frame(height: 14)
+                            .padding(.horizontal, 2)
+
+                        ForEach(viewModel.availableHistoricalTags.prefix(6), id: \.self) { tag in
+                            let isTagSelected = viewModel.selectedTagFilter == tag
+                            Button(action: {
+                                withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                    viewModel.toggleTagFilter(tag)
+                                }
+                            }) {
+                                Text(tag)
+                                    .font(.caption.weight(isTagSelected ? .bold : .medium).monospacedDigit())
+                                    .foregroundStyle(isTagSelected ? .white : .secondary)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        isTagSelected ? Color.accentColor : Color.primary.opacity(0.07),
+                                        in: Capsule()
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("vox.macos.todo.filter.tag." + tag.replacingOccurrences(of: "#", with: ""))
+                        }
+
+                        if viewModel.hasActiveTodoFilters {
+                            Button(action: {
+                                withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                    viewModel.resetAllTodoFilters()
+                                }
+                            }) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "arrow.counterclockwise")
+                                    Text("重置筛选")
+                                }
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.accentColor.opacity(0.14), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("vox.macos.todo.filter.reset")
                         }
                     }
                 }
-
-                Spacer()
-
-                TextField("搜索待办、标签或子步骤…", text: $viewModel.searchQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 210)
-                    .accessibilityIdentifier("vox.macos.todo.search")
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
@@ -1078,7 +1148,7 @@ private struct MacOSParityTodoCardView: View {
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: todo.scheduledAt == nil ? "bell" : "bell.fill")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                             Text(todo.scheduledAt.map { "🔔 " + Self.timeFormatter.string(from: $0) } ?? "设置提醒")
                                 .font(.system(size: 11, weight: .semibold).monospacedDigit())
                         }
@@ -1242,7 +1312,7 @@ private struct MacOSParityTodoCardView: View {
                 }) {
                     HStack(spacing: 3) {
                         Image(systemName: isTagTrayOpen ? "chevron.up" : "plus")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                         Text("标签")
                             .font(.system(size: 11, weight: .semibold))
                     }

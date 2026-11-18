@@ -82,23 +82,23 @@ public enum TodoUnfoldVariantKind: String, CaseIterable, Identifiable, Sendable 
 
     public var title: String {
         switch self {
-        case .v01: "Upward Vertical Glass Stack · 竖向玻璃浮层栈 (锁定 v02 Tag)"
-        case .v02: "Native Liquid Glass Popover · 竖向玻璃弹出菜单 (锁定 v02 Tag)"
-        case .v03: "Persistent Vertical Icon Column · 常驻竖向胶囊柱 (锁定 v02 Tag)"
-        case .v04: "Slide-Up Vertical Glass Drawer · 上滑竖向玻璃抽屉 (锁定 v02 Tag)"
+        case .v01: "Top-Header Liquid Glass Pill Rail · 顶栏液态玻璃胶囊轨 + #Tag 联动快筛"
+        case .v02: "Bottom-Center Horizontal Glass Lens Dock · 底部双键间水平悬浮光学透镜"
+        case .v03: "Interactive Summary Bento Cards · 列表顶部 3 宫格状态仪表微卡直筛"
+        case .v04: "Multi-Faceted Command Filter Matrix · 状态 × P0..P2 × #Tag 组合矩阵"
         }
     }
 
     public var summary: String {
         switch self {
         case .v01:
-            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击展开竖向玻璃浮层栈；✨ AI do it 实时派单。"
+            "位于顶栏正下方，彻底解放底部双按钮区（0 底部遮挡）；第 1 行单点即切 4 态液态玻璃胶囊滑轨，第 2 行 #Tag 与 P0 芯片叠加快筛。"
         case .v02:
-            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击弹出竖向玻璃 Popover；✨ AI do it 实时派单。"
+            "水平嵌入底部左侧 waveform 与右侧 mic.fill 双按钮正中间空档（高度 44pt，绝不向上弹出遮挡列表）；单点切换 4 段高折射光学透镜。"
         case .v03:
-            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下常驻紧凑竖向 4 胶囊柱；✨ AI do it 实时派单。"
+            "列表顶部 3 列等宽 Bento 状态仪表微卡（待处理 / AI 执行中 / 已完成，含大号数字与占比条），点按微卡即刻过滤对应状态，兼顾全局进度与直筛。"
         case .v04:
-            "Header 第 1 行 [标题 + 创建时间 + 常驻翻转箭头]，第 2 行 [状态 + Pri + 🔔提醒时间 + >=2子流程进度]；锁定 v02 同框标签架；左下点击上滑竖向玻璃抽屉；✨ AI do it 实时派单。"
+            "顶栏组合筛选控制条 + 已激活条件 Chips（状态 × 优先级 P0..P2 × #Tag 多维交叉过滤），支持展开紧凑玻璃矩阵与一键重置。"
         }
     }
 
@@ -125,6 +125,8 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
     @Published public var isTagTrayOpen: Bool = false
     @Published public var isFilterPanelOpen: Bool = true
     @Published public var selectedFilter: String = "全部"
+    @Published public var selectedTagFilter: String? = nil
+    @Published public var selectedPriorityFilter: TodoPriority? = nil
     @Published public var speedMultiplier: Double = 1.0
     @Published public var cascadeStageTwoVisible: Bool = false
     @Published public var recorderStatus: RecorderStatus = .idle
@@ -294,6 +296,44 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
         todos[0].id
     }
 
+    public var hasActiveFilters: Bool {
+        selectedFilter != "全部" || selectedTagFilter != nil || selectedPriorityFilter != nil
+    }
+
+    public var filteredTodos: [VoiceTodo] {
+        todos.filter { todo in
+            let matchesStatus: Bool = {
+                switch selectedFilter {
+                case "待处理", "待办":
+                    return todo.executionState == .inbox
+                case "AI 执行中", "AI":
+                    return todo.executionState == .running
+                case "已完成", "完成":
+                    return todo.executionState == .done
+                default:
+                    return true
+                }
+            }()
+            let matchesTag: Bool = {
+                guard let tag = selectedTagFilter else { return true }
+                let normalized = tag.hasPrefix("#") ? tag : "#\(tag)"
+                return todo.tags.contains(where: { $0.caseInsensitiveCompare(normalized) == .orderedSame })
+            }()
+            let matchesPriority: Bool = {
+                guard let priority = selectedPriorityFilter else { return true }
+                return todo.priority == priority
+            }()
+            return matchesStatus && matchesTag && matchesPriority
+        }
+    }
+
+    private func reconcileExpandedTodoWithFilter() {
+        guard let expandedTodoID else { return }
+        if !filteredTodos.contains(where: { $0.id == expandedTodoID }) {
+            self.expandedTodoID = filteredTodos.first?.id
+        }
+    }
+
     public func toggleExpand(_ id: UUID) {
         let anim = variant.spring(speedMultiplier: speedMultiplier)
         if expandedTodoID == id {
@@ -427,9 +467,39 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
     public func selectFilterOption(_ title: String) {
         withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
             selectedFilter = title
-            if variant != .v03 {
-                isFilterPanelOpen = false
+            reconcileExpandedTodoWithFilter()
+        }
+    }
+
+    public func selectTagFilter(_ tag: String?) {
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            if let raw = tag?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+                let normalized = raw.hasPrefix("#") ? raw : "#\(raw)"
+                selectedTagFilter = (selectedTagFilter == normalized) ? nil : normalized
+            } else {
+                selectedTagFilter = nil
             }
+            reconcileExpandedTodoWithFilter()
+        }
+    }
+
+    public func selectPriorityFilter(_ priority: TodoPriority?) {
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            if let priority {
+                selectedPriorityFilter = (selectedPriorityFilter == priority) ? nil : priority
+            } else {
+                selectedPriorityFilter = nil
+            }
+            reconcileExpandedTodoWithFilter()
+        }
+    }
+
+    public func resetFilters() {
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            selectedFilter = "全部"
+            selectedTagFilter = nil
+            selectedPriorityFilter = nil
+            reconcileExpandedTodoWithFilter()
         }
     }
 
@@ -527,52 +597,64 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                 headerBar
                     .padding(.horizontal, AppTheme.Space.lg)
                     .padding(.top, AppTheme.Space.xs)
-                    .padding(.bottom, AppTheme.Space.sm)
+                    .padding(.bottom, AppTheme.Space.xs)
+
+                topVariantFilterBar
+                    .padding(.horizontal, AppTheme.Space.lg)
+                    .padding(.bottom, AppTheme.Space.xs)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 10) {
-                        VStack(spacing: listCardSpacing) {
-                            ForEach(Array(store.todos.enumerated()), id: \.element.id) { index, todo in
-                                let isExpanded = store.expandedTodoID == todo.id
-                                let expandFraction: Double = {
-                                    if let p = interpolationProgress, index == 0 {
-                                        return min(1.0, max(0.0, p))
-                                    }
-                                    return isExpanded ? 1.0 : 0.0
-                                }()
-                                let siblingDimmed = store.variant == .v03 && store.expandedTodoID != nil && !isExpanded
+                        if store.variant == .v03 {
+                            v03InteractiveSummaryBentoFilterCards
+                        }
 
-                                TodoUnfoldVariantCardView(
-                                    variant: store.variant,
-                                    todo: todo,
-                                    aiOrder: store.aiOrdersByTodoID[todo.id],
-                                    isExpanded: expandFraction > 0.01,
-                                    expandFraction: expandFraction,
-                                    isTagTrayOpen: index == 0 && store.isTagTrayOpen,
-                                    cascadeStageTwoVisible: store.cascadeStageTwoVisible || (interpolationProgress ?? 0) > 0.30,
-                                    historicalTags: store.historicalTags,
-                                    speedMultiplier: store.speedMultiplier,
-                                    onToggleExpand: { store.toggleExpand(todo.id) },
-                                    onToggleTagTray: { store.toggleTagTray() },
-                                    onCycleStatus: { store.cycleStatus(todoID: todo.id) },
-                                    onCyclePriority: { store.cyclePriority(todoID: todo.id) },
-                                    onToggleTag: { tag in store.toggleTag(todoID: todo.id, tag: tag) },
-                                    onAddTag: { tag in store.addTag(todoID: todo.id, tag: tag) },
-                                    onToggleSubtask: { subID in store.toggleSubtask(todoID: todo.id, subtaskID: subID) },
-                                    onUpdateTitle: { title in store.updateTitle(todoID: todo.id, title: title) },
-                                    onUpdateDescription: { desc in store.updateDescription(todoID: todo.id, description: desc) },
-                                    onUpdateSubtaskTitle: { subID, title in store.updateSubtaskTitle(todoID: todo.id, subtaskID: subID, title: title) },
-                                    onAppendSubtask: { title in store.appendSubtask(todoID: todo.id, title: title) },
-                                    onDispatchAI: { store.dispatchTodoToICloudAI(todoID: todo.id) }
-                                )
-                                .opacity(siblingDimmed ? 0.82 : 1.0)
-                                .scaleEffect(siblingDimmed ? 0.99 : 1.0)
+                        if store.filteredTodos.isEmpty {
+                            emptyFilteredTodosCard
+                        } else {
+                            VStack(spacing: listCardSpacing) {
+                                ForEach(Array(store.filteredTodos.enumerated()), id: \.element.id) { index, todo in
+                                    let isExpanded = store.expandedTodoID == todo.id
+                                    let expandFraction: Double = {
+                                        if let p = interpolationProgress, index == 0 {
+                                            return min(1.0, max(0.0, p))
+                                        }
+                                        return isExpanded ? 1.0 : 0.0
+                                    }()
+                                    let siblingDimmed = store.variant == .v03 && store.expandedTodoID != nil && !isExpanded
+
+                                    TodoUnfoldVariantCardView(
+                                        variant: store.variant,
+                                        todo: todo,
+                                        aiOrder: store.aiOrdersByTodoID[todo.id],
+                                        isExpanded: expandFraction > 0.01,
+                                        expandFraction: expandFraction,
+                                        isTagTrayOpen: index == 0 && store.isTagTrayOpen,
+                                        cascadeStageTwoVisible: store.cascadeStageTwoVisible || (interpolationProgress ?? 0) > 0.30,
+                                        historicalTags: store.historicalTags,
+                                        speedMultiplier: store.speedMultiplier,
+                                        onToggleExpand: { store.toggleExpand(todo.id) },
+                                        onToggleTagTray: { store.toggleTagTray() },
+                                        onCycleStatus: { store.cycleStatus(todoID: todo.id) },
+                                        onCyclePriority: { store.cyclePriority(todoID: todo.id) },
+                                        onToggleTag: { tag in store.toggleTag(todoID: todo.id, tag: tag) },
+                                        onAddTag: { tag in store.addTag(todoID: todo.id, tag: tag) },
+                                        onToggleSubtask: { subID in store.toggleSubtask(todoID: todo.id, subtaskID: subID) },
+                                        onUpdateTitle: { title in store.updateTitle(todoID: todo.id, title: title) },
+                                        onUpdateDescription: { desc in store.updateDescription(todoID: todo.id, description: desc) },
+                                        onUpdateSubtaskTitle: { subID, title in store.updateSubtaskTitle(todoID: todo.id, subtaskID: subID, title: title) },
+                                        onAppendSubtask: { title in store.appendSubtask(todoID: todo.id, title: title) },
+                                        onDispatchAI: { store.dispatchTodoToICloudAI(todoID: todo.id) }
+                                    )
+                                    .opacity(siblingDimmed ? 0.82 : 1.0)
+                                    .scaleEffect(siblingDimmed ? 0.99 : 1.0)
+                                }
                             }
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.lg)
                     .padding(.top, AppTheme.Space.xs)
-                    .padding(.bottom, 136)
+                    .padding(.bottom, 108)
                 }
             }
 
@@ -625,232 +707,551 @@ public struct TodoUnfoldVariantPhoneViewport: View {
         }
     }
 
-    private var filterOptionsWithCounts: [(title: String, count: Int)] {
+    private var filterOptionsWithCounts: [(title: String, shortTitle: String, count: Int, tint: Color)] {
         [
-            ("全部", store.todos.count),
-            ("待处理", store.todos.filter { $0.executionState == .inbox }.count),
-            ("AI 执行中", store.todos.filter { $0.executionState == .running }.count),
-            ("已完成", store.todos.filter { $0.executionState == .done }.count)
+            ("全部", "全", store.todos.count, Color.accentColor),
+            ("待处理", "待", store.todos.filter { $0.executionState == .inbox }.count, Color.blue),
+            ("AI 执行中", "AI", store.todos.filter { $0.executionState == .running }.count, Color.orange),
+            ("已完成", "完", store.todos.filter { $0.executionState == .done }.count, Color.green)
         ]
     }
 
-    private var activeFilterCount: Int {
-        filterOptionsWithCounts.first(where: { $0.title == store.selectedFilter })?.count ?? store.todos.count
+    private var emptyFilteredTodosCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text("当前筛选条件下暂无待办")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+            Button(action: { store.resetFilters() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.caption.weight(.bold))
+                    Text("重置筛选")
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Color.accentColor, in: Capsule())
+            }
+            .buttonStyle(AppPressableButtonStyle())
+        }
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.surfaceCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.8)
+        }
     }
 
     @ViewBuilder
-    private var bottomLeadingVerticalFilterControl: some View {
+    private var topVariantFilterBar: some View {
         switch store.variant {
         case .v01:
-            // v01: Upward Vertical Liquid Glass Floating Stack
-            VStack(alignment: .leading, spacing: 6) {
-                TodoExpandRevealLayout(progress: store.isFilterPanelOpen ? 1.0 : 0.0) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(filterOptionsWithCounts, id: \.title) { item in
-                            verticalFilterRow(title: item.title, count: item.count, isSelected: store.selectedFilter == item.title)
-                        }
-                    }
-                    .padding(6)
-                    .frame(width: 156, alignment: .leading)
-                    .modifier(RecorderGlassModifier())
-                    .padding(.bottom, 2)
-                }
-                .clipped()
-                .opacity(store.isFilterPanelOpen ? 1.0 : 0.0)
-                .allowsHitTesting(store.isFilterPanelOpen)
-
-                compactFilterTriggerCapsule
-            }
-
+            v01TopHeaderLiquidGlassPillRailAndTagStrip
         case .v02:
-            // v02: Native-Style Liquid Glass Popover Menu above bottom-left capsule
-            VStack(alignment: .leading, spacing: 4) {
-                if store.isFilterPanelOpen {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("状态筛选")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(Color.accentColor)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.top, 4)
-
-                        Divider()
-
-                        ForEach(filterOptionsWithCounts, id: \.title) { item in
-                            verticalFilterRow(title: item.title, count: item.count, isSelected: store.selectedFilter == item.title)
-                        }
-                    }
-                    .padding(6)
-                    .frame(width: 164, alignment: .leading)
-                    .modifier(RecorderGlassModifier())
-                    .shadow(color: Color.black.opacity(0.22), radius: 14, y: 6)
-                }
-
-                compactFilterTriggerCapsule
-            }
-
+            v02TopQuickTagStrip
         case .v03:
-            // v03: Persistent Compact Vertical Icon/Label Capsule Column
-            VStack(alignment: .leading, spacing: 4) {
+            EmptyView()
+        case .v04:
+            v04MultiFacetedCommandFilterBarAndMatrix
+        }
+    }
+
+    // MARK: - v01 · Top-Header Liquid Glass Pill Rail + #Tag Strip (Zero Bottom-Left Popup)
+
+    private var v01TopHeaderLiquidGlassPillRailAndTagStrip: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
                 ForEach(filterOptionsWithCounts, id: \.title) { item in
                     let isSelected = store.selectedFilter == item.title
                     Button(action: { store.selectFilterOption(item.title) }) {
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.4))
-                                .frame(width: 6, height: 6)
-                            Text(item.title)
-                                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                            Spacer(minLength: 4)
+                        HStack(spacing: 4) {
+                            if item.title != "全部" {
+                                Circle()
+                                    .fill(isSelected ? Color.white : item.tint)
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(item.title == "AI 执行中" ? "AI" : item.title)
+                                .font(.caption.weight(isSelected ? .bold : .semibold))
                             Text("\(item.count)")
-                                .font(.system(size: 10.5, weight: .bold).monospacedDigit())
-                                .foregroundStyle(.secondary)
+                                .font(.caption2.weight(.bold).monospacedDigit())
+                                .opacity(isSelected ? 0.92 : 0.72)
                         }
+                        .foregroundStyle(isSelected ? .white : .primary)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .frame(width: 122, alignment: .leading)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity)
                         .background {
                             if isSelected {
                                 Capsule()
-                                    .fill(Color.accentColor.opacity(0.18))
+                                    .fill(item.tint)
+                                    .matchedGeometryEffect(id: "v01StatusPill", in: glass)
+                            } else {
+                                Capsule()
+                                    .fill(AppTheme.surfaceCard.opacity(0.82))
                             }
                         }
-                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(
+                                    isSelected ? item.tint.opacity(0.45) : Color.primary.opacity(0.08),
+                                    lineWidth: 0.8
+                                )
+                        }
+                    }
+                    .buttonStyle(AppPressableButtonStyle())
+                }
+            }
+            .padding(4)
+            .modifier(RecorderGlassModifier())
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    let isP0Selected = store.selectedPriorityFilter == .p0
+                    Button(action: { store.selectPriorityFilter(.p0) }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "flame.fill")
+                                .font(.caption2.weight(.bold))
+                            Text("P0")
+                                .font(.caption.weight(.bold).monospacedDigit())
+                        }
+                        .foregroundStyle(isP0Selected ? .white : Color.red)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            isP0Selected ? Color.red : Color.red.opacity(0.14),
+                            in: Capsule()
+                        )
+                    }
+                    .buttonStyle(AppPressableButtonStyle())
+
+                    ForEach(["#VoxPocket", "#iOS", "#AI", "#Podcast", "#Glass"], id: \.self) { tag in
+                        let isTagSelected = store.selectedTagFilter == tag
+                        Button(action: { store.selectTagFilter(tag) }) {
+                            Text(tag)
+                                .font(.caption.weight(isTagSelected ? .bold : .medium).monospacedDigit())
+                                .foregroundStyle(isTagSelected ? .white : .secondary)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 4)
+                                .background(
+                                    isTagSelected ? Color.accentColor : AppTheme.surfaceCard.opacity(0.85),
+                                    in: Capsule()
+                                )
+                                .overlay {
+                                    Capsule()
+                                        .strokeBorder(Color.primary.opacity(isTagSelected ? 0 : 0.08), lineWidth: 0.7)
+                                }
+                        }
+                        .buttonStyle(AppPressableButtonStyle())
+                    }
+
+                    if store.hasActiveFilters {
+                        Button(action: { store.resetFilters() }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.caption2.weight(.bold))
+                                Text("重置")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.14), in: Capsule())
+                        }
+                        .buttonStyle(AppPressableButtonStyle())
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - v02 · Top Quick Tag Strip + Bottom-Center Horizontal Glass Lens Dock
+
+    private var v02TopQuickTagStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                let isP0 = store.selectedPriorityFilter == .p0
+                Button(action: { store.selectPriorityFilter(.p0) }) {
+                    Text("P0 高优")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(isP0 ? .white : Color.red)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(isP0 ? Color.red : Color.red.opacity(0.13), in: Capsule())
+                }
+                .buttonStyle(.plain)
+
+                ForEach(["#VoxPocket", "#iOS", "#AI", "#Podcast"], id: \.self) { tag in
+                    let selected = store.selectedTagFilter == tag
+                    Button(action: { store.selectTagFilter(tag) }) {
+                        Text(tag)
+                            .font(.caption.weight(selected ? .bold : .medium).monospacedDigit())
+                            .foregroundStyle(selected ? .white : .secondary)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(selected ? Color.accentColor : AppTheme.surfaceCard.opacity(0.80), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if store.hasActiveFilters {
+                    Button(action: { store.resetFilters() }) {
+                        Text("重置")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.13), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(5)
-            .modifier(RecorderGlassModifier())
+        }
+    }
 
-        case .v04:
-            // v04: Slide-Up Vertical Glass Drawer Card
-            VStack(alignment: .leading, spacing: 6) {
-                TodoExpandRevealLayout(progress: store.isFilterPanelOpen ? 1.0 : 0.0) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            Label("筛选清单", systemImage: "line.3.horizontal.decrease.circle.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(Color.accentColor)
-                            Spacer()
-                            Button(action: { store.toggleFilterPanel() }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
+    private var v02BottomCenterHorizontalLensDock: some View {
+        HStack(spacing: 4) {
+            ForEach(filterOptionsWithCounts, id: \.title) { item in
+                let isSelected = store.selectedFilter == item.title
+                Button(action: { store.selectFilterOption(item.title) }) {
+                    HStack(spacing: 3) {
+                        Text(item.shortTitle)
+                            .font(.caption.weight(isSelected ? .bold : .semibold))
+                        Text("\(item.count)")
+                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .opacity(isSelected ? 0.95 : 0.72)
+                    }
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .padding(.horizontal, 9)
+                    .frame(height: 36)
+                    .background {
+                        if isSelected {
+                            Capsule()
+                                .fill(item.tint)
+                                .matchedGeometryEffect(id: "v02BottomLens", in: glass)
+                        }
+                    }
+                }
+                .buttonStyle(AppPressableButtonStyle())
+            }
+        }
+        .padding(.horizontal, 5)
+        .frame(height: 44)
+        .modifier(RecorderGlassModifier())
+    }
+
+    // MARK: - v03 · Interactive Summary Bento Cards (Top of Scroll Stage)
+
+    private var v03InteractiveSummaryBentoFilterCards: some View {
+        let total = max(1, store.todos.count)
+        let bentoItems: [(title: String, label: String, icon: String, count: Int, tint: Color)] = [
+            ("待处理", "待处理", "tray.full.fill", store.todos.filter { $0.executionState == .inbox }.count, .blue),
+            ("AI 执行中", "AI 执行中", "bolt.horizontal.circle.fill", store.todos.filter { $0.executionState == .running }.count, .orange),
+            ("已完成", "已完成", "checkmark.circle.fill", store.todos.filter { $0.executionState == .done }.count, .green)
+        ]
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ForEach(bentoItems, id: \.title) { card in
+                    let isSelected = store.selectedFilter == card.title
+                    let ratio = Double(card.count) / Double(total)
+                    Button(action: {
+                        if isSelected {
+                            store.selectFilterOption("全部")
+                        } else {
+                            store.selectFilterOption(card.title)
+                        }
+                    }) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: card.icon)
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(isSelected ? .white : card.tint)
+                                Text(card.label)
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(isSelected ? .white : .secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Text("\(card.count)")
+                                .font(.title3.weight(.black).monospacedDigit())
+                                .foregroundStyle(isSelected ? .white : .primary)
+
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill((isSelected ? Color.white : card.tint).opacity(0.22))
+                                    Capsule()
+                                        .fill(isSelected ? Color.white : card.tint)
+                                        .frame(width: max(6, geo.size.width * ratio))
+                                }
+                            }
+                            .frame(height: 4)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            isSelected ? card.tint : AppTheme.surfaceCard,
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(
+                                    isSelected ? card.tint.opacity(0.6) : Color.primary.opacity(0.08),
+                                    lineWidth: isSelected ? 1.4 : 0.8
+                                )
+                        }
+                    }
+                    .buttonStyle(AppPressableButtonStyle())
+                }
+            }
+
+            HStack(spacing: 6) {
+                Button(action: { store.resetFilters() }) {
+                    Text("全部 (\(store.todos.count))")
+                        .font(.caption.weight(store.selectedFilter == "全部" ? .bold : .medium).monospacedDigit())
+                        .foregroundStyle(store.selectedFilter == "全部" ? .white : .primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            store.selectedFilter == "全部" ? Color.accentColor : AppTheme.surfaceCard,
+                            in: Capsule()
+                        )
+                }
+                .buttonStyle(.plain)
+
+                ForEach(["#VoxPocket", "#iOS", "#AI"], id: \.self) { tag in
+                    let isTag = store.selectedTagFilter == tag
+                    Button(action: { store.selectTagFilter(tag) }) {
+                        Text(tag)
+                            .font(.caption.weight(isTag ? .bold : .regular).monospacedDigit())
+                            .foregroundStyle(isTag ? .white : .secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(isTag ? Color.accentColor : AppTheme.surfaceCard, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    // MARK: - v04 · Multi-Faceted Command Filter Bar & Matrix (Status × Priority P0..P2 × #Tag)
+
+    private var v04MultiFacetedCommandFilterBarAndMatrix: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Button(action: { store.toggleFilterPanel() }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.accentColor)
+                        Text("组合矩阵筛选")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.primary)
+                        Text("\(store.filteredTodos.count)/\(store.todos.count)")
+                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.down")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(store.isFilterPanelOpen ? 180 : 0))
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .modifier(RecorderGlassModifier())
+                }
+                .buttonStyle(AppPressableButtonStyle())
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 5) {
+                        if store.selectedFilter != "全部" {
+                            Button(action: { store.selectFilterOption("全部") }) {
+                                HStack(spacing: 3) {
+                                    Text("状态: \(store.selectedFilter)")
+                                    Image(systemName: "xmark")
+                                }
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.accentColor, in: Capsule())
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.top, 4)
 
-                        ForEach(filterOptionsWithCounts, id: \.title) { item in
-                            verticalFilterRow(title: item.title, count: item.count, isSelected: store.selectedFilter == item.title)
+                        if let pri = store.selectedPriorityFilter {
+                            Button(action: { store.selectPriorityFilter(nil) }) {
+                                HStack(spacing: 3) {
+                                    Text("优先级: \(pri.rawValue)")
+                                    Image(systemName: "xmark")
+                                }
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.red, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if let tag = store.selectedTagFilter {
+                            Button(action: { store.selectTagFilter(nil) }) {
+                                HStack(spacing: 3) {
+                                    Text(tag)
+                                    Image(systemName: "xmark")
+                                }
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.purple, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if store.hasActiveFilters {
+                            Button(action: { store.resetFilters() }) {
+                                Text("重置")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(Color.accentColor)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.accentColor.opacity(0.14), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    .padding(7)
-                    .frame(width: 172, alignment: .leading)
-                    .modifier(RecorderGlassModifier())
-                }
-                .clipped()
-                .opacity(store.isFilterPanelOpen ? 1.0 : 0.0)
-                .allowsHitTesting(store.isFilterPanelOpen)
-
-                compactFilterTriggerCapsule
-            }
-        }
-    }
-
-    private var compactFilterTriggerCapsule: some View {
-        Button(action: { store.toggleFilterPanel() }) {
-            HStack(spacing: 5) {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.accentColor)
-                Text(store.selectedFilter)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("\(activeFilterCount)")
-                    .font(.caption2.weight(.bold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(store.isFilterPanelOpen ? 180 : 0))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .frame(minHeight: 34)
-            .modifier(RecorderGlassModifier())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func verticalFilterRow(title: String, count: Int, isSelected: Bool) -> some View {
-        Button(action: { store.selectFilterOption(title) }) {
-            HStack(spacing: 6) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                Text(title)
-                    .font(.caption.weight(isSelected ? .semibold : .regular))
-                Spacer(minLength: 6)
-                Text(String(count))
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.18))
                 }
             }
-            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+
+            TodoExpandRevealLayout(progress: store.isFilterPanelOpen ? 1.0 : 0.0) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 5) {
+                        Text("状态")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 34, alignment: .leading)
+                        ForEach(filterOptionsWithCounts, id: \.title) { item in
+                            let selected = store.selectedFilter == item.title
+                            Button(action: { store.selectFilterOption(item.title) }) {
+                                Text("\(item.title == "AI 执行中" ? "AI" : item.title) \(item.count)")
+                                    .font(.caption2.weight(selected ? .bold : .medium).monospacedDigit())
+                                    .foregroundStyle(selected ? .white : .primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        selected ? item.tint : AppTheme.surfaceElevated,
+                                        in: Capsule()
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 5) {
+                        Text("优级")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 34, alignment: .leading)
+                        ForEach(TodoPriority.allCases, id: \.self) { pri in
+                            let selected = store.selectedPriorityFilter == pri
+                            Button(action: { store.selectPriorityFilter(pri) }) {
+                                Text(pri.rawValue)
+                                    .font(.caption2.weight(selected ? .bold : .semibold).monospacedDigit())
+                                    .foregroundStyle(selected ? .white : .primary)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        selected ? Color.red : AppTheme.surfaceElevated,
+                                        in: Capsule()
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 5) {
+                            Text("标签")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 34, alignment: .leading)
+                            ForEach(store.historicalTags, id: \.self) { tag in
+                                let selected = store.selectedTagFilter == tag
+                                Button(action: { store.selectTagFilter(tag) }) {
+                                    Text(tag)
+                                        .font(.caption2.weight(selected ? .bold : .regular).monospacedDigit())
+                                        .foregroundStyle(selected ? .white : .secondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            selected ? Color.accentColor : AppTheme.surfaceElevated,
+                                            in: Capsule()
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(10)
+                .background(
+                    AppTheme.surfaceCard.opacity(0.92),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.8)
+                }
+            }
+            .clipped()
+            .opacity(store.isFilterPanelOpen ? 1.0 : 0.0)
+            .allowsHitTesting(store.isFilterPanelOpen)
         }
-        .buttonStyle(.plain)
     }
 
     private var bottomDualGlassBar: some View {
         GlassEffectContainer(spacing: 10) {
-            VStack(alignment: .leading, spacing: 10) {
-                bottomLeadingVerticalFilterControl
-                    .glassEffectID("previewFilterBar", in: glass)
+            HStack(spacing: 10) {
+                Image(systemName: "waveform")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 48, height: 48)
+                    .modifier(RecorderGlassModifier())
+                    .glassEffectID("previewSwitch", in: glass)
 
-                HStack {
-                    Image(systemName: "waveform")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 48, height: 48)
-                        .modifier(RecorderGlassModifier())
-                        .glassEffectID("previewSwitch", in: glass)
+                Spacer(minLength: 4)
 
-                    Spacer()
-
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.accentColor, Color.cyan],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 54, height: 54)
-                            .shadow(color: Color.accentColor.opacity(0.28), radius: 10, y: 4)
-
-                        Image(systemName: "mic.fill")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .glassEffectID("previewRecord", in: glass)
+                if store.variant == .v02 {
+                    v02BottomCenterHorizontalLensDock
+                        .glassEffectID("previewFilterBar", in: glass)
+                    Spacer(minLength: 4)
                 }
+
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.accentColor, Color.cyan],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 54, height: 54)
+                        .shadow(color: Color.accentColor.opacity(0.28), radius: 10, y: 4)
+
+                    Image(systemName: "mic.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .glassEffectID("previewRecord", in: glass)
             }
             .padding(.horizontal, 22)
             .padding(.bottom, 14)
@@ -1081,7 +1482,7 @@ public struct TodoUnfoldVariantCardView: View {
 
             Button(action: onToggleExpand) {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(expandFraction * 180.0))
                     .frame(width: 24, height: 24)
@@ -1191,7 +1592,7 @@ public struct TodoUnfoldVariantCardView: View {
     private var reminderMicroBadge: some View {
         HStack(spacing: 3) {
             Image(systemName: "bell.fill")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
             Text("明早 09:00")
                 .font(.system(size: 11, weight: .semibold).monospacedDigit())
         }
@@ -1301,7 +1702,7 @@ public struct TodoUnfoldVariantCardView: View {
                 Button(action: onToggleTagTray) {
                     HStack(spacing: 3) {
                         Image(systemName: isTagTrayOpen ? "chevron.up" : "plus")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                         Text("标签")
                             .font(.system(size: 11, weight: .semibold))
                     }
@@ -1325,7 +1726,7 @@ public struct TodoUnfoldVariantCardView: View {
                             Button(action: { onToggleTag(candidate) }) {
                                 HStack(spacing: 3) {
                                     Image(systemName: selected ? "checkmark" : "plus")
-                                        .font(.system(size: 10, weight: .bold))
+                                        .font(.system(size: 11, weight: .bold))
                                     Text(candidate)
                                         .font(.system(size: 11, weight: selected ? .semibold : .regular).monospacedDigit())
                                 }
@@ -1398,7 +1799,7 @@ public struct TodoUnfoldVariantCardView: View {
                 HStack(spacing: 5) {
                     Button(action: onToggleTagTray) {
                         Image(systemName: isTagTrayOpen ? "xmark" : "plus")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 24, height: 24)
                             .background(Color.accentColor.opacity(0.14), in: Circle())
@@ -1462,7 +1863,7 @@ public struct TodoUnfoldVariantCardView: View {
         Button(action: { onToggleTag(tag) }) {
             HStack(spacing: 3) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                 Text(tag)
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
             }
@@ -1485,7 +1886,7 @@ public struct TodoUnfoldVariantCardView: View {
         Button(action: { onToggleTag(tag) }) {
             HStack(spacing: 3) {
                 Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                 Text(tag)
                     .font(.system(size: 11, weight: .regular).monospacedDigit())
             }
@@ -1723,7 +2124,7 @@ public enum PreviewHostTopTab: String, CaseIterable, Identifiable, Sendable {
     public var label: String {
         switch self {
         case .todoAndVerticalFilter:
-            "Tab 1 · Todo 列表与竖向 Filter"
+            "Tab 1 · Todo Filter 4 套差异化方案预览"
         case .recorderFiveStageAtmosphere:
             "Tab 2 · 录音页 5 阶段色彩流转"
         case .dynamicIslandFourVariants:
@@ -1936,8 +2337,14 @@ public final class TodoUnfoldFourUpBoardController: ObservableObject {
 
     public let stores: [TodoUnfoldVariantKind: TodoUnfoldVariantPreviewStore]
 
-    public init(initiallyExpanded: Bool = true) {
+    public init(initiallyExpanded: Bool = true, initialTab: PreviewHostTopTab? = nil) {
         self.allExpanded = initiallyExpanded
+        if let initialTab {
+            self.activeTab = initialTab
+        } else if let rawTab = ProcessInfo.processInfo.environment["VOX_PREVIEW_TAB"],
+                  let envTab = PreviewHostTopTab(rawValue: rawTab) {
+            self.activeTab = envTab
+        }
         var map: [TodoUnfoldVariantKind: TodoUnfoldVariantPreviewStore] = [:]
         for kind in TodoUnfoldVariantKind.allCases {
             let s = TodoUnfoldVariantPreviewStore(variant: kind, initiallyExpanded: initiallyExpanded)
@@ -2129,7 +2536,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("VoxPocket · 120Hz 原生 SwiftUI 预览窗 (Todo 竖向筛选 · 录音 5 阶段色彩 · 灵动岛 DI-v01..v04 · macOS 桌面工作台)")
+                    Text("VoxPocket · 120Hz 原生 SwiftUI 预览窗 (Todo Filter 4 套差异化方案 · 录音 5 阶段色彩 · 灵动岛 DI-v01..v04 · macOS 桌面工作台)")
                         .font(.headline.bold())
                     Text("100% Native SwiftUI · iOS 4 × 390×844 & macOS 1280×760 · Zero-Jump Scale & Continuous 5-Blob RGB Morph")
                         .font(.caption)
@@ -2326,7 +2733,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                     }
                                 }) {
                                     Text(opt.label)
-                                        .font(.system(size: 10, weight: stage == opt ? .bold : .regular))
+                                        .font(.system(size: 11, weight: stage == opt ? .bold : .regular))
                                         .foregroundStyle(stage == opt ? .white : .secondary)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 3)
@@ -2468,15 +2875,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
         let receipt = controller.islandReceiptByVariant[kind]
         let aiStatus = controller.islandAIStatusByVariant[kind]
         let stage = controller.islandPhaseByVariant[kind] ?? .listening
-        let accent: Color = {
-            switch stage {
-            case .listening: Color(.sRGB, red: 0.32, green: 0.74, blue: 0.72, opacity: 1.0)
-            case .transcribing: Color(.sRGB, red: 0.34, green: 0.56, blue: 0.90, opacity: 1.0)
-            case .refining: Color(.sRGB, red: 0.58, green: 0.50, blue: 0.90, opacity: 1.0)
-            case .idle: Color(.sRGB, red: 0.22, green: 0.74, blue: 0.97, opacity: 1.0)
-            case .error: Color(.sRGB, red: 0.90, green: 0.46, blue: 0.50, opacity: 1.0)
-            }
-        }()
+        let accent: Color = AtmosphereGlass.colors(for: stage.recorderStatus).first ?? Color.accentColor
         let scale = max(0.15, 1.0 / max(0.15, controller.speedMultiplier))
         let spring = Animation.spring(response: 0.32 * scale, dampingFraction: 0.84)
 
@@ -2499,7 +2898,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                     .padding(.horizontal, 24)
                     .frame(height: 37)
 
-                    // Single continuous morphing #000000 Dynamic Island container with conditional height shrinkage
+                    // Single continuous morphing Dynamic Island container with conditional height shrinkage
                     let effectiveHeight: CGFloat = (mode == .expanded || mode == .lockScreenBanner)
                         ? kind.expandedHeight(hasDescription: hasDescription, hasSubtasks: hasSubtasks)
                         : mode.targetSize.height
@@ -2552,7 +2951,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                             }
                         }) {
                             Text(candidate.shortLabel)
-                                .font(.system(size: 10, weight: selected ? .bold : .medium).monospaced())
+                                .font(.system(size: 11, weight: selected ? .bold : .medium).monospaced())
                                 .foregroundStyle(selected ? .white : .secondary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -2625,7 +3024,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                         .buttonStyle(.plain)
 
                         Text("P0")
-                            .font(.system(size: 9.5, weight: .black).monospacedDigit())
+                            .font(.system(size: 11, weight: .black).monospacedDigit())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -2707,7 +3106,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                 .buttonStyle(.plain)
 
                                 Text("P0")
-                                    .font(.system(size: 9, weight: .black).monospacedDigit())
+                                    .font(.system(size: 11, weight: .black).monospacedDigit())
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 1.5)
@@ -2721,7 +3120,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
 
                             if !descriptionText.isEmpty {
                                 Text(descriptionText)
-                                    .font(.system(size: 10.5))
+                                    .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.72))
                                     .lineLimit(2)
                             }
@@ -2733,7 +3132,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                 withAnimation(spring) { controller.appendVoiceSubtaskOnIsland(for: kind) }
                             }) {
                                 Text("🎙️ 语音补录")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 9)
                                     .padding(.vertical, 5)
@@ -2745,7 +3144,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                 withAnimation(spring) { controller.triggerAIDirectlyOnIsland(for: kind) }
                             }) {
                                 Text(aiStatus ?? "✨ AI 直接做")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.black)
                                     .padding(.horizontal, 9)
                                     .padding(.vertical, 5)
@@ -2806,7 +3205,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
 
                         if !subtasks.isEmpty {
                             Text("\(completedCount)/\(subtasks.count) 步")
-                                .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                                .font(.system(size: 11, weight: .bold).monospacedDigit())
                                 .foregroundStyle(accent)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
@@ -2821,7 +3220,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                 .fill(accent)
                                 .frame(width: 2.5, height: 16)
                             Text(descriptionText)
-                                .font(.system(size: 10.5))
+                                .font(.system(size: 11))
                                 .foregroundStyle(.white.opacity(0.80))
                                 .lineLimit(1)
                         }
@@ -2843,7 +3242,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                     }) {
                                         HStack(spacing: 5) {
                                             Text("\(idx + 1)")
-                                                .font(.system(size: 9.5, weight: .black).monospacedDigit())
+                                                .font(.system(size: 11, weight: .black).monospacedDigit())
                                                 .foregroundStyle(sub.isCompleted ? .black : accent)
                                                 .frame(width: 15, height: 15)
                                                 .background(sub.isCompleted ? Color.green : accent.opacity(0.20), in: Circle())
@@ -2894,7 +3293,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                             withAnimation(spring) { controller.appendVoiceSubtaskOnIsland(for: kind) }
                         }) {
                             Text("🎙️ 补录")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -2906,7 +3305,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                             withAnimation(spring) { controller.triggerAIDirectlyOnIsland(for: kind) }
                         }) {
                             Text(aiStatus ?? "✨ AI 直接做")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(.black)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -2918,7 +3317,7 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
 
                     if !descriptionText.isEmpty {
                         Text(descriptionText)
-                            .font(.system(size: 10.5))
+                            .font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.72))
                             .lineLimit(1)
                             .padding(.horizontal, 14)
@@ -2935,10 +3334,10 @@ public struct TodoUnfoldFourUpPreviewBoard: View {
                                     }) {
                                         HStack(spacing: 4) {
                                             Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
-                                                .font(.system(size: 10.5, weight: .bold))
+                                                .font(.system(size: 11, weight: .bold))
                                                 .foregroundStyle(sub.isCompleted ? Color.green : accent)
                                             Text(sub.title)
-                                                .font(.system(size: 10.5, weight: .medium))
+                                                .font(.system(size: 11, weight: .medium))
                                                 .foregroundStyle(sub.isCompleted ? .white.opacity(0.55) : .white)
                                                 .strikethrough(sub.isCompleted, color: .white.opacity(0.45))
                                                 .lineLimit(1)

@@ -39,6 +39,8 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     @Published public var playingCaptureID: UUID?
     @Published public var searchQuery = ""
     @Published public var selectedTodoFilter: TodoStatusFilter = .all
+    @Published public var selectedPriorityFilter: TodoPriority?
+    @Published public var selectedTagFilter: String?
     @Published public var selectedProjectFilter: String?
     @Published public var sortOrder: WorkspaceSortOrder = .newestFirst
     @Published public var selectedSidebarSection: WorkspaceSidebarSection = .todoAll { didSet { applySidebarSelection(selectedSidebarSection) } }
@@ -96,8 +98,30 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     public var failedCount: Int { count(.failed) }
     public var totalTodoCount: Int { todos.count }
     public var projectCounts: [String: Int] { Dictionary(grouping: todos.compactMap(\.projectKey), by: { $0 }).mapValues(\.count) }
+    public var hasActiveTodoFilters: Bool {
+        selectedTodoFilter != .all || selectedPriorityFilter != nil || selectedTagFilter != nil || selectedProjectFilter != nil || !searchQuery.isEmpty
+    }
 
     public func clearSearchPreservingFilters() { searchQuery = "" }
+    public func resetAllTodoFilters() {
+        selectedTodoFilter = .all
+        selectedPriorityFilter = nil
+        selectedTagFilter = nil
+        selectedProjectFilter = nil
+        searchQuery = ""
+    }
+    public func togglePriorityFilter(_ priority: TodoPriority) {
+        selectedPriorityFilter = (selectedPriorityFilter == priority) ? nil : priority
+    }
+    public func toggleTagFilter(_ tag: String) {
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            selectedTagFilter = nil
+            return
+        }
+        let normalized = trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+        selectedTagFilter = (selectedTagFilter == normalized) ? nil : normalized
+    }
     public func dismissReceiptBanner() { lastCopiedBannerText = nil }
     public var expandedTodo: VoiceTodo? {
         guard let expandedTodoID else { return nil }
@@ -976,6 +1000,30 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
     }
     private func perform(_ operation: @escaping () async throws -> Void) { Task { do { try await operation() } catch { captureState = .failed(stage: .ai, reason: error.localizedDescription) } } }
     private func count(_ state: TodoExecutionState) -> Int { todos.filter { $0.executionState == state }.count }
-    private func matches(_ todo: VoiceTodo) -> Bool { (selectedTodoFilter == .all || todo.executionState.rawValue == selectedTodoFilter.rawValue) && (selectedProjectFilter == nil || todo.projectKey == selectedProjectFilter) && (searchQuery.isEmpty || todo.title.localizedCaseInsensitiveContains(searchQuery) || todo.description.localizedCaseInsensitiveContains(searchQuery) || todo.taskPrompt.localizedCaseInsensitiveContains(searchQuery) || todo.rawTranscript.localizedCaseInsensitiveContains(searchQuery)) }
+    private func matches(_ todo: VoiceTodo) -> Bool {
+        let statusMatches = (selectedTodoFilter == .all || todo.executionState.rawValue == selectedTodoFilter.rawValue)
+        let priorityMatches = (selectedPriorityFilter == nil || todo.priority == selectedPriorityFilter)
+        let tagMatches: Bool = {
+            guard let selectedTagFilter else { return true }
+            let normalized = selectedTagFilter.hasPrefix("#") ? selectedTagFilter : "#\(selectedTagFilter)"
+            if todo.tags.contains(where: { $0.caseInsensitiveCompare(normalized) == .orderedSame }) {
+                return true
+            }
+            if let projectKey = todo.projectKey, "#\(projectKey)".caseInsensitiveCompare(normalized) == .orderedSame {
+                return true
+            }
+            return false
+        }()
+        let projectMatches = (selectedProjectFilter == nil || todo.projectKey == selectedProjectFilter)
+        let searchMatches = (
+            searchQuery.isEmpty
+            || todo.title.localizedCaseInsensitiveContains(searchQuery)
+            || todo.description.localizedCaseInsensitiveContains(searchQuery)
+            || todo.taskPrompt.localizedCaseInsensitiveContains(searchQuery)
+            || todo.rawTranscript.localizedCaseInsensitiveContains(searchQuery)
+            || todo.tags.contains(where: { $0.localizedCaseInsensitiveContains(searchQuery) })
+        )
+        return statusMatches && priorityMatches && tagMatches && projectMatches && searchMatches
+    }
     private func ordered(_ lhs: Date, _ rhs: Date) -> Bool { sortOrder == .newestFirst ? lhs > rhs : lhs < rhs }
 }
