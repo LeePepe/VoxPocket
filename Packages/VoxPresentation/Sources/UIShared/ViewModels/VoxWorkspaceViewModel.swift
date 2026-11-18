@@ -782,9 +782,47 @@ public final class VoxWorkspaceViewModel: ObservableObject, VoxWorkspaceViewStat
 
     public func deleteTodo(_ todoID: UUID) {
         perform { [weak self] in
-            guard let self else { return }
+            guard let self, let deletedTodo = todos.first(where: { $0.id == todoID }) else { return }
+            expandedTodoID = expandedTodoID == todoID ? nil : expandedTodoID
+            selectedTodoID = selectedTodoID == todoID ? nil : selectedTodoID
+            aiOrdersByTodoID.removeValue(forKey: todoID)
+            voiceAppendedSubtaskIDs.removeValue(forKey: todoID)
+            aiOrderProgressTasks[todoID]?.cancel()
+            aiOrderProgressTasks.removeValue(forKey: todoID)
             try await useCase.deleteTodo(id: todoID)
             await reload()
+            lastCopiedBannerText = "已删除待办 · \(deletedTodo.title)"
+        }
+    }
+
+    public func deleteTodoSubtask(todoID: UUID, subtaskID: UUID) {
+        perform { [weak self] in
+            guard let self, let todo = todos.first(where: { $0.id == todoID }), todo.subtasks.contains(where: { $0.id == subtaskID }) else { return }
+            _ = try await useCase.updateTodo(todo.withRemovedSubtask(subtaskID))
+            voiceAppendedSubtaskIDs[todoID]?.removeAll { $0 == subtaskID }
+            if voiceAppendedSubtaskIDs[todoID]?.isEmpty == true {
+                voiceAppendedSubtaskIDs.removeValue(forKey: todoID)
+            }
+            await reload()
+        }
+    }
+
+    public func clearCompletedTodos() {
+        perform { [weak self] in
+            guard let self else { return }
+            let completed = todos.filter { $0.executionState == .done }
+            guard !completed.isEmpty else { return }
+            for todo in completed {
+                aiOrdersByTodoID.removeValue(forKey: todo.id)
+                voiceAppendedSubtaskIDs.removeValue(forKey: todo.id)
+                aiOrderProgressTasks[todo.id]?.cancel()
+                aiOrderProgressTasks.removeValue(forKey: todo.id)
+                if expandedTodoID == todo.id { expandedTodoID = nil }
+                if selectedTodoID == todo.id { selectedTodoID = nil }
+                try await useCase.deleteTodo(id: todo.id)
+            }
+            await reload()
+            lastCopiedBannerText = "已清理 \(completed.count) 项已完成待办"
         }
     }
 

@@ -503,6 +503,33 @@ public final class TodoUnfoldVariantPreviewStore: ObservableObject {
         }
     }
 
+    public func deleteTodo(todoID: UUID) {
+        guard todos.contains(where: { $0.id == todoID }) else { return }
+        aiSimulationTasks[todoID]?.cancel()
+        aiSimulationTasks.removeValue(forKey: todoID)
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            todos.removeAll { $0.id == todoID }
+            aiOrdersByTodoID.removeValue(forKey: todoID)
+            if expandedTodoID == todoID { expandedTodoID = nil }
+        }
+    }
+
+    public func deleteSubtask(todoID: UUID, subtaskID: UUID) {
+        guard let idx = todos.firstIndex(where: { $0.id == todoID }) else { return }
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            todos[idx] = todos[idx].withRemovedSubtask(subtaskID)
+        }
+    }
+
+    public func clearCompletedTodos() {
+        let completedIDs = todos.filter { $0.executionState == .done }.map(\.id)
+        completedIDs.forEach { aiSimulationTasks[$0]?.cancel(); aiSimulationTasks.removeValue(forKey: $0); aiOrdersByTodoID.removeValue(forKey: $0) }
+        withAnimation(variant.spring(speedMultiplier: speedMultiplier)) {
+            todos.removeAll { $0.executionState == .done }
+            if let expandedTodoID, completedIDs.contains(expandedTodoID) { self.expandedTodoID = nil }
+        }
+    }
+
     public func dispatchTodoToICloudAI(todoID: UUID) {
         guard let idx = todos.firstIndex(where: { $0.id == todoID }) else { return }
         let todo = todos[idx]
@@ -640,6 +667,8 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                                         onToggleTag: { tag in store.toggleTag(todoID: todo.id, tag: tag) },
                                         onAddTag: { tag in store.addTag(todoID: todo.id, tag: tag) },
                                         onToggleSubtask: { subID in store.toggleSubtask(todoID: todo.id, subtaskID: subID) },
+                                        onDeleteTodo: { store.deleteTodo(todoID: todo.id) },
+                                        onDeleteSubtask: { subID in store.deleteSubtask(todoID: todo.id, subtaskID: subID) },
                                         onUpdateTitle: { title in store.updateTitle(todoID: todo.id, title: title) },
                                         onUpdateDescription: { desc in store.updateDescription(todoID: todo.id, description: desc) },
                                         onUpdateSubtaskTitle: { subID, title in store.updateSubtaskTitle(todoID: todo.id, subtaskID: subID, title: title) },
@@ -695,6 +724,13 @@ public struct TodoUnfoldVariantPhoneViewport: View {
                 .foregroundStyle(.primary)
 
             Spacer(minLength: AppTheme.Space.sm)
+
+            if store.selectedFilter == "已完成" && store.todos.contains(where: { $0.executionState == .done }) {
+                Button("清除已完成", action: store.clearCompletedTodos)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("vox.todo.clearCompleted.button")
+            }
 
             Image(systemName: "gearshape")
                 .font(.body.weight(.semibold))
@@ -1280,6 +1316,8 @@ public struct TodoUnfoldVariantCardView: View {
     public let onToggleTag: (String) -> Void
     public let onAddTag: (String) -> Void
     public let onToggleSubtask: (UUID) -> Void
+    public let onDeleteTodo: () -> Void
+    public let onDeleteSubtask: (UUID) -> Void
     public let onUpdateTitle: (String) -> Void
     public let onUpdateDescription: (String) -> Void
     public let onUpdateSubtaskTitle: (UUID, String) -> Void
@@ -1310,6 +1348,8 @@ public struct TodoUnfoldVariantCardView: View {
         onToggleTag: @escaping (String) -> Void,
         onAddTag: @escaping (String) -> Void,
         onToggleSubtask: @escaping (UUID) -> Void,
+        onDeleteTodo: @escaping () -> Void,
+        onDeleteSubtask: @escaping (UUID) -> Void,
         onUpdateTitle: @escaping (String) -> Void,
         onUpdateDescription: @escaping (String) -> Void = { _ in },
         onUpdateSubtaskTitle: @escaping (UUID, String) -> Void,
@@ -1332,6 +1372,8 @@ public struct TodoUnfoldVariantCardView: View {
         self.onToggleTag = onToggleTag
         self.onAddTag = onAddTag
         self.onToggleSubtask = onToggleSubtask
+        self.onDeleteTodo = onDeleteTodo
+        self.onDeleteSubtask = onDeleteSubtask
         self.onUpdateTitle = onUpdateTitle
         self.onUpdateDescription = onUpdateDescription
         self.onUpdateSubtaskTitle = onUpdateSubtaskTitle
@@ -1403,6 +1445,12 @@ public struct TodoUnfoldVariantCardView: View {
             if !isExpanded {
                 onToggleExpand()
             }
+        }
+        .contextMenu {
+            Button("复制待办内容") {}
+            Button(isDone ? "标记为待处理" : "标记为已完成", action: onCycleStatus)
+            Divider()
+            Button("删除待办", role: .destructive, action: onDeleteTodo)
         }
         .background(
             AppTheme.surfaceCard,
@@ -1525,6 +1573,17 @@ public struct TodoUnfoldVariantCardView: View {
             aiDoItActionCapsule
 
             Spacer(minLength: 4)
+
+            Button(action: onDeleteTodo) {
+                Label("删除", systemImage: "trash")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red.opacity(0.88))
+                    .padding(.horizontal, 9)
+                    .frame(height: 26)
+                    .background(Color.red.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("vox.todo.delete.button")
         }
         .padding(.top, 2)
     }
@@ -1936,31 +1995,35 @@ public struct TodoUnfoldVariantCardView: View {
     private var v03SpatialHeroSubtaskCards: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(todo.subtasks) { subtask in
-                Button(action: { onToggleSubtask(subtask.id) }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: subtask.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(subtask.isCompleted ? .green : .secondary)
-
-                        Text(subtask.title)
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(subtask.isCompleted ? .secondary : .primary)
-                            .strikethrough(subtask.isCompleted, color: .secondary)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 8) {
+                    Button(action: { onToggleSubtask(subtask.id) }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: subtask.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(subtask.isCompleted ? .green : .secondary)
+                            Text(subtask.title)
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(subtask.isCompleted ? .secondary : .primary)
+                                .strikethrough(subtask.isCompleted, color: .secondary)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(
-                        AppTheme.surfacePrimary,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.7)
+                    .buttonStyle(.plain)
+                    Button(action: { onDeleteSubtask(subtask.id) }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("vox.todo.subtask.delete." + subtask.id.uuidString)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(AppTheme.surfacePrimary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.7)
+                }
             }
 
             addSubtaskInputRow
