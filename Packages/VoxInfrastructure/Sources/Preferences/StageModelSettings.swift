@@ -29,20 +29,24 @@ public struct StageModelSettings: Equatable, Sendable {
     public var skipAnalysis: Bool
     public var realtimeDeployment: String
     public var realtimeStreamModel: RealtimeStreamModelKind
+    public var hasExplicitRealtimeStreamModel: Bool
     public var gptRealtimeDeployment: String
     public var maiRealtimeDeployment: String
 
     public init(speech: SpeechModelSelection = .realtime, intent: TextModelSelection = .appleIntelligence,
                 tone: TextModelSelection = .appleIntelligence, refinement: TextModelSelection = .azureFoundry,
                 skipAnalysis: Bool = false, realtimeDeployment: String = "",
-                realtimeStreamModel: RealtimeStreamModelKind = .gptRealtime,
+                realtimeStreamModel: RealtimeStreamModelKind? = nil,
+                hasExplicitRealtimeStreamModel: Bool = false,
                 gptRealtimeDeployment: String = "", maiRealtimeDeployment: String = "") {
         self.speech = speech; self.intent = intent; self.tone = tone
         self.refinement = refinement; self.skipAnalysis = skipAnalysis
         self.realtimeDeployment = Self.sanitizedDeployment(realtimeDeployment)
-        self.realtimeStreamModel = realtimeStreamModel
         self.gptRealtimeDeployment = Self.sanitizedDeployment(gptRealtimeDeployment)
         self.maiRealtimeDeployment = Self.sanitizedDeployment(maiRealtimeDeployment)
+        self.hasExplicitRealtimeStreamModel = hasExplicitRealtimeStreamModel || realtimeStreamModel != nil
+        self.realtimeStreamModel = realtimeStreamModel
+            ?? (self.gptRealtimeDeployment.isEmpty && !self.maiRealtimeDeployment.isEmpty ? .maiTranscribe2 : .gptRealtime)
     }
 
     public static func load(from store: any PreferencesStore) async -> Self {
@@ -58,7 +62,6 @@ public struct StageModelSettings: Equatable, Sendable {
         let gpt = sanitizedDeployment(gptDeployment ?? "")
         let mai = sanitizedDeployment(maiDeployment ?? "")
         let streamModel = storedStreamModel.flatMap(RealtimeStreamModelKind.init(rawValue:))
-            ?? (gpt.isEmpty && !mai.isEmpty ? .maiTranscribe2 : .gptRealtime)
         return Self(speech: speech.flatMap(SpeechModelSelection.init(rawValue:)) ?? .realtime,
                     intent: intent.flatMap(TextModelSelection.init(rawValue:)) ?? .appleIntelligence,
                     tone: tone.flatMap(TextModelSelection.init(rawValue:)) ?? .appleIntelligence,
@@ -70,10 +73,18 @@ public struct StageModelSettings: Equatable, Sendable {
                     maiRealtimeDeployment: mai)
     }
 
+    public func effectiveRealtimeStreamModel(gptDefault: String = "", maiDefault: String = "") -> RealtimeStreamModelKind {
+        if hasExplicitRealtimeStreamModel { return realtimeStreamModel }
+        let gpt = !gptRealtimeDeployment.isEmpty ? gptRealtimeDeployment : Self.sanitizedDeployment(gptDefault)
+        let mai = !maiRealtimeDeployment.isEmpty ? maiRealtimeDeployment : Self.sanitizedDeployment(maiDefault)
+        if gpt.isEmpty && !mai.isEmpty { return .maiTranscribe2 }
+        return realtimeStreamModel
+    }
+
     public func resolvedRealtimeDeployment(gptDefault: String = "", maiDefault: String = "",
                                            legacyDefault: String = "") -> String {
         let candidates: [String]
-        switch realtimeStreamModel {
+        switch effectiveRealtimeStreamModel(gptDefault: gptDefault, maiDefault: maiDefault) {
         case .maiTranscribe2:
             candidates = [maiRealtimeDeployment, maiDefault, realtimeDeployment, legacyDefault]
         case .gptRealtime:

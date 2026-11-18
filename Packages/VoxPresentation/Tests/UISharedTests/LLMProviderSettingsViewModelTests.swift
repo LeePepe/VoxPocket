@@ -179,6 +179,31 @@ final class LLMProviderSettingsViewModelTests: XCTestCase {
         }
     }
 
+    func testMAIOnlyAvailabilityUsesMAIUntilUserExplicitlySelectsGPT() async throws {
+        try await PreferenceFixture.withFreshSuite { fixture in
+            let defaults = try fixture.defaults()
+            let store = UserDefaultsPreferencesStore(defaults: defaults)
+            let availability = ModelSettingsAvailability(
+                batchConfigured: true,
+                realtimeCredentialsConfigured: true,
+                gptRealtimeDeployment: "",
+                maiRealtimeDeployment: "example-mai"
+            )
+            let model = LLMProviderSettingsViewModel(preferences: store, availability: availability)
+            await model.load()
+            XCTAssertEqual(model.realtimeStreamModel, .maiTranscribe2)
+            XCTAssertTrue(model.realtimeReady)
+
+            await model.updateRealtimeStreamModel(.gptRealtime)
+            XCTAssertFalse(model.realtimeReady)
+
+            let restored = LLMProviderSettingsViewModel(preferences: store, availability: availability)
+            await restored.load()
+            XCTAssertEqual(restored.realtimeStreamModel, .gptRealtime)
+            XCTAssertFalse(restored.realtimeReady)
+        }
+    }
+
     func testInvalidStreamDeploymentDoesNotPersist() async throws {
         try await PreferenceFixture.withFreshSuite { fixture in
             let defaults = try fixture.defaults()

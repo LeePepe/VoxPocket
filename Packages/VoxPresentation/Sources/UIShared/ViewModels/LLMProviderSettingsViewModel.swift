@@ -31,6 +31,7 @@ public final class LLMProviderSettingsViewModel: ObservableObject {
     private var savedRealtimeDeployment = ""
     private var savedGPTRealtimeDeployment = ""
     private var savedMAIRealtimeDeployment = ""
+    private var hasExplicitStreamModel = false
 
     private let preferences: UserDefaultsPreferencesStore
 
@@ -51,22 +52,20 @@ public final class LLMProviderSettingsViewModel: ObservableObject {
         speechModel = stages.speech
         intentModel = stages.intent
         toneModel = stages.tone
-        let storedStreamModel: String? = await preferences.getValue(for: .realtimeStreamModel)
         let editingLegacy = realtimeDeploymentDraft != savedRealtimeDeployment
         let editingGPT = gptRealtimeDeploymentDraft != savedGPTRealtimeDeployment
         let editingMAI = maiRealtimeDeploymentDraft != savedMAIRealtimeDeployment
         savedRealtimeDeployment = stages.realtimeDeployment
         savedGPTRealtimeDeployment = stages.gptRealtimeDeployment
         savedMAIRealtimeDeployment = stages.maiRealtimeDeployment
+        hasExplicitStreamModel = stages.hasExplicitRealtimeStreamModel
         if !editingLegacy { realtimeDeploymentDraft = stages.realtimeDeployment }
         if !editingGPT { gptRealtimeDeploymentDraft = stages.gptRealtimeDeployment }
         if !editingMAI { maiRealtimeDeploymentDraft = stages.maiRealtimeDeployment }
-        if storedStreamModel == nil && stages.gptRealtimeDeployment.isEmpty && stages.maiRealtimeDeployment.isEmpty,
-           !availability.maiRealtimeDeployment.isEmpty && availability.gptRealtimeDeployment.isEmpty {
-            realtimeStreamModel = .maiTranscribe2
-        } else {
-            realtimeStreamModel = stages.realtimeStreamModel
-        }
+        realtimeStreamModel = stages.effectiveRealtimeStreamModel(
+            gptDefault: availability.gptRealtimeDeployment,
+            maiDefault: availability.maiRealtimeDeployment
+        )
     }
 
     public var cloudModelLabel: String {
@@ -79,7 +78,7 @@ public final class LLMProviderSettingsViewModel: ObservableObject {
             refinement: selectedProvider == .appleIntelligence ? .appleIntelligence : .azureFoundry,
             skipAnalysis: skipContentAnalysis,
             realtimeDeployment: savedRealtimeDeployment,
-            realtimeStreamModel: realtimeStreamModel,
+            realtimeStreamModel: hasExplicitStreamModel ? realtimeStreamModel : nil,
             gptRealtimeDeployment: savedGPTRealtimeDeployment,
             maiRealtimeDeployment: savedMAIRealtimeDeployment
         ).resolvedRealtimeDeployment(
@@ -132,6 +131,7 @@ public final class LLMProviderSettingsViewModel: ObservableObject {
 
     public func updateRealtimeStreamModel(_ kind: RealtimeStreamModelKind) async {
         realtimeStreamModel = kind
+        hasExplicitStreamModel = true
         await preferences.setValue(kind.rawValue, for: .realtimeStreamModel)
         notifyStages()
     }

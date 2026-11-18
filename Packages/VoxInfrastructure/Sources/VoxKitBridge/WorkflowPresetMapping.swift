@@ -150,18 +150,9 @@ public final class IOSPresetPreferenceBinding {
     public private(set) var currentStreamModel: RealtimeStreamModelKind = .gptRealtime
     public private(set) var currentGPTRealtimeDeployment: String = ""
     public private(set) var currentMAIRealtimeDeployment: String = ""
+    public private(set) var currentSettings = StageModelSettings()
     public private(set) var preset: Preset
     public var activePreset: Preset { preset }
-    public var currentSettings: StageModelSettings {
-        StageModelSettings(
-            speech: currentSpeech,
-            refinement: currentProvider == .appleIntelligence ? .appleIntelligence : .azureFoundry,
-            realtimeDeployment: currentRealtimeDeployment,
-            realtimeStreamModel: currentStreamModel,
-            gptRealtimeDeployment: currentGPTRealtimeDeployment,
-            maiRealtimeDeployment: currentMAIRealtimeDeployment
-        )
-    }
 
     private let batchConfigured: Bool
     private let realtimeConfigured: Bool
@@ -254,9 +245,16 @@ public final class IOSPresetPreferenceBinding {
                     maiDefault: self.defaultMAIRealtimeDeployment,
                     legacyDefault: self.defaultRealtimeDeployment
                 )
+                var updatedStages = stages
+                updatedStages.speech = self.currentSpeech
+                updatedStages.refinement = self.currentProvider == .appleIntelligence ? .appleIntelligence : .azureFoundry
+                self.currentSettings = updatedStages
                 let effectiveRealtimeConfigured = self.realtimeConfigured || (self.realtimeCredentialsConfigured && !effectiveDeployment.isEmpty)
-                self.currentRealtimeDeployment = effectiveDeployment
-                self.currentStreamModel = stages.realtimeStreamModel
+                self.currentRealtimeDeployment = stages.realtimeDeployment
+                self.currentStreamModel = stages.effectiveRealtimeStreamModel(
+                    gptDefault: self.defaultGPTRealtimeDeployment,
+                    maiDefault: self.defaultMAIRealtimeDeployment
+                )
                 self.currentGPTRealtimeDeployment = stages.gptRealtimeDeployment
                 self.currentMAIRealtimeDeployment = stages.maiRealtimeDeployment
                 self.preset = IOSPresetMapping.preset(

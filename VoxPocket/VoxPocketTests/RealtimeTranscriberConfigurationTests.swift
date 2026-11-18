@@ -53,6 +53,28 @@ struct RealtimeTranscriberConfigurationTests {
         ]).gptRealtimeDeployment == "fixture-gpt")
     }
 
+    @MainActor @Test func maiOnlyEnvironmentWithoutSavedPreferencesEnablesRealtimeSessionAndMatchesSettings() async throws {
+        let suiteName = "RealtimeTranscriberConfigurationTests.MAIOnly.\(UUID())"
+        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
+        let store = UserDefaultsPreferencesStore(defaults: UserDefaults(suiteName: suiteName)!)
+        var values = environment
+        values["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "example-mai"
+        let availability = StageModelRouting.availability(environment: values)
+        #expect(availability.gptRealtimeDeployment.isEmpty)
+        #expect(availability.maiRealtimeDeployment == "example-mai")
+
+        let stages = await StageModelSettings.load(from: store)
+        #expect(!stages.hasExplicitRealtimeStreamModel)
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values, settings: stages).map(deployment) == "example-mai")
+        #expect(StageModelRouting.resolvedSpeechModel(settings: stages, environment: values) == .realtime)
+
+        await store.setValue(RealtimeStreamModelKind.gptRealtime.rawValue, for: .realtimeStreamModel)
+        let reloaded = await StageModelSettings.load(from: store)
+        #expect(reloaded.hasExplicitRealtimeStreamModel)
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values, settings: reloaded) == nil)
+        #expect(StageModelRouting.resolvedSpeechModel(settings: reloaded, environment: values) == .batch)
+    }
+
     @MainActor @Test func invalidRealtimeConfigurationKeepsBatchAvailable() {
         var values = environment
         values["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "../invalid"

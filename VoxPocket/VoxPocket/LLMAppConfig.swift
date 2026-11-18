@@ -116,13 +116,13 @@ enum LLMAppConfig {
     static func realtimeTranscriptionConfig(
         environment: [String: String], settings: StageModelSettings
     ) -> AzureRealtimeTranscriptionConfig? {
-        realtimeTranscriptionConfig(
-            environment: environment,
-            deploymentOverride: settings.realtimeDeployment,
-            streamModel: settings.realtimeStreamModel,
-            gptDeploymentOverride: settings.gptRealtimeDeployment,
-            maiDeploymentOverride: settings.maiRealtimeDeployment
+        let deployment = settings.resolvedRealtimeDeployment(
+            gptDefault: environment["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"] ?? "",
+            maiDefault: environment["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"] ?? "",
+            legacyDefault: environment["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] ?? ""
         )
+        guard !deployment.isEmpty else { return nil }
+        return realtimeTranscriptionConfig(environment: environment, deploymentOverride: deployment)
     }
 
     private static func nonempty(_ value: String?) -> String? {
