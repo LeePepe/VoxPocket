@@ -140,8 +140,8 @@ final class VoxPocketUITests: XCTestCase {
             let filterAllHittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: filterAll)
             XCTAssertEqual(XCTWaiter.wait(for: [filterAllHittable], timeout: 5), .completed)
             XCTAssertTrue(app.buttons["vox.ios.filter.done"].exists)
-            // Verify Filter sits right above the bottom-left switch button
-            XCTAssertLessThan(filterAll.frame.maxY, switchBtn.frame.minY + 4)
+            // Verify Top-Header One-Tap Liquid Glass Pill Rail sits above the bottom switch dock (zero bottom-left occlusion)
+            XCTAssertLessThan(filterAll.frame.maxY, switchBtn.frame.minY)
             XCTAssertFalse(app.staticTexts["点击任务置顶聚焦 · 标题与属性展示处直接点按修改"].exists)
             let todoPredicate = NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "液态玻璃", "整理下周设计评审")
             let todoButton = app.buttons.matching(todoPredicate).firstMatch

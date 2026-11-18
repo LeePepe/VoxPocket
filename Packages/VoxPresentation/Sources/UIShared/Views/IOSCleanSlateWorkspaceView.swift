@@ -47,9 +47,6 @@ public struct IOSCleanSlateWorkspaceView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 IOSDualButtonSlideDock(
                     activePage: viewModel.activePage,
-                    selectedFilter: viewModel.selectedTodoFilter,
-                    countForFilter: countForFilter,
-                    onSelectFilter: selectFilter,
                     isRecording: viewModel.isRecordingActive,
                     isProcessing: viewModel.isProcessingCapture,
                     togglePage: {
@@ -107,6 +104,8 @@ public struct IOSCleanSlateWorkspaceView: View {
     private var todoStagePage: some View {
         IOSTodoSlidePageView(
             viewModel: viewModel,
+            countForFilter: countForFilter,
+            onSelectFilter: selectFilter,
             onOpenSettings: { isShowingSettingsSheet = true }
         )
     }
@@ -182,13 +181,10 @@ public struct IOSCleanSlateWorkspaceView: View {
     }
 }
 
-// MARK: - Ultra-Pure 2-Button Bottom Bar (Bottom-Leading Switch + Liquid Glass Filter Above Switch + Bottom-Trailing Persistent Record)
+// MARK: - Ultra-Pure 2-Button Bottom Bar (Bottom-Leading Switch + Bottom-Trailing Persistent Record, Zero Upward Popup)
 
 private struct IOSDualButtonSlideDock: View {
     let activePage: WorkspacePage
-    let selectedFilter: TodoStatusFilter
-    let countForFilter: (TodoStatusFilter) -> Int
-    let onSelectFilter: (TodoStatusFilter) -> Void
     let isRecording: Bool
     let isProcessing: Bool
     let togglePage: () -> Void
@@ -197,130 +193,26 @@ private struct IOSDualButtonSlideDock: View {
     let cancel: @MainActor () async -> Void
 
     @Namespace private var glass
-    @State private var isFilterMenuOpen = false
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GlassEffectContainer(spacing: 10) {
-            VStack(alignment: .leading, spacing: 10) {
-                if activePage == .todo {
-                    bottomLeadingVerticalFilterStack
-                        .glassEffectID("todoFilterBar", in: glass)
-                        .transition(.opacity)
-                }
-
-                HStack(spacing: 14) {
-                    pageSwitchButton
-                        .glassEffectID("switchPage", in: glass)
-                    Spacer(minLength: 0)
-                    RecorderButton(
-                        isRecording: isRecording,
-                        isProcessing: isProcessing,
-                        start: start,
-                        stop: stop,
-                        cancel: cancel
-                    )
-                    .glassEffectID("record", in: glass)
-                }
+            HStack(spacing: 14) {
+                pageSwitchButton
+                    .glassEffectID("switchPage", in: glass)
+                Spacer(minLength: 0)
+                RecorderButton(
+                    isRecording: isRecording,
+                    isProcessing: isProcessing,
+                    start: start,
+                    stop: stop,
+                    cancel: cancel
+                )
+                .glassEffectID("record", in: glass)
             }
             .padding(.horizontal, 22)
             .padding(.bottom, 12)
             .padding(.top, 4)
         }
-        .onChange(of: activePage) { _, nextPage in
-            if nextPage != .todo {
-                isFilterMenuOpen = false
-            }
-        }
-    }
-
-    private var bottomLeadingVerticalFilterStack: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            TodoExpandRevealLayout(progress: isFilterMenuOpen ? 1.0 : 0.0) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(TodoStatusFilter.primaryFilters, id: \.self) { filter in
-                        verticalFilterOptionRow(for: filter)
-                    }
-                }
-                .padding(6)
-                .frame(width: 158, alignment: .leading)
-                .modifier(RecorderGlassModifier())
-                .padding(.bottom, 2)
-            }
-            .clipped()
-            .opacity(isFilterMenuOpen ? 1.0 : 0.0)
-            .allowsHitTesting(isFilterMenuOpen)
-
-            Button(action: {
-                withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
-                    isFilterMenuOpen.toggle()
-                }
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.accentColor)
-                    Text(selectedFilter.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(String(countForFilter(selectedFilter)))
-                        .font(.caption2.weight(.bold).monospacedDigit())
-                        .contentTransition(.numericText())
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.up")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isFilterMenuOpen ? 180 : 0))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(minHeight: 36)
-                .modifier(RecorderGlassModifier())
-            }
-            .buttonStyle(AppPressableButtonStyle())
-            .accessibilityLabel("筛选待办：\(selectedFilter.title)")
-            .accessibilityIdentifier("vox.ios.filter.trigger")
-        }
-        .sensoryFeedback(.selection, trigger: selectedFilter)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("vox.ios.filter.bar")
-    }
-
-    private func verticalFilterOptionRow(for filter: TodoStatusFilter) -> some View {
-        let isSelected = selectedFilter == filter
-        let count = countForFilter(filter)
-        return Button(action: {
-            onSelectFilter(filter)
-            withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
-                isFilterMenuOpen = false
-            }
-        }) {
-            HStack(spacing: 6) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                Text(filter.title)
-                    .font(.caption.weight(isSelected ? .semibold : .regular))
-                Spacer(minLength: 6)
-                Text(String(count))
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .contentTransition(.numericText())
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.accentColor.opacity(reduceTransparency ? 0.24 : 0.18))
-                }
-            }
-            .foregroundStyle(isSelected ? Color.accentColor : .primary)
-        }
-        .buttonStyle(AppPressableButtonStyle())
-        .accessibilityIdentifier("vox.ios.filter." + filter.rawValue)
     }
 
     private var pageSwitchButton: some View {
@@ -337,18 +229,26 @@ private struct IOSDualButtonSlideDock: View {
     }
 }
 
-// MARK: - Slide Right Page: Todo Page (In-Place Card Expansion + Bottom-Left Liquid Glass Filter + Direct In-Place Manipulation)
+// MARK: - Slide Right Page: Todo Page (Top-Header One-Tap Liquid Glass Pill Rail + #Tag/P0 Quick Strip + In-Place Card Expansion)
 
 private struct IOSTodoSlidePageView: View {
     @ObservedObject var viewModel: VoxWorkspaceViewModel
+    let countForFilter: (TodoStatusFilter) -> Int
+    let onSelectFilter: (TodoStatusFilter) -> Void
     let onOpenSettings: () -> Void
+    @Namespace private var filterGlass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerBar
                 .padding(.horizontal, AppTheme.Space.lg)
                 .padding(.top, AppTheme.Space.md)
+                .padding(.bottom, AppTheme.Space.xs)
+
+            topHeaderLiquidGlassFilterRail
+                .padding(.horizontal, AppTheme.Space.lg)
                 .padding(.bottom, AppTheme.Space.sm)
 
             ScrollView {
@@ -371,6 +271,33 @@ private struct IOSTodoSlidePageView: View {
 
             Spacer(minLength: AppTheme.Space.sm)
 
+            Button(action: {
+                withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                    if viewModel.hasActiveTodoFilters {
+                        viewModel.resetAllTodoFilters()
+                    } else {
+                        viewModel.selectedTodoFilter = .inbox
+                    }
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: viewModel.hasActiveTodoFilters ? "arrow.counterclockwise" : "line.3.horizontal.decrease")
+                        .font(.caption2.weight(.bold))
+                    Text(viewModel.hasActiveTodoFilters ? "重置" : viewModel.selectedTodoFilter.title)
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(viewModel.hasActiveTodoFilters ? Color.accentColor : .secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    (viewModel.hasActiveTodoFilters ? Color.accentColor : Color.primary).opacity(0.12),
+                    in: Capsule()
+                )
+            }
+            .buttonStyle(AppPressableButtonStyle())
+            .accessibilityLabel(viewModel.hasActiveTodoFilters ? "重置全部筛选" : "筛选待办：\(viewModel.selectedTodoFilter.title)")
+            .accessibilityIdentifier("vox.ios.filter.trigger")
+
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape")
                     .font(.body.weight(.semibold))
@@ -381,6 +308,124 @@ private struct IOSTodoSlidePageView: View {
             .modifier(RecorderGlassModifier())
             .accessibilityLabel("设置")
             .accessibilityIdentifier("vox.ios.settingsButton")
+        }
+    }
+
+    private var topHeaderLiquidGlassFilterRail: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 5) {
+                ForEach(TodoStatusFilter.primaryFilters, id: \.self) { filter in
+                    let isSelected = viewModel.selectedTodoFilter == filter
+                    let count = countForFilter(filter)
+                    let tint = statusFilterTint(for: filter)
+
+                    Button(action: { onSelectFilter(filter) }) {
+                        HStack(spacing: 4) {
+                            if filter != .all {
+                                Circle()
+                                    .fill(isSelected ? Color.white : tint)
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(filter.compactTitle)
+                                .font(.caption.weight(isSelected ? .bold : .semibold))
+                            Text(String(count))
+                                .font(.caption2.weight(.bold).monospacedDigit())
+                                .contentTransition(.numericText())
+                                .opacity(isSelected ? 0.94 : 0.72)
+                        }
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(tint.opacity(reduceTransparency ? 0.92 : 0.85))
+                                    .matchedGeometryEffect(id: "iosStatusFilterPill", in: filterGlass)
+                            } else {
+                                Capsule()
+                                    .fill(AppTheme.surfaceCard.opacity(0.80))
+                            }
+                        }
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(
+                                    isSelected ? tint.opacity(0.45) : Color.primary.opacity(0.08),
+                                    lineWidth: 0.8
+                                )
+                        }
+                    }
+                    .buttonStyle(AppPressableButtonStyle())
+                    .accessibilityIdentifier("vox.ios.filter." + filter.rawValue)
+                }
+            }
+            .padding(4)
+            .modifier(RecorderGlassModifier())
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    let isP0Selected = viewModel.selectedPriorityFilter == .p0
+                    Button(action: {
+                        withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                            viewModel.togglePriorityFilter(.p0)
+                        }
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "flame.fill")
+                                .font(.caption2.weight(.bold))
+                            Text("P0")
+                                .font(.caption.weight(.bold).monospacedDigit())
+                        }
+                        .foregroundStyle(isP0Selected ? .white : Color.red)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(
+                            isP0Selected ? Color.red : Color.red.opacity(0.14),
+                            in: Capsule()
+                        )
+                    }
+                    .buttonStyle(AppPressableButtonStyle())
+                    .accessibilityIdentifier("vox.ios.filter.priority.p0")
+
+                    ForEach(viewModel.availableHistoricalTags.prefix(6), id: \.self) { tag in
+                        let isTagSelected = viewModel.selectedTagFilter == tag
+                        Button(action: {
+                            withAnimation(reduceMotion ? nil : AppTheme.snappySpring) {
+                                viewModel.toggleTagFilter(tag)
+                            }
+                        }) {
+                            Text(tag)
+                                .font(.caption.weight(isTagSelected ? .bold : .medium).monospacedDigit())
+                                .foregroundStyle(isTagSelected ? .white : .secondary)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(
+                                    isTagSelected ? Color.accentColor : AppTheme.surfaceCard.opacity(0.85),
+                                    in: Capsule()
+                                )
+                                .overlay {
+                                    Capsule()
+                                        .strokeBorder(Color.primary.opacity(isTagSelected ? 0 : 0.08), lineWidth: 0.7)
+                                }
+                        }
+                        .buttonStyle(AppPressableButtonStyle())
+                        .accessibilityIdentifier("vox.ios.filter.tag." + tag.replacingOccurrences(of: "#", with: ""))
+                    }
+                }
+            }
+        }
+        .sensoryFeedback(.selection, trigger: viewModel.selectedTodoFilter)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("vox.ios.filter.bar")
+    }
+
+    private func statusFilterTint(for filter: TodoStatusFilter) -> Color {
+        switch filter {
+        case .all: Color.accentColor
+        case .inbox: Color.blue
+        case .running: Color.orange
+        case .done: Color.green
+        case .failed: Color.red
         }
     }
 
@@ -459,14 +504,15 @@ private struct IOSTodoSlidePageView: View {
 
     private var todoEmptyState: some View {
         VStack(spacing: AppTheme.Space.md) {
-            if !viewModel.searchQuery.isEmpty {
+            if viewModel.hasActiveTodoFilters {
                 ContentUnavailableView {
-                    Label("没有匹配结果", systemImage: "magnifyingglass")
+                    Label("没有匹配结果", systemImage: "line.3.horizontal.decrease.circle")
                 } description: {
-                    Text("尝试清空搜索词。")
+                    Text("尝试重置筛选条件或清空搜索词。")
                 } actions: {
-                    Button("清除搜索后重试", action: viewModel.clearSearchPreservingFilters)
+                    Button("重置筛选", action: viewModel.resetAllTodoFilters)
                         .buttonStyle(.bordered)
+                        .accessibilityIdentifier("vox.ios.filter.resetEmpty")
                 }
             } else {
                 ContentUnavailableView {
@@ -1537,6 +1583,16 @@ private extension TodoStatusFilter {
         case .all: "全部"
         case .inbox: "待处理"
         case .running: "AI 执行中"
+        case .done: "已完成"
+        case .failed: "失败"
+        }
+    }
+
+    var compactTitle: String {
+        switch self {
+        case .all: "全部"
+        case .inbox: "待处理"
+        case .running: "AI"
         case .done: "已完成"
         case .failed: "失败"
         }

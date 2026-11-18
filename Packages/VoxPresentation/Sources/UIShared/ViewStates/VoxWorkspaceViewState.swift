@@ -12,7 +12,10 @@ public protocol VoxWorkspaceViewState: AnyObject, ObservableObject {
     var playingCaptureID: UUID? { get set }
     var searchQuery: String { get set }
     var selectedTodoFilter: TodoStatusFilter { get set }
+    var selectedPriorityFilter: TodoPriority? { get set }
+    var selectedTagFilter: String? { get set }
     var selectedProjectFilter: String? { get set }
+    var hasActiveTodoFilters: Bool { get }
     var sortOrder: WorkspaceSortOrder { get set }
     var selectedSidebarSection: WorkspaceSidebarSection { get set }
     var activePage: WorkspacePage { get set }

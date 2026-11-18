@@ -214,11 +214,11 @@ enum LocalBoardSnapshotExporter {
         }
         let board = LocalNativePreviewHostRootView()
             .environment(\.colorScheme, .dark)
-            .frame(width: 1680, height: 1020)
+            .frame(width: 1680, height: 1140)
         let host = NSHostingView(rootView: board)
-        host.frame = NSRect(x: 0, y: 0, width: 1680, height: 1020)
+        host.frame = NSRect(x: 0, y: 0, width: 1680, height: 1140)
         let panel = NSPanel(
-            contentRect: NSRect(x: -10000, y: -10000, width: 1680, height: 1020),
+            contentRect: NSRect(x: -10000, y: -10000, width: 1680, height: 1140),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
