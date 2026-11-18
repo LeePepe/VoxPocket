@@ -428,21 +428,24 @@ final class MacOSSettingsViewTests: XCTestCase {
                                                             initialSection: section)
             .environment(\.colorScheme, scheme))
         host.appearance = appearance
-        let panel = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 640, height: 760),
+        let panel = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 640, height: 920),
                             styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "VoxPocket 设置"
         panel.appearance = appearance
         panel.contentView = host
         panel.makeKeyAndOrderFront(nil)
         defer { panel.orderOut(nil) }
-        let expectedText = section == .shortcuts ? "录音到剪贴板" : "识别模型"
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let requiredTokens = section == .shortcuts
+            ? ["录音到剪贴板"]
+            : (configured ? ["识别模型", "意图模型", "语气模型", "精炼模型"] : ["识别模型", "部署名"])
+        let deadline = ContinuousClock.now.advanced(by: .seconds(4))
         while true {
             await Task.yield()
             host.layoutSubtreeIfNeeded()
             panel.displayIfNeeded()
             let bitmap = try capture(panel)
-            if try await recognize(bitmap).joined().contains(expectedText) {
+            let recognized = try await recognize(bitmap).joined()
+            if requiredTokens.allSatisfy({ recognized.contains($0) }) {
                 return bitmap
             }
             if ContinuousClock.now >= deadline {
@@ -451,7 +454,8 @@ final class MacOSSettingsViewTests: XCTestCase {
                 panel.displayIfNeeded()
                 let finalBitmap = try capture(panel)
                 let finalWords = try await recognize(finalBitmap).joined()
-                XCTAssertTrue(finalWords.contains(expectedText), "Timed out rendering settings: \(finalWords)")
+                XCTAssertTrue(requiredTokens.allSatisfy({ finalWords.contains($0) }),
+                              "Timed out rendering settings: \(finalWords)")
                 return finalBitmap
             }
             try await Task.sleep(for: .milliseconds(50))
