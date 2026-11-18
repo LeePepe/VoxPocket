@@ -435,9 +435,10 @@ final class MacOSSettingsViewTests: XCTestCase {
         panel.contentView = host
         panel.makeKeyAndOrderFront(nil)
         defer { panel.orderOut(nil) }
+        let expectedText = section == .shortcuts ? "录音到剪贴板" : "识别模型"
         let requiredTokens = section == .shortcuts
-            ? ["录音到剪贴板"]
-            : (configured ? ["识别模型", "意图模型", "语气模型", "精炼模型"] : ["识别模型", "部署名"])
+            ? [expectedText]
+            : (configured ? [expectedText, "意图模型", "语气模型", "精炼模型"] : [expectedText, "部署名"])
         let deadline = ContinuousClock.now.advanced(by: .seconds(4))
         while true {
             await Task.yield()
@@ -454,8 +455,9 @@ final class MacOSSettingsViewTests: XCTestCase {
                 panel.displayIfNeeded()
                 let finalBitmap = try capture(panel)
                 let finalWords = try await recognize(finalBitmap).joined()
+                XCTAssertTrue(finalWords.contains(expectedText), "Timed out rendering settings: \(finalWords)")
                 XCTAssertTrue(requiredTokens.allSatisfy({ finalWords.contains($0) }),
-                              "Timed out rendering settings: \(finalWords)")
+                              "Timed out rendering full settings sections: \(finalWords)")
                 return finalBitmap
             }
             try await Task.sleep(for: .milliseconds(50))
