@@ -613,24 +613,29 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         cal.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
         let fixedNow = cal.date(from: DateComponents(timeZone: cal.timeZone, year: 2026, month: 11, day: 18, hour: 10, minute: 0))!
 
-        // 1. Verify cloud fallbackCompletion is used when on-device FoundationModels is unavailable
-        let cloudDecomposer = DefaultOnDeviceAITodoDecomposer(fallbackCompletion: { instructions, _ in
-            XCTAssertTrue(instructions.contains("紧急提醒我今晚8点半整理代码重构清单"))
-            return """
-            {
-              "cleanTitle": "整理代码重构清单",
-              "description": "今晚 20:30 紧急整理代码重构与单测回归清单",
-              "timeSlot": "night",
-              "dayOffset": 0,
-              "explicitHour": 20,
-              "explicitMinute": 30,
-              "relativeMinutes": null,
-              "priority": "P0",
-              "tags": ["#Dev", "#VoxPocket"],
-              "subtasks": ["跑通所有单测", "提交代码审查"]
+        // 1. Verify cloud fallbackCompletion is used when on-device FoundationModels fails
+        let cloudDecomposer = DefaultOnDeviceAITodoDecomposer(
+            onDeviceCompletion: { _, _ in
+                throw NSError(domain: "TestOnDeviceUnavailable", code: 1)
+            },
+            fallbackCompletion: { instructions, _ in
+                XCTAssertTrue(instructions.contains("紧急提醒我今晚8点半整理代码重构清单"))
+                return """
+                {
+                  "cleanTitle": "整理代码重构清单",
+                  "description": "今晚 20:30 紧急整理代码重构与单测回归清单",
+                  "timeSlot": "night",
+                  "dayOffset": 0,
+                  "explicitHour": 20,
+                  "explicitMinute": 30,
+                  "relativeMinutes": null,
+                  "priority": "P0",
+                  "tags": ["#Dev", "#VoxPocket"],
+                  "subtasks": ["跑通所有单测", "提交代码审查"]
+                }
+                """
             }
-            """
-        })
+        )
         let cloudResult = try await cloudDecomposer.decompose(
             transcript: "紧急提醒我今晚8点半整理代码重构清单，先跑通所有单测，再提交代码审查",
             referenceDate: fixedNow,
@@ -711,5 +716,57 @@ final class VoiceTodoUseCaseTests: XCTestCase {
         XCTAssertTrue(appended.todo.tags.contains("#Glass"))
         XCTAssertNotNil(appended.todo.scheduledAt)
         XCTAssertEqual(scheduler.pendingItems().count, 1)
+
+        // 4. Verify concurrent edits while appendVoiceToTodo awaits AI decomposition are preserved
+        let targetTodoID = baseTodo.id
+        let interleavingDecomposer = DefaultOnDeviceAITodoDecomposer(customCompletion: { _, _ in
+            _ = try await todos.update(id: targetTodoID) { latest in
+                latest
+                    .withTitle("准备设计评审（并发改名）")
+                    .withAppendedSubtask("并发新增子任务")
+            }
+            return """
+            {
+              "cleanTitle": "补充复盘",
+              "description": "",
+              "timeSlot": null,
+              "dayOffset": 0,
+              "explicitHour": null,
+              "explicitMinute": null,
+              "relativeMinutes": null,
+              "priority": "P1",
+              "tags": ["#Sync"],
+              "subtasks": ["语音追补步骤 A", "语音追补步骤 B"]
+            }
+            """
+        })
+        let interleavingUseCase = DefaultVoiceCaptureAndTodoUseCase(
+            captures: captures,
+            todos: todos,
+            extractor: DefaultVoiceTodoExtractor(
+                aiDecomposer: interleavingDecomposer,
+                timeAnchorLearner: learner,
+                calendar: cal,
+                nowProvider: { fixedNow }
+            ),
+            runner: DefaultAIRunnerExecutionService(sandboxTasksDirectory: sandboxDir),
+            notificationScheduler: scheduler
+        )
+        let interleaved = try await interleavingUseCase.appendVoiceToTodo(
+            todoID: targetTodoID,
+            rawTranscript: "再补两条：语音追补步骤 A，语音追补步骤 B",
+            refinedText: "再补两条：语音追补步骤 A，语音追补步骤 B",
+            localAudioFileName: nil,
+            durationSeconds: 3,
+            deviceSource: .iPhone
+        )
+        XCTAssertEqual(interleaved.todo.title, "准备设计评审（并发改名）")
+        XCTAssertEqual(interleaved.addedSubtaskIDs.count, 2)
+        XCTAssertEqual(
+            interleaved.todo.subtasks.map(\.title),
+            ["核对降低透明度模式对比度", "导出明暗双态截图", "并发新增子任务", "语音追补步骤 A", "语音追补步骤 B"]
+        )
+        XCTAssertTrue(interleaved.todo.tags.contains("#Glass"))
+        XCTAssertTrue(interleaved.todo.tags.contains("#Sync"))
     }
 }

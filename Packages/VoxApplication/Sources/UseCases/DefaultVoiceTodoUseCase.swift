@@ -15,13 +15,16 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
     public typealias ModelCompletionHandler = @Sendable (_ instructions: String, _ prompt: String) async throws -> String
 
     private let customCompletion: ModelCompletionHandler?
+    private let onDeviceCompletion: ModelCompletionHandler?
     private let fallbackCompletion: ModelCompletionHandler?
 
     public init(
         customCompletion: ModelCompletionHandler? = nil,
+        onDeviceCompletion: ModelCompletionHandler? = nil,
         fallbackCompletion: ModelCompletionHandler? = nil
     ) {
         self.customCompletion = customCompletion
+        self.onDeviceCompletion = onDeviceCompletion
         self.fallbackCompletion = fallbackCompletion
     }
 
@@ -54,12 +57,17 @@ public struct DefaultOnDeviceAITodoDecomposer: AITodoDecomposing, Sendable {
         let rawJSON: String?
         if let customCompletion {
             rawJSON = try? await customCompletion(instructions, "Return JSON only.")
-        } else if let onDeviceJSON = try? await Self.invokeFoundationModels(instructions: instructions) {
-            rawJSON = onDeviceJSON
-        } else if let fallbackCompletion {
-            rawJSON = try? await fallbackCompletion(instructions, "Return JSON only.")
         } else {
-            rawJSON = nil
+            let onDeviceRunner = onDeviceCompletion ?? { instructions, _ in
+                try await Self.invokeFoundationModels(instructions: instructions)
+            }
+            if let onDeviceJSON = try? await onDeviceRunner(instructions, "Output compact JSON only.") {
+                rawJSON = onDeviceJSON
+            } else if let fallbackCompletion {
+                rawJSON = try? await fallbackCompletion(instructions, "Return JSON only.")
+            } else {
+                rawJSON = nil
+            }
         }
 
         if let rawJSON, let parsed = Self.parseJSONResponse(rawJSON, fallbackTranscript: trimmed) {
@@ -637,6 +645,9 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         durationSeconds: TimeInterval,
         deviceSource: DeviceSource
     ) async throws -> (todo: VoiceTodo, addedSubtaskIDs: [UUID]) {
+        guard (try await todos.fetch(by: todoID)) != nil else {
+            throw VoiceTodoUseCaseError.todoNotFound
+        }
         let cleaned = (refinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? rawTranscript : refinedText)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let effectiveRaw = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleaned : rawTranscript
@@ -651,9 +662,6 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
             linkedTodoID: todoID
         )
         try await captures.save(capture)
-        guard let current = try await todos.fetch(by: todoID) else {
-            throw VoiceTodoUseCaseError.todoNotFound
-        }
         let draft = try await extractor.extractTodo(
             from: effectiveRaw,
             refinedText: cleaned,
@@ -670,25 +678,38 @@ public final class DefaultVoiceCaptureAndTodoUseCase: VoiceCaptureAndTodoUseCase
         } else {
             subtaskTitles = [strippedFallback.isEmpty ? draft.title : strippedFallback]
         }
-        let existingIDs = Set(current.subtasks.map(\.id))
-        var updated = current
-        for title in subtaskTitles where !title.isEmpty {
-            updated = updated.withAppendedSubtask(title)
+        let newSubtasks = subtaskTitles
+            .filter { !$0.isEmpty }
+            .map { VoiceTodoSubtask(title: $0) }
+        let addedIDs = newSubtasks.map(\.id)
+        guard let merged = try await todos.update(id: todoID, transform: { current in
+            var updated = current.withEdits(subtasks: current.subtasks + newSubtasks)
+            if updated.description.isEmpty && !draft.description.isEmpty && draft.subtasks.count >= 2 {
+                updated = updated.withDescription(draft.description)
+            }
+            if !draft.tags.isEmpty {
+                updated = updated.withTags(VoiceTodo.normalizeTags(updated.tags + draft.tags))
+            }
+            if draft.priority == .p0 && updated.priority != .p0 {
+                updated = updated.withPriority(.p0)
+            }
+            if let scheduledAt = draft.scheduledAt {
+                updated = updated.withReminder(scheduledAt: scheduledAt, timeSlot: draft.timeSlot ?? updated.timeSlot)
+            }
+            return updated
+        }) else {
+            throw VoiceTodoUseCaseError.todoNotFound
         }
-        if updated.description.isEmpty && !draft.description.isEmpty && draft.subtasks.count >= 2 {
-            updated = updated.withDescription(draft.description)
+        await syncNotificationSchedule(for: merged)
+        let saved: VoiceTodo
+        if merged.externalSync != nil {
+            let queued = try await todos.update(id: merged.id) { current in
+                current.withExternalSync(self.pendingMetadata(for: current), updatedAt: current.updatedAt)
+            } ?? merged.withExternalSync(pendingMetadata(for: merged), updatedAt: merged.updatedAt)
+            saved = externalSync.isEnabled ? await pushBestEffort(queued, fallbackStateOnFailure: .pendingPush) : queued
+        } else {
+            saved = merged
         }
-        if !draft.tags.isEmpty {
-            updated = updated.withTags(VoiceTodo.normalizeTags(updated.tags + draft.tags))
-        }
-        if draft.priority == .p0 && updated.priority != .p0 {
-            updated = updated.withPriority(.p0)
-        }
-        if let scheduledAt = draft.scheduledAt {
-            updated = updated.withReminder(scheduledAt: scheduledAt, timeSlot: draft.timeSlot ?? updated.timeSlot)
-        }
-        let saved = try await updateTodo(updated)
-        let addedIDs = saved.subtasks.map(\.id).filter { !existingIDs.contains($0) }
         telemetry.track(
             name: "capture.completed",
             properties: ["duration_ms": String(Int(durationSeconds * 1000)), "mode": CaptureMode.todo.rawValue, "source": deviceSource.rawValue]
