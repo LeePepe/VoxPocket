@@ -147,6 +147,10 @@ public final class IOSPresetPreferenceBinding {
     public private(set) var currentProvider: LLMProviderType
     public private(set) var currentSpeech: SpeechModelSelection
     public private(set) var currentRealtimeDeployment: String = ""
+    public private(set) var currentStreamModel: RealtimeStreamModelKind = .gptRealtime
+    public private(set) var currentGPTRealtimeDeployment: String = ""
+    public private(set) var currentMAIRealtimeDeployment: String = ""
+    public private(set) var currentSettings = StageModelSettings()
     public private(set) var preset: Preset
     public var activePreset: Preset { preset }
 
@@ -154,6 +158,8 @@ public final class IOSPresetPreferenceBinding {
     private let realtimeConfigured: Bool
     private let realtimeCredentialsConfigured: Bool
     private let defaultRealtimeDeployment: String
+    private let defaultGPTRealtimeDeployment: String
+    private let defaultMAIRealtimeDeployment: String
     private let azureTextConfigured: Bool
     private let preferences: any PreferencesStore
     private let notificationCenter: NotificationCenter
@@ -168,6 +174,8 @@ public final class IOSPresetPreferenceBinding {
         realtimeConfigured: Bool = false,
         realtimeCredentialsConfigured: Bool = false,
         defaultRealtimeDeployment: String = "",
+        defaultGPTRealtimeDeployment: String = "",
+        defaultMAIRealtimeDeployment: String = "",
         azureTextConfigured: Bool,
         preferences: any PreferencesStore,
         notificationCenter: NotificationCenter = .default,
@@ -178,6 +186,8 @@ public final class IOSPresetPreferenceBinding {
         self.realtimeConfigured = realtimeConfigured
         self.realtimeCredentialsConfigured = realtimeCredentialsConfigured
         self.defaultRealtimeDeployment = defaultRealtimeDeployment
+        self.defaultGPTRealtimeDeployment = defaultGPTRealtimeDeployment
+        self.defaultMAIRealtimeDeployment = defaultMAIRealtimeDeployment
         self.azureTextConfigured = azureTextConfigured
         self.preferences = preferences
         self.notificationCenter = notificationCenter
@@ -219,7 +229,7 @@ public final class IOSPresetPreferenceBinding {
         pendingUpdate = Task { [weak self] in
             let storedProvider: String? = await preferences.getValue(for: .llmProvider)
             let storedSpeech: String? = await preferences.getValue(for: .speechModel)
-            let storedDeployment: String? = await preferences.getValue(for: .realtimeDeployment)
+            let stages = await StageModelSettings.load(from: preferences)
             _ = await preferences.getValue(for: .llmSkipContentAnalysis, default: true)
             guard let self else { return }
             await MainActor.run {
@@ -230,11 +240,23 @@ public final class IOSPresetPreferenceBinding {
                 if let storedSpeech, let speech = SpeechModelSelection(rawValue: storedSpeech) {
                     self.currentSpeech = speech
                 }
-                let trimmedDeployment = (storedDeployment ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                let validOverride = StageModelSettings.validDeploymentOverride(trimmedDeployment) ? trimmedDeployment : ""
-                let effectiveDeployment = validOverride.isEmpty ? self.defaultRealtimeDeployment : validOverride
+                let effectiveDeployment = stages.resolvedRealtimeDeployment(
+                    gptDefault: self.defaultGPTRealtimeDeployment,
+                    maiDefault: self.defaultMAIRealtimeDeployment,
+                    legacyDefault: self.defaultRealtimeDeployment
+                )
+                var updatedStages = stages
+                updatedStages.speech = self.currentSpeech
+                updatedStages.refinement = self.currentProvider == .appleIntelligence ? .appleIntelligence : .azureFoundry
+                self.currentSettings = updatedStages
                 let effectiveRealtimeConfigured = self.realtimeConfigured || (self.realtimeCredentialsConfigured && !effectiveDeployment.isEmpty)
-                self.currentRealtimeDeployment = validOverride
+                self.currentRealtimeDeployment = stages.realtimeDeployment
+                self.currentStreamModel = stages.effectiveRealtimeStreamModel(
+                    gptDefault: self.defaultGPTRealtimeDeployment,
+                    maiDefault: self.defaultMAIRealtimeDeployment
+                )
+                self.currentGPTRealtimeDeployment = stages.gptRealtimeDeployment
+                self.currentMAIRealtimeDeployment = stages.maiRealtimeDeployment
                 self.preset = IOSPresetMapping.preset(
                     batchConfigured: self.batchConfigured,
                     realtimeConfigured: effectiveRealtimeConfigured,

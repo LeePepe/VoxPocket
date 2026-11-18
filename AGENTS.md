@@ -59,8 +59,8 @@ scripts/verify --policy   # policy only; scripts/verify --layer VoxDomain = one 
 ```
 - LokiKit is the SwiftPM remote dependency https://github.com/LeePepe/shared-telemetry exact `0.2.0`; tag
   `8d85333eb3c039378f116f082d0f59b0b08207a5` → `903f4b9bc01cfcfeba3ce96e13519d841781b40a` is integrity evidence.
-  VoxKit is `https://github.com/LeePepe/VoxKit` exact `0.1.0`; tag `7c86c6594aaf0132bd15ef07a7bb4034a90426d2` →
-  `5190fe56ece8a56ecb2bfb08885b1f2c544cecbc`. Local overrides via `swift package edit VoxKit --path ../VoxKit`
+  VoxKit is `https://github.com/LeePepe/VoxKit` exact `0.1.1`; tag `fb3a9e4f289ce6f201a3b625ae21821f8bc39020` →
+  `49ac814412c47ab2c7f46cd736e8fa4640369a0d`. Local overrides via `swift package edit VoxKit --path ../VoxKit`
   or Xcode local package override must never be committed. Only `../AppleUITesting` lives next to the repository.
   `scripts/verify` runs `scripts/ci/fetch-external-deps.sh`, which checks out AppleUITesting at its pinned SHA when
   missing. `scripts/verify` needs Python 3.11+ first on `PATH`.
@@ -122,7 +122,7 @@ repository-contract deviation; it creates no broader exception.
 
 - `shared-ci` `838e10a059979e6732446cb26edc95d173cc7e3a` — https://github.com/LeePepe/shared-ci/blob/838e10a059979e6732446cb26edc95d173cc7e3a/ai/
 - `shared-telemetry` `0.2.0` (`LokiKit`, tag `v0.2.0` `8d85333eb3c039378f116f082d0f59b0b08207a5` → `903f4b9bc01cfcfeba3ce96e13519d841781b40a`, guarded in `scripts/ci/fetch-external-deps.sh`) — https://github.com/LeePepe/shared-telemetry/tree/0.2.0/ai/ (https://github.com/LeePepe/shared-telemetry/blob/v0.2.0/ai/)
-- `VoxKit` `0.1.0` (tag `0.1.0` `7c86c6594aaf0132bd15ef07a7bb4034a90426d2` → `5190fe56ece8a56ecb2bfb08885b1f2c544cecbc`, guarded in `scripts/ci/fetch-external-deps.sh`) — https://github.com/LeePepe/VoxKit/blob/0.1.0/ai/
+- `VoxKit` `0.1.1` (tag `0.1.1` `fb3a9e4f289ce6f201a3b625ae21821f8bc39020` → `49ac814412c47ab2c7f46cd736e8fa4640369a0d`, guarded in `scripts/ci/fetch-external-deps.sh`) — https://github.com/LeePepe/VoxKit/blob/0.1.1/ai/
 - AppleUITesting at `e6be2fcdf83341a9f3000a4cc489237655461a07` (`scripts/ci/fetch-external-deps.sh`).
 
 ## Delivery

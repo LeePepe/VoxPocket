@@ -154,6 +154,70 @@ final class LLMProviderSettingsViewModelTests: XCTestCase {
         }
     }
 
+    func testRealtimeStreamModelSwitchPersistsDeploymentsAndReadiness() async throws {
+        try await PreferenceFixture.withFreshSuite { fixture in
+            let defaults = try fixture.defaults()
+            let store = UserDefaultsPreferencesStore(defaults: defaults)
+            let model = LLMProviderSettingsViewModel(preferences: store, availability: .init(
+                batchConfigured: true, realtimeCredentialsConfigured: true,
+                gptRealtimeDeployment: "fixture-gpt", maiRealtimeDeployment: "fixture-mai"
+            ))
+            await model.load()
+            XCTAssertEqual(model.realtimeStreamModel, .gptRealtime)
+            model.gptRealtimeDeploymentDraft = "fixture-gpt-custom"
+            model.maiRealtimeDeploymentDraft = "fixture-mai-custom"
+            await model.saveStreamDeployments()
+            XCTAssertTrue(model.realtimeReady)
+            XCTAssertTrue(model.speechStatus.contains("GPT 流式"))
+            await model.updateRealtimeStreamModel(.maiTranscribe2)
+            XCTAssertTrue(model.realtimeReady)
+            XCTAssertTrue(model.speechStatus.contains("MAI-Transcribe-2"))
+            let restored = LLMProviderSettingsViewModel(preferences: store, availability: model.availability)
+            await restored.load()
+            XCTAssertEqual(restored.realtimeStreamModel, .maiTranscribe2)
+            XCTAssertEqual(restored.maiRealtimeDeploymentDraft, "fixture-mai-custom")
+        }
+    }
+
+    func testMAIOnlyAvailabilityUsesMAIUntilUserExplicitlySelectsGPT() async throws {
+        try await PreferenceFixture.withFreshSuite { fixture in
+            let defaults = try fixture.defaults()
+            let store = UserDefaultsPreferencesStore(defaults: defaults)
+            let availability = ModelSettingsAvailability(
+                batchConfigured: true,
+                realtimeCredentialsConfigured: true,
+                gptRealtimeDeployment: "",
+                maiRealtimeDeployment: "example-mai"
+            )
+            let model = LLMProviderSettingsViewModel(preferences: store, availability: availability)
+            await model.load()
+            XCTAssertEqual(model.realtimeStreamModel, .maiTranscribe2)
+            XCTAssertTrue(model.realtimeReady)
+
+            await model.updateRealtimeStreamModel(.gptRealtime)
+            XCTAssertFalse(model.realtimeReady)
+
+            let restored = LLMProviderSettingsViewModel(preferences: store, availability: availability)
+            await restored.load()
+            XCTAssertEqual(restored.realtimeStreamModel, .gptRealtime)
+            XCTAssertFalse(restored.realtimeReady)
+        }
+    }
+
+    func testInvalidStreamDeploymentDoesNotPersist() async throws {
+        try await PreferenceFixture.withFreshSuite { fixture in
+            let defaults = try fixture.defaults()
+            let store = UserDefaultsPreferencesStore(defaults: defaults)
+            let model = LLMProviderSettingsViewModel(preferences: store)
+            await model.load()
+            model.maiRealtimeDeploymentDraft = "https://invalid.example"
+            await model.saveStreamDeployments()
+            let stored: String? = await store.getValue(for: .maiRealtimeDeployment)
+            XCTAssertNil(stored)
+            XCTAssertTrue(model.deploymentMessage?.contains("部署名") == true)
+        }
+    }
+
     func testLoadDefaultProviderIsAzureFoundry() async throws {
         try await PreferenceFixture.withFreshSuite { fixture in
             let defaults = try fixture.defaults()

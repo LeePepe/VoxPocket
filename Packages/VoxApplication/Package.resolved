@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/LeePepe/VoxKit.git",
       "state" : {
-        "revision" : "5190fe56ece8a56ecb2bfb08885b1f2c544cecbc",
-        "version" : "0.1.0"
+        "revision" : "49ac814412c47ab2c7f46cd736e8fa4640369a0d",
+        "version" : "0.1.1"
       }
     },
     {

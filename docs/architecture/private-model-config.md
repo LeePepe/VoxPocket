@@ -23,10 +23,12 @@ iOS 使用其应用沙箱内同一相对路径。本轮不提供 iOS 文件导�
 或当前配置的 Azure 文本模型。不虚构尚未部署的模型选项。
 
 `azure.realtimeTranscriptionDeployment` 为可选字段（省略或 `null` 不提供实时部署默认值），对应环境变量
-`AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT`。也可在设置的「实时部署配置」填写非敏感部署名覆盖值，
-留空使用私密配置/环境中的部署名。填写经过实时音频验证的专用 transcription 部署名，
-使用同一 HTTPS 资源根地址和语音密钥。不要直接填普通文件转写模型名来猜测实时能力。
-仅 macOS 使用此字段；iOS 仍使用原转写实现。
+`AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT`。可分别配置 `azure.gptRealtimeTranscriptionDeployment`
+（`AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT`）与 `azure.maiRealtimeTranscriptionDeployment`
+（`AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT`），设置页可在 macOS 与 iOS 选择 GPT 流式转写或
+MAI-Transcribe-2 流式转写并填写对应部署名。也可在设置的「实时部署配置」填写非敏感部署名覆盖值，
+留空使用私密配置/环境中的部署名。填写经过实时音频验证的专用 transcription 部署名，使用同一 HTTPS
+资源根地址和语音密钥；示例部署名只能使用 `example-*` 合成标识。不要直接填普通文件转写模型名来猜测实时能力。
 
 缺少实时部署或凭据时，设置页明确显示当前回退到整段云端/Apple Speech，不将默认选择视为远端验证成功。
 只将模型选择及用户填写的安全部署短标识存入偏好；不复制私密配置对象、端点或 API key 到 UserDefaults。

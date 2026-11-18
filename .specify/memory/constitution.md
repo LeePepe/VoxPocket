@@ -19,7 +19,7 @@ Dependencies flow one way only, and never reverse:
 ```
 VoxPocketApp → VoxPresentation → VoxApplication → VoxInfrastructure (VoxKitBridge)
                                       └──────────→ VoxKit SDK
-VoxKit (remote `LeePepe/VoxKit` exact `0.1.0`: VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow,
+VoxKit (remote `LeePepe/VoxKit` exact `0.1.1`: VoxCore, VoxSpeech, VoxSpeechWhisperKit, VoxRefine, VoxLLM, VoxWorkflow,
        VoxWorkflowWhisperKit) → no local or external runtime layer
 VoxInfrastructure → VoxDomain; VoxDomain → no dependencies
 ```
@@ -97,7 +97,7 @@ system boundary before use. Fail fast with a clear message. Never trust external
   test doubles are `Fake*` / `Mock*`. Depend on protocols, not concrete types.
 - **File organization**: many small focused files over few large ones. Functions < 50 lines,
   files < 800 lines, nesting ≤ 4 levels.
-- **VoxKit SDK boundary**: is consumed from `LeePepe/VoxKit` as a remote exact `0.1.0` dependency from phase 4 onward.
+- **VoxKit SDK boundary**: is consumed from `LeePepe/VoxKit` as a remote exact `0.1.1` dependency from phase 4 onward.
   Its SDK redlines are governed by the VoxKit repository.
 - **Non-public project configuration**: Azure hostnames, internal endpoints, and internal issue
   numbers never enter Git; use gitignored local files and commit only synthetic `.example` templates
@@ -122,7 +122,7 @@ system boundary before use. Fail fast with a clear message. Never trust external
   cannot skip; heavy verification (`xcodebuild`, simulator) lives here, not in local hooks.
 - Repository-owned `.githooks/` run the deterministic checks directly, including docs-map and
   freshness on commit. Internal AI Reviewer and PR Actions review responsibilities are unchanged.
-- VoxKit `0.1.0` is verified through the pinned remote package and App iOS Simulator unit tests remain a governance gate.
+- VoxKit `0.1.1` is verified through the pinned remote package and App iOS Simulator unit tests remain a governance gate.
 
 ## Governance
 

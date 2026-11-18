@@ -36,6 +36,35 @@ final class PrivateModelConfigurationTests: XCTestCase {
         }
     }
 
+    func testDualRealtimeDeploymentsMapToDedicatedEnvironmentKeysAndAllowOverrides() async throws {
+        var fields = fixture
+        fields["gptRealtimeTranscriptionDeployment"] = "fixture-gpt-live"
+        fields["maiRealtimeTranscriptionDeployment"] = "fixture-mai-live"
+        let config = try PrivateModelConfiguration.decode(encoded(fields))
+        let defaults = try config.environmentDefaults()
+        XCTAssertEqual(defaults["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"], "fixture-gpt-live")
+        XCTAssertEqual(defaults["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"], "fixture-mai-live")
+        let url = try makeFile(data: encoded(fields))
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let result = try await DefaultPrivateModelConfigurationLoader(fileURL: url).load(environment: [
+            "AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT": "fixture-gpt-override",
+            "AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT": "fixture-mai-override"
+        ])
+        XCTAssertEqual(result.environmentValues["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"], "fixture-gpt-override")
+        XCTAssertEqual(result.environmentValues["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"], "fixture-mai-override")
+    }
+
+    func testInvalidDualRealtimeDeploymentsAreRejected() throws {
+        for field in ["gptRealtimeTranscriptionDeployment", "maiRealtimeTranscriptionDeployment"] {
+            var fields = fixture
+            fields[field] = "../invalid"
+            let config = try PrivateModelConfiguration.decode(encoded(fields))
+            XCTAssertThrowsError(try config.environmentDefaults()) { error in
+                XCTAssertEqual(error as? PrivateModelConfigurationError, .invalidFields)
+            }
+        }
+    }
+
     func testValidFileWorksWithoutEnvironmentAndIsExcludedFromBackup() async throws {
         let url = try makeFile(data: encoded(fixture))
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }

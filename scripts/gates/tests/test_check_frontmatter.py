@@ -69,7 +69,7 @@ class CheckFrontmatterTests(unittest.TestCase):
                    manifest.read_text(encoding="utf-8").replace(
                        '        .package(path: "../VoxDomain"),',
                        '        .package(path: "../VoxDomain"),\n'
-                       '        .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0"),',
+                       '        .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.1"),',
                    ))
         self.assertEqual(self.run_check(), 0)
 

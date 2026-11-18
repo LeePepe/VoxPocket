@@ -12,9 +12,9 @@ LOKIKIT_TAG_OBJECT="8d85333eb3c039378f116f082d0f59b0b08207a5"
 LOKIKIT_SHA="903f4b9bc01cfcfeba3ce96e13519d841781b40a"
 
 VOXKIT_REPO="LeePepe/VoxKit"
-VOXKIT_TAG="0.1.0"
-VOXKIT_TAG_OBJECT="7c86c6594aaf0132bd15ef07a7bb4034a90426d2"
-VOXKIT_SHA="5190fe56ece8a56ecb2bfb08885b1f2c544cecbc"
+VOXKIT_TAG="0.1.1"
+VOXKIT_TAG_OBJECT="fb3a9e4f289ce6f201a3b625ae21821f8bc39020"
+VOXKIT_SHA="49ac814412c47ab2c7f46cd736e8fa4640369a0d"
 
 APPLE_UI_TESTING_REPO="LeePepe/AppleUITesting"
 APPLE_UI_TESTING_SHA="e6be2fcdf83341a9f3000a4cc489237655461a07"
@@ -48,7 +48,7 @@ verify_lokikit_tag() {
     echo "[deps] LokiKit $LOKIKIT_TAG $LOKIKIT_TAG_OBJECT -> $LOKIKIT_SHA"
 }
 
-# Manifests select exact 0.1.0; this guard fails if its annotated tag is retargeted.
+# Manifests select exact 0.1.1; this guard fails if its annotated tag is retargeted.
 verify_voxkit_tag() {
     local refs sha ref peeled="" plain=""
     if ! refs="$(git ls-remote "https://github.com/$VOXKIT_REPO.git" "refs/tags/$VOXKIT_TAG^{}" "refs/tags/$VOXKIT_TAG")"; then

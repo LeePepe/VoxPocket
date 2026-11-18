@@ -19,7 +19,7 @@ def main(scratch_path: Path | None = None):
         (package / "Package.swift").write_text(f'''// swift-tools-version: 6.2
 import PackageDescription
 let package = Package(name: "RealtimeConfigRegression", platforms: [.macOS(.v26)],
-    dependencies: [.package(path: {json.dumps(str(infrastructure))}), .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.0")],
+    dependencies: [.package(path: {json.dumps(str(infrastructure))}), .package(url: "https://github.com/LeePepe/VoxKit.git", exact: "0.1.1")],
     targets: [
         .target(name: "VoxPocket", dependencies: [
             .product(name: "VoxSpeech", package: "VoxKit"),

@@ -9,6 +9,10 @@ import VoxWorkflow
 @testable import VoxPocket
 
 struct RealtimeTranscriberConfigurationTests {
+    private func deployment(_ config: AzureRealtimeTranscriptionConfig) -> String? {
+        Mirror(reflecting: config).children.first(where: { $0.label == "deployment" })?.value as? String
+    }
+
     private var environment: [String: String] {
         ["AZURE_OPENAI_ENDPOINT": "https://example.invalid", "AZURE_API_KEY": "fixture-key"]
     }
@@ -27,6 +31,48 @@ struct RealtimeTranscriberConfigurationTests {
         var values = environment
         values["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "fixture-live"
         #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values) != nil)
+    }
+
+    @MainActor @Test func selectedRealtimeStreamModelRoutesToItsDeployment() {
+        var values = environment
+        values["AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "fixture-gpt"
+        values["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "fixture-mai"
+        let gpt = StageModelSettings(realtimeStreamModel: .gptRealtime)
+        let mai = StageModelSettings(realtimeStreamModel: .maiTranscribe2)
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values, settings: gpt).map(deployment) == "fixture-gpt")
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values, settings: mai).map(deployment) == "fixture-mai")
+        values.removeValue(forKey: "AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT")
+        values.removeValue(forKey: "AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT")
+        values["AZURE_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "fixture-legacy"
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values, settings: mai).map(deployment) == "fixture-legacy")
+        #expect(StageModelRouting.availability(environment: [
+            "AZURE_OPENAI_ENDPOINT": "https://example.invalid",
+            "AZURE_API_KEY": "fixture-key",
+            "AZURE_GPT_REALTIME_TRANSCRIPTION_DEPLOYMENT": "fixture-gpt",
+            "AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT": "fixture-mai"
+        ]).gptRealtimeDeployment == "fixture-gpt")
+    }
+
+    @MainActor @Test func maiOnlyEnvironmentWithoutSavedPreferencesEnablesRealtimeSessionAndMatchesSettings() async throws {
+        let suiteName = "RealtimeTranscriberConfigurationTests.MAIOnly.\(UUID())"
+        defer { UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName) }
+        let store = UserDefaultsPreferencesStore(defaults: UserDefaults(suiteName: suiteName)!)
+        var values = environment
+        values["AZURE_MAI_REALTIME_TRANSCRIPTION_DEPLOYMENT"] = "example-mai"
+        let availability = StageModelRouting.availability(environment: values)
+        #expect(availability.gptRealtimeDeployment.isEmpty)
+        #expect(availability.maiRealtimeDeployment == "example-mai")
+
+        let stages = await StageModelSettings.load(from: store)
+        #expect(!stages.hasExplicitRealtimeStreamModel)
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values, settings: stages).map(deployment) == "example-mai")
+        #expect(StageModelRouting.resolvedSpeechModel(settings: stages, environment: values) == .realtime)
+
+        await store.setValue(RealtimeStreamModelKind.gptRealtime.rawValue, for: .realtimeStreamModel)
+        let reloaded = await StageModelSettings.load(from: store)
+        #expect(reloaded.hasExplicitRealtimeStreamModel)
+        #expect(LLMAppConfig.realtimeTranscriptionConfig(environment: values, settings: reloaded) == nil)
+        #expect(StageModelRouting.resolvedSpeechModel(settings: reloaded, environment: values) == .batch)
     }
 
     @MainActor @Test func invalidRealtimeConfigurationKeepsBatchAvailable() {
@@ -157,6 +203,13 @@ struct RealtimeTranscriberConfigurationTests {
         #expect(ObjectIdentifier(third as AnyObject) != ObjectIdentifier(first as AnyObject))
         #expect(seenSettings.count == 3)
         #expect(seenSettings.last?.speech == .batch)
+
+        await store.setValue("realtime", for: .speechModel)
+        await store.setValue("maiTranscribe2", for: .realtimeStreamModel)
+        let fourth = try await factory.makeSource()
+        #expect(ObjectIdentifier(fourth as AnyObject) != ObjectIdentifier(third as AnyObject))
+        #expect(seenSettings.count == 4)
+        #expect(seenSettings.last?.realtimeStreamModel == .maiTranscribe2)
     }
 }
 import VoxRefine

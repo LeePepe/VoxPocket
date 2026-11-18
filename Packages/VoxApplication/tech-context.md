@@ -31,7 +31,7 @@ targets: [UseCases]
 
 ## 依赖
 - **仓库内**:`VoxDomain` + `VoxInfrastructure`(VoxKitBridge/Persistence/PlatformAdapters)。
-- **外部**:`LokiKit`(遥测) + `VoxKit`(`LeePepe/VoxKit`, exact `0.1.0`)。所有 UseCase 的 telemetry 参数默认 `NoopTelemetryService`。
+- **外部**:`LokiKit`(遥测) + `VoxKit`(`LeePepe/VoxKit`, exact `0.1.1`)。所有 UseCase 的 telemetry 参数默认 `NoopTelemetryService`。
 
 ## 约束 / 红线投影
 - 遥测:`recording.stopped`(duration_s)、`transcription.completed`(word_count/source)、

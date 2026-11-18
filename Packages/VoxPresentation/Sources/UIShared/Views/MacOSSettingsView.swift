@@ -433,7 +433,7 @@ struct MacOSTextSettingsPane: View {
                 Picker("识别模型", selection: Binding(get: { viewModel.speechModel }, set: { model in
                     Task { await viewModel.updateSpeechModel(model) }
                 })) {
-                    Text("gpt-live-transcribe · 流式（默认）").tag(SpeechModelSelection.realtime)
+                    Text("流式云端转写（默认）").tag(SpeechModelSelection.realtime)
                     Text("已配置的 Azure 模型 · 整段").tag(SpeechModelSelection.batch)
                     Text("Apple Speech · 系统识别").tag(SpeechModelSelection.appleSpeech)
                 }
@@ -442,16 +442,32 @@ struct MacOSTextSettingsPane: View {
                 if viewModel.speechModel == .realtime {
                     Text("边录音边发送音频；服务失败时回退整段转写。配置就绪不代表已通过真实音频验证。")
                         .font(.callout).foregroundStyle(.secondary)
-                    DisclosureGroup("实时部署配置", isExpanded: $deploymentExpanded) {
-                        HStack {
-                            TextField("部署名", text: $viewModel.realtimeDeploymentDraft,
-                                      prompt: Text(viewModel.availability.realtimeDeployment.isEmpty
-                                                   ? "填写资源中的实时部署名" : viewModel.availability.realtimeDeployment))
-                                .textFieldStyle(.roundedBorder)
-                                .accessibilityIdentifier("vox.settings.realtimeDeployment")
-                            Button("保存") { Task { await viewModel.saveRealtimeDeployment() } }
-                                .accessibilityIdentifier("vox.settings.saveRealtimeDeployment")
+                    Picker("流式远端模型", selection: Binding(
+                        get: { viewModel.realtimeStreamModel },
+                        set: { kind in Task { await viewModel.updateRealtimeStreamModel(kind) } }
+                    )) {
+                        ForEach(RealtimeStreamModelKind.allCases, id: \.self) { kind in
+                            Text(kind.displayName).tag(kind)
                         }
+                    }
+                    .accessibilityIdentifier("vox.settings.realtimeStreamModel")
+                    DisclosureGroup("实时部署配置", isExpanded: $deploymentExpanded) {
+                        TextField("GPT 流式部署名", text: $viewModel.gptRealtimeDeploymentDraft,
+                                  prompt: Text(viewModel.availability.gptRealtimeDeployment
+                                               .isEmpty ? (viewModel.availability.realtimeDeployment.isEmpty
+                                                           ? "例如 example-gpt-live" : viewModel.availability.realtimeDeployment)
+                                                        : viewModel.availability.gptRealtimeDeployment))
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("vox.settings.gptRealtimeDeployment")
+                        TextField("MAI-Transcribe-2 部署名", text: $viewModel.maiRealtimeDeploymentDraft,
+                                  prompt: Text(viewModel.availability.maiRealtimeDeployment
+                                               .isEmpty ? (viewModel.availability.realtimeDeployment.isEmpty
+                                                           ? "例如 example-mai-transcribe-2" : viewModel.availability.realtimeDeployment)
+                                                        : viewModel.availability.maiRealtimeDeployment))
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("vox.settings.maiRealtimeDeployment")
+                        Button("保存部署配置") { Task { await viewModel.saveStreamDeployments() } }
+                            .accessibilityIdentifier("vox.settings.saveRealtimeDeployment")
                         Text("部署名不一定等于模型名。留空使用本机配置；这里只保存部署名，不保存密钥。")
                             .font(.caption).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
